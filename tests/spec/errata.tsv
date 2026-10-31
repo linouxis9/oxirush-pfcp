@@ -1,14 +1,16 @@
 # The errata of TS 29.244 V19.6.0 that the crate meets: what the document says, and what
 # the crate takes instead. The test `spec` applies each to the fixtures before it compares
-# them with the crate, and fails when one no longer finds what the document says. A
-# `note` is one that no fixture shows: a caption, a style, a length in a figure.
+# them with the crate, and fails when one no longer finds what the document says. The test
+# `notes` checks those that no fixture holds as the document has them: a caption of a
+# table (`table-caption`, the table is found), a heading without its style (`heading`,
+# the figures of the clauses are found), the table that the comment of a row names
+# (`row-table`, the crate's row is of the table that the erratum gives).
 #
 # name	kind	where	the document	the crate
 modifcation	message-name	17	PFCP Session Set Modifcation Response	PFCP Session Set Modification Response
 table-7.4.2.2-1-twice	table-number	Information Elements in a PFCP Session Set Modification Response	7.4.2.2-1	7.4.7.2-1
 ip-multicast-addressing-info-clause	ie-type-reference	188	Extendable / Clause 7.5.2.2-4	Extendable / Table 7.5.2.2-4
-source-ip-address-continued	row-name	7.5.2.2-4/3		Source IP Address
-source-ip-address-continued-type	row-ie-type	7.5.2.2-4/3		Source IP Address
+redundant-transmission-parameters-table-of-270	ie-type-reference	255	Extendable / Table 7.5.2.2-5, Table 7.5.2.3-4	Extendable / Table 7.5.2.2-5
 ethernet-inactivity-timer-type	row-ie-type	7.5.2.4-1/Ethernet Inactivity Timer		Ethernet Inactivity Timer
 rtfp-no-interface	row-interfaces	7.5.2.3-1/Redundant Transmission Forwarding Parameters		N4
 redundant-transmission-detection-parameters	row-ie-type	7.5.2.2-2/Redundant Transmission Detection Parameters	Redundant Transmission Detection Parameters	Redundant Transmission Parameters
@@ -42,8 +44,9 @@ protocol-specific-configuration-parameters-length	ie-type-length	378	1	Not Appli
 packet-rate-status-report-modification	row-ie-type	7.5.5.1-1/Packet Rate Status Report	Packet Rate Status Report	Packet Rate Status Report IE within PFCP Session Modification Response
 link-specific-multipath-adress	figure-field	8.2.158	Link-Specific Multipath IPv6 Adress for Non-3GPP Access	Link-Specific Multipath IPv6 Address for Non-3GPP Access
 data-network-access-identfier	figure-field	8.2.161	Data Network Access Identfier	Data Network Access Identifier
-remove-qer-caption	note	Table 7.5.4.9-1	T Table 7.5.4.9-1: Remove QER IE PFCP Session Modification Request	Table 7.5.4.9-1
-traffic-parameter-measurement-caption	note	Table 7.5.2.9-5	Table 7.5.2.9-5.: Traffic Parameter Measurement Control Information IE	Table 7.5.2.9-5
-session-report-request-prsr-reference	note	Table 7.5.8.1-1	the row of Packet Rate Status Report says "See Table 7.5.7.1-1"	Table 7.5.7.1-2, of IE type 252
-link-specific-multipath-ipv6	note	Figure 8.2.158-1	four octets for the Link-Specific Multipath IPv6 Address for Non-3GPP Access	sixteen, as for 3GPP access
-unstyled-headings	note	8.2.220, 8.2.221, 8.2.222 and 8.2.224	headings written as plain paragraphs	clauses of their own
+remove-qer-caption	table-caption	7.5.4.9-1	T Table 7.5.4.9-1: Remove QER IE PFCP Session Modification Request	Table 7.5.4.9-1
+traffic-parameter-measurement-caption	table-caption	7.5.2.9-5	Table 7.5.2.9-5.: Traffic Parameter Measurement Control Information IE	Table 7.5.2.9-5
+session-report-request-prsr-reference	row-table	7.5.8.1-1/Packet Rate Status Report	Table 7.5.7.1-1	Table 7.5.7.1-2
+link-specific-multipath-ipv6	figure-octets	8.2.158/s to (s+3)	s to (s+3)	s to (s+15)
+ip-address-and-port-number-replacement-flags	figure-octets	8.2.200/5 to 6	5 to 6	5
+unstyled-headings	heading	8.2.220 8.2.221 8.2.222 8.2.224	headings written as plain paragraphs	clauses of their own

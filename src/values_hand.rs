@@ -233,12 +233,17 @@ pfcp_layout! {
             umn6rs "UMN6RS": 7, spn "SPN": 6, sipv6 "SIPV6": 5, sipv4 "SIPV4": 4,
             dpn "DPN": 3, dipv6 "DIPV6": 2, dipv4 "DIPV4": 1,
         }
-        destination_ipv4_address "Destination IPv4 Address": Ipv4Addr if dipv4,
-        destination_ipv6_address "Destination IPv6 Address": Ipv6Addr if dipv6,
-        destination_port_number "Destination Port Number": u16 if dpn,
-        source_ipv4_address "Source IPv4 Address": Ipv4Addr if sipv4,
-        source_ipv6_address "Source IPv6 Address": Ipv6Addr if sipv6,
-        source_port_number "Source Port Number": u16 if spn,
+        destination_ipv4_address "Destination IPv4 Address": Ipv4Addr if dipv4 && !umn6rs,
+        destination_ipv6_address "Destination IPv6 Address": Ipv6Addr if dipv6 && !umn6rs,
+        destination_port_number "Destination Port Number": u16 if dpn && !umn6rs,
+        source_ipv4_address "Source IPv4 Address": Ipv4Addr if sipv4 && !umn6rs,
+        source_ipv6_address "Source IPv6 Address": Ipv6Addr if sipv6 && !umn6rs,
+        source_port_number "Source Port Number": u16 if spn && !umn6rs,
+    }
+    check(replacement, path, found) {
+        if replacement.umn6rs && (replacement.dipv4 || replacement.dipv6 || replacement.dpn || replacement.sipv4 || replacement.sipv6 || replacement.spn) {
+            found.push(Deviation::new(path, "8.2.200", crate::check::DeviationKind::Rule("UMN6RS with an address or a port to replace")));
+        }
     }
 }
 
@@ -644,6 +649,7 @@ identity_lv8!(
 );
 
 impl TextLv8 {
+    #[cfg(feature = "tree")]
     fn text_owned(&self) -> Option<alloc::string::String> {
         self.text().map(alloc::string::String::from)
     }
@@ -671,6 +677,8 @@ macro_rules! pfcp_secret {
         impl $ty {
             /// The name of its field.
             pub const FIELDS: &'static [&'static str] = &[$name];
+            /// Its layout.
+            pub const LAYOUT: Option<&'static Layout> = Some(&Layout { head: &[], bits: &[], fields: &[Member { name: $name, octets: None, condition: "true" }] });
         }
 
         impl Codec for $ty {
@@ -765,6 +773,8 @@ pub struct FqCsid {
 impl FqCsid {
     /// The names of its fields.
     pub const FIELDS: &'static [&'static str] = &["FQ-CSID Node-ID Type", "Node-Address", "PDN Connection Set Identifiers", "Node Type"];
+    /// Read by hand: its layout depends on its type.
+    pub const LAYOUT: Option<&'static Layout> = None;
 
     /// The length of the Node-Address of a Node-ID Type: `None` for a spare type.
     fn address_length(node_id_type: u8) -> Option<usize> {
@@ -901,6 +911,8 @@ macro_rules! mac_addresses {
         impl $ty {
             /// The names of its fields.
             pub const FIELDS: &'static [&'static str] = &["MAC address values", "C-TAG", "S-TAG"];
+            /// Read by hand: a list after its number, then fields after their lengths.
+            pub const LAYOUT: Option<&'static Layout> = None;
         }
 
         impl Codec for $ty {

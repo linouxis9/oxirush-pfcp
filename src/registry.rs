@@ -74,6 +74,9 @@ pub struct IeTypeInfo {
     /// The names of the flags and fields of its layout, as its tree has them: none for a
     /// grouped IE.
     pub fields: &'static [&'static str],
+    /// How the crate lays it out: `None` for a grouped IE, an IE that the crate keeps as
+    /// octets, and a value that the crate reads by hand.
+    pub layout: Option<&'static crate::values::Layout>,
     /// The tables of its content, for a grouped IE: one, or one per place for an IE that
     /// has different content in different places.
     pub tables: &'static [&'static crate::table::Table],

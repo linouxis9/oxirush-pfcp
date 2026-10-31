@@ -1,0 +1,851 @@
+# clause	octets	name	lowest bit	bits
+8.2.1	5	Cause value	1	8
+8.2.2	5	Interface value	1	4
+8.2.3	5	CHID	4	1
+8.2.3	5	CH	3	1
+8.2.3	5	V6	2	1
+8.2.3	5	V4	1	1
+8.2.3	6 to 9	TEID	1	8
+8.2.3	m to (m+3)	IPv4 address	1	8
+8.2.3	p to (p+15)	IPv6 address	1	8
+8.2.3	q	CHOOSE ID	1	8
+8.2.4	5 to (n+4)	Network Instance	1	8
+8.2.5	5	SMMII	6	1
+8.2.5	5	BID	5	1
+8.2.5	5	FL	4	1
+8.2.5	5	SPI	3	1
+8.2.5	5	TTC	2	1
+8.2.5	5	FD	1	1
+8.2.5	m to (m+1)	Length of Flow Description	1	8
+8.2.5	(m+2) to p	Flow Description	1	8
+8.2.5	s to (s+1)	ToS Traffic Class	1	8
+8.2.5	t to (t+3)	Security Parameter Index	1	8
+8.2.5	v to (v+2)	Flow Label	1	8
+8.2.5	w to (w+3)	SDF Filter ID	1	8
+8.2.5	a	Number of (S)RTP Multiplexed Media Identification Information instances	1	8
+8.2.5	b to (b+1)	Length of (S)RTP Multiplexed Media Identification Information 1	1	8
+8.2.5	(b+2) to c	(S)RTP Multiplexed Media Identification Information 1	1	8
+8.2.5	d to (d+1)	Length of (S)RTP Multiplexed Media Identification Information n	1	8
+8.2.5	(d+2) to e	(S)RTP Multiplexed Media Identification Information n	1	8
+8.2.6	5 to (n+4)	Application Identifier	1	8
+8.2.7	5	UL Gate	3	2
+8.2.7	5	DL Gate	1	2
+8.2.8	5 to 9	UL MBR	1	8
+8.2.8	10 to 14	DL MBR	1	8
+8.2.9	5 to 9	UL GBR	1	8
+8.2.9	10 to 14	DL GBR	1	8
+8.2.10	5 to 8	QER Correlation ID value	1	8
+8.2.11	5 to 8	Precedence value	1	8
+8.2.12	5 to 6	ToS/Traffic Class	1	8
+8.2.13	5	DLVOL	3	1
+8.2.13	5	ULVOL	2	1
+8.2.13	5	TOVOL	1	1
+8.2.13	m to (m+7)	Total Volume	1	8
+8.2.13	p to (p+7)	Uplink Volume	1	8
+8.2.13	q to (q+7)	Downlink Volume	1	8
+8.2.14	5 to 8	Time Threshold	1	8
+8.2.15	5 to 8	Monitoring Time	1	8
+8.2.16	5	DLVOL	3	1
+8.2.16	5	ULVOL	2	1
+8.2.16	5	TOVOL	1	1
+8.2.16	m to (m+7)	Total Volume	1	8
+8.2.16	p to (p+7)	Uplink Volume	1	8
+8.2.16	q to (q+7)	Downlink Volume	1	8
+8.2.17	5 to 8	Subsequent Time Threshold	1	8
+8.2.18	5 to 8	Inactivity Detection Time	1	8
+8.2.19	5	LIUSA	8	1
+8.2.19	5	DROTH	7	1
+8.2.19	5	STOPT	6	1
+8.2.19	5	START	5	1
+8.2.19	5	QUHTI	4	1
+8.2.19	5	TIMTH	3	1
+8.2.19	5	VOLTH	2	1
+8.2.19	5	PERIO	1	1
+8.2.19	6	QUVTI	8	1
+8.2.19	6	IPMJL	7	1
+8.2.19	6	EVEQU	6	1
+8.2.19	6	EVETH	5	1
+8.2.19	6	MACAR	4	1
+8.2.19	6	ENVCL	3	1
+8.2.19	6	TIMQU	2	1
+8.2.19	6	VOLQU	1	1
+8.2.19	7	UPINT	2	1
+8.2.19	7	REEMR	1	1
+8.2.20	5	Redirect Address Type	1	4
+8.2.20	8-(8+a-1)	Redirect Server Address	1	8
+8.2.20	(p+2)-(p+2+b-1)	Other Redirect Server Address	1	8
+8.2.20	m to (m+1)	Redirect Port	1	8
+8.2.21	5	UISR	7	1
+8.2.21	5	SESR	6	1
+8.2.21	5	TMIR	5	1
+8.2.21	5	UPIR	4	1
+8.2.21	5	ERIR	3	1
+8.2.21	5	USAR	2	1
+8.2.21	5	DLDR	1	1
+8.2.22	5 to 6	Type of the offending IE	1	8
+8.2.23	5	Forwarding Policy Identifier Length	1	8
+8.2.23	j to k	Forwarding Policy Identifier	1	8
+8.2.24	5	Interface value	1	4
+8.2.25	5 to 6	Supported-Features	1	8
+8.2.25	7 to 8	Additional Supported-Features 1	1	8
+8.2.25	9 to 10	Additional Supported-Features 2	1	8
+8.2.25	11 to 12	Additional Supported-Features 3	1	8
+8.2.25	13 to 14	Additional Supported-Features 4	1	8
+8.2.25	15 to 16	Additional Supported-Features 5	1	8
+8.2.26	5	DFRT	8	1
+8.2.26	5	IPMD	7	1
+8.2.26	5	IPMA	6	1
+8.2.26	5	DUPL	5	1
+8.2.26	5	NOCP	4	1
+8.2.26	5	BUFF	3	1
+8.2.26	5	FORW	2	1
+8.2.26	5	DROP	1	1
+8.2.26	6	MBSU	5	1
+8.2.26	6	FSSM	4	1
+8.2.26	6	DDPN	3	1
+8.2.26	6	BDPN	2	1
+8.2.26	6	EDRT	1	1
+8.2.27	5	DLPSI	3	1
+8.2.27	5	QFII	2	1
+8.2.27	5	PPI	1	1
+8.2.27	m	Paging Policy Indication value	1	6
+8.2.27	p	QFI	1	6
+8.2.27	q to (q+1)	DL Data Packets Size	1	8
+8.2.28	5	Delay Value in integer multiples of 50 millisecs, or zero	1	8
+8.2.29	5	Timer unit	6	3
+8.2.29	5	Timer value	1	5
+8.2.30	5 to n+4	Packet Count Value	1	8
+8.2.31	5	HRSBOM	7	1
+8.2.31	5	DETEID	6	1
+8.2.31	5	RUMUC	5	1
+8.2.31	5	SUMPC	4	1
+8.2.31	5	QAURR	3	1
+8.2.31	5	SNDEM	2	1
+8.2.31	5	DROBU	1	1
+8.2.32	5	DROBU	1	1
+8.2.33	5 to 8	Sequence Number	1	8
+8.2.34	5	Metric	1	8
+8.2.35	5	Timer unit	6	3
+8.2.35	5	Timer value	1	5
+8.2.36	5 to 6	Rule ID	1	8
+8.2.37	5	V4	2	1
+8.2.37	5	V6	1	1
+8.2.37	6 to 13	SEID	1	8
+8.2.37	m to (m+3)	IPv4 address	1	8
+8.2.37	p to (p+15)	IPv6 address	1	8
+8.2.38	5	Node ID Type	1	4
+8.2.38	6 to o	Node ID value	1	8
+8.2.39	5	ADNP	8	1
+8.2.39	5	AURL	7	1
+8.2.39	5	AFD	6	1
+8.2.39	5	DNP	5	1
+8.2.39	5	CP	4	1
+8.2.39	5	DN	3	1
+8.2.39	5	URL	2	1
+8.2.39	5	FD	1	1
+8.2.39	m to (m+1)	Length of Flow Description	1	8
+8.2.39	(m+2) to p	Flow Description	1	8
+8.2.39	q to (q+1)	Length of URL	1	8
+8.2.39	(q+2) to r	URL	1	8
+8.2.39	s to (s+1)	Length of Domain Name	1	8
+8.2.39	(s+2) to t	Domain Name	1	8
+8.2.39	u to (u+1)	Length of Custom PFD Content	1	8
+8.2.39	(u+2) to v	Custom PFD Content	1	8
+8.2.39	w to (w+1)	Length of Domain Name Protocol	1	8
+8.2.39	(w+2) to x	Domain Name Protocol	1	8
+8.2.39	y to (y+1)	Length of Additional Flow Description	1	8
+8.2.39	(y+2) to z	Additional Flow Description	1	8
+8.2.39	a to (a+1)	Length of Additional URL	1	8
+8.2.39	(a+2) to b	Additional URL	1	8
+8.2.39	c to (c+1)	Length of Additional Domain Name and Domain Name Protocol	1	8
+8.2.39	(c+2) to d	Additional Domain Name and Domain Name Protocol	1	8
+8.2.40	5	EVENT	3	1
+8.2.40	5	VOLUM	2	1
+8.2.40	5	DURAT	1	1
+8.2.41	5	IMMER	8	1
+8.2.41	5	DROTH	7	1
+8.2.41	5	STOPT	6	1
+8.2.41	5	START	5	1
+8.2.41	5	QUHTI	4	1
+8.2.41	5	TIMTH	3	1
+8.2.41	5	VOLTH	2	1
+8.2.41	5	PERIO	1	1
+8.2.41	6	EVETH	8	1
+8.2.41	6	MACAR	7	1
+8.2.41	6	ENVCL	6	1
+8.2.41	6	MONIT	5	1
+8.2.41	6	TERMR	4	1
+8.2.41	6	LIUSA	3	1
+8.2.41	6	TIMQU	2	1
+8.2.41	6	VOLQU	1	1
+8.2.41	7	UPINT	6	1
+8.2.41	7	EMRRE	5	1
+8.2.41	7	QUVTI	4	1
+8.2.41	7	IPMJL	3	1
+8.2.41	7	TEBUR	2	1
+8.2.41	7	EVEQU	1	1
+8.2.42	5 to 8	Measurement Period	1	8
+8.2.43	5	FQ-CSID Node-ID Type	5	4
+8.2.43	5	Number of CSIDs= m	1	4
+8.2.43	6 to p	Node-Address	1	8
+8.2.43	(p+1) to (p+2)	First PDN Connection Set Identifier (CSID)	1	8
+8.2.43	(p+3) to (p+4)	Second PDN Connection Set Identifier (CSID)	1	8
+8.2.43	q to q+1	m-th PDN Connection Set Identifier (CSID)	1	8
+8.2.43	q+2	Node Type	1	4
+8.2.44	5	DLNOP	6	1
+8.2.44	5	ULNOP	5	1
+8.2.44	5	TONOP	4	1
+8.2.44	5	DLVOL	3	1
+8.2.44	5	ULVOL	2	1
+8.2.44	5	TOVOL	1	1
+8.2.44	m to (m+7)	Total Volume	1	8
+8.2.44	p to (p+7)	Uplink Volume	1	8
+8.2.44	q to (q+7)	Downlink Volume	1	8
+8.2.44	r to (r+7)	Total Number of Packets	1	8
+8.2.44	s to (s+7)	Uplink Number of Packets	1	8
+8.2.44	t to (t+7)	Downlink Number of Packets	1	8
+8.2.45	5 to 8	Duration value	1	8
+8.2.46	5 to 8	Time of First Packet	1	8
+8.2.47	5 to 8	Time of Last Packet	1	8
+8.2.48	5 to 8	Quota Holding Time value	1	8
+8.2.49	5	DLBY	2	1
+8.2.49	5	DLPA	1	1
+8.2.49	m to (m+7)	Downlink Packets	1	8
+8.2.49	o to (o+7)	Number of Bytes of Downlink Data	1	8
+8.2.50	5	DLVOL	3	1
+8.2.50	5	ULVOL	2	1
+8.2.50	5	TOVOL	1	1
+8.2.50	m to (m+7)	Total Volume	1	8
+8.2.50	p to (p+7)	Uplink Volume	1	8
+8.2.50	q to (q+7)	Downlink Volume	1	8
+8.2.51	5 to 8	Time Quota value	1	8
+8.2.52	5 to 8	Start Time	1	8
+8.2.53	5 to 8	End Time	1	8
+8.2.54	5 to 8	URR ID value	1	8
+8.2.55	5 to 8	Linked URR ID value	1	8
+8.2.56	5 to 6	Outer Header Creation Description	1	8
+8.2.56	m to (m+3)	TEID	1	8
+8.2.56	p to (p+3)	IPv4 Address	1	8
+8.2.56	q to (q+15)	IPv6 Address	1	8
+8.2.56	r to (r+1)	Port Number	1	8
+8.2.56	t to (t+2)	C-TAG	1	8
+8.2.56	u to (u+2)	S-TAG	1	8
+8.2.57	5	BAR ID value	1	8
+8.2.58	5	Supported-Features	1	8
+8.2.58	6 to 7	Additional Supported-Features 1	1	8
+8.2.59	5	UBE	4	1
+8.2.59	5	UAE	3	1
+8.2.59	5	AFT	2	1
+8.2.59	5	BEF	1	1
+8.2.60	5 to (n+4)	Application Instance Identifier	1	8
+8.2.61	5	Flow Direction	1	3
+8.2.61	6 to 7	Length of Flow Description	1	8
+8.2.61	8 to m	Flow Description	1	8
+8.2.62	5	IP6PL	7	1
+8.2.62	5	CHV6	6	1
+8.2.62	5	CHV4	5	1
+8.2.62	5	IPv6D	4	1
+8.2.62	5	S/D	3	1
+8.2.62	5	V4	2	1
+8.2.62	5	V6	1	1
+8.2.62	m to (m+3)	IPv4 address	1	8
+8.2.62	p to (p+15)	IPv6 address	1	8
+8.2.62	r	IPv6 Prefix Delegation Bits	1	8
+8.2.62	s	IPv6 Prefix Length	1	8
+8.2.63	5	APRC	3	1
+8.2.63	5	DLPR	2	1
+8.2.63	5	ULPR	1	1
+8.2.63	m	Uplink Time Unit	1	3
+8.2.63	(m+1) to (m+2)	Maximum Uplink Packet Rate	1	8
+8.2.63	p	Downlink Time Unit	1	3
+8.2.63	(p+1) to (p+2)	Maximum Downlink Packet Rate	1	8
+8.2.63	q	Additional Uplink Time Unit	1	3
+8.2.63	(q+1) to (q+2)	Additional Maximum Uplink Packet Rate	1	8
+8.2.63	r	Additional Downlink Time Unit	1	3
+8.2.63	(r+1) to (r+2)	Additional Maximum Downlink Packet Rate	1	8
+8.2.64	5	Outer Header Removal Description	1	8
+8.2.64	6	GTP-U Extension Header Deletion	1	8
+8.2.65	5 to 8	Recovery Time Stamp value	1	8
+8.2.66	5	SCI	2	1
+8.2.66	5	TTC	1	1
+8.2.66	m to (m+1)	ToS/Traffic Class	1	8
+8.2.66	p to (p+1)	Service Class Indicator	1	8
+8.2.67	5	Header Type	1	5
+8.2.67	6	Length of Header Field Name	1	8
+8.2.67	7 to m	Header Field Name	1	8
+8.2.67	p	Length of Header Field Value	1	8
+8.2.67	(p+1) to q	Header Field Value	1	8
+8.2.68	5	CIAM	8	1
+8.2.68	5	ASPOC	7	1
+8.2.68	5	SSPOC	6	1
+8.2.68	5	MNOP	5	1
+8.2.68	5	ISTM	4	1
+8.2.68	5	RADI	3	1
+8.2.68	5	INAM	2	1
+8.2.68	5	MBQE	1	1
+8.2.69	5	N6DR	7	1
+8.2.69	5	VSR	6	1
+8.2.69	5	PURR	5	1
+8.2.69	5	GPQR	4	1
+8.2.69	5	CKDR	3	1
+8.2.69	5	UPRR	2	1
+8.2.69	5	UPFR	1	1
+8.2.70	5	RTS	5	1
+8.2.70	5	NI	4	1
+8.2.70	5	DI	3	1
+8.2.70	5	V4	2	1
+8.2.70	5	V6	1	1
+8.2.70	m to (m+3)	IPv4 address	1	8
+8.2.70	p to (p+15)	IPv6 address	1	8
+8.2.70	q to (q+1)	Length of Destination Interface field	1	8
+8.2.70	(q+2) to r	Destination Interface field	1	8
+8.2.70	s to (s+1)	Length of Network Instance field	1	8
+8.2.70	(s+2) to t	Network Instance field	1	8
+8.2.70	u to (u+3)	Recovery Timestamp	1	8
+8.2.71	5 to 8	UR-SEQN	1	8
+8.2.72	5 to (n+4)	Predefined Rules Name	1	8
+8.2.73	5 to (n+4)	Predefined Rules Name	1	8
+8.2.74	5 to 8	FAR ID value	1	8
+8.2.75	5 to 8	QER ID value	1	8
+8.2.76	5	AOCI	1	1
+8.2.77	5	URSS	2	1
+8.2.77	5	SARR	1	1
+8.2.78	5	Timer unit	6	3
+8.2.78	5	Timer value	1	5
+8.2.79	5	PDN Type	1	3
+8.2.80	5	Rule ID Type	1	5
+8.2.80	6 to p	Rule ID value	1	8
+8.2.81	5	BTIT	1	2
+8.2.81	m to (m+3)	Base Time Interval	1	8
+8.2.83	5 to 8	User Plane Inactivity Timer	1	8
+8.2.84	5 to 12	Value-Digits	1	8
+8.2.84	13 to 16	Exponent	1	8
+8.2.85	5 to 8	URR ID value	1	8
+8.2.86	5	DLVOL	3	1
+8.2.86	5	ULVOL	2	1
+8.2.86	5	TOVOL	1	1
+8.2.86	m to (m+7)	Total Volume	1	8
+8.2.86	p to (p+7)	Uplink Volume	1	8
+8.2.86	q to (q+7)	Downlink Volume	1	8
+8.2.87	5 to 8	Time Quota value	1	8
+8.2.88	5	RQI	1	1
+8.2.89	5	QFI value	1	6
+8.2.90	5 to 8	Query URR Reference value	1	8
+8.2.91	5	AURI	8	1
+8.2.91	5	Number of Additional Usage Reports value	1	7
+8.2.91	6	Number of Additional Usage Reports value	1	8
+8.2.92	5	Traffic Endpoint ID value	1	8
+8.2.93	5	UDES	4	1
+8.2.93	5	USOU	3	1
+8.2.93	5	DEST	2	1
+8.2.93	5	SOUR	1	1
+8.2.93	m to (m+5)	Source MAC address value	1	8
+8.2.93	n to (n+5)	Destination MAC address value	1	8
+8.2.93	o to (o+5)	Upper Source MAC address value	1	8
+8.2.93	p to (p+5)	Upper Destination MAC address value	1	8
+8.2.94	5	VID	3	1
+8.2.94	5	DEI	2	1
+8.2.94	5	PCP	1	1
+8.2.94	6	C-VID value	5	4
+8.2.94	6	DEI Flag	4	1
+8.2.94	6	PCP value	1	3
+8.2.94	7	C-VID Value	1	8
+8.2.95	5	VID	3	1
+8.2.95	5	DEI	2	1
+8.2.95	5	PCP	1	1
+8.2.95	6	S-VID value	5	4
+8.2.95	6	DEI Flag	4	1
+8.2.95	6	PCP value	1	3
+8.2.95	7	S-VID value	1	8
+8.2.96	5 to 6	Ethertype	1	8
+8.2.97	5	INS	2	1
+8.2.97	5	ARP	1	1
+8.2.98	5 to 8	Ethernet Filter ID value	1	8
+8.2.99	5	BIDE	1	1
+8.2.100	5	Packet Count value	1	8
+8.2.101	5	PEIF	7	1
+8.2.101	5	GPSIF	6	1
+8.2.101	5	SUPIF	5	1
+8.2.101	5	NAIF	4	1
+8.2.101	5	MSISDNF	3	1
+8.2.101	5	IMEIF	2	1
+8.2.101	5	IMSIF	1	1
+8.2.101	6	Length of IMSI	1	8
+8.2.101	7 to a	IMSI	1	8
+8.2.101	b	Length of IMEI	1	8
+8.2.101	(b+1) to c	IMEI	1	8
+8.2.101	d	Length of MSISDN	1	8
+8.2.101	(d+1) to e	MSISDN	1	8
+8.2.101	f	Length of NAI	1	8
+8.2.101	(f+1) to g	NAI	1	8
+8.2.101	h	Length of SUPI	1	8
+8.2.101	(h+1) to i	SUPI	1	8
+8.2.101	j	Length of GPSI	1	8
+8.2.101	(j+1) to k	GPSI	1	8
+8.2.101	l	Length of PEI	1	8
+8.2.101	(l+1) to m	PEI	1	8
+8.2.102	5	ETHI	1	1
+8.2.103	5	Number of MAC addresses (k)	1	8
+8.2.103	6 to 11	MAC address value 1	1	8
+8.2.103	o to (o+5)	MAC address value 2	1	8
+8.2.103	q to (q+5)	MAC address value k	1	8
+8.2.103	s	Length of C-TAG field	1	8
+8.2.103	(s+1) to t	C-TAG	1	8
+8.2.103	u	Length of S-TAG field	1	8
+8.2.103	(u+1) to v	S-TAG	1	8
+8.2.104	5	Number of MAC addresses (k)	1	8
+8.2.104	6 to 11	MAC address value 1	1	8
+8.2.104	o to (o+5)	MAC address value 2	1	8
+8.2.104	q to (q+5)	MAC address value k	1	8
+8.2.104	s	Length of C-TAG field	1	8
+8.2.104	(s+1) to t	C-TAG	1	8
+8.2.104	u	Length of S-TAG field	1	8
+8.2.104	(u+1) to v	S-TAG	1	8
+8.2.105	5 to 8	Ethernet Inactivity Timer	1	8
+8.2.106	5 to 8	Subsequent Event Quota	1	8
+8.2.107	5 to 8	Subsequent Event Threshold	1	8
+8.2.108	5	MCC digit 2	5	4
+8.2.108	5	MCC digit 1	1	4
+8.2.108	6	MNC digit 3	5	4
+8.2.108	6	MCC digit 3	1	4
+8.2.108	7	MNC digit 2	5	4
+8.2.108	7	MNC digit 1	1	4
+8.2.108	8 to10	Trace ID	1	8
+8.2.108	11	Length of Triggering Events	1	8
+8.2.108	12 to m	Triggering Events	1	8
+8.2.108	m+1	Session Trace Depth	1	8
+8.2.108	m+2	Length of List of Interfaces	1	8
+8.2.108	(m+3) to p	List of Interfaces	1	8
+8.2.108	p+1	Length of IP Address of Trace Collection Entity	1	8
+8.2.108	(p+2) to q	IP Address of Trace Collection Entity	1	8
+8.2.109	5 to (n+4)	Framed-Route	1	8
+8.2.110	5 to 8	Framed-Routing	1	8
+8.2.111	5 to (n+4)	Framed-IPv6-Route	1	8
+8.2.112	5 to 8	Subsequent Event Quota	1	8
+8.2.113	5 to 8	Event Threshold	1	8
+8.2.114	5 to 8	Time Stamp	1	8
+8.2.115	5 to 8	Averaging Window	1	8
+8.2.116	5	PPI value	1	3
+8.2.117	5 to (n+4)	APN/DNN	1	8
+8.2.118	5	Interface Type value	1	6
+8.2.119	5	PPPCP	2	1
+8.2.119	5	PSDBU	1	1
+8.2.120	5	PARPS	1	1
+8.2.121	5 to 8	Activation Time	1	8
+8.2.122	5 to 8	Deactivation Time	1	8
+8.2.123	5 to 6	MAR ID value	1	8
+8.2.124	5	Steering Functionality Value	1	4
+8.2.125	5	Steering Mode Value	1	4
+8.2.126	5	Weight Value	1	8
+8.2.127	5	Priority Value	1	4
+8.2.128	5 to 6	UE IP address Pool Id Length	1	8
+8.2.128	7 to k	UE IP address Pool Identity	1	8
+8.2.129	5	PPE	3	1
+8.2.129	5	V4	2	1
+8.2.129	5	V6	1	1
+8.2.129	p to (p+3)	IPv4 Address	1	8
+8.2.129	q to (q+15)	IPv6 Address	1	8
+8.2.130	5	DCARONI	4	1
+8.2.130	5	PRIN6I	3	1
+8.2.130	5	PRIN19I	2	1
+8.2.130	5	PRIUEAI	1	1
+8.2.131	6 to m	FQDN	1	8
+8.2.132	5 to 8	Validity Time value	1	8
+8.2.133	5 to 6	Number of Reports	1	8
+8.2.134	5	UUPSI	2	1
+8.2.134	5	PSREI	1	1
+8.2.135	5	V4	2	1
+8.2.135	5	V6	1	1
+8.2.135	p to (p+3)	IPv4 Address	1	8
+8.2.135	q to (q+15)	IPv6 Address	1	8
+8.2.136	5	EPRI	4	1
+8.2.136	5	HRSBOM	3	1
+8.2.136	5	SUMPC	2	1
+8.2.136	5	RESTI	1	1
+8.2.137	5	A	4	1
+8.2.137	5	R	3	1
+8.2.137	5	V4	2	1
+8.2.137	5	V6	1	1
+8.2.137	m to (m+3)	(start) IPv4 address	1	8
+8.2.137	p to (p+15)	(start) IPv6 address	1	8
+8.2.137	q to (q+3)	(end) IPv4 address	1	8
+8.2.137	r to (r+15)	(end) IPv6 address	1	8
+8.2.138	5	MPL	3	1
+8.2.138	5	V4	2	1
+8.2.138	5	V6	1	1
+8.2.138	m to (m+3)	IPv4 address	1	8
+8.2.138	p to (p+15)	IPv6 address	1	8
+8.2.138	q	mask/prefix length	1	8
+8.2.139	5	APR	3	1
+8.2.139	5	DL	2	1
+8.2.139	5	UL	1	1
+8.2.139	a to (a+1)	Number of Remaining Uplink Packets Allowed	1	8
+8.2.139	b to (b+1)	Number of Remaining Additional Uplink Packets Allowed	1	8
+8.2.139	c to (c+1)	Number of Remaining Downlink Packets Allowed	1	8
+8.2.139	d to (d+1)	Number of Remaining Additional Downlink Packets Allowed	1	8
+8.2.139	e to (e+7)	Rate Control Status Validity Time	1	8
+8.2.140	5	RII	2	1
+8.2.140	5	BII	1	1
+8.2.141	5 to 8	Port Number value	1	8
+8.2.142	5 to 8	Port Number value	1	8
+8.2.143	5	BID	1	1
+8.2.143	m to (m+7)	User Plane Node ID value	1	8
+8.2.144	5 to (n+4)	Port Management Information	1	8
+8.2.145	5	RRCR	2	1
+8.2.145	5	RRTO	1	1
+8.2.146	5	Time Domain Number value	1	8
+8.2.147	5 to 12	Time Offset Threshold	1	8
+8.2.148	5 to 8	Cumulative rateRatio Threshold	1	8
+8.2.149	5 to 12	Time Offset Measurement	1	8
+8.2.150	5 to 8	Cumulative rateRatio Measurement	1	8
+8.2.151	5	SRR ID value	1	8
+8.2.152	5	RRCA	1	1
+8.2.153	5	Availability Status	3	2
+8.2.153	5	Access Type	1	2
+8.2.154	5	TCI	1	1
+8.2.155	5	LLI	1	1
+8.2.156	5	PQPM	3	1
+8.2.156	5	DRTTI	2	1
+8.2.156	5	PMFI	1	1
+8.2.156	6	Number of QFI (=p)	1	8
+8.2.156	7	value of QFI 1	1	8
+8.2.156	8	value of QFI 2	1	8
+8.2.156	7-(7+p-1)	value of QFI p	1	8
+8.2.157	5	V6	2	1
+8.2.157	5	V4	1	1
+8.2.157	6	MPTCP Proxy Type	1	8
+8.2.157	7 to 8	MPTCP Proxy Port	1	8
+8.2.157	p to (p+3)	MPTCP Proxy IPv4 Address	1	8
+8.2.157	q to (q+15)	MPTCP Proxy IPv6 Address	1	8
+8.2.158	5	NV6	4	1
+8.2.158	5	NV4	3	1
+8.2.158	5	V6	2	1
+8.2.158	5	V4	1	1
+8.2.158	p to (p+3)	Link-Specific Multipath IPv4 Address for 3GPP Access	1	8
+8.2.158	q to (q+15)	Link-Specific Multipath IPv6 Address for 3GPP Access	1	8
+8.2.158	r to (r+3)	Link-Specific Multipath IPv4 Address for Non-3GPP Access	1	8
+8.2.158	s to (s+3)	Link-Specific Multipath IPv6 Adress for Non-3GPP Access	1	8
+8.2.159	5	MAC	3	1
+8.2.159	5	V6	2	1
+8.2.159	5	V4	1	1
+8.2.159	p to (p+3)	PMF IPv4 Address	1	8
+8.2.159	q to (q+15)	PMF IPv6 Address	1	8
+8.2.159	r to (r+1)	PMF Port for 3GPP Access	1	8
+8.2.159	s to (s+1)	PMF Port for Non-3GPP Access	1	8
+8.2.159	t to (t+5)	PMF MAC Address for 3GPP Access	1	8
+8.2.159	u to (u+5)	PMF MAC Address for Non-3GPP Access	1	8
+8.2.160	5	LLI	1	1
+8.2.161	5 to (n+4)	Data Network Access Identfier	1	8
+8.2.162	5 to 8	Delay Value in milliseconds	1	8
+8.2.163	5 to 8	Delay Value in milliseconds	1	8
+8.2.164	5 to 8	Delay Value in milliseconds	1	8
+8.2.165	5	IRE	3	1
+8.2.165	5	THR	2	1
+8.2.165	5	PER	1	1
+8.2.166	5	N3	2	1
+8.2.166	5	N9	1	1
+8.2.167	5	ULDR	8	1
+8.2.167	5	DLDR	7	1
+8.2.167	5	ULCI	6	1
+8.2.167	5	DLCI	5	1
+8.2.167	5	GTPUPM	4	1
+8.2.167	5	RPPD	3	1
+8.2.167	5	ULPD	2	1
+8.2.167	5	DLPD	1	1
+8.2.167	6	ULAB	2	1
+8.2.167	6	DLAB	1	1
+8.2.168	5	Reserved	3	1
+8.2.168	5	PERIO	2	1
+8.2.168	5	EVETT	1	1
+8.2.169	5	RP	3	1
+8.2.169	5	UL	2	1
+8.2.169	5	DL	1	1
+8.2.169	m to (m+3)	Downlink packet delay threshold	1	8
+8.2.169	p to (p+3)	Uplink packet delay threshold	1	8
+8.2.169	q to (q+3)	Round trip packet delay threshold	1	8
+8.2.170	5 to 8	Minimum Wait Time	1	8
+8.2.171	5	ULDR	8	1
+8.2.171	5	DLDR	7	1
+8.2.171	5	ULCI	6	1
+8.2.171	5	DLCI	5	1
+8.2.171	5	PLMF	4	1
+8.2.171	5	RPPD	3	1
+8.2.171	5	ULPD	2	1
+8.2.171	5	DLPD	1	1
+8.2.171	m to (m+3)	Downlink packet delay	1	8
+8.2.171	p to (p+3)	Uplink packet delay	1	8
+8.2.171	q to (q+3)	Round trip packet delay	1	8
+8.2.171	r to (r+1)	Downlink Congestion information	1	8
+8.2.171	s to (s+1)	Uplink Congestion information	1	8
+8.2.171	t to (t+4)	Average downlink data rate	1	8
+8.2.171	u to (u+4)	Average uplink data rate	1	8
+8.2.172	5	RDSI	1	1
+8.2.173	5 to 6	DL Data Packets Size	1	8
+8.2.174	5	RCSR	1	1
+8.2.175	5 to 20	NF Instance ID	1	8
+8.2.176	5	SST	1	8
+8.2.176	6 to 8	SD	1	8
+8.2.177	5	V6	2	1
+8.2.177	5	V4	1	1
+8.2.178	5	UUPSI	1	1
+8.2.179	5	BUFF	2	1
+8.2.179	5	DROP	1	1
+8.2.180	5	RDS	1	1
+8.2.181	5	MQAI	2	1
+8.2.181	5	MTAI	1	1
+8.2.182	5 to (n+4)	User Plane Node Management Information	1	8
+8.2.183	5	IPv6	2	1
+8.2.183	5	IPv4	1	1
+8.2.183	a to (a+3)	Number of UE IPv4 Addresses	1	8
+8.2.183	b to (b+3)	Number of UE IPv6 Addresses	1	8
+8.2.184	5 to 6	Validity Timer	1	8
+8.2.185	5 to 6	Type of the offending IE	1	8
+8.2.185	7 to (n+4)	Value of the offending IE	1	8
+8.2.186	5	RAT Type	1	8
+8.2.187	5 - 6	Proxy Authen Type Value	1	8
+8.2.187	7	PAI	4	1
+8.2.187	7	PAR	3	1
+8.2.187	7	PAC	2	1
+8.2.187	7	PAN	1	1
+8.2.187	8	Length of Proxy Authen Name	1	8
+8.2.187	9 to a	Proxy Authen Name Value	1	8
+8.2.187	a+1	Length of Proxy Authen Challenge	1	8
+8.2.187	(a+2) to b	Proxy Authen Challenge Value	1	8
+8.2.187	b+1	Length of Proxy Authen Response	1	8
+8.2.187	(b+2) to c	Proxy Authen Response Value	1	8
+8.2.187	c+1	Proxy Authen ID	1	8
+8.2.188	5 to o	LNS Address value	1	8
+8.2.189	5 to 7	Tunnel Preference value	1	8
+8.2.190	5 to (n+4)	Calling Number value	1	8
+8.2.191	5 to (n+4)	Called Number value	1	8
+8.2.192	5	RENSA	3	1
+8.2.192	5	REDSA	2	1
+8.2.192	5	REUIA	1	1
+8.2.193	5 to 8	DNS Server Address value	1	8
+8.2.194	5 to 8	NBNS Server Address value	1	8
+8.2.195	5 to 6	Maximum Receive Unit value	1	8
+8.2.196	5	PLR	2	1
+8.2.196	5	RTT	1	1
+8.2.196	m to (m+1)	RTT value	1	8
+8.2.196	p	Packet Loss Rate value	1	8
+8.2.197	5	UEAI	2	1
+8.2.197	5	ALBI	1	1
+8.2.198	5 to n+4	Group Id	1	8
+8.2.199	5	V4	2	1
+8.2.199	5	V6	1	1
+8.2.199	p to (p+3)	IPv4 Address	1	8
+8.2.199	q to (q+15)	IPv6 Address	1	8
+8.2.200	5 to 6	UMN6RS	7	1
+8.2.200	5 to 6	SPN	6	1
+8.2.200	5 to 6	SIPV6	5	1
+8.2.200	5 to 6	SIPV4	4	1
+8.2.200	5 to 6	DPN	3	1
+8.2.200	5 to 6	DIPV6	2	1
+8.2.200	5 to 6	DIPV4	1	1
+8.2.200	p to (p+3)	Destination IPv4 Address	1	8
+8.2.200	q to (q+15)	Destination IPv6 Address	1	8
+8.2.200	r to (r+1)	Destination Port Number	1	8
+8.2.200	s to (s+3)	Source IPv4 Address	1	8
+8.2.200	t to (t+15)	Source IPv6 Address	1	8
+8.2.200	u to (u+1)	Source Port Number	1	8
+8.2.201	5 to 6	Length of Domain Name Pattern	1	8
+8.2.201	7 to p	Domain Name Pattern	1	8
+8.2.202	5 to n+4	Event Notification URI	1	8
+8.2.203	5 to n+4	Notification Correlation ID	1	8
+8.2.204	5	DUPL	1	1
+8.2.205	5 to (n+4)	Predefined Rules Name	1	8
+8.2.206	5	NIDI	3	1
+8.2.206	5	SSMI	2	1
+8.2.206	5	TMGI	1	1
+8.2.206	6-11	TMGI	1	8
+8.2.206	12-m	Source Specific IP Multicast Address	1	8
+8.2.206	o to (o+5)	NID	1	8
+8.2.207	6 to 9	Common Tunnel Endpoint Identifier	1	8
+8.2.207	10	Address Type	7	2
+8.2.207	10	Address Length	1	6
+8.2.207	11 to K	IP Multicast Distribution Address (IPv4 or IPv6)	1	8
+8.2.207	K+1	Address Type	7	2
+8.2.207	K+1	Address Length	1	6
+8.2.207	(k+2) to m	IP Source Address (IPv4 or IPv6)	1	8
+8.2.208	5	MBS RESTI	3	1
+8.2.208	5	JMBSSM	2	1
+8.2.208	5	PLLSSM	1	1
+8.2.209	5	CH	3	1
+8.2.209	5	V6	2	1
+8.2.209	5	V4	1	1
+8.2.209	6-7	UDP Port	1	8
+8.2.209	m to (m+3)	IPv4 address	1	8
+8.2.209	p to (p+15)	IPv6 address	1	8
+8.2.210	5 to 6	MBS Unicast Parameters ID value	1	8
+8.2.211	5	N19DTR	3	1
+8.2.211	5	JMTI	2	1
+8.2.211	5	NN19DT	1	1
+8.2.212	5 to (n+4)	Tunnel Password value	1	8
+8.2.213	5 to 6	Area Session ID value	1	8
+8.2.214	5	PPI Value	1	3
+8.2.214	6	DSCP Value 1	1	6
+8.2.214	7	DSCP Value 2	1	6
+8.2.214	(5+x)	DSCP Value x	1	6
+8.2.215	5	PURU	1	1
+8.2.216	5	TNBMI	6	1
+8.2.216	5	DBSMI	5	1
+8.2.216	5	PDUSM	4	1
+8.2.216	5	EML4S	3	1
+8.2.216	5	EDBMI	2	1
+8.2.216	5	IQFISN	1	1
+8.2.217	5 to 6	Enterprise ID	1	8
+8.2.218	5	CTDI	1	1
+8.2.219	5 to n+4	Metadata	1	8
+8.2.220	5	DL	1	1
+8.2.220	6 to 9	Downlink N6 Jitter threshold	1	8
+8.2.221	6 to 9	DL Periodicity	1	8
+8.2.222	5	DL	1	1
+8.2.222	6 to 9	DL Periodicity	1	8
+8.2.222	10 to 13	Lower DL Jitter Measurement	1	8
+8.2.222	14 to 17	Higher DL Jitter Measurement	1	8
+8.2.223	5	N6JMI	3	1
+8.2.223	5	DLPMI	2	1
+8.2.223	5	ULPMI	1	1
+8.2.224	6 to 9	UL Periodicity	1	8
+8.2.225	5	CETH	3	1
+8.2.225	5	CIP	2	1
+8.2.225	5	CUDP	1	1
+8.2.226	5	V6	2	1
+8.2.226	5	V4	1	1
+8.2.226	6	MPQUIC Proxy Type	1	8
+8.2.226	7 to 8	MPQUIC Proxy Port	1	8
+8.2.226	p to (p+3)	MPQUIC Proxy IPv4 Address	1	8
+8.2.226	q to (q+15)	MPQUIC Proxy IPv6 Address	1	8
+8.2.227	5	Transport Mode Value	1	4
+8.2.229	5	Reporting Urgency value	1	4
+8.2.229	6 to 9	Reporting Time Info	1	8
+8.2.230	5 to (n+4)	TL-Container Information	1	8
+8.2.231	5	DQFI	1	1
+8.2.232	5	SST	1	8
+8.2.232	6 to 8	SD	1	8
+8.2.233	5	Media Transport Protocol	1	4
+8.2.234	5	RTP Header Extension Type	1	8
+8.2.235	5	RTP Header Extension ID	1	8
+8.2.236	5	Payload Type	1	8
+8.2.237	5	Payload Format	1	8
+8.2.238	5	EDBN	1	1
+8.2.239	5	RDSI	1	1
+8.2.240	5	ULDR	4	1
+8.2.240	5	DLDR	3	1
+8.2.240	5	ULCI	2	1
+8.2.240	5	DLCI	1	1
+8.2.240	m to (m+1)	DL Congestion information threshold	1	8
+8.2.240	p to (p+1)	UL Congestion information threshold	1	8
+8.2.240	q to (q+4)	DL Data Rate threshold	1	8
+8.2.240	r to (r+4)	UL Data Rate threshold	1	8
+8.2.241	5	NPDSI	3	1
+8.2.241	5	PSSAI	2	1
+8.2.241	5	FI	1	1
+8.2.241	6	NPDS	4	1
+8.2.241	6	PSSA	3	1
+8.2.241	6	Format	1	2
+8.2.242	5	V4	2	1
+8.2.242	5	CHV4	1	1
+8.2.242	m to (m+3)	IPv4 address	1	8
+8.2.243	5	DPO	6	1
+8.2.243	5	DIPV6	5	1
+8.2.243	5	DIPV4	4	1
+8.2.243	5	SPO	3	1
+8.2.243	5	SIPV6	2	1
+8.2.243	5	SIPV4	1	1
+8.2.243	m to (m+3)	Source IPv4 address	1	8
+8.2.243	p to (p+15)	Source IPv6 address	1	8
+8.2.243	q to (q+1)	Source Port Number	1	8
+8.2.243	r to (r+3)	Destination IPv4 address	1	8
+8.2.243	s to (s+15)	Destination IPv6 address	1	8
+8.2.243	t to (t+1)	Destination Port Number	1	8
+8.2.244	5 to n+4	URI	1	8
+8.2.245	5	Job Type	1	8
+8.2.245	6	Number of Measurement Types (k)	1	8
+8.2.245	7	Measurement Type value 1	1	8
+8.2.245	8	Measurement Type value 2	1	8
+8.2.245	7+k-1	Measurement Type value k	1	8
+8.2.245	m to m+2	Time Period	1	8
+8.2.246	5	OTHER	4	1
+8.2.246	5	STAMP	3	1
+8.2.246	5	OWAMP	2	1
+8.2.246	5	TWAMP	1	1
+8.2.247	5	MAXD	2	1
+8.2.247	5	MIND	1	1
+8.2.247	6 to 9	Average Packet Delay	1	8
+8.2.247	p to (p+3)	Minimum Packet Delay	1	8
+8.2.247	q to (q+3)	Maximum Packet Delay	1	8
+8.2.248	5	V6	2	1
+8.2.248	5	V4	1	1
+8.2.248	p to (p+3)	IPv4 Address	1	8
+8.2.248	q to (q+15)	IPv6 Address	1	8
+8.2.249	5 to (n+4)	Operator-Configurable-UPF-Capability	1	8
+8.2.250	5	DPID	3	1
+8.2.250	5	MACD	2	1
+8.2.250	5	IPBD	1	1
+8.2.251	5 to (n+4)	Header Detection Reference	1	8
+8.2.252	5 to (n+4)	Header Detection Support Information	1	8
+8.2.253	5	Reporting Endpoint ID	1	8
+8.2.254	5 to (n+4)	Header Handling Control Reference	1	8
+8.2.255	5	Action value	1	4
+8.2.256	5 to (n+4)	Header Information	1	8
+8.2.257	5 to (n+4)	Header Value	1	8
+8.2.258	5	Condition value	1	4
+8.2.259	5	Header Handling Control ID	1	8
+8.2.260	5	Header Handling Control Rule ID	1	8
+8.2.261	5	PN	6	1
+8.2.261	5	V6	5	1
+8.2.261	5	V4	4	1
+8.2.261	5	Signaling method	1	3
+8.2.261	p to (p+3)	Destination IPv4 (Connection) Address	1	8
+8.2.261	q to (q+15)	Destination IPv6 (Connection) Address	1	8
+8.2.261	r to (r+1)	Port Number	1	8
+8.2.262	5	IRE	3	1
+8.2.262	5	EVT	2	1
+8.2.262	5	PER	1	1
+8.2.263	5	Failure cause	1	8
+8.2.264	5 to 6	N6 Delay Measurement Control Information ID	1	8
+8.2.265	5 to 6	Port Number value	1	8
+8.2.266	5	OTRI	1	1
+8.2.267	5	MPSAI	3	1
+8.2.267	5	MPSSF	2	1
+8.2.267	5	MPSNR	1	1
+8.2.268	5	PSI7	8	1
+8.2.268	5	PSI6	7	1
+8.2.268	5	PSI5	6	1
+8.2.268	5	PSI4	5	1
+8.2.268	5	PSI3	4	1
+8.2.268	5	PSI2	3	1
+8.2.268	5	PSI1	2	1
+8.2.268	5	PSI0	1	1
+8.2.268	6	PSI15	8	1
+8.2.268	6	PSI14	7	1
+8.2.268	6	PSI13	6	1
+8.2.268	6	PSI12	5	1
+8.2.268	6	PSI11	4	1
+8.2.268	6	PSI10	3	1
+8.2.268	6	PSI9	2	1
+8.2.268	6	PSI8	1	1
+8.2.269	5	MQRAI	2	1
+8.2.269	5	MQREI	1	1
+8.2.270	5	V4	2	1
+8.2.270	5	V6	1	1
+8.2.270	p to (p+3)	IPv4 Address	1	8
+8.2.270	q to (q+15)	IPv6 Address	1	8
+8.2.271	5	Transferring method	1	4
+8.2.272	5	UELM	1	1
+8.2.273	5	CONP	2	1
+8.2.273	5	INTP	1	1
+8.2.274	5 to n	HMAC Key	1	8
+8.2.275	5 to 8	Mode	1	8
+8.2.276	5	Length of Key ID	1	8
+8.2.276	6 to p	Key ID	1	8
+8.2.276	p+1	Length of Shared Secret	1	8
+8.2.276	(p+2) to q	Shared Secret	1	8
+8.2.277	5	Remaining Data Reporting Indication value	1	4
+8.2.278	5	FALSE	2	1
+8.2.278	5	TRUE	1	1
+8.2.279	5	SRM	1	1
+8.2.280	5	TLMIP	1	1
+8.2.281	5 to n	Binding Indication	1	8
+8.2.282	5	PSI value	1	4

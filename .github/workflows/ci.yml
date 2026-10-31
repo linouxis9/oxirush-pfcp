@@ -90,6 +90,16 @@ jobs:
       - run: python3 tests/spec/extract.py --fetch
       - run: git diff --exit-code tests/spec
 
+  # The changes of tests/spec/mutations.tsv, each of which the test `spec` must fail on.
+  mutations:
+    name: The test of the specification fails on what differs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: python3 tests/spec/mutate.py
+
   # The test vectors of go-pfcp, at the version that tests/README.md names: each decodes,
   # encodes back to its octets, and reads back from its tree.
   vectors:

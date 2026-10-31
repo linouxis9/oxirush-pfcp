@@ -1056,7 +1056,12 @@ pfcp_layout! {
     /// Mapped N6 IP Address (§8.2.242).
     pub struct MappedN6IpAddress "8.2.242" {
         flags(u8) { v4 "V4": 2, chv4 "CHV4": 1 }
-        ipv4_address "IPv4 address": Ipv4Addr if v4,
+        ipv4_address "IPv4 address": Ipv4Addr if v4 && !chv4,
+    }
+    check(address, path, found) {
+        if address.v4 && address.chv4 {
+            found.push(crate::check::Deviation::new(path, "8.2.242", crate::check::DeviationKind::Rule("V4 and CHV4 are both set")));
+        }
     }
 }
 
