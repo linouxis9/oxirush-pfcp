@@ -37,6 +37,8 @@ pub struct Octets<'a>(Repr<'a>);
 
 #[derive(Clone)]
 enum Repr<'a> {
+    /// No octets: what most values' later octets are, built and dropped for nothing.
+    Empty,
     Inline { length: u8, octets: [u8; INLINE] },
     Heap(Box<[u8]>),
     #[cfg_attr(not(pfcp_borrowed), allow(dead_code))]
@@ -46,14 +48,13 @@ enum Repr<'a> {
 impl<'a> Octets<'a> {
     /// No octets.
     pub const fn new() -> Self {
-        Self(Repr::Inline { length: 0, octets: [0; INLINE] })
+        Self(Repr::Empty)
     }
 
     /// A copy of `octets`.
     pub fn copied(octets: &[u8]) -> Self {
         match octets.len() {
-            // No octets, without an array to fill: an empty box allocates nothing.
-            0 => Self(Repr::Heap(Box::default())),
+            0 => Self(Repr::Empty),
             length @ 1..=INLINE => {
                 let mut inline = [0; INLINE];
                 inline[..length].copy_from_slice(octets);
@@ -66,6 +67,9 @@ impl<'a> Octets<'a> {
     /// The octets of a value of a decoded message: borrowed, or copied.
     #[inline]
     pub(crate) fn wire(octets: &'a [u8]) -> Self {
+        if octets.is_empty() {
+            return Self(Repr::Empty);
+        }
         #[cfg(pfcp_borrowed)]
         {
             Self(Repr::Borrowed(octets))
@@ -80,6 +84,7 @@ impl<'a> Octets<'a> {
     #[inline]
     pub fn as_slice(&self) -> &[u8] {
         match &self.0 {
+            Repr::Empty => &[],
             Repr::Inline { length, octets } => &octets[..usize::from(*length)],
             Repr::Heap(octets) => octets,
             Repr::Borrowed(octets) => octets,
@@ -89,6 +94,7 @@ impl<'a> Octets<'a> {
     /// The same octets, borrowing nothing.
     pub fn into_owned(self) -> Octets<'static> {
         Octets(match self.0 {
+            Repr::Empty => Repr::Empty,
             Repr::Inline { length, octets } => Repr::Inline { length, octets },
             Repr::Heap(octets) => Repr::Heap(octets),
             Repr::Borrowed(octets) => return Octets::copied(octets),
@@ -103,7 +109,7 @@ impl<'a> Octets<'a> {
 
 impl Default for Octets<'_> {
     fn default() -> Self {
-        Self(Repr::Heap(Box::default()))
+        Self(Repr::Empty)
     }
 }
 
