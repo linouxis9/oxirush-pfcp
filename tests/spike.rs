@@ -14,7 +14,7 @@ fn establishment() -> Message<'static> {
     let uplink = CreatePdr::new(
         PdrId::new(1),
         Precedence::new(255),
-        Pdi::new(SourceInterface::new(InterfaceValue::Access)).with_local_f_teid(FTeid::choose_ipv4()),
+        Pdi::new(SourceInterface::new(SourceInterfaceValue::Access)).with_local_f_teid(FTeid::choose_ipv4()),
     )
     .with_far_id(FarId::new(1))
     .with_urr_id(UrrId::new(1));
@@ -22,7 +22,7 @@ fn establishment() -> Message<'static> {
     let downlink = CreatePdr::new(
         PdrId::new(2),
         Precedence::new(255),
-        Pdi::new(SourceInterface::new(InterfaceValue::Core)).with_ue_ip_address(ue),
+        Pdi::new(SourceInterface::new(SourceInterfaceValue::Core)).with_ue_ip_address(ue),
     )
     .with_far_id(FarId::new(2));
     let smf = Ipv4Addr::new(10, 0, 0, 1);

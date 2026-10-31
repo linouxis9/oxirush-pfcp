@@ -24,9 +24,10 @@ use core::net::{Ipv4Addr, Ipv6Addr};
 
 use crate::Error;
 use crate::check::{Check, Deviation};
-use crate::ie::{Codec, IeType, listed_value};
+use crate::ie::{Codec, listed_value};
 use crate::macros::{pfcp_bits, pfcp_layout};
 use crate::octets::{IntoOwned, Octets};
+use crate::enums::*;
 use crate::values::*;
 
 // ── Flags, then the fields that they announce ──────────────────────────────
@@ -36,7 +37,7 @@ pfcp_layout! {
     /// which SMMII announces, is kept as its octets.
     pub struct SdfFilter "8.2.5" {
         flags(u8) { smmii "SMMII": 6, bid "BID": 5, fl "FL": 4, spi "SPI": 3, ttc "TTC": 2, fd "FD": 1 }
-        spare_octet "Spare octet": u8 if true,
+        spare_octet "Spare octet": Spare if true,
         flow_description "Flow Description": Lv16 if fd,
         tos_traffic_class "ToS Traffic Class": u16 if ttc,
         security_parameter_index "Security Parameter Index": u32 if spi,
@@ -51,10 +52,10 @@ pfcp_layout! {
     /// 1 IPv6, 2 URL, 3 SIP URI, 4 IPv4 and IPv6, 5 Port, 6 IPv4 and Port, 7 IPv6 and
     /// Port, 8 IPv4 and IPv6 and Port), the addresses and the port.
     pub struct RedirectInformation "8.2.20" {
-        flags(u8) { redirect_address_type "Redirect Address Type": 1 / 4 }
+        flags(u8) { redirect_address_type "Redirect Address Type": 1 / 4 as RedirectAddressType }
         redirect_server_address "Redirect Server Address": Lv16 if true,
-        other_redirect_server_address "Other Redirect Server Address": Lv16 if redirect_address_type == 4 || redirect_address_type == 8,
-        redirect_port "Redirect Port": u16 if (5..=8).contains(&redirect_address_type),
+        other_redirect_server_address "Other Redirect Server Address": Lv16 if matches!(redirect_address_type.value(), 4 | 8),
+        redirect_port "Redirect Port": u16 if (5..=8).contains(&redirect_address_type.value()),
     }
 }
 
@@ -74,7 +75,7 @@ pfcp_layout! {
     /// kept as the octets of their lists.
     pub struct PfdContents "8.2.39" {
         flags(u8) { adnp "ADNP": 8, aurl "AURL": 7, afd "AFD": 6, dnp "DNP": 5, cp "CP": 4, dn "DN": 3, url "URL": 2, fd "FD": 1 }
-        spare_octet "Spare octet": u8 if true,
+        spare_octet "Spare octet": Spare if true,
         flow_description "Flow Description": Lv16 if fd,
         url_field "URL field": Lv16 if url,
         domain_name "Domain Name": Lv16 if dn,
@@ -89,23 +90,23 @@ pfcp_layout! {
 pfcp_layout! {
     /// Flow Information (§8.2.61): the Flow Direction of Table 8.2.61-1 and the flow.
     pub struct FlowInformation "8.2.61" {
-        flags(u8) { flow_direction "Flow Direction": 1 / 3 }
+        flags(u8) { flow_direction "Flow Direction": 1 / 3 as FlowDirection }
         flow_description "Flow Description": Lv16 if true,
     }
 }
 
 pfcp_layout! {
-    /// Packet Rate (§8.2.63): each rate after its time unit (Table 8.2.63-1), in the octet
+    /// Packet Rate (§8.2.63): each rate after its time unit (Table 8.2.63.1), in the octet
     /// of the unit with its spare bits.
     pub struct PacketRate "8.2.63" {
         flags(u8) { aprc "APRC": 3, dlpr "DLPR": 2, ulpr "ULPR": 1 }
-        uplink_time_unit "Uplink Time Unit": u8 if ulpr,
+        uplink_time_unit "Uplink Time Unit": TimeUnit if ulpr,
         maximum_uplink_packet_rate "Maximum Uplink Packet Rate": u16 if ulpr,
-        downlink_time_unit "Downlink Time Unit": u8 if dlpr,
+        downlink_time_unit "Downlink Time Unit": TimeUnit if dlpr,
         maximum_downlink_packet_rate "Maximum Downlink Packet Rate": u16 if dlpr,
-        additional_uplink_time_unit "Additional Uplink Time Unit": u8 if aprc && ulpr,
+        additional_uplink_time_unit "Additional Uplink Time Unit": TimeUnit if aprc && ulpr,
         maximum_additional_uplink_packet_rate "Maximum Additional Uplink Packet Rate": u16 if aprc && ulpr,
-        additional_downlink_time_unit "Additional Downlink Time Unit": u8 if aprc && dlpr,
+        additional_downlink_time_unit "Additional Downlink Time Unit": TimeUnit if aprc && dlpr,
         maximum_additional_downlink_packet_rate "Maximum Additional Downlink Packet Rate": u16 if aprc && dlpr,
     }
 }
@@ -114,7 +115,7 @@ pfcp_layout! {
     /// Header Enrichment (§8.2.67): the Header Type of Table 8.2.67-1, the name and the
     /// value of the header field.
     pub struct HeaderEnrichment "8.2.67" {
-        flags(u8) { header_type "Header Type": 1 / 5 }
+        flags(u8) { header_type "Header Type": 1 / 5 as HeaderType }
         header_field_name "Header Field Name": Lv8 if true,
         header_field_value "Header Field Value": Lv8 if true,
     }
@@ -124,7 +125,7 @@ pfcp_layout! {
     /// Failed Rule ID (§8.2.80): the Rule ID Type of Table 8.2.80-1 and the rule ID, of the
     /// length of its type.
     pub struct FailedRuleId "8.2.80" {
-        flags(u8) { rule_id_type "Rule ID Type": 1 / 5 }
+        flags(u8) { rule_id_type "Rule ID Type": 1 / 5 as RuleIdType }
         rule_id_value "Rule ID value": Rest if true,
     }
 }
@@ -133,7 +134,7 @@ pfcp_layout! {
     /// Time Quota Mechanism (§8.2.81): the Base Time Interval Type of Table 8.2.81-1 and the
     /// interval, in seconds.
     pub struct TimeQuotaMechanism "8.2.81" {
-        flags(u8) { btit "BTIT": 1 / 2 }
+        flags(u8) { btit "BTIT": 1 / 2 as BaseTimeIntervalType }
         base_time_interval "Base Time Interval": u32 if true,
     }
 }
@@ -304,7 +305,7 @@ pfcp_layout! {
     /// Reporting Suggestion Info (§8.2.229): the Reporting Urgency of Table 8.2.229-1 and
     /// the time.
     pub struct ReportingSuggestionInfo "8.2.229" {
-        flags(u8) { reporting_urgency "Reporting Urgency value": 1 / 4 }
+        flags(u8) { reporting_urgency "Reporting Urgency value": 1 / 4 as ReportingUrgencyValue }
         reporting_time_info "Reporting Time Info": u32 if true,
     }
 }
@@ -324,44 +325,12 @@ pfcp_layout! {
     /// On-path N6 Connection Information (§8.2.261): the Signaling method of Table
     /// 8.2.261-1, then the destination of the connection.
     pub struct OnPathN6ConnectionInformation "8.2.261" {
-        flags(u8) { pn "PN": 6, v6 "V6": 5, v4 "V4": 4, signaling_method "Signaling method": 1 / 3 }
+        flags(u8) { pn "PN": 6, v6 "V6": 5, v4 "V4": 4, signaling_method "Signaling method": 1 / 3 as SignalingMethod }
         destination_ipv4 "Destination IPv4 (Connection Address)": Ipv4Addr if v4,
         destination_ipv6 "Destination IPv6 (Connection Address)": Ipv6Addr if v6,
         port_number "Port Number": u16 if pn,
     }
 }
-
-impl Check for SdfFilter<'_> {
-    fn check(&self, path: &str, found: &mut Vec<Deviation>) {
-        layout_checks(self.inconsistent(), self.spare | self.spare_octet.unwrap_or(0), path, Self::CLAUSE, found);
-    }
-}
-
-impl Check for PfdContents<'_> {
-    fn check(&self, path: &str, found: &mut Vec<Deviation>) {
-        layout_checks(self.inconsistent(), self.spare | self.spare_octet.unwrap_or(0), path, Self::CLAUSE, found);
-    }
-}
-
-macro_rules! layout_check {
-    ($($ty:ident),*) => {$(
-        impl Check for $ty<'_> {
-            fn check(&self, path: &str, found: &mut Vec<Deviation>) {
-                layout_checks(self.inconsistent(), self.spare, path, Self::CLAUSE, found);
-            }
-        }
-    )*};
-}
-
-layout_check!(
-    RedirectInformation, DownlinkDataServiceInformation, FlowInformation, PacketRate,
-    HeaderEnrichment, FailedRuleId, TimeQuotaMechanism, MacAddress, CpPfcpEntityIpAddress,
-    SourceIpAddress, PacketRateStatus, PmfControlInformation, MptcpAddressInformation,
-    LinkSpecificMultipathIpAddress, PmfAddressInformation, IpAddressAndPortNumberReplacement,
-    MbsSessionIdentifier, LocalIngressTunnel, DscpToPpiMappingInformation,
-    TrafficParameterThreshold, N6JitterMeasurement, MpquicAddressInformation,
-    ReportingSuggestionInfo, ReportingThresholds, OnPathN6ConnectionInformation
-);
 
 // ── Fixed fields, a length and its octets ──────────────────────────────────
 
@@ -371,7 +340,7 @@ pfcp_fields! {
     /// UE IP address Pool Identity (§8.2.128).
     pub struct UeIpAddressPoolIdentity "8.2.128" { ue_ip_address_pool_identity "UE IP address Pool Identity": Lv16 }
     /// SMF Set ID (§8.2.131): a spare octet, then the FQDN.
-    pub struct SmfSetId "8.2.131" { spare_octet "Spare": u8, fqdn "FQDN": Rest }
+    pub struct SmfSetId "8.2.131" { spare_octet "Spare": Spare, fqdn "FQDN": Rest }
     /// Offending IE Information (§8.2.185).
     pub struct OffendingIeInformation "8.2.185" { type_of_the_offending_ie "Type of the offending IE": u16, value_of_the_offending_ie "Value of the offending IE": Rest }
     /// DNS Query/Response Filter (§8.2.201).
@@ -379,13 +348,14 @@ pfcp_fields! {
     /// Multicast Transport Information (§8.2.207): a spare octet, the Common Tunnel
     /// Endpoint Identifier, then the IP multicast distribution address and the source
     /// address, each after its type and length, kept as their octets.
-    pub struct MulticastTransportInformation "8.2.207" { spare_octet "Spare": u8, common_tunnel_endpoint_identifier "Common Tunnel Endpoint Identifier": u32, addresses "IP Multicast Distribution Address and IP Source Address": Rest }
+    pub struct MulticastTransportInformation "8.2.207" { spare_octet "Spare": Spare, common_tunnel_endpoint_identifier "Common Tunnel Endpoint Identifier": u32, addresses "IP Multicast Distribution Address and IP Source Address": Rest }
     /// Vendor-Specific Node Report Type (§8.2.217): the Enterprise ID and its octet of
     /// flags, which the vendor defines.
     pub struct VendorSpecificNodeReportType "8.2.217" { enterprise_id "Enterprise ID": u16, flags "Flags": u8 }
-    /// UE Level Measurements Configuration (§8.2.245): the Job Type of Table 8.2.231-1,
-    /// then its measurements, kept as their octets.
-    pub struct UeLevelMeasurementsConfiguration "8.2.245" { job_type "Job Type": u8, measurements "Measurements": Rest }
+    /// UE Level Measurements Configuration (§8.2.245): the Job Type (Table 8.2.245-1), the
+    /// Measurement Types after their number (Table 8.2.245-2), and the Time Period, in
+    /// seconds.
+    pub struct UeLevelMeasurementsConfiguration "8.2.245" { job_type "Job Type": JobType, measurement_types "Measurement Type": Counted<MeasurementType>, time_period "Time Period": U24 }
     /// L2TP User Authentication (§8.2.187): the Proxy Authen Type, its flags, then the name,
     /// the challenge, the response and the ID that they announce, kept as their octets.
     pub struct L2tpUserAuthentication "8.2.187" { proxy_authen_type_value "Proxy Authen Type Value": u8, flags "Flags": u8, authentication "Proxy Authen Name, Challenge, Response and ID": Rest }
@@ -393,7 +363,7 @@ pfcp_fields! {
 
 pfcp_number! {
     /// RAT Type (§8.2.186): its value of Table 8.2.186-1.
-    RatType(u8) "RAT Type" "8.2.186";
+    RatType(RatTypeValue) "RAT Type" "8.2.186";
 }
 
 pfcp_octets! {
@@ -605,8 +575,8 @@ pfcp_fields! {
 }
 
 /// FQ-CSID (§8.2.43): the node that allocated the PDN Connection Set Identifiers, by its
-/// Node-ID Type (Table 8.2.43-1: 0 an IPv4 address, 1 an IPv6 address, 2 MCC, MNC and a
-/// number), and the identifiers.
+/// Node-ID Type (0 an IPv4 address, 1 an IPv6 address, 2 MCC, MNC and a number), the
+/// identifiers, and the Node Type (Table 8.2.43-2) that a later release added.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct FqCsid<'a> {
     /// The Node-ID Type, bits 8 to 5 of octet 5.
@@ -615,6 +585,9 @@ pub struct FqCsid<'a> {
     pub node_address: Vec<u8>,
     /// The PDN Connection Set Identifiers, at most fifteen.
     pub csids: Vec<u16>,
+    /// The octet of the Node Type, bits 4 to 1, and four spare bits: absent from a sender
+    /// of an earlier release.
+    pub node_type: Option<NodeType>,
     /// The octets after them, which a later release adds.
     pub extra: Octets<'a>,
 }
@@ -639,7 +612,8 @@ impl<'a> Codec<'a> for FqCsid<'a> {
         for _ in 0..first & 0x0f {
             csids.push(u16::read(&mut rest)?);
         }
-        Some(Self { node_id_type, node_address: address.to_vec(), csids, extra: Octets::wire(rest) })
+        let node_type = NodeType::read(&mut rest);
+        Some(Self { node_id_type, node_address: address.to_vec(), csids, node_type, extra: Octets::wire(rest) })
     }
     fn encode(&self, out: &mut Vec<u8>) -> Result<(), Error> {
         if self.csids.len() > 15 || Self::address_length(self.node_id_type) != Some(self.node_address.len()) {
@@ -650,20 +624,35 @@ impl<'a> Codec<'a> for FqCsid<'a> {
         for csid in &self.csids {
             out.extend_from_slice(&csid.to_be_bytes());
         }
+        if self.node_type.is_none() && !self.extra.is_empty() {
+            return Err(Error::Inconsistent { ie: "FQ-CSID", field: "Node Type", clause: "8.2.43" });
+        }
+        if let Some(node_type) = self.node_type {
+            out.push(node_type.value());
+        }
         out.extend_from_slice(&self.extra);
         Ok(())
     }
     fn encoded_len(&self) -> usize {
-        1 + self.node_address.len() + 2 * self.csids.len() + self.extra.len()
+        1 + self.node_address.len() + 2 * self.csids.len() + usize::from(self.node_type.is_some()) + self.extra.len()
     }
 }
 
-impl Check for FqCsid<'_> {}
+impl Check for FqCsid<'_> {
+    fn check(&self, path: &str, found: &mut Vec<Deviation>) {
+        if Self::address_length(self.node_id_type).is_none() {
+            found.push(Deviation::new(path, "8.2.43", crate::check::DeviationKind::SpareValue { value: self.node_id_type.into() }));
+        }
+        if let Some(node_type) = self.node_type {
+            node_type.check(path, "8.2.43", found);
+        }
+    }
+}
 
 impl<'a> IntoOwned for FqCsid<'a> {
     type Owned = FqCsid<'static>;
     fn into_owned(self) -> FqCsid<'static> {
-        FqCsid { node_id_type: self.node_id_type, node_address: self.node_address, csids: self.csids, extra: self.extra.into_owned() }
+        FqCsid { node_id_type: self.node_id_type, node_address: self.node_address, csids: self.csids, node_type: self.node_type, extra: self.extra.into_owned() }
     }
 }
 
@@ -683,6 +672,9 @@ impl oxirush_utils::tree::Tree for FqCsid<'_> {
         };
         members.put("Node-Address", address);
         members.put("PDN Connection Set Identifiers", tree::Value::Array(self.csids.iter().map(|csid| tree::unsigned((*csid).into())).collect()));
+        if let Some(node_type) = self.node_type {
+            members.put("Node Type", node_type.tree());
+        }
         if !self.extra.is_empty() {
             members.put("extra", tree::octets(&self.extra));
         }
@@ -692,7 +684,7 @@ impl oxirush_utils::tree::Tree for FqCsid<'_> {
         value: &oxirush_utils::tree::Value,
         reading: &mut oxirush_utils::tree::Reading,
     ) -> Result<Self, oxirush_utils::tree::Refused> {
-        let read = reading.members(value, &["Node-ID Type", "Node-Address", "PDN Connection Set Identifiers", "extra"])?;
+        let read = reading.members(value, &["Node-ID Type", "Node-Address", "PDN Connection Set Identifiers", "Node Type", "extra"])?;
         let node_id_type = reading.member(&read, 0, |value, reading| reading.unsigned(value, 0, 15))? as u8;
         let node_address = reading.member(&read, 1, |value, reading| {
             let text = value.as_str().unwrap_or_default();
@@ -703,8 +695,12 @@ impl oxirush_utils::tree::Tree for FqCsid<'_> {
             }
         })?;
         let csids = reading.member(&read, 2, |value, reading| reading.list(value, |value, reading| Ok(reading.unsigned(value, 0, 0xffff)? as u16)))?;
-        let extra = reading.optional(&read, 3, |value, reading| reading.octets(value))?;
-        let fq_csid = Self { node_id_type, node_address, csids, extra: extra.map(Octets::from).unwrap_or_default() };
+        let node_type = reading.optional(&read, 3, NodeType::from_tree)?;
+        let extra = reading.optional(&read, 4, |value, reading| reading.octets(value))?;
+        let fq_csid = Self { node_id_type, node_address, csids, node_type, extra: extra.map(Octets::from).unwrap_or_default() };
+        if fq_csid.node_type.is_none() && !fq_csid.extra.is_empty() {
+            return Err(reading.refuse(oxirush_utils::tree::ErrorKind::Value, "extra octets after a Node Type only (8.2.43)"));
+        }
         if fq_csid.csids.len() > 15 || Self::address_length(node_id_type) != Some(fq_csid.node_address.len()) {
             return Err(reading.refuse(oxirush_utils::tree::ErrorKind::Value, "a Node-Address of the length of its type, and at most fifteen identifiers (8.2.43)"));
         }

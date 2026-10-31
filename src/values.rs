@@ -24,6 +24,7 @@ use core::net::{Ipv4Addr, Ipv6Addr};
 
 use crate::Error;
 use crate::check::{Check, Deviation, DeviationKind};
+use crate::enums::*;
 use crate::ie::{Codec, IeType, listed_value};
 use crate::macros::{pfcp_bits, pfcp_layout};
 use crate::octets::{IntoOwned, Octets};
@@ -36,6 +37,8 @@ pub trait Field: Sized {
     fn write(&self, out: &mut Vec<u8>);
     /// Its length.
     fn size(&self) -> usize;
+    /// What it breaks of the clause of its layout: a value that its table does not name.
+    fn check(&self, _path: &str, _clause: &'static str, _found: &mut Vec<Deviation>) {}
     /// Its tree.
     #[cfg(feature = "tree")]
     fn to_tree(&self) -> oxirush_utils::tree::Value;
@@ -218,6 +221,87 @@ impl Field for Rest {
     }
 }
 
+/// An octet that is spare: zero from a sender, kept as it is.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Spare(pub u8);
+
+impl Field for Spare {
+    fn read(octets: &mut &[u8]) -> Option<Self> {
+        u8::read(octets).map(Self)
+    }
+    fn write(&self, out: &mut Vec<u8>) {
+        out.push(self.0);
+    }
+    fn size(&self) -> usize {
+        1
+    }
+    fn check(&self, path: &str, _clause: &'static str, found: &mut Vec<Deviation>) {
+        if self.0 != 0 {
+            found.push(Deviation::new(path, "8.1.2", DeviationKind::SpareBits));
+        }
+    }
+    #[cfg(feature = "tree")]
+    fn to_tree(&self) -> oxirush_utils::tree::Value {
+        oxirush_utils::tree::unsigned(self.0.into())
+    }
+    #[cfg(feature = "tree")]
+    fn from_tree(
+        value: &oxirush_utils::tree::Value,
+        reading: &mut oxirush_utils::tree::Reading,
+    ) -> Result<Self, oxirush_utils::tree::Refused> {
+        u8::from_tree(value, reading).map(Self)
+    }
+}
+
+/// A number of one octet, then that many values.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Counted<T>(pub Vec<T>);
+
+impl<T: Field> Field for Counted<T> {
+    fn read(octets: &mut &[u8]) -> Option<Self> {
+        let count = u8::read(octets)?;
+        let mut values = Vec::with_capacity(usize::from(count).min(octets.len()));
+        for _ in 0..count {
+            values.push(T::read(octets)?);
+        }
+        Some(Self(values))
+    }
+    fn write(&self, out: &mut Vec<u8>) {
+        // More values than the number can say are written with the number cut: check()
+        // reports it.
+        out.push(u8::try_from(self.0.len()).unwrap_or(u8::MAX));
+        for value in &self.0 {
+            value.write(out);
+        }
+    }
+    fn size(&self) -> usize {
+        1 + self.0.iter().map(Field::size).sum::<usize>()
+    }
+    fn check(&self, path: &str, clause: &'static str, found: &mut Vec<Deviation>) {
+        if self.0.len() > usize::from(u8::MAX) {
+            found.push(Deviation::new(path, clause, DeviationKind::Rule("more values than their number can say")));
+        }
+        for value in &self.0 {
+            value.check(path, clause, found);
+        }
+    }
+    #[cfg(feature = "tree")]
+    fn to_tree(&self) -> oxirush_utils::tree::Value {
+        oxirush_utils::tree::Value::Array(self.0.iter().map(Field::to_tree).collect())
+    }
+    #[cfg(feature = "tree")]
+    fn from_tree(
+        value: &oxirush_utils::tree::Value,
+        reading: &mut oxirush_utils::tree::Reading,
+    ) -> Result<Self, oxirush_utils::tree::Refused> {
+        let values = reading.list(value, T::from_tree)?;
+        if values.len() > usize::from(u8::MAX) {
+            return Err(reading.mismatch("at most 255 values", value));
+        }
+        Ok(Self(values))
+    }
+}
+
 /// A number of three octets.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct U24(pub u32);
@@ -357,17 +441,21 @@ macro_rules! pfcp_number {
                 Ok(())
             }
             fn encoded_len(&self) -> usize {
-                core::mem::size_of::<$t>() + self.extra.len()
+                Field::size(&self.value) + self.extra.len()
             }
         }
 
-        impl Check for $ty<'_> {}
+        impl Check for $ty<'_> {
+            fn check(&self, path: &str, found: &mut Vec<crate::check::Deviation>) {
+                Field::check(&self.value, path, $clause, found);
+            }
+        }
 
         /// The number alone, or `{"Rule ID": 1, "extra": "00"}` with the octets of a later
         /// release.
         #[cfg(feature = "tree")]
         impl oxirush_utils::tree::Tree for $ty<'_> {
-            const NAME: &'static str = <$ty<'static> as IeType>::TYPE_NAME;
+            const NAME: &'static str = <$ty<'static> as crate::ie::IeType>::TYPE_NAME;
             fn to_tree(&self) -> oxirush_utils::tree::Value {
                 if self.extra.is_empty() {
                     return Field::to_tree(&self.value);
@@ -407,150 +495,24 @@ pfcp_number! {
     QerId(u32) "QER ID value" "8.2.75";
 }
 
-/// The Interface value of a Source Interface (Table 8.2.2-1).
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub enum InterfaceValue {
-    /// 0: Access.
-    #[default]
-    Access,
-    /// 1: Core.
-    Core,
-    /// 2: SGi-LAN/N6-LAN.
-    SgiLanN6Lan,
-    /// 3: CP-function.
-    CpFunction,
-    /// 4: 5G VN Internal.
-    FiveGVnInternal,
-    /// A value that Table 8.2.2-1 has as spare, kept as it is.
-    Spare(u8),
-}
-
-impl InterfaceValue {
-    const NAMES: &'static [&'static str] =
-        &["Access", "Core", "SGi-LAN/N6-LAN", "CP-function", "5G VN Internal"];
-
-    fn from_bits(bits: u8) -> Self {
-        match bits {
-            0 => Self::Access,
-            1 => Self::Core,
-            2 => Self::SgiLanN6Lan,
-            3 => Self::CpFunction,
-            4 => Self::FiveGVnInternal,
-            other => Self::Spare(other),
-        }
+pfcp_bits! {
+    /// Source Interface (§8.2.2): where the packets of a PDR come from (Table 8.2.2-1).
+    pub struct SourceInterface "8.2.2" octets 1 min 1 {
+        interface_value "Interface value": 0 1 4 as SourceInterfaceValue,
     }
-
-    fn bits(self) -> u8 {
-        match self {
-            Self::Access => 0,
-            Self::Core => 1,
-            Self::SgiLanN6Lan => 2,
-            Self::CpFunction => 3,
-            Self::FiveGVnInternal => 4,
-            Self::Spare(bits) => bits & 0x0f,
-        }
-    }
-}
-
-/// Source Interface (§8.2.2): where the packets of a PDR come from.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct SourceInterface<'a> {
-    /// The Interface value, bits 4 to 1.
-    pub value: InterfaceValue,
-    /// Bits 8 to 5, which are spare.
-    pub spare: u8,
-    /// The octets after it, which a later release adds.
-    pub extra: Octets<'a>,
 }
 
 impl SourceInterface<'_> {
     /// The interface.
-    pub fn new(value: InterfaceValue) -> Self {
-        Self { value, spare: 0, extra: Octets::new() }
+    pub fn new(interface_value: SourceInterfaceValue) -> Self {
+        Self { interface_value, ..Self::default() }
     }
 }
 
-impl<'a> IntoOwned for SourceInterface<'a> {
-    type Owned = SourceInterface<'static>;
-    fn into_owned(self) -> SourceInterface<'static> {
-        SourceInterface { value: self.value, spare: self.spare, extra: self.extra.into_owned() }
-    }
-}
-
-impl<'a> Codec<'a> for SourceInterface<'a> {
-    fn decode(octets: &'a [u8]) -> Option<Self> {
-        let (&first, rest) = octets.split_first()?;
-        Some(Self {
-            value: InterfaceValue::from_bits(first & 0x0f),
-            spare: first >> 4,
-            extra: Octets::wire(rest),
-        })
-    }
-    fn encode(&self, out: &mut Vec<u8>) -> Result<(), Error> {
-        out.push(self.spare << 4 | self.value.bits());
-        out.extend_from_slice(&self.extra);
-        Ok(())
-    }
-    fn encoded_len(&self) -> usize {
-        1 + self.extra.len()
-    }
-}
-
-impl Check for SourceInterface<'_> {
-    fn check(&self, path: &str, found: &mut Vec<Deviation>) {
-        if let InterfaceValue::Spare(value) = self.value {
-            found.push(Deviation::new(path, "8.2.2", DeviationKind::SpareValue { value: value.into() }));
-        }
-        if self.spare != 0 {
-            found.push(Deviation::new(path, "8.1.2", DeviationKind::SpareBits));
-        }
-    }
-}
-
-/// The name of the value, or its number for a spare one.
-#[cfg(feature = "tree")]
-impl oxirush_utils::tree::Tree for SourceInterface<'_> {
-    const NAME: &'static str = "Source Interface";
-    fn to_tree(&self) -> oxirush_utils::tree::Value {
-        let value = match self.value {
-            InterfaceValue::Spare(bits) => oxirush_utils::tree::unsigned(bits.into()),
-            known => oxirush_utils::tree::text(InterfaceValue::NAMES[usize::from(known.bits())]),
-        };
-        if self.spare == 0 && self.extra.is_empty() {
-            return value;
-        }
-        let mut members = oxirush_utils::tree::Members::new();
-        members.put("Interface value", value);
-        if self.spare != 0 {
-            members.put("Spare", oxirush_utils::tree::unsigned(self.spare.into()));
-        }
-        if !self.extra.is_empty() {
-            members.put("extra", oxirush_utils::tree::octets(&self.extra));
-        }
-        members.finish()
-    }
-    fn from_tree(
-        value: &oxirush_utils::tree::Value,
-        reading: &mut oxirush_utils::tree::Reading,
-    ) -> Result<Self, oxirush_utils::tree::Refused> {
-        fn interface(
-            value: &oxirush_utils::tree::Value,
-            reading: &mut oxirush_utils::tree::Reading,
-        ) -> Result<InterfaceValue, oxirush_utils::tree::Refused> {
-            match value.is_number() {
-                true => Ok(InterfaceValue::from_bits(reading.unsigned(value, 0, 15)? as u8)),
-                false => Ok(InterfaceValue::from_bits(reading.named(value, InterfaceValue::NAMES)? as u8)),
-            }
-        }
-        if !value.is_object() {
-            return Ok(Self::new(interface(value, reading)?));
-        }
-        let read = reading.members(value, &["Interface value", "Spare", "extra"])?;
-        Ok(Self {
-            value: reading.member(&read, 0, interface)?,
-            spare: reading.optional(&read, 1, |value, reading| reading.unsigned(value, 0, 15))?.unwrap_or(0) as u8,
-            extra: reading.optional(&read, 2, |value, reading| reading.octets(value))?.map(Octets::from).unwrap_or_default(),
-        })
+impl DestinationInterface<'_> {
+    /// The interface.
+    pub fn new(interface_value: DestinationInterfaceValue) -> Self {
+        Self { interface_value, ..Self::default() }
     }
 }
 
@@ -563,6 +525,14 @@ pfcp_layout! {
         ipv4 "IPv4 address": Ipv4Addr if v4 && !ch,
         ipv6 "IPv6 address": Ipv6Addr if v6 && !ch,
         choose_id "CHOOSE ID": u8 if chid,
+    }
+    check(fteid, path, found) {
+        if !fteid.v4 && !fteid.v6 {
+            found.push(Deviation::new(path, "8.2.3", DeviationKind::Rule("neither V4 nor V6 is set")));
+        }
+        if fteid.chid && !fteid.ch {
+            found.push(Deviation::new(path, "8.2.3", DeviationKind::Rule("CHID is set and CH is not")));
+        }
     }
 }
 
@@ -589,6 +559,14 @@ pfcp_layout! {
         ipv6_prefix_delegation_bits "IPv6 Prefix Delegation Bits": u8 if ipv6d,
         ipv6_prefix_length "IPv6 Prefix Length": u8 if ip6pl,
     }
+    check(address, path, found) {
+        if address.v4 && address.chv4 {
+            found.push(Deviation::new(path, "8.2.62", DeviationKind::Rule("V4 and CHV4 are both set")));
+        }
+        if address.v6 && address.chv6 {
+            found.push(Deviation::new(path, "8.2.62", DeviationKind::Rule("V6 and CHV6 are both set")));
+        }
+    }
 }
 
 impl FTeid<'_> {
@@ -600,51 +578,6 @@ impl FTeid<'_> {
     /// A request that the UP function choose an F-TEID with an IPv4 address.
     pub fn choose_ipv4() -> Self {
         Self { v4: true, ch: true, ..Self::default() }
-    }
-}
-
-impl Check for FTeid<'_> {
-    fn check(&self, path: &str, found: &mut Vec<Deviation>) {
-        layout_checks(self.inconsistent(), self.spare, path, Self::CLAUSE, found);
-        if !self.v4 && !self.v6 {
-            found.push(Deviation::new(path, "8.2.3", DeviationKind::Rule("neither V4 nor V6 is set")));
-        }
-        if self.chid && !self.ch {
-            found.push(Deviation::new(path, "8.2.3", DeviationKind::Rule("CHID is set and CH is not")));
-        }
-    }
-}
-
-impl Check for FSeid<'_> {
-    fn check(&self, path: &str, found: &mut Vec<Deviation>) {
-        layout_checks(self.inconsistent(), self.spare, path, Self::CLAUSE, found);
-    }
-}
-
-impl Check for UeIpAddress<'_> {
-    fn check(&self, path: &str, found: &mut Vec<Deviation>) {
-        layout_checks(self.inconsistent(), self.spare, path, Self::CLAUSE, found);
-        if self.v4 && self.chv4 {
-            found.push(Deviation::new(path, "8.2.62", DeviationKind::Rule("V4 and CHV4 are both set")));
-        }
-        if self.v6 && self.chv6 {
-            found.push(Deviation::new(path, "8.2.62", DeviationKind::Rule("V6 and CHV6 are both set")));
-        }
-    }
-}
-
-pub(crate) fn layout_checks(
-    inconsistent: Option<&'static str>,
-    spare: u8,
-    path: &str,
-    clause: &'static str,
-    found: &mut Vec<Deviation>,
-) {
-    if let Some(field) = inconsistent {
-        found.push(Deviation::new(path, clause, DeviationKind::Inconsistent { field }));
-    }
-    if spare != 0 {
-        found.push(Deviation::new(path, "8.1.2", DeviationKind::SpareBits));
     }
 }
 
@@ -729,6 +662,16 @@ impl Check for NodeId<'_> {
 }
 
 impl NodeId<'_> {
+    /// The Node ID Type (Table 8.2.38-2).
+    pub fn node_id_type(&self) -> NodeIdType {
+        match self {
+            Self::Ipv4(_) => NodeIdType::Ipv4Address,
+            Self::Ipv6(_) => NodeIdType::Ipv6Address,
+            Self::Fqdn(_) => NodeIdType::Fqdn,
+            Self::Other(first, _) => NodeIdType::from_value(first & 0x0f),
+        }
+    }
+
     /// The FQDN as text, its labels with dots: `None` for labels that are not.
     pub fn fqdn(&self) -> Option<String> {
         let Self::Fqdn(labels) = self else { return None };
@@ -902,7 +845,12 @@ macro_rules! pfcp_fields {
             }
         }
 
-        impl Check for $ty<'_> {}
+        impl Check for $ty<'_> {
+            #[allow(unused_variables)]
+            fn check(&self, path: &str, found: &mut Vec<crate::check::Deviation>) {
+                $( Field::check(&self.$field, path, $clause, found); )*
+            }
+        }
 
         impl<'a> IntoOwned for $ty<'a> {
             type Owned = $ty<'static>;
@@ -913,7 +861,7 @@ macro_rules! pfcp_fields {
 
         #[cfg(feature = "tree")]
         impl oxirush_utils::tree::Tree for $ty<'_> {
-            const NAME: &'static str = <Self as IeType>::TYPE_NAME;
+            const NAME: &'static str = <Self as crate::ie::IeType>::TYPE_NAME;
             fn to_tree(&self) -> oxirush_utils::tree::Value {
                 let mut members = oxirush_utils::tree::Members::new();
                 $( members.put($name, Field::to_tree(&self.$field)); )*
@@ -994,15 +942,8 @@ pfcp_layout! {
         c_tag "C-TAG field": VlanTag if c_tag_header,
         s_tag "S-TAG field": VlanTag if s_tag_header,
     }
-}
-
-impl Check for VolumeThreshold<'_> {}
-impl Check for VolumeQuota<'_> {}
-impl Check for SubsequentVolumeThreshold<'_> {}
-impl Check for OuterHeaderCreation<'_> {
-    fn check(&self, path: &str, found: &mut Vec<Deviation>) {
-        layout_checks(self.inconsistent(), u8::from(self.spare != 0), path, Self::CLAUSE, found);
-        if !(self.gtpu_udp_ipv4 || self.gtpu_udp_ipv6 || self.udp_ipv4 || self.udp_ipv6 || self.ipv4_header || self.ipv6_header || self.c_tag_header || self.s_tag_header) {
+    check(creation, path, found) {
+        if !(creation.gtpu_udp_ipv4 || creation.gtpu_udp_ipv6 || creation.udp_ipv4 || creation.udp_ipv6 || creation.ipv4_header || creation.ipv6_header || creation.c_tag_header || creation.s_tag_header) {
             found.push(Deviation::new(path, "8.2.56", DeviationKind::Rule("no bit of the description is set")));
         }
     }
@@ -1020,7 +961,7 @@ pfcp_bits! {
 pfcp_bits! {
     /// Destination Interface (§8.2.24): its Interface value (Table 8.2.24-1).
     pub struct DestinationInterface "8.2.24" octets 1 min 1 {
-        interface_value "Interface value": 0 1 4,
+        interface_value "Interface value": 0 1 4 as DestinationInterfaceValue,
     }
 }
 
@@ -1028,7 +969,7 @@ pfcp_bits! {
     /// Outer Header Removal (§8.2.64): its description (Table 8.2.64-1), and the GTP-U
     /// extension headers to delete (Table 8.2.64-2), which a later release added.
     pub struct OuterHeaderRemoval "8.2.64" octets 2 min 1 {
-        outer_header_removal_description "Outer Header Removal Description": 0 1 8,
+        outer_header_removal_description "Outer Header Removal Description": 0 1 8 as OuterHeaderRemovalDescription,
         pdu_session_container "PDU Session Container": 1 1 1,
     }
 }
@@ -1054,7 +995,7 @@ pfcp_bits! {
 pfcp_bits! {
     /// Gate Status (§8.2.7): the UL Gate and the DL Gate, 0 OPEN and 1 CLOSED.
     pub struct GateStatus "8.2.7" octets 1 min 1 {
-        dl_gate "DL Gate": 0 1 2, ul_gate "UL Gate": 0 3 2,
+        dl_gate "DL Gate": 0 1 2 as Gate, ul_gate "UL Gate": 0 3 2 as Gate,
     }
 }
 
@@ -1082,7 +1023,7 @@ pfcp_bits! {
 pfcp_bits! {
     /// 3GPP Interface Type (§8.2.118): its Interface Type value (Table 8.2.118-1).
     pub struct InterfaceType3gpp "8.2.118" octets 1 min 1 {
-        interface_type_value "Interface Type value": 0 1 6,
+        interface_type_value "Interface Type value": 0 1 6 as InterfaceTypeValue,
     }
 }
 

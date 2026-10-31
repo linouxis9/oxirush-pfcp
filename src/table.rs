@@ -225,6 +225,7 @@ pub(crate) fn decode_scope_sized<'a, S: Scope<'a>>(scope: &mut S, octets: &'a [u
 
 /// Keep `order` in `scope`, unless the fields in the order of the table give the same
 /// octets: then nothing is kept, and a scope that is changed stays in that order.
+#[cfg(feature = "tree")]
 pub(crate) fn keep_order<'a, S: Scope<'a>>(scope: &mut S, order: Vec<Placed>) {
     let mut last = 0;
     let in_table_order = order.iter().all(|placed| match placed {

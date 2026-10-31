@@ -55,13 +55,13 @@ fn sdf_filter(text: &str) -> Raw<'static, 23> {
 
 fn pdr(id: u16, uplink: bool) -> CreatePdr<'static> {
     let pdi = if uplink {
-        Pdi::new(SourceInterface::new(InterfaceValue::Access))
+        Pdi::new(SourceInterface::new(SourceInterfaceValue::Access))
             .with_local_f_teid(FTeid::choose_ipv4())
             .with_network_instance(network_instance())
             .with_qfi(Qfi { qfi_value: 9, ..Default::default() })
     } else {
         let ue = UeIpAddress { v4: true, sd: true, ipv4: Some(Ipv4Addr::new(10, 45, 0, 2)), ..Default::default() };
-        Pdi::new(SourceInterface::new(InterfaceValue::Core))
+        Pdi::new(SourceInterface::new(SourceInterfaceValue::Core))
             .with_network_instance(network_instance())
             .with_ue_ip_address(ue)
             .with_sdf_filter(sdf_filter("permit out ip from any to assigned"))

@@ -23,14 +23,15 @@ use core::net::{Ipv4Addr, Ipv6Addr};
 
 use crate::Error;
 use crate::check::Check;
-use crate::ie::{Codec, IeType, listed_value};
+use crate::ie::{Codec, listed_value};
 use crate::macros::{pfcp_bits, pfcp_layout};
 use crate::octets::{IntoOwned, Octets};
+use crate::enums::*;
 use crate::values::*;
 
 pfcp_number! {
     /// Cause (§8.2.1).
-    Cause(u8) "Cause value" "8.2.1";
+    Cause(CauseValue) "Cause value" "8.2.1";
     /// Offending IE (§8.2.22).
     OffendingIe(u16) "Type of the offending IE" "8.2.22";
     /// Downlink Data Notification Delay (§8.2.28).
@@ -138,13 +139,13 @@ pfcp_number! {
     /// Area Session ID (§8.2.213).
     AreaSessionId(u16) "Area Session ID value" "8.2.213";
     /// RTP Header Extension Type (§8.2.234).
-    RtpHeaderExtensionType(u8) "RTP Header Extension Type" "8.2.234";
+    RtpHeaderExtensionType(RtpHeaderExtensionTypeValue) "RTP Header Extension Type" "8.2.234";
     /// RTP Header Extension ID (§8.2.235).
     RtpHeaderExtensionId(u8) "RTP Header Extension ID" "8.2.235";
     /// RTP Payload Type (§8.2.236).
     RtpPayloadType(u8) "Payload Type" "8.2.236";
     /// RTP Payload Format (§8.2.237).
-    RtpPayloadFormat(u8) "Payload Format" "8.2.237";
+    RtpPayloadFormat(PayloadFormat) "Payload Format" "8.2.237";
     /// Reporting Endpoint ID (§8.2.253).
     ReportingEndpointId(u8) "Reporting Endpoint ID" "8.2.253";
     /// Header Handling Control ID (§8.2.259).
@@ -152,7 +153,7 @@ pfcp_number! {
     /// Header Handling Control Rule ID (§8.2.260).
     HeaderHandlingControlRuleId(u8) "Header Handling Control Rule ID" "8.2.260";
     /// N6 Delay Measurement Failure Information (§8.2.263).
-    N6DelayMeasurementFailureInformation(u8) "Failure cause" "8.2.263";
+    N6DelayMeasurementFailureInformation(FailureCause) "Failure cause" "8.2.263";
     /// N6 Delay Measurement Control Information ID (§8.2.264).
     N6DelayMeasurementControlInformationId(u16) "N6 Delay Measurement Control Information ID" "8.2.264";
     /// Measurement Endpoint Port Number (§8.2.265).
@@ -184,7 +185,7 @@ pfcp_bits! {
 pfcp_bits! {
     /// DL Buffering Duration (§8.2.29).
     pub struct DlBufferingDuration "8.2.29" octets 1 min 1 {
-        timer_unit "Timer unit": 0 6 3, timer_value "Timer value": 0 1 5,
+        timer_unit "Timer unit": 0 6 3 as TimerUnit, timer_value "Timer value": 0 1 5,
     }
 }
 
@@ -205,7 +206,7 @@ pfcp_bits! {
 pfcp_bits! {
     /// Timer (§8.2.35).
     pub struct Timer "8.2.35" octets 1 min 1 {
-        timer_unit "Timer unit": 0 6 3, timer_value "Timer value": 0 1 5,
+        timer_unit "Timer unit": 0 6 3 as TimerUnit, timer_value "Timer value": 0 1 5,
     }
 }
 
@@ -254,14 +255,14 @@ pfcp_bits! {
 pfcp_bits! {
     /// Graceful Release Period (§8.2.78).
     pub struct GracefulReleasePeriod "8.2.78" octets 1 min 1 {
-        timer_unit "Timer unit": 0 6 3, timer_value "Timer value": 0 1 5,
+        timer_unit "Timer unit": 0 6 3 as TimerUnit, timer_value "Timer value": 0 1 5,
     }
 }
 
 pfcp_bits! {
     /// PDN Type (§8.2.79).
     pub struct PdnType "8.2.79" octets 1 min 1 {
-        pdn_type "PDN Type": 0 1 3,
+        pdn_type "PDN Type": 0 1 3 as PdnTypeValue,
     }
 }
 
@@ -303,21 +304,21 @@ pfcp_bits! {
 pfcp_bits! {
     /// Steering Functionality (§8.2.124).
     pub struct SteeringFunctionality "8.2.124" octets 1 min 1 {
-        steering_functionality_value "Steering Functionality Value": 0 1 4,
+        steering_functionality_value "Steering Functionality Value": 0 1 4 as SteeringFunctionalityValue,
     }
 }
 
 pfcp_bits! {
     /// Steering Mode (§8.2.125).
     pub struct SteeringMode "8.2.125" octets 1 min 1 {
-        steering_mode_value "Steering Mode Value": 0 1 4,
+        steering_mode_value "Steering Mode Value": 0 1 4 as SteeringModeValue,
     }
 }
 
 pfcp_bits! {
     /// Priority (§8.2.127).
     pub struct Priority "8.2.127" octets 1 min 1 {
-        priority_value "Priority Value": 0 1 4,
+        priority_value "Priority Value": 0 1 4 as PriorityValue,
     }
 }
 
@@ -366,7 +367,7 @@ pfcp_bits! {
 pfcp_bits! {
     /// Access Availability Information (§8.2.153).
     pub struct AccessAvailabilityInformation "8.2.153" octets 1 min 1 {
-        availability_status "Availability Status": 0 3 2, access_type "Access Type": 0 1 2,
+        availability_status "Availability Status": 0 3 2 as AvailabilityStatus, access_type "Access Type": 0 1 2 as AccessType,
     }
 }
 
@@ -541,7 +542,7 @@ pfcp_bits! {
 pfcp_bits! {
     /// Transport Mode (§8.2.227).
     pub struct TransportMode "8.2.227" octets 1 min 1 {
-        transport_mode_value "Transport Mode Value": 0 1 4,
+        transport_mode_value "Transport Mode Value": 0 1 4 as TransportModeValue,
     }
 }
 
@@ -555,7 +556,7 @@ pfcp_bits! {
 pfcp_bits! {
     /// Media Transport Protocol (§8.2.233).
     pub struct MediaTransportProtocol "8.2.233" octets 1 min 1 {
-        media_transport_protocol "Media Transport Protocol": 0 1 4,
+        media_transport_protocol "Media Transport Protocol": 0 1 4 as MediaTransportProtocolValue,
     }
 }
 
@@ -576,7 +577,7 @@ pfcp_bits! {
 pfcp_bits! {
     /// RTP Header Extension Additional Information (§8.2.241).
     pub struct RtpHeaderExtensionAdditionalInformation "8.2.241" octets 2 min 2 {
-        npdsi "NPDSI": 0 3 1, pssai "PSSAI": 0 2 1, fi "FI": 0 1 1, npds "NPDS": 1 4 1, pssa "PSSA": 1 3 1, format "Format": 1 1 2,
+        npdsi "NPDSI": 0 3 1, pssai "PSSAI": 0 2 1, fi "FI": 0 1 1, npds "NPDS": 1 4 1, pssa "PSSA": 1 3 1, format "Format": 1 1 2 as FormatField,
     }
 }
 
@@ -597,14 +598,14 @@ pfcp_bits! {
 pfcp_bits! {
     /// Header Handling Action (§8.2.255).
     pub struct HeaderHandlingAction "8.2.255" octets 1 min 1 {
-        action_value "Action value": 0 1 4,
+        action_value "Action value": 0 1 4 as ActionValue,
     }
 }
 
 pfcp_bits! {
     /// Header Handling Condition (§8.2.258).
     pub struct HeaderHandlingCondition "8.2.258" octets 1 min 1 {
-        condition_value "Condition value": 0 1 4,
+        condition_value "Condition value": 0 1 4 as ConditionValue,
     }
 }
 
@@ -646,7 +647,7 @@ pfcp_bits! {
 pfcp_bits! {
     /// Media Related Information Transfer Info (§8.2.271).
     pub struct MediaRelatedInformationTransferInfo "8.2.271" octets 1 min 1 {
-        transferring_method "Transferring method": 0 1 4,
+        transferring_method "Transferring method": 0 1 4 as TransferringMethod,
     }
 }
 
@@ -667,7 +668,7 @@ pfcp_bits! {
 pfcp_bits! {
     /// Remaining Data Reporting Indication (§8.2.277).
     pub struct RemainingDataReportingIndication "8.2.277" octets 1 min 1 {
-        remaining_data_reporting_indication_value "Remaining Data Reporting Indication value": 0 1 4,
+        remaining_data_reporting_indication_value "Remaining Data Reporting Indication value": 0 1 4 as RemainingDataReportingIndicationValue,
     }
 }
 
@@ -1096,120 +1097,6 @@ pfcp_layout! {
         flags(u8) { v4 "V4": 2, v6 "V6": 1 }
         ipv4_address "IPv4 Address": Ipv4Addr if v4,
         ipv6_address "IPv6 Address": Ipv6Addr if v6,
-    }
-}
-
-impl Check for VolumeMeasurement<'_> {
-    fn check(&self, path: &str, found: &mut Vec<crate::check::Deviation>) {
-        layout_checks(self.inconsistent(), self.spare, path, Self::CLAUSE, found);
-    }
-}
-
-impl Check for DroppedDlTrafficThreshold<'_> {
-    fn check(&self, path: &str, found: &mut Vec<crate::check::Deviation>) {
-        layout_checks(self.inconsistent(), self.spare, path, Self::CLAUSE, found);
-    }
-}
-
-impl Check for DlFlowLevelMarking<'_> {
-    fn check(&self, path: &str, found: &mut Vec<crate::check::Deviation>) {
-        layout_checks(self.inconsistent(), self.spare, path, Self::CLAUSE, found);
-    }
-}
-
-impl Check for RemoteGtpUPeer<'_> {
-    fn check(&self, path: &str, found: &mut Vec<crate::check::Deviation>) {
-        layout_checks(self.inconsistent(), self.spare, path, Self::CLAUSE, found);
-    }
-}
-
-impl Check for SubsequentVolumeQuota<'_> {
-    fn check(&self, path: &str, found: &mut Vec<crate::check::Deviation>) {
-        layout_checks(self.inconsistent(), self.spare, path, Self::CLAUSE, found);
-    }
-}
-
-impl Check for UserId<'_> {
-    fn check(&self, path: &str, found: &mut Vec<crate::check::Deviation>) {
-        layout_checks(self.inconsistent(), self.spare, path, Self::CLAUSE, found);
-    }
-}
-
-impl Check for AlternativeSmfIpAddress<'_> {
-    fn check(&self, path: &str, found: &mut Vec<crate::check::Deviation>) {
-        layout_checks(self.inconsistent(), self.spare, path, Self::CLAUSE, found);
-    }
-}
-
-impl Check for IpMulticastAddress<'_> {
-    fn check(&self, path: &str, found: &mut Vec<crate::check::Deviation>) {
-        layout_checks(self.inconsistent(), self.spare, path, Self::CLAUSE, found);
-    }
-}
-
-impl Check for FiveGsUserPlaneNodeId<'_> {
-    fn check(&self, path: &str, found: &mut Vec<crate::check::Deviation>) {
-        layout_checks(self.inconsistent(), self.spare, path, Self::CLAUSE, found);
-    }
-}
-
-impl Check for PacketDelayThresholds<'_> {
-    fn check(&self, path: &str, found: &mut Vec<crate::check::Deviation>) {
-        layout_checks(self.inconsistent(), self.spare, path, Self::CLAUSE, found);
-    }
-}
-
-impl Check for QoSMonitoringMeasurement<'_> {
-    fn check(&self, path: &str, found: &mut Vec<crate::check::Deviation>) {
-        layout_checks(self.inconsistent(), self.spare, path, Self::CLAUSE, found);
-    }
-}
-
-impl Check for NumberOfUeIpAddresses<'_> {
-    fn check(&self, path: &str, found: &mut Vec<crate::check::Deviation>) {
-        layout_checks(self.inconsistent(), self.spare, path, Self::CLAUSE, found);
-    }
-}
-
-impl Check for Thresholds<'_> {
-    fn check(&self, path: &str, found: &mut Vec<crate::check::Deviation>) {
-        layout_checks(self.inconsistent(), self.spare, path, Self::CLAUSE, found);
-    }
-}
-
-impl Check for CpIpAddress<'_> {
-    fn check(&self, path: &str, found: &mut Vec<crate::check::Deviation>) {
-        layout_checks(self.inconsistent(), self.spare, path, Self::CLAUSE, found);
-    }
-}
-
-impl Check for MappedN6IpAddress<'_> {
-    fn check(&self, path: &str, found: &mut Vec<crate::check::Deviation>) {
-        layout_checks(self.inconsistent(), self.spare, path, Self::CLAUSE, found);
-    }
-}
-
-impl Check for N6RoutingInformation<'_> {
-    fn check(&self, path: &str, found: &mut Vec<crate::check::Deviation>) {
-        layout_checks(self.inconsistent(), self.spare, path, Self::CLAUSE, found);
-    }
-}
-
-impl Check for N6DelayMeasurementInformation<'_> {
-    fn check(&self, path: &str, found: &mut Vec<crate::check::Deviation>) {
-        layout_checks(self.inconsistent(), self.spare, path, Self::CLAUSE, found);
-    }
-}
-
-impl Check for MeasurementEndpointAddress<'_> {
-    fn check(&self, path: &str, found: &mut Vec<crate::check::Deviation>) {
-        layout_checks(self.inconsistent(), self.spare, path, Self::CLAUSE, found);
-    }
-}
-
-impl Check for MoQRelayIpAddress<'_> {
-    fn check(&self, path: &str, found: &mut Vec<crate::check::Deviation>) {
-        layout_checks(self.inconsistent(), self.spare, path, Self::CLAUSE, found);
     }
 }
 

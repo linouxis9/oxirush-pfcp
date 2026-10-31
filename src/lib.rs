@@ -29,6 +29,7 @@ extern crate alloc;
 extern crate std;
 
 mod check;
+mod enums;
 mod header;
 mod ie;
 mod macros;
@@ -48,6 +49,7 @@ use alloc::string::{String, ToString};
 use core::fmt;
 
 pub use check::{Check, Deviation, DeviationKind};
+pub use enums::*;
 pub use header::Header;
 pub use ie::{Codec, IeFault, IeType, Listed, Placed, RawIe, VENDOR};
 pub use message::{Body, Message, is_node_related};

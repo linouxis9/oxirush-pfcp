@@ -63,16 +63,17 @@ macro_rules! pfcp_layout {
     (
         $(#[$meta:meta])*
         pub struct $ty:ident $clause:literal {
-            flags($fk:ty) { $( $flag:ident $flag_name:literal : $bit:literal $(/ $width:literal)? ),* $(,)? }
+            flags($fk:ty) { $( $flag:ident $flag_name:literal : $bit:literal $(/ $width:literal $(as $fkind:ident)?)? ),* $(,)? }
             $( $field:ident $field_name:literal : $kind:ident if $cond:expr ),* $(,)?
         }
+        $( check($this:ident, $path:ident, $found:ident) $rules:block )?
     ) => {
         $(#[$meta])*
         #[derive(Debug, Clone, Default, PartialEq, Eq)]
         pub struct $ty<'a> {
             $(
                 #[doc = concat!("The ", $flag_name, " field of the first octet, from bit ", stringify!($bit), ".")]
-                pub $flag: pfcp_layout!(@ft $($width)?),
+                pub $flag: pfcp_layout!(@ft $($width $(as $fkind)?)?),
             )*
             /// The other bits of the first octet, which are spare: zero from a sender.
             pub spare: $fk,
@@ -109,7 +110,7 @@ macro_rules! pfcp_layout {
             fn decode(octets: &'a [u8]) -> Option<Self> {
                 let mut rest = octets;
                 let first = <$fk as crate::values::Field>::read(&mut rest)?;
-                $( let $flag = pfcp_layout!(@fread first, $bit $(, $width)?); )*
+                $( let $flag = pfcp_layout!(@fread first, $bit $(, $width $(as $fkind)?)?); )*
                 $(
                     let $field = match $cond {
                         true => Some(<$kind as crate::values::Field>::read(&mut rest)?),
@@ -132,7 +133,7 @@ macro_rules! pfcp_layout {
                         clause: $clause,
                     });
                 }
-                crate::values::Field::write(&(self.spare & !Self::FLAGS $( | pfcp_layout!(@fwrite $fk, self.$flag, $bit $(, $width)?) )*), out);
+                crate::values::Field::write(&(self.spare & !Self::FLAGS $( | pfcp_layout!(@fwrite $fk, self.$flag, $bit $(, $width $(as $fkind)?)?) )*), out);
                 $(
                     if let Some(field) = &self.$field {
                         crate::values::Field::write(field, out);
@@ -154,13 +155,34 @@ macro_rules! pfcp_layout {
             }
         }
 
+        impl crate::check::Check for $ty<'_> {
+            fn check(&self, path: &str, found: &mut alloc::vec::Vec<crate::check::Deviation>) {
+                if let Some(field) = self.inconsistent() {
+                    found.push(crate::check::Deviation::new(path, $clause, crate::check::DeviationKind::Inconsistent { field }));
+                }
+                if self.spare != 0 {
+                    found.push(crate::check::Deviation::new(path, "8.1.2", crate::check::DeviationKind::SpareBits));
+                }
+                $( pfcp_layout!(@fcheck self.$flag, path, found $(, $width $(as $fkind)?)?); )*
+                $(
+                    if let Some(field) = &self.$field {
+                        crate::values::Field::check(field, path, $clause, found);
+                    }
+                )*
+                $(
+                    let ($this, $path, $found) = (self, path, found);
+                    $rules
+                )?
+            }
+        }
+
         #[cfg(feature = "tree")]
         impl oxirush_utils::tree::Tree for $ty<'_> {
             const NAME: &'static str = <Self as crate::ie::IeType>::TYPE_NAME;
 
             fn to_tree(&self) -> oxirush_utils::tree::Value {
                 let mut members = oxirush_utils::tree::Members::new();
-                $( pfcp_layout!(@fput members, $flag_name, self.$flag $(, $width)?); )*
+                $( pfcp_layout!(@fput members, $flag_name, self.$flag $(, $width $(as $fkind)?)?); )*
                 if self.spare != 0 {
                     members.put("Spare", oxirush_utils::tree::unsigned(self.spare.into()));
                 }
@@ -183,7 +205,7 @@ macro_rules! pfcp_layout {
                 let read = reading.members(value, NAMES)?;
                 let mut at = 0;
                 $(
-                    let $flag = pfcp_layout!(@fget reading, read, at $(, $width)?);
+                    let $flag = pfcp_layout!(@fget reading, read, at $(, $width $(as $fkind)?)?);
                     at += 1;
                 )*
                 let spare = reading
@@ -218,23 +240,42 @@ macro_rules! pfcp_layout {
     // A field of the first octet: a flag of one bit, or a number of `width` bits.
     (@ft) => { bool };
     (@ft $width:literal) => { u8 };
+    (@ft $width:literal as $kind:ident) => { $kind };
     (@fmask $bit:literal) => { 1 << ($bit - 1) };
     (@fmask $bit:literal, $width:literal) => { ((1 << $width) - 1) << ($bit - 1) };
     (@fread $first:ident, $bit:literal) => { $first & 1 << ($bit - 1) != 0 };
     (@fread $first:ident, $bit:literal, $width:literal) => { (($first >> ($bit - 1)) & ((1 << $width) - 1)) as u8 };
+    (@fread $first:ident, $bit:literal, $width:literal as $kind:ident) => {
+        $kind::from_value(pfcp_layout!(@fread $first, $bit, $width))
+    };
     (@fwrite $fk:ty, $value:expr, $bit:literal) => { <$fk>::from($value) << ($bit - 1) };
     (@fwrite $fk:ty, $value:expr, $bit:literal, $width:literal) => { (<$fk>::from($value) & ((1 << $width) - 1)) << ($bit - 1) };
+    (@fwrite $fk:ty, $value:expr, $bit:literal, $width:literal as $kind:ident) => {
+        pfcp_layout!(@fwrite $fk, $value.value(), $bit, $width)
+    };
     (@fput $members:ident, $name:literal, $value:expr) => {
         if $value { $members.put($name, oxirush_utils::tree::Value::Bool(true)); }
     };
     (@fput $members:ident, $name:literal, $value:expr, $width:literal) => {
         $members.put($name, oxirush_utils::tree::unsigned($value.into()));
     };
+    (@fput $members:ident, $name:literal, $value:expr, $width:literal as $kind:ident) => {
+        $members.put($name, $value.tree());
+    };
     (@fget $reading:ident, $read:ident, $at:ident) => {
         $reading.optional(&$read, $at, |value, reading| reading.boolean(value))?.unwrap_or(false)
     };
     (@fget $reading:ident, $read:ident, $at:ident, $width:literal) => {
         $reading.optional(&$read, $at, |value, reading| reading.unsigned(value, 0, (1 << $width) - 1))?.unwrap_or(0) as u8
+    };
+    (@fget $reading:ident, $read:ident, $at:ident, $width:literal as $kind:ident) => {
+        $reading
+            .optional(&$read, $at, |value, reading| $kind::read_tree(value, reading, ((1u16 << $width) - 1) as u8))?
+            .unwrap_or_default()
+    };
+    (@fcheck $value:expr, $path:ident, $found:ident $(, $width:literal)?) => {};
+    (@fcheck $value:expr, $path:ident, $found:ident, $width:literal as $kind:ident) => {
+        crate::values::Field::check(&$value, $path, Self::CLAUSE, $found)
     };
 }
 
@@ -252,7 +293,7 @@ macro_rules! pfcp_bits {
     (
         $(#[$meta:meta])*
         pub struct $ty:ident $clause:literal octets $n:literal min $min:literal {
-            $( $field:ident $name:literal : $octet:literal $low:literal $width:tt ),* $(,)?
+            $( $field:ident $name:literal : $octet:literal $low:literal $width:tt $(as $kind:ident)? ),* $(,)?
         }
     ) => {
         $(#[$meta])*
@@ -260,7 +301,7 @@ macro_rules! pfcp_bits {
         pub struct $ty<'a> {
             $(
                 #[doc = concat!("The ", $name, " field.")]
-                pub $field: pfcp_bits!(@type $width),
+                pub $field: pfcp_bits!(@type $width [$($kind)?]),
             )*
             /// The bits of each octet that no field has, which are spare.
             pub spare: [u8; $n],
@@ -280,6 +321,9 @@ macro_rules! pfcp_bits {
         impl $ty<'_> {
             /// The clause of the layout.
             pub const CLAUSE: &'static str = $clause;
+            /// Whether the tree is the value of the field alone: one field, not a flag.
+            #[cfg(feature = "tree")]
+            const BARE: bool = { let widths: &[u32] = &[$($width),*]; widths.len() == 1 && widths[0] > 1 };
             /// The bits of each octet that a field has.
             const MASKS: [u8; $n] = {
                 let mut masks = [0u8; $n];
@@ -293,7 +337,7 @@ macro_rules! pfcp_bits {
                 for (octet, (spare, mask)) in octets.iter_mut().zip(self.spare.iter().zip(Self::MASKS)) {
                     *octet = spare & !mask;
                 }
-                $( octets[$octet] |= pfcp_bits!(@write $width self.$field, $low); )*
+                $( octets[$octet] |= pfcp_bits!(@write $width [$($kind)?] self.$field, $low); )*
                 let mut used = usize::from(self.present).clamp($min, $n);
                 if !self.extra.is_empty() {
                     used = $n;
@@ -319,7 +363,7 @@ macro_rules! pfcp_bits {
                     spare[octet] = octets[octet] & !Self::MASKS[octet];
                 }
                 Some(Self {
-                    $( $field: pfcp_bits!(@read $width at($octet), $low), )*
+                    $( $field: pfcp_bits!(@read $width [$($kind)?] at($octet), $low), )*
                     spare,
                     present: present as u8,
                     extra: crate::octets::Octets::wire(&octets[present..]),
@@ -350,6 +394,7 @@ macro_rules! pfcp_bits {
                 if self.spare.iter().any(|spare| *spare != 0) {
                     found.push(crate::check::Deviation::new(path, "8.1.2", crate::check::DeviationKind::SpareBits));
                 }
+                $( pfcp_bits!(@check [$($kind)?] self.$field, path, found); )*
             }
         }
 
@@ -361,8 +406,11 @@ macro_rules! pfcp_bits {
             const NAME: &'static str = <Self as crate::ie::IeType>::TYPE_NAME;
 
             fn to_tree(&self) -> oxirush_utils::tree::Value {
+                if Self::BARE && self.spare.iter().all(|spare| *spare == 0) && usize::from(self.present) == $n && self.extra.is_empty() {
+                    $( if Self::BARE { return pfcp_bits!(@tree $width [$($kind)?] self.$field); } )*
+                }
                 let mut members = oxirush_utils::tree::Members::new();
-                $( pfcp_bits!(@put $width members, $name, self.$field); )*
+                $( pfcp_bits!(@put $width [$($kind)?] members, $name, self.$field); )*
                 if self.spare.iter().any(|spare| *spare != 0) {
                     members.put("Spare", oxirush_utils::tree::octets(&self.spare));
                 }
@@ -380,11 +428,15 @@ macro_rules! pfcp_bits {
                 reading: &mut oxirush_utils::tree::Reading,
             ) -> Result<Self, oxirush_utils::tree::Refused> {
                 const NAMES: &[&str] = &[$($name,)* "Spare", "length", "extra"];
+                let mut bits = Self::default();
+                if Self::BARE && !value.is_object() {
+                    $( bits.$field = pfcp_bits!(@get $width [$($kind)?] value, reading)?; )*
+                    return Ok(bits);
+                }
                 let read = reading.members(value, NAMES)?;
                 let mut at = 0;
-                let mut bits = Self::default();
                 $(
-                    if let Some(value) = reading.optional(&read, at, |value, reading| pfcp_bits!(@get $width value, reading))? {
+                    if let Some(value) = reading.optional(&read, at, |value, reading| pfcp_bits!(@get $width [$($kind)?] value, reading))? {
                         bits.$field = value;
                     }
                     at += 1;
@@ -406,21 +458,36 @@ macro_rules! pfcp_bits {
             }
         }
     };
-    (@type 1) => { bool };
-    (@type $width:tt) => { u8 };
-    (@read 1 $octet:expr, $low:literal) => { $octet >> ($low - 1) & 1 == 1 };
-    (@read $width:tt $octet:expr, $low:literal) => { ($octet >> ($low - 1)) & (((1u16 << $width) - 1) as u8) };
-    (@write 1 $value:expr, $low:literal) => { u8::from($value) << ($low - 1) };
-    (@write $width:tt $value:expr, $low:literal) => { ($value & (((1u16 << $width) - 1) as u8)) << ($low - 1) };
-    (@put 1 $members:ident, $name:literal, $value:expr) => {
+    (@type 1 []) => { bool };
+    (@type $width:tt []) => { u8 };
+    (@type $width:tt [$kind:ident]) => { $kind };
+    (@read 1 [] $octet:expr, $low:literal) => { $octet >> ($low - 1) & 1 == 1 };
+    (@read $width:tt [] $octet:expr, $low:literal) => { ($octet >> ($low - 1)) & (((1u16 << $width) - 1) as u8) };
+    (@read $width:tt [$kind:ident] $octet:expr, $low:literal) => {
+        $kind::from_value(pfcp_bits!(@read $width [] $octet, $low))
+    };
+    (@write 1 [] $value:expr, $low:literal) => { u8::from($value) << ($low - 1) };
+    (@write $width:tt [] $value:expr, $low:literal) => { ($value & (((1u16 << $width) - 1) as u8)) << ($low - 1) };
+    (@write $width:tt [$kind:ident] $value:expr, $low:literal) => { pfcp_bits!(@write $width [] $value.value(), $low) };
+    (@check [] $value:expr, $path:ident, $found:ident) => {};
+    (@check [$kind:ident] $value:expr, $path:ident, $found:ident) => {
+        crate::values::Field::check(&$value, $path, Self::CLAUSE, $found)
+    };
+    (@tree 1 [] $value:expr) => { oxirush_utils::tree::Value::Bool($value) };
+    (@tree $width:tt [] $value:expr) => { oxirush_utils::tree::unsigned($value.into()) };
+    (@tree $width:tt [$kind:ident] $value:expr) => { $value.tree() };
+    (@put 1 [] $members:ident, $name:literal, $value:expr) => {
         if $value { $members.put($name, oxirush_utils::tree::Value::Bool(true)); }
     };
-    (@put $width:tt $members:ident, $name:literal, $value:expr) => {
-        $members.put($name, oxirush_utils::tree::unsigned($value.into()));
+    (@put $width:tt [$($kind:ident)?] $members:ident, $name:literal, $value:expr) => {
+        $members.put($name, pfcp_bits!(@tree $width [$($kind)?] $value));
     };
-    (@get 1 $value:expr, $reading:expr) => { $reading.boolean($value) };
-    (@get $width:tt $value:expr, $reading:expr) => {
+    (@get 1 [] $value:expr, $reading:expr) => { $reading.boolean($value) };
+    (@get $width:tt [] $value:expr, $reading:expr) => {
         $reading.unsigned($value, 0, (1u64 << $width) - 1).map(|value| value as u8)
+    };
+    (@get $width:tt [$kind:ident] $value:expr, $reading:expr) => {
+        $kind::read_tree($value, $reading, ((1u16 << $width) - 1) as u8)
     };
 }
 
@@ -1000,4 +1067,156 @@ macro_rules! pfcp_table {
     };
 }
 
-pub(crate) use {pfcp_bits, pfcp_ies, pfcp_layout, pfcp_messages, pfcp_table};
+/// The values that a table of clause 8.2 names: a variant each, and `Other` for a value that
+/// the table has as spare or reserved, or does not have, kept as it is. A field of `bits`
+/// bits, or a whole octet whose other bits are spare.
+///
+/// ```text
+/// pub enum Gate "Table 8.2.7-1 and Table 8.2.7-2" bits 2 {
+///     0 Open "OPEN",
+///     1 Closed "CLOSED",
+/// }
+/// ```
+macro_rules! pfcp_enum {
+    ($(
+        $(#[$meta:meta])*
+        pub enum $ty:ident $table:literal bits $bits:literal {
+            $( $value:literal $variant:ident $name:literal ),* $(,)?
+        }
+    )*) => {$(
+        $(#[$meta])*
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+        #[non_exhaustive]
+        pub enum $ty {
+            $(
+                #[doc = concat!(stringify!($value), ": ", $name, ".")]
+                $variant,
+            )*
+            /// A value that the table has as spare or reserved, or does not have.
+            Other(u8),
+        }
+
+        impl $ty {
+            /// The tables of the values.
+            pub const TABLE: &'static str = $table;
+            /// The values that the tables name, with their names.
+            pub const NAMES: &'static [(u8, &'static str)] = &[$(($value, $name)),*];
+            /// The width of the field, in bits.
+            pub const BITS: u32 = $bits;
+
+            /// The variant of a number.
+            pub const fn from_value(value: u8) -> Self {
+                match value {
+                    $( $value => Self::$variant, )*
+                    other => Self::Other(other),
+                }
+            }
+
+            /// The number.
+            pub const fn value(self) -> u8 {
+                match self {
+                    $( Self::$variant => $value, )*
+                    Self::Other(value) => value,
+                }
+            }
+
+            /// The name that the table gives the value: `None` for `Other`.
+            pub const fn name(self) -> Option<&'static str> {
+                match Self::from_value(self.value()) {
+                    $( Self::$variant => Some($name), )*
+                    Self::Other(_) => None,
+                }
+            }
+
+            /// The name, or the number of a value that the table does not name.
+            #[cfg(feature = "tree")]
+            pub(crate) fn tree(self) -> oxirush_utils::tree::Value {
+                match self.name() {
+                    Some(name) => oxirush_utils::tree::text(name),
+                    None => oxirush_utils::tree::unsigned(self.value().into()),
+                }
+            }
+
+            /// A name of the table in any spelling, or a number up to `upper`.
+            #[cfg(feature = "tree")]
+            pub(crate) fn read_tree(
+                value: &oxirush_utils::tree::Value,
+                reading: &mut oxirush_utils::tree::Reading,
+                upper: u8,
+            ) -> Result<Self, oxirush_utils::tree::Refused> {
+                const NAMES: &[&str] = &[$($name),*];
+                const VALUES: &[u8] = &[$($value),*];
+                if value.is_number() {
+                    return Ok(Self::from_value(reading.unsigned(value, 0, upper.into())? as u8));
+                }
+                Ok(Self::from_value(VALUES[reading.named(value, NAMES)?]))
+            }
+        }
+
+        impl Default for $ty {
+            /// The value 0.
+            fn default() -> Self {
+                Self::from_value(0)
+            }
+        }
+
+        impl From<u8> for $ty {
+            fn from(value: u8) -> Self {
+                Self::from_value(value)
+            }
+        }
+
+        impl From<$ty> for u8 {
+            fn from(value: $ty) -> u8 {
+                value.value()
+            }
+        }
+
+        impl core::fmt::Display for $ty {
+            /// The name, or the number of a value that the table does not name.
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                match self.name() {
+                    Some(name) => f.write_str(name),
+                    None => write!(f, "{}", self.value()),
+                }
+            }
+        }
+
+        /// A whole octet: a value with a spare bit set is `Other`.
+        impl crate::values::Field for $ty {
+            fn read(octets: &mut &[u8]) -> Option<Self> {
+                let (&first, rest) = octets.split_first()?;
+                *octets = rest;
+                Some(Self::from_value(first))
+            }
+            fn write(&self, out: &mut alloc::vec::Vec<u8>) {
+                out.push(self.value());
+            }
+            fn size(&self) -> usize {
+                1
+            }
+            fn check(&self, path: &str, clause: &'static str, found: &mut alloc::vec::Vec<crate::check::Deviation>) {
+                if self.name().is_none() {
+                    found.push(crate::check::Deviation::new(
+                        path,
+                        clause,
+                        crate::check::DeviationKind::SpareValue { value: self.value().into() },
+                    ));
+                }
+            }
+            #[cfg(feature = "tree")]
+            fn to_tree(&self) -> oxirush_utils::tree::Value {
+                self.tree()
+            }
+            #[cfg(feature = "tree")]
+            fn from_tree(
+                value: &oxirush_utils::tree::Value,
+                reading: &mut oxirush_utils::tree::Reading,
+            ) -> Result<Self, oxirush_utils::tree::Refused> {
+                Self::read_tree(value, reading, u8::MAX)
+            }
+        }
+    )*};
+}
+
+pub(crate) use {pfcp_bits, pfcp_enum, pfcp_ies, pfcp_layout, pfcp_messages, pfcp_table};
