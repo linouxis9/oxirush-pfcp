@@ -265,7 +265,8 @@ impl fmt::Display for Deviation {
 }
 
 /// What a value checks of itself: its flags, its fields and its values. A grouped IE
-/// checks its table.
+/// checks its table, on its own on the interfaces of the table: the IEs that each of
+/// them needs are mandatory.
 pub trait Check {
     /// Add what is wrong with the value to `found`, at `path`.
     fn check(&self, path: &Path<'_>, found: &mut Vec<Deviation>) {

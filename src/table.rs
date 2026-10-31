@@ -249,6 +249,15 @@ pub struct Table {
 }
 
 impl Table {
+    /// The interfaces that its rows have.
+    pub fn interfaces(&self) -> Interfaces {
+        let bits = self
+            .rows
+            .iter()
+            .fold(0, |bits, row| bits | row.interfaces.0);
+        Interfaces(bits)
+    }
+
     /// The row of `ie_type`.
     pub fn row_of(&self, ie_type: u16) -> Option<&'static Row> {
         let rows: &'static [Row] = self.rows;
