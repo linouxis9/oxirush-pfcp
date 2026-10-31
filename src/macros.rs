@@ -286,6 +286,33 @@ macro_rules! pfcp_table {
                 &[<$ty:snake:upper _TABLE>]
             }
 
+            #[allow(unused_assignments)]
+            fn position(ie_type: u16) -> Option<usize> {
+                let mut at = 0;
+                $(
+                    if ie_type == <pfcp_table!(@type_any $vty $($raw)?) as crate::ie::IeType>::IE_TYPE {
+                        return Some(at);
+                    }
+                    at += 1;
+                )*
+                None
+            }
+
+            const PRESIZE: bool = false $( || pfcp_table!(@large [$(* $($max)?)?] (pfcp_table!(@type_static $vty $($raw)?))) )*;
+
+            fn presize(&mut self, octets: &[u8]) {
+                $( let mut [<count_ $field>] = 0usize; )*
+                for ie in crate::framing::ies(octets).flatten() {
+                    $(
+                        if ie.ie_type == <pfcp_table!(@type_any $vty $($raw)?) as crate::ie::IeType>::IE_TYPE {
+                            [<count_ $field>] += 1;
+                            continue;
+                        }
+                    )*
+                }
+                $( pfcp_table!(@reserve [$(* $($max)?)?] self.$field, [<count_ $field>]); )*
+            }
+
             fn place(&mut self, ie_type: u16, body: &'a [u8]) -> crate::ie::Placing {
                 $(
                     if ie_type == <pfcp_table!(@type $vty $($raw)?) as crate::ie::IeType>::IE_TYPE {
@@ -416,21 +443,26 @@ macro_rules! pfcp_table {
         for ($nth, $value) in $f.iter().enumerate() $body
     };
     (@place [] $f:expr, $body:expr) => {
-        match $f {
-            Some(_) => crate::ie::Placing::Repeated,
-            None => match crate::ie::Codec::decode($body) {
-                Some(value) => { $f = Some(value); crate::ie::Placing::Placed }
-                None => crate::ie::Placing::Malformed,
-            },
+        match $f.is_some() {
+            true => crate::ie::Placing::Repeated,
+            false if crate::ie::Codec::decode_into(&mut $f, $body) => crate::ie::Placing::Placed,
+            false => crate::ie::Placing::Malformed,
         }
     };
     (@place [* $($max:literal)?] $f:expr, $body:expr) => {
-        match crate::ie::Codec::decode($body) {
-            _ if pfcp_table!(@full [$($max)?] $f) => crate::ie::Placing::Repeated,
-            Some(value) => { $f.push(value); crate::ie::Placing::Placed }
-            None => crate::ie::Placing::Malformed,
+        if pfcp_table!(@full [$($max)?] $f) {
+            crate::ie::Placing::Repeated
+        } else if crate::ie::Codec::decode_push(&mut $f, $body) {
+            crate::ie::Placing::Placed
+        } else {
+            crate::ie::Placing::Malformed
         }
     };
+    // A list of values larger than this is sized before it is filled.
+    (@large [] ($t:ty)) => { false };
+    (@large [* $($max:literal)?] ($t:ty)) => { core::mem::size_of::<$t>() > 64 };
+    (@reserve [] $f:expr, $n:expr) => { let _ = $n; };
+    (@reserve [* $($max:literal)?] $f:expr, $n:expr) => { $f.reserve_exact($n) };
     (@full [] $f:expr) => { false };
     (@full [$max:literal] $f:expr) => { $f.len() >= $max };
 
@@ -440,6 +472,26 @@ macro_rules! pfcp_table {
         impl<'a> crate::ie::Codec<'a> for $ty<'a> {
             fn decode(octets: &'a [u8]) -> Option<Self> {
                 crate::table::decode_scope(octets).ok()
+            }
+
+            // A grouped IE is large: it is decoded in its place, and not moved there.
+            fn decode_into(slot: &mut Option<Self>, octets: &'a [u8]) -> bool {
+                let scope = slot.insert(Self::default());
+                if crate::table::decode_scope_into(scope, octets).is_err() {
+                    *slot = None;
+                    return false;
+                }
+                true
+            }
+
+            fn decode_push(list: &mut alloc::vec::Vec<Self>, octets: &'a [u8]) -> bool {
+                list.push(Self::default());
+                let last = list.len() - 1;
+                if crate::table::decode_scope_into(&mut list[last], octets).is_err() {
+                    list.pop();
+                    return false;
+                }
+                true
             }
 
             fn encode(&self, out: &mut alloc::vec::Vec<u8>) -> Result<(), crate::Error> {

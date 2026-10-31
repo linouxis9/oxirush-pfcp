@@ -26,6 +26,7 @@ fn run(workload: &str, octets: &[u8]) -> u64 {
             black_box(&message);
             0
         }
+        "encode" => unreachable!(),
         "sizes" => {
             use oxirush_pfcp::*;
             use std::mem::size_of;
@@ -68,8 +69,15 @@ fn main() {
     {
         let start = Instant::now();
         let mut sum = 0;
-        for _ in 0..rounds {
-            sum += run(workload, octets);
+        if workload == "encode" {
+            let message = Message::decode(octets).unwrap();
+            for _ in 0..rounds {
+                sum += black_box(black_box(&message).encode().unwrap()).len() as u64;
+            }
+        } else {
+            for _ in 0..rounds {
+                sum += run(workload, octets);
+            }
         }
         let elapsed = start.elapsed();
         black_box(sum);

@@ -129,6 +129,13 @@ impl Table {
 pub(crate) trait Scope<'a>: Default {
     /// The table of the scope.
     fn table() -> &'static Table;
+    /// The position in the table of the row of `ie_type`.
+    fn position(ie_type: u16) -> Option<usize>;
+    /// Whether a list of the scope is of values large enough to be sized before it is
+    /// filled, by a first pass over the IEs.
+    const PRESIZE: bool;
+    /// Size the lists for the IEs of `octets`.
+    fn presize(&mut self, octets: &[u8]);
     /// Read the content of an IE of `ie_type` into its field.
     fn place(&mut self, ie_type: u16, body: &'a [u8]) -> Placing;
     /// Write the `nth` value of the field of `ie_type`: `false` for one that is not there.
@@ -150,7 +157,19 @@ pub(crate) trait Scope<'a>: Default {
 /// The scope of `octets`.
 pub(crate) fn decode_scope<'a, S: Scope<'a>>(octets: &'a [u8]) -> Result<S, IeFault> {
     let mut scope = S::default();
-    let mut order = Vec::new();
+    decode_scope_into(&mut scope, octets)?;
+    Ok(scope)
+}
+
+/// The scope of `octets`, in `scope`, which is empty.
+pub(crate) fn decode_scope_into<'a, S: Scope<'a>>(scope: &mut S, octets: &'a [u8]) -> Result<(), IeFault> {
+    if S::PRESIZE {
+        scope.presize(octets);
+    }
+    // No order is kept while the IEs come in the order of the table, which encoding the
+    // fields in that order gives back.
+    let mut order: Option<Vec<Placed>> = None;
+    let mut last = 0;
     for ie in crate::framing::ies(octets) {
         let ie = ie?;
         let (ie_type, body) = (ie.ie_type, ie.content());
@@ -158,26 +177,49 @@ pub(crate) fn decode_scope<'a, S: Scope<'a>>(octets: &'a [u8]) -> Result<S, IeFa
             true => Placing::Unexpected,
             false => scope.place(ie_type, body),
         };
-        if placing == Placing::Placed {
-            order.push(Placed::Field(ie_type));
-        } else {
-            scope.raw_mut().push(raw(ie_type, body));
-            order.push(Placed::Raw);
+        let placed = match placing {
+            Placing::Placed => Placed::Field(ie_type),
+            _ => {
+                scope.raw_mut().push(raw(ie_type, body));
+                Placed::Raw
+            }
+        };
+        if let Some(order) = &mut order {
+            order.push(placed);
+            continue;
         }
+        let at = match placed {
+            Placed::Field(ie_type) => S::position(ie_type).unwrap_or(usize::MAX),
+            Placed::Raw => usize::MAX,
+        };
+        if placed != Placed::Raw && at >= last {
+            last = at;
+            continue;
+        }
+        // The first IE out of the order of the table: those before it were in that order.
+        let mut kept = Vec::new();
+        for row in S::table().rows {
+            let mut values = scope.count(row.ie_type);
+            if placed == Placed::Field(row.ie_type) {
+                values -= 1;
+            }
+            kept.extend(core::iter::repeat_n(Placed::Field(row.ie_type), values));
+        }
+        kept.push(placed);
+        order = Some(kept);
     }
-    keep_order(&mut scope, order);
-    Ok(scope)
+    *scope.order_mut() = order.unwrap_or_default();
+    Ok(())
 }
 
 /// Keep `order` in `scope`, unless the fields in the order of the table give the same
 /// octets: then nothing is kept, and a scope that is changed stays in that order.
 pub(crate) fn keep_order<'a, S: Scope<'a>>(scope: &mut S, order: Vec<Placed>) {
-    let table = S::table();
     let mut last = 0;
     let in_table_order = order.iter().all(|placed| match placed {
         Placed::Raw => false,
         Placed::Field(ie_type) => {
-            let at = table.position_of(*ie_type).unwrap_or(usize::MAX);
+            let at = S::position(*ie_type).unwrap_or(usize::MAX);
             let ordered = at >= last;
             last = at;
             ordered
@@ -195,7 +237,7 @@ pub(crate) fn encode_scope<'a, S: Scope<'a>>(scope: &S, out: &mut Vec<u8>) -> Re
     let mut ordered = [0usize; 64];
     for placed in order {
         if let Placed::Field(ie_type) = placed
-            && let Some(at) = table.position_of(*ie_type)
+            && let Some(at) = S::position(*ie_type)
         {
             ordered[at] += 1;
         }
@@ -217,7 +259,7 @@ pub(crate) fn encode_scope<'a, S: Scope<'a>>(scope: &S, out: &mut Vec<u8>) -> Re
     for placed in order {
         match placed {
             Placed::Field(ie_type) => {
-                let at = table.position_of(*ie_type).unwrap_or(table.rows.len());
+                let at = S::position(*ie_type).unwrap_or(table.rows.len());
                 emit_added(at, out)?;
                 scope.emit(*ie_type, emitted[at], out)?;
                 emitted[at] += 1;

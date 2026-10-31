@@ -41,6 +41,26 @@ pub trait Codec<'a>: Sized {
     /// them as they are.
     fn decode(octets: &'a [u8]) -> Option<Self>;
 
+    /// Decode into the field of a row that is there once: `false`, and the field left
+    /// empty, for octets that are no value. A grouped IE decodes in its place.
+    #[inline]
+    fn decode_into(slot: &mut Option<Self>, octets: &'a [u8]) -> bool {
+        *slot = Self::decode(octets);
+        slot.is_some()
+    }
+
+    /// Decode at the end of the field of a row that is a list.
+    #[inline]
+    fn decode_push(list: &mut Vec<Self>, octets: &'a [u8]) -> bool {
+        match Self::decode(octets) {
+            Some(value) => {
+                list.push(value);
+                true
+            }
+            None => false,
+        }
+    }
+
     /// Write the value.
     ///
     /// # Errors
