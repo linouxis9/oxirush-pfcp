@@ -1,0 +1,152 @@
+name: Mutants
+
+# cargo-mutants changes the code of the crate at one place at a time, a mutant, and
+# runs the tests on each: a mutant that every test passes is code that no test checks.
+# .cargo/mutants.toml says what it leaves alone, and why. Every mutant runs each Saturday
+# evening, and when the run is started by hand with `full`; on the other nights after a
+# day with a commit, and when it is started by hand without `full`, the mutants of the
+# code that the commits of the last day changed. Each job keeps its mutants.out, and a
+# missed mutant fails it. The crates of the family start at times of their own, the
+# longest first, and few jobs of each run at once, to leave runners to the other CI.
+on:
+  schedule:
+    - cron: "43 23 * * 6"
+    - cron: "3 5 * * 1-6"
+  workflow_dispatch:
+    inputs:
+      full:
+        description: Every mutant, rather than those of the last day's changes
+        type: boolean
+        default: false
+
+# A run is never cancelled by another: a newer one waits until it ends.
+concurrency:
+  group: mutants-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  # Without debug information each mutant builds and links faster.
+  CARGO_PROFILE_DEV_DEBUG: 0
+
+jobs:
+  # What the run mutates: every mutant, the mutants of what the commits of the last day
+  # changed since the last commit before them, or nothing after a day without a commit.
+  plan:
+    name: What to mutate
+    runs-on: ubuntu-latest
+    outputs:
+      mode: ${{ steps.plan.outputs.mode }}
+      base: ${{ steps.plan.outputs.base }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: plan
+        env:
+          WEEKLY: "43 23 * * 6"
+          SCHEDULE: ${{ github.event.schedule }}
+          FULL: ${{ inputs.full }}
+        run: |
+          # The last commit before the last day, or the empty tree
+          base=$(git rev-list -1 --before="24 hours ago" HEAD)
+          base=${base:-$(git hash-object -t tree /dev/null)}
+          if [ "$SCHEDULE" = "$WEEKLY" ] || [ "$FULL" = true ]; then
+            mode=full
+          elif [ "$base" != "$(git rev-parse HEAD)" ]; then
+            mode=diff
+          else
+            mode=none
+          fi
+          echo "mode=$mode" >> "$GITHUB_OUTPUT"
+          echo "base=$base" >> "$GITHUB_OUTPUT"
+
+  # The lines that no test reaches: the summary of each file in the log, and each line
+  # in the report that the job keeps (cargo-llvm-cov 0.9.1): once in each run that
+  # mutates something.
+  coverage:
+    name: Coverage
+    needs: plan
+    if: needs.plan.outputs.mode != 'none'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-llvm-cov@0.9.1
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo llvm-cov --all-features --html
+      - run: cargo llvm-cov report --summary-only
+      - run: cargo llvm-cov report --lcov --output-path target/llvm-cov/lcov.info
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: |
+            target/llvm-cov/html
+            target/llvm-cov/lcov.info
+
+  mutants:
+    name: Mutants (shard ${{ matrix.shard }} of 4)
+    needs: plan
+    if: needs.plan.outputs.mode == 'full'
+    runs-on: ubuntu-latest
+    env:
+      # A test of a mutant that allocates without end fails once it has 4 GiB of
+      # address space, instead of taking the memory of the runner, which then dies.
+      CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUNNER: prlimit --as=4294967296
+    timeout-minutes: 300
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        shard: [0, 1, 2, 3]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-mutants@27.1.0
+      # cargo-mutants exits with 3 when a mutant made a test run until its timeout,
+      # before it says whether a mutant was missed: a mutant that makes a test loop
+      # forever is one that the tests see, and missed.txt has those that they do not.
+      - run: |
+          cargo mutants --shard ${{ matrix.shard }}/4 -j 2 || [ $? -eq 3 ]
+          test ! -s mutants.out/missed.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mutants.out-${{ matrix.shard }}
+          path: mutants.out
+
+  # The mutants of the lines that the commits of the last day changed.
+  changes:
+    name: Mutants of the last day's changes
+    needs: plan
+    if: needs.plan.outputs.mode == 'diff'
+    runs-on: ubuntu-latest
+    env:
+      CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUNNER: prlimit --as=4294967296
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-mutants@27.1.0
+      - run: |
+          git diff ${{ needs.plan.outputs.base }} HEAD > "$RUNNER_TEMP/changes.diff"
+          cargo mutants --in-diff "$RUNNER_TEMP/changes.diff" -j 2 || [ $? -eq 3 ]
+          test ! -s mutants.out/missed.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mutants.out-changes
+          path: mutants.out
