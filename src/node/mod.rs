@@ -688,7 +688,7 @@ impl Node {
                 .header
                 .priority
                 .unwrap_or(self.config.default_priority);
-            if self.throttle(to, priority) {
+            if self.throttle(to, local_seid, priority) {
                 return Err(NodeError::Throttled);
             }
             change = match &message.body {
@@ -1016,13 +1016,11 @@ impl Node {
         let node = self
             .association_of(peer)
             .map(|association| Scope::Node(association.key.clone()));
-        node.and_then(|scope| self.load.get(&scope))
-            .or_else(|| self.load.get(&Scope::Address(peer.ip())))
-            .copied()
+        node.and_then(|scope| self.load.get(&scope)).copied()
     }
 
-    /// The overload control information of a peer that still holds: of its address, or
-    /// of its Node ID (§6.2.4.3.1).
+    /// The overload control information that still holds for the requests to `peer`: of
+    /// its address, as the UP F-SEID of a session has it, or of its Node ID (§6.2.4.3.1).
     pub fn overload_control(&self, peer: SocketAddr) -> Option<OverloadControl> {
         let node = self
             .association_of(peer)
@@ -1398,7 +1396,7 @@ impl Node {
             // Full of requests that wait for their answer: the peer sends it again.
             return;
         }
-        self.note_controls(now, from, octets, &message.body);
+        self.note_controls(now, from, octets, &message.body, message.header.seid);
         self.events.push_back(Event::Request {
             request: inbound,
             message,
@@ -1439,7 +1437,7 @@ impl Node {
         self.deadlines.remove(&(request.deadline, sequence));
         self.finish(now, sequence, from, false);
         self.note_recovery(now, from, &message.body);
-        self.note_controls(now, from, octets, &message.body);
+        self.note_controls(now, from, octets, &message.body, request.local_seid);
         self.response_effects(now, from, &request, &message);
         if !request.heartbeat {
             self.events.push_back(Event::Response {
@@ -1645,11 +1643,9 @@ impl Node {
             let node = self
                 .association_of(from)
                 .map(|association| Scope::Node(association.key.clone()));
-            self.load.retain(|scope, _| {
-                *scope != Scope::Address(from.ip()) && Some(scope) != node.as_ref()
-            });
-            self.overload.retain(|scope, _| {
-                *scope != Scope::Address(from.ip()) && Some(scope) != node.as_ref()
+            self.load.retain(|scope, _| Some(scope) != node.as_ref());
+            self.overload.retain(|scope, overload| {
+                overload.peer.ip() != from.ip() && Some(scope) != node.as_ref()
             });
             self.events.push_back(Event::PeerRestarted {
                 peer: from,
@@ -1658,9 +1654,18 @@ impl Node {
         }
     }
 
-    /// The load and overload control information that a message carries (§6.2.3.3.3,
-    /// §6.2.4.3.3).
-    fn note_controls(&mut self, now: Duration, from: SocketAddr, octets: &[u8], body: &Body) {
+    /// The load and overload control information that a message of the session of
+    /// `local_seid` carries (§6.2.3.3.3, §6.2.4.3.3), from a peer with an association:
+    /// the load of its Node ID, and the overload of the address of the UP F-SEID of the
+    /// session, or of its Node ID (§6.2.4.3.1).
+    fn note_controls(
+        &mut self,
+        now: Duration,
+        from: SocketAddr,
+        octets: &[u8],
+        body: &Body,
+        local_seid: Option<u64>,
+    ) {
         let (load, overload) = match body {
             Body::SessionEstablishmentResponse(message) => (
                 message.load_control_information.as_deref(),
@@ -1680,14 +1685,40 @@ impl Node {
             ),
             _ => (None, None),
         };
-        let node = self
-            .association_of(from)
-            .map(|association| Scope::Node(association.key.clone()));
+        if load.is_none() && overload.is_none() {
+            return;
+        }
+        // Of the association of the session, from its peer or the address of its F-SEID,
+        // and of no other host, which would fill the maps or throttle a peer.
+        let session = local_seid.and_then(|seid| self.sessions.get(&seid));
+        let of_peer = |key: &[u8]| {
+            session.is_some_and(|session| session.peer.ip() == from.ip())
+                || self
+                    .association_of(from)
+                    .is_some_and(|association| association.key == key)
+        };
+        let node = match session.filter(|session| self.associations.contains_key(&session.node)) {
+            Some(session) => Some(session.node.clone()).filter(|key| of_peer(key)),
+            None => self
+                .association_of(from)
+                .map(|association| association.key.clone()),
+        };
+        let Some(node) = node.map(Scope::Node) else {
+            return;
+        };
+        let address = match body {
+            Body::SessionEstablishmentResponse(response) => response
+                .up_f_seid
+                .as_ref()
+                .map(|f_seid| fseid_peer(from, f_seid).ip()),
+            _ => session.map(|session| session.peer.ip()),
+        };
+        let address = Scope::Address(address.unwrap_or(from.ip()));
         if let Some(load) = load
             && let (Some(sequence), Some(metric)) =
                 (&load.load_control_sequence_number, &load.load_metric)
         {
-            let scope = node.clone().unwrap_or(Scope::Address(from.ip()));
+            let scope = node.clone();
             let new = LoadControl {
                 sequence: sequence.value,
                 metric: metric.value.0,
@@ -1722,9 +1753,9 @@ impl Node {
                 .overload_control_information_flags
                 .as_ref()
                 .is_some_and(|flags| flags.aoci);
-            let scope = match (of_node, node) {
-                (true, Some(node)) => node,
-                _ => Scope::Address(from.ip()),
+            let scope = match of_node {
+                true => node,
+                false => address,
             };
             let validity = timer(validity);
             let until = validity.map(|period| now.saturating_add(period));
@@ -1765,15 +1796,23 @@ impl Node {
     /// Whether the "Loss" algorithm drops a session request of `priority` to `to`
     /// (§6.2.4.4.2): of each 100 requests, as many as the Overload Reduction Metric,
     /// those of the priorities that the node spares last (§6.2.4.5.1).
-    fn throttle(&mut self, to: SocketAddr, priority: u8) -> bool {
+    fn throttle(&mut self, to: SocketAddr, local_seid: Option<u64>, priority: u8) -> bool {
         if !self.config.throttling {
             return false;
         }
-        let node = self
-            .association_of(to)
-            .map(|association| Scope::Node(association.key.clone()));
-        let scope = match self.overload.contains_key(&Scope::Address(to.ip())) {
-            true => Scope::Address(to.ip()),
+        // The address of the UP F-SEID of the session, and its association.
+        let session = local_seid.and_then(|seid| self.sessions.get(&seid));
+        let address = Scope::Address(session.map_or(to.ip(), |session| session.peer.ip()));
+        let node = session
+            .filter(|session| self.associations.contains_key(&session.node))
+            .map(|session| session.node.clone())
+            .or_else(|| {
+                self.association_of(to)
+                    .map(|association| association.key.clone())
+            })
+            .map(Scope::Node);
+        let scope = match self.overload.contains_key(&address) {
+            true => address,
             false => match node {
                 Some(node) if self.overload.contains_key(&node) => node,
                 _ => return false,
