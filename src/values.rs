@@ -987,6 +987,17 @@ listed_value!(
 
 impl<'a, const N: u16> crate::ie::Listed<'a> for Raw<'a, N> {
     type List = crate::list::List<Self>;
+    type Slot = Option<Self>;
+    fn decode_slot(slot: &mut Self::Slot, octets: &'a [u8]) -> bool {
+        *slot = Some(Self(Octets::wire(octets)));
+        true
+    }
+    fn slot_get(slot: &Self::Slot) -> Option<&Self> {
+        slot.as_ref()
+    }
+    fn slot_set(slot: &mut Self::Slot, value: Self) {
+        *slot = Some(value);
+    }
     #[inline]
     fn decode_push(list: &mut Self::List, octets: &'a [u8]) -> bool {
         list.push(Self(Octets::wire(octets)));

@@ -181,6 +181,13 @@ impl<T: IntoOwned> IntoOwned for Option<T> {
     }
 }
 
+impl<T: IntoOwned> IntoOwned for alloc::boxed::Box<T> {
+    type Owned = alloc::boxed::Box<T::Owned>;
+    fn into_owned(self) -> Self::Owned {
+        alloc::boxed::Box::new((*self).into_owned())
+    }
+}
+
 impl<T: IntoOwned> IntoOwned for Vec<T> {
     type Owned = Vec<T::Owned>;
     fn into_owned(self) -> Self::Owned {

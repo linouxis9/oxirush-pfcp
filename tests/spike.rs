@@ -34,7 +34,7 @@ fn establishment() -> Message<'static> {
         CreateFar::new(FarId::new(1), ApplyAction { forw: true, ..Default::default() }),
     )
     .with_create_pdr(downlink);
-    Message { header: Header::session(0, 7), body: Body::SessionEstablishmentRequest(request) }
+    Message { header: Header::session(0, 7), body: request.into() }
 }
 
 #[test]

@@ -69,6 +69,19 @@ pub trait Listed<'a>: Codec<'a> {
 
     /// Decode at the end of the field of a row that is a list.
     fn decode_push(list: &mut Self::List, octets: &'a [u8]) -> bool;
+
+    /// The field of a row that is conditional or optional and there once: an `Option` of
+    /// a value, or of a box for a grouped IE.
+    type Slot: Default + Clone + PartialEq + core::fmt::Debug;
+
+    /// Decode into a slot that is empty.
+    fn decode_slot(slot: &mut Self::Slot, octets: &'a [u8]) -> bool;
+
+    /// The value of a slot.
+    fn slot_get(slot: &Self::Slot) -> Option<&Self>;
+
+    /// Give a slot a value.
+    fn slot_set(slot: &mut Self::Slot, value: Self);
 }
 
 /// What a value that is not a grouped IE writes as its [`Listed`].
@@ -76,6 +89,19 @@ macro_rules! listed_value {
     ($($ty:ident),* $(,)?) => {$(
         impl<'a> crate::ie::Listed<'a> for $ty<'a> {
             type List = crate::list::List<Self>;
+            type Slot = Option<Self>;
+            #[inline]
+            fn decode_slot(slot: &mut Self::Slot, octets: &'a [u8]) -> bool {
+                <Self as crate::ie::Codec<'a>>::decode_into(slot, octets)
+            }
+            #[inline]
+            fn slot_get(slot: &Self::Slot) -> Option<&Self> {
+                slot.as_ref()
+            }
+            #[inline]
+            fn slot_set(slot: &mut Self::Slot, value: Self) {
+                *slot = Some(value);
+            }
             #[inline]
             fn decode_push(list: &mut Self::List, octets: &'a [u8]) -> bool {
                 match <Self as crate::ie::Codec<'a>>::decode(octets) {

@@ -102,7 +102,7 @@ pub fn establishment(pdrs: u16) -> Vec<u8> {
         .with_apn_dnn(Raw(b"\x08internet".to_vec().into()))
         .with_s_nssai(Raw(vec![0x01, 0x00, 0x00, 0x01].into()))
         .with_user_id(Raw(vec![0x01, 0x08, 0x02, 0xf8, 0x39, 0x00, 0x00, 0x00, 0x00, 0xf1].into()));
-    let message = Message { header: Header::session(0, 7), body: Body::SessionEstablishmentRequest(request) };
+    let message = Message { header: Header::session(0, 7), body: request.into() };
     message.encode().unwrap()
 }
 

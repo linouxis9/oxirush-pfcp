@@ -1228,10 +1228,12 @@ pfcp_table! {
     group CreateFar = 3, "Create FAR", "7.5.2.3-1" {
         far_id: "FAR ID" M FarId [SXA SXB SXC N4 N4MB],
         apply_action: "Apply Action" M ApplyAction [SXA SXB SXC N4 N4MB],
-        forwarding_parameters: "Forwarding Parameters" C ForwardingParameters [SXA SXB SXC N4],
+        forwarding_parameters: "Forwarding Parameters" Ci ForwardingParameters [SXA SXB SXC N4],
         duplicating_parameters: "Duplicating Parameters" C* DuplicatingParameters [SXA SXB],
         bar_id: "BAR ID" O BarId [SXA N4],
-        redundant_transmission_forwarding_parameters: "Redundant Transmission Forwarding Parameters" C RedundantTransmissionForwardingParameters [],
+        // V19.6.0 marks no interface for this row; its row in Update FAR (Table
+        // 7.5.4.3-1) and clause 5.24 have it on N4.
+        redundant_transmission_forwarding_parameters: "Redundant Transmission Forwarding Parameters" C RedundantTransmissionForwardingParameters [N4],
         mbs_multicast_parameters: "MBS Multicast Parameters" C MbsMulticastParameters [N4MB],
         add_mbs_unicast_parameters: "Add MBS Unicast Parameters" C* AddMbsUnicastParameters [N4MB],
     }
@@ -1731,7 +1733,7 @@ pfcp_table! {
     group UpdateFar = 10, "Update FAR", "7.5.4.3-1" {
         far_id: "FAR ID" M FarId [SXA SXB SXC N4 N4MB],
         apply_action: "Apply Action" C ApplyAction [SXA SXB SXC N4 N4MB],
-        update_forwarding_parameters: "Update Forwarding parameters" C UpdateForwardingParameters [SXA SXB SXC N4],
+        update_forwarding_parameters: "Update Forwarding parameters" Ci UpdateForwardingParameters [SXA SXB SXC N4],
         update_duplicating_parameters: "Update Duplicating Parameters" C* UpdateDuplicatingParameters [SXA SXB],
         redundant_transmission_forwarding_parameters: "Redundant Transmission Forwarding Parameters" C RedundantTransmissionForwardingParameters [N4],
         bar_id: "BAR ID" C BarId [SXA N4],

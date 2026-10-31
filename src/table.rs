@@ -167,7 +167,14 @@ pub(crate) fn decode_scope<'a, S: Scope<'a>>(octets: &'a [u8]) -> Result<S, IeFa
 
 /// The scope of `octets`, in `scope`, which is empty.
 pub(crate) fn decode_scope_into<'a, S: Scope<'a>>(scope: &mut S, octets: &'a [u8]) -> Result<(), IeFault> {
-    if S::PRESIZE {
+    decode_scope_sized(scope, octets, false)
+}
+
+/// The scope of `octets`, in `scope`, which is empty; its large lists sized first by a
+/// pass over its IEs where `presize` asks for it: a message, whose lists of grouped IEs
+/// are long, and not a grouped IE, whose lists are short or empty.
+pub(crate) fn decode_scope_sized<'a, S: Scope<'a>>(scope: &mut S, octets: &'a [u8], presize: bool) -> Result<(), IeFault> {
+    if presize && S::PRESIZE {
         scope.presize(octets);
     }
     // No order is kept while the IEs come in the order of the table, which encoding the

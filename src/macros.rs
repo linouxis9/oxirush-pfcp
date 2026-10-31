@@ -415,7 +415,7 @@ macro_rules! pfcp_messages {
         pub enum Body<'a> {
             $(
                 #[doc = concat!("Message type ", stringify!($code), ".")]
-                $ty(crate::registry::$ty<'a>),
+                $ty(alloc::boxed::Box<crate::registry::$ty<'a>>),
             )*
             /// A message type that Table 7.3-1 does not have, with the octets after its
             /// header (§7.6.4).
@@ -427,11 +427,19 @@ macro_rules! pfcp_messages {
             },
         }
 
+        $(
+            impl<'a> From<crate::registry::$ty<'a>> for Body<'a> {
+                fn from(body: crate::registry::$ty<'a>) -> Self {
+                    Self::$ty(alloc::boxed::Box::new(body))
+                }
+            }
+        )*
+
         impl<'a> crate::octets::IntoOwned for Body<'a> {
             type Owned = Body<'static>;
             fn into_owned(self) -> Body<'static> {
                 match self {
-                    $( Self::$ty(body) => Body::$ty(body.into_owned()), )*
+                    $( Self::$ty(body) => Body::$ty(crate::octets::IntoOwned::into_owned(body)), )*
                     Self::Other { message_type, octets } => Body::Other { message_type, octets: octets.into_owned() },
                 }
             }
@@ -467,14 +475,19 @@ macro_rules! pfcp_messages {
 
             pub(crate) fn decode(message_type: u8, octets: &'a [u8]) -> Result<Self, crate::ie::IeFault> {
                 Ok(match message_type {
-                    $( $code => Self::$ty(crate::table::decode_scope(octets)?), )*
+                    $( $code => {
+                        // The message is decoded in its box, and not moved there.
+                        let mut body = alloc::boxed::Box::<crate::registry::$ty<'a>>::default();
+                        crate::table::decode_scope_sized(&mut *body, octets, true)?;
+                        Self::$ty(body)
+                    } )*
                     other => Self::Other { message_type: other, octets: crate::octets::Octets::wire(octets) },
                 })
             }
 
             pub(crate) fn encode(&self, out: &mut alloc::vec::Vec<u8>) -> Result<(), crate::Error> {
                 match self {
-                    $( Self::$ty(body) => crate::table::encode_scope(body, out), )*
+                    $( Self::$ty(body) => crate::table::encode_scope(&**body, out), )*
                     Self::Other { octets, .. } => {
                         out.extend_from_slice(octets);
                         Ok(())
@@ -484,14 +497,14 @@ macro_rules! pfcp_messages {
 
             pub(crate) fn encoded_len(&self) -> usize {
                 match self {
-                    $( Self::$ty(body) => crate::table::Scope::encoded_len(body), )*
+                    $( Self::$ty(body) => crate::table::Scope::encoded_len(&**body), )*
                     Self::Other { octets, .. } => octets.len(),
                 }
             }
 
             pub(crate) fn check(&self, path: &str, found: &mut alloc::vec::Vec<crate::check::Deviation>) {
                 match self {
-                    $( Self::$ty(body) => crate::check::check_scope(body, path, found), )*
+                    $( Self::$ty(body) => crate::check::check_scope(&**body, path, found), )*
                     Self::Other { message_type, .. } => {
                         let _ = message_type;
                         found.push(crate::check::Deviation::new(
@@ -506,7 +519,7 @@ macro_rules! pfcp_messages {
             #[cfg(feature = "tree")]
             pub(crate) fn ies_tree(&self) -> oxirush_utils::tree::Value {
                 match self {
-                    $( Self::$ty(body) => crate::tree::scope_to_tree(body), )*
+                    $( Self::$ty(body) => crate::tree::scope_to_tree(&**body), )*
                     Self::Other { octets, .. } => oxirush_utils::tree::alternative("octets", oxirush_utils::tree::octets(octets)),
                 }
             }
@@ -525,7 +538,7 @@ macro_rules! pfcp_messages {
                     Err(code) => code,
                 };
                 Ok(match code {
-                    $( $code if kind.is_ok() => Self::$ty(crate::tree::scope_from_tree(value, reading)?), )*
+                    $( $code if kind.is_ok() => Self::$ty(alloc::boxed::Box::new(crate::tree::scope_from_tree(value, reading)?)), )*
                     other => {
                         let (_, octets) = reading.alternative(value, &["octets"])?;
                         let octets = reading.within("octets", octets, |value, reading| reading.octets(value))?;
@@ -559,7 +572,7 @@ macro_rules! pfcp_table {
         pub struct $ty<'a> {
             $(
                 #[doc = concat!("The ", $row, " IE.")]
-                pub $field: pfcp_table!(@field (pfcp_table!(@type $vty $($raw)?)) $(* $($max)?)?),
+                pub $field: pfcp_table!(@field [$(* $($max)?)?] $p (pfcp_table!(@type $vty $($raw)?))),
             )*
             /// The IEs that the scope keeps as octets, in the order of the wire.
             pub raw: alloc::vec::Vec<crate::ie::RawIe<'a>>,
@@ -596,7 +609,7 @@ macro_rules! pfcp_table {
             $(
                 #[doc = concat!("Builder: add the ", $row, " IE.")]
                 pub fn [<with_ $field>](mut self, value: pfcp_table!(@type $vty $($raw)?)) -> Self {
-                    pfcp_table!(@set [$(* $($max)?)?] self.$field, value);
+                    pfcp_table!(@set [$(* $($max)?)?] $p (pfcp_table!(@type $vty $($raw)?)) self.$field, value);
                     self
                 }
             )*
@@ -642,7 +655,7 @@ macro_rules! pfcp_table {
             fn place(&mut self, ie_type: u16, body: &'a [u8]) -> crate::ie::Placing {
                 $(
                     if ie_type == <pfcp_table!(@type $vty $($raw)?) as crate::ie::IeType>::IE_TYPE {
-                        return pfcp_table!(@place [$(* $($max)?)?] (pfcp_table!(@type $vty $($raw)?)) self.$field, body);
+                        return pfcp_table!(@place [$(* $($max)?)?] $p (pfcp_table!(@type $vty $($raw)?)) self.$field, body);
                     }
                 )*
                 crate::ie::Placing::Unexpected
@@ -651,7 +664,7 @@ macro_rules! pfcp_table {
             fn emit(&self, ie_type: u16, nth: usize, out: &mut alloc::vec::Vec<u8>) -> Result<bool, crate::Error> {
                 $(
                     if ie_type == <pfcp_table!(@type $vty $($raw)?) as crate::ie::IeType>::IE_TYPE {
-                        let Some(value) = pfcp_table!(@nth [$(* $($max)?)?] self.$field, nth) else {
+                        let Some(value) = pfcp_table!(@nth [$(* $($max)?)?] $p (pfcp_table!(@type $vty $($raw)?)) self.$field, nth) else {
                             return Ok(false);
                         };
                         crate::ie::encode_value(value, out)?;
@@ -663,7 +676,7 @@ macro_rules! pfcp_table {
 
             fn encoded_len(&self) -> usize {
                 let mut length = 0;
-                $( pfcp_table!(@each [$(* $($max)?)?] self.$field, |nth, value| {
+                $( pfcp_table!(@each [$(* $($max)?)?] $p (pfcp_table!(@type $vty $($raw)?)) self.$field, |nth, value| {
                     let _ = nth;
                     length += 4 + crate::ie::Codec::encoded_len(value);
                 }); )*
@@ -674,7 +687,7 @@ macro_rules! pfcp_table {
             }
 
             fn encode_fields(&self, out: &mut alloc::vec::Vec<u8>) -> Result<(), crate::Error> {
-                $( pfcp_table!(@each [$(* $($max)?)?] self.$field, |nth, value| {
+                $( pfcp_table!(@each [$(* $($max)?)?] $p (pfcp_table!(@type $vty $($raw)?)) self.$field, |nth, value| {
                     let _ = nth;
                     crate::ie::encode_value(value, out)?;
                 }); )*
@@ -707,10 +720,10 @@ macro_rules! pfcp_table {
 
         // A table without rows leaves its arguments unused.
         #[allow(unused_variables, unused_mut, unused_assignments)]
-        impl crate::check::Checked for $ty<'_> {
+        impl<'a> crate::check::Checked for $ty<'a> {
             fn check_values(&self, path: &str, found: &mut alloc::vec::Vec<crate::check::Deviation>) {
                 $(
-                    pfcp_table!(@each [$(* $($max)?)?] self.$field, |nth, value| {
+                    pfcp_table!(@each [$(* $($max)?)?] $p (pfcp_table!(@type $vty $($raw)?)) self.$field, |nth, value| {
                         let at = crate::check::at(path, $row, pfcp_table!(@position [$(* $($max)?)?] nth));
                         crate::check::Check::check(value, &at, found);
                     });
@@ -738,7 +751,7 @@ macro_rules! pfcp_table {
             fn field_tree(&self, ie_type: u16, nth: usize) -> Option<oxirush_utils::tree::Value> {
                 $(
                     if ie_type == <pfcp_table!(@type $vty $($raw)?) as crate::ie::IeType>::IE_TYPE {
-                        return pfcp_table!(@nth [$(* $($max)?)?] self.$field, nth).map(oxirush_utils::tree::Tree::to_tree);
+                        return pfcp_table!(@nth [$(* $($max)?)?] $p (pfcp_table!(@type $vty $($raw)?)) self.$field, nth).map(oxirush_utils::tree::Tree::to_tree);
                     }
                 )*
                 None
@@ -753,7 +766,7 @@ macro_rules! pfcp_table {
                 $(
                     if ie_type == <pfcp_table!(@type $vty $($raw)?) as crate::ie::IeType>::IE_TYPE {
                         let value = <pfcp_table!(@type $vty $($raw)?) as oxirush_utils::tree::Tree>::from_tree(value, reading)?;
-                        pfcp_table!(@set [$(* $($max)?)?] self.$field, value);
+                        pfcp_table!(@set [$(* $($max)?)?] $p (pfcp_table!(@type $vty $($raw)?)) self.$field, value);
                         return Ok(());
                     }
                 )*
@@ -770,36 +783,74 @@ macro_rules! pfcp_table {
     (@type_static $vty:ident) => { $vty<'static> };
     (@type_any raw $raw:literal) => { crate::values::Raw<'_, $raw> };
     (@type_any $vty:ident) => { $vty<'_> };
-    (@field ($t:ty)) => { Option<$t> };
-    (@field ($t:ty) * $($max:literal)?) => { <$t as crate::ie::Listed<'a>>::List };
+    // A row that is there once is a field of its value, mandatory ones in place, and the
+    // others as the slot of their type: a grouped IE, large and rare, is boxed.
+    (@field [] M ($t:ty)) => { Option<$t> };
+    (@field [] Ci ($t:ty)) => { Option<$t> };
+    (@field [] Oi ($t:ty)) => { Option<$t> };
+    (@field [] $p:ident ($t:ty)) => { <$t as crate::ie::Listed<'a>>::Slot };
+    (@field [* $($max:literal)?] $p:ident ($t:ty)) => { <$t as crate::ie::Listed<'a>>::List };
     (@presence M) => { crate::table::Presence::Mandatory };
     (@presence C) => { crate::table::Presence::Conditional };
     (@presence O) => { crate::table::Presence::Optional };
+    // A conditional or optional grouped IE that most messages have stays in place.
+    (@presence Ci) => { crate::table::Presence::Conditional };
+    (@presence Oi) => { crate::table::Presence::Optional };
     (@repeat) => { crate::table::Repeat::Once };
     (@repeat *) => { crate::table::Repeat::Any };
     (@repeat * $max:literal) => { crate::table::Repeat::AtMost($max) };
-    (@set [] $f:expr, $value:expr) => { $f = Some($value) };
-    (@set [* $($max:literal)?] $f:expr, $value:expr) => { $f.push($value) };
-    (@nth [] $f:expr, $nth:expr) => { $f.as_ref().filter(|_| $nth == 0) };
-    (@nth [* $($max:literal)?] $f:expr, $nth:expr) => { $f.get($nth) };
+    (@set [] M ($t:ty) $f:expr, $value:expr) => { $f = Some($value) };
+    (@set [] Ci ($t:ty) $f:expr, $value:expr) => { $f = Some($value) };
+    (@set [] Oi ($t:ty) $f:expr, $value:expr) => { $f = Some($value) };
+    (@set [] $p:ident ($t:ty) $f:expr, $value:expr) => { <$t as crate::ie::Listed>::slot_set(&mut $f, $value) };
+    (@set [* $($max:literal)?] $p:ident ($t:ty) $f:expr, $value:expr) => { $f.push($value) };
+    (@nth [] M ($t:ty) $f:expr, $nth:expr) => { $f.as_ref().filter(|_| $nth == 0) };
+    (@nth [] Ci ($t:ty) $f:expr, $nth:expr) => { $f.as_ref().filter(|_| $nth == 0) };
+    (@nth [] Oi ($t:ty) $f:expr, $nth:expr) => { $f.as_ref().filter(|_| $nth == 0) };
+    (@nth [] $p:ident ($t:ty) $f:expr, $nth:expr) => { <$t as crate::ie::Listed>::slot_get(&$f).filter(|_| $nth == 0) };
+    (@nth [* $($max:literal)?] $p:ident ($t:ty) $f:expr, $nth:expr) => { $f.get($nth) };
     (@position [] $nth:ident) => {{ let _ = $nth; None }};
     (@position [* $($max:literal)?] $nth:ident) => { Some($nth) };
     (@count [] $f:expr) => { usize::from($f.is_some()) };
     (@count [* $($max:literal)?] $f:expr) => { $f.len() };
-    (@each [] $f:expr, |$nth:ident, $value:ident| $body:block) => {
+    (@each [] M ($t:ty) $f:expr, |$nth:ident, $value:ident| $body:block) => {
+        if let Some($value) = $f.as_ref() { let $nth = 0; $body }
+    };
+    (@each [] Ci ($t:ty) $f:expr, |$nth:ident, $value:ident| $body:block) => {
+        if let Some($value) = $f.as_ref() { let $nth = 0; $body }
+    };
+    (@each [] Oi ($t:ty) $f:expr, |$nth:ident, $value:ident| $body:block) => {
+        if let Some($value) = $f.as_ref() { let $nth = 0; $body }
+    };
+    (@each [] $p:ident ($t:ty) $f:expr, |$nth:ident, $value:ident| $body:block) => {
+        if let Some($value) = <$t as crate::ie::Listed>::slot_get(&$f) { let $nth = 0; $body }
+    };
+    (@each_unused [] $f:expr, |$nth:ident, $value:ident| $body:block) => {
         if let Some($value) = &$f { let $nth = 0; $body }
     };
-    (@each [* $($max:literal)?] $f:expr, |$nth:ident, $value:ident| $body:block) => {
+    (@each [* $($max:literal)?] $p:ident ($t:ty) $f:expr, |$nth:ident, $value:ident| $body:block) => {
         for ($nth, $value) in $f.iter().enumerate() $body
     };
-    (@place [] ($t:ty) $f:expr, $body:expr) => {
+    (@place [] $p:ident ($t:ty) $f:expr, $body:expr) => {
+        pfcp_table!(@place_once $p ($t) $f, $body)
+    };
+    (@place_once Ci ($t:ty) $f:expr, $body:expr) => { pfcp_table!(@place_once M ($t) $f, $body) };
+    (@place_once Oi ($t:ty) $f:expr, $body:expr) => { pfcp_table!(@place_once M ($t) $f, $body) };
+    (@place_once M ($t:ty) $f:expr, $body:expr) => {
         match $f.is_some() {
             true => crate::ie::Placing::Repeated,
             false if crate::ie::Codec::decode_into(&mut $f, $body) => crate::ie::Placing::Placed,
             false => crate::ie::Placing::Malformed,
         }
     };
-    (@place [* $($max:literal)?] ($t:ty) $f:expr, $body:expr) => {
+    (@place_once $p:ident ($t:ty) $f:expr, $body:expr) => {
+        match $f.is_some() {
+            true => crate::ie::Placing::Repeated,
+            false if <$t as crate::ie::Listed>::decode_slot(&mut $f, $body) => crate::ie::Placing::Placed,
+            false => crate::ie::Placing::Malformed,
+        }
+    };
+    (@place [* $($max:literal)?] $p:ident ($t:ty) $f:expr, $body:expr) => {
         if pfcp_table!(@full [$($max)?] $f) {
             crate::ie::Placing::Repeated
         } else if <$t as crate::ie::Listed>::decode_push(&mut $f, $body) {
@@ -845,6 +896,24 @@ macro_rules! pfcp_table {
 
         impl<'a> crate::ie::Listed<'a> for $ty<'a> {
             type List = alloc::vec::Vec<Self>;
+            type Slot = Option<alloc::boxed::Box<Self>>;
+
+            fn decode_slot(slot: &mut Self::Slot, octets: &'a [u8]) -> bool {
+                let scope = slot.insert(alloc::boxed::Box::default());
+                if crate::table::decode_scope_into(&mut **scope, octets).is_err() {
+                    *slot = None;
+                    return false;
+                }
+                true
+            }
+
+            fn slot_get(slot: &Self::Slot) -> Option<&Self> {
+                slot.as_deref()
+            }
+
+            fn slot_set(slot: &mut Self::Slot, value: Self) {
+                *slot = Some(alloc::boxed::Box::new(value));
+            }
 
             fn decode_push(list: &mut Self::List, octets: &'a [u8]) -> bool {
                 list.push(Self::default());
@@ -882,14 +951,14 @@ macro_rules! pfcp_table {
     (@kind message $ty:ident) => {};
 
     // `new()`, with the fields of the mandatory rows, which a muncher collects.
-    (@new $ty:ident [$($arg:tt)*] [$( ($f:ident [$($m:tt)*]) )*]) => {
+    (@new $ty:ident [$($arg:tt)*] [$( ($f:ident [$($m:tt)*] ($ft:ty)) )*]) => {
         impl<'a> $ty<'a> {
             /// The scope with its mandatory IEs.
             #[allow(clippy::too_many_arguments)]
             pub fn new($($arg)*) -> Self {
                 #[allow(unused_mut)]
                 let mut scope = Self::default();
-                $( pfcp_table!(@set [$($m)*] scope.$f, $f); )*
+                $( pfcp_table!(@set [$($m)*] M ($ft) scope.$f, $f); )*
                 scope
             }
         }
@@ -902,7 +971,7 @@ macro_rules! pfcp_table {
         pfcp_table!(@new $ty [$($arg)*] [$($set)*] $($rest)*);
     };
     (@n4 [N4 $($i:ident)*] $ty:ident [$($arg:tt)*] [$($set:tt)*] ($field:ident [$($m:tt)*] ($t:ty)) $($rest:tt)*) => {
-        pfcp_table!(@new $ty [$($arg)* $field: $t,] [$($set)* ($field [$($m)*])] $($rest)*);
+        pfcp_table!(@new $ty [$($arg)* $field: $t,] [$($set)* ($field [$($m)*] ($t))] $($rest)*);
     };
     (@n4 [$other:ident $($i:ident)*] $ty:ident [$($arg:tt)*] [$($set:tt)*] $row:tt $($rest:tt)*) => {
         pfcp_table!(@n4 [$($i)*] $ty [$($arg)*] [$($set)*] $row $($rest)*);
