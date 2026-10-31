@@ -2444,6 +2444,100 @@ fn a_second_answer_has_no_effect() {
     assert!(upf.session(up_seid).is_some());
 }
 
+// ── §4.2.2: the port of the requests ───────────────────────────────────────
+
+/// §4.2.2: a request goes to port 8805, whatever port the peer sends its own from, and
+/// the association is of the peer's address, whatever its port.
+#[test]
+fn requests_go_to_port_8805() {
+    let ephemeral: SocketAddr = "10.0.0.1:40000".parse().unwrap();
+    let mut upf = Node::new(NodeConfig {
+        heartbeat: Some(Duration::from_secs(10)),
+        ..config(UPF, Function::Up)
+    });
+    upf.handle_datagram(at(0), ephemeral, &setup_of(SMF, 1, 1000));
+    let (inbound, _) = request(&mut upf);
+    upf.respond(at(0), &inbound, setup_answer()).unwrap();
+    assert_eq!(
+        sent(&mut upf)[0].to,
+        ephemeral,
+        "a response to the source port"
+    );
+    assert_eq!(
+        upf.association(SMF).map(|association| association.peer),
+        Some(SMF)
+    );
+    assert!(upf.association(ephemeral).is_some());
+    events(&mut upf);
+    upf.handle_timeout(at(10));
+    assert_eq!(sent(&mut upf)[0].to, SMF, "the heartbeat");
+    let f_seid = FSeid {
+        v4: true,
+        seid: Some(77),
+        ipv4: Some(Ipv4Addr::new(10, 0, 0, 1)),
+        ..Default::default()
+    };
+    let pdr = CreatePdr::new_n4(
+        PdrId::new(1),
+        Precedence::new(1),
+        Pdi::new(SourceInterface::new(SourceInterfaceValue::Access)),
+    );
+    let far = CreateFar::new(
+        FarId::new(1),
+        ApplyAction {
+            forw: true,
+            ..Default::default()
+        },
+    );
+    let establishment = Message {
+        header: Header::session(0, 2),
+        body: SessionEstablishmentRequest::new_n4(node_id(SMF), f_seid, pdr, far).into(),
+    };
+    upf.handle_datagram(at(11), ephemeral, &establishment.encode().unwrap());
+    let (inbound, _) = request(&mut upf);
+    let up_seid = upf.new_session(ephemeral);
+    let up_f_seid = FSeid {
+        v4: true,
+        seid: Some(up_seid),
+        ipv4: Some(Ipv4Addr::new(10, 0, 0, 2)),
+        ..Default::default()
+    };
+    let response =
+        SessionEstablishmentResponse::new(node_id(UPF), accepted()).with_up_f_seid(up_f_seid);
+    upf.respond(at(11), &inbound, response).unwrap();
+    sent(&mut upf);
+    let report = SessionReportRequest::new(ReportType {
+        upir: true,
+        ..Default::default()
+    });
+    upf.session_request(at(12), up_seid, report).unwrap();
+    assert_eq!(sent(&mut upf)[0].to, SMF, "the report");
+    let pfd = Message {
+        header: Header::node(3),
+        body: PfdManagementRequest::default().into(),
+    };
+    upf.handle_datagram(at(13), SMF, &pfd.encode().unwrap());
+    assert_eq!(requests_of(&events(&mut upf)), 1, "of the association");
+}
+
+/// A node of `request_port` `None` sends its requests to the port that the peer sent
+/// from, for peers on other ports, as in a test.
+#[test]
+fn requests_to_the_port_of_the_peer() {
+    let ephemeral: SocketAddr = "10.0.0.1:40000".parse().unwrap();
+    let mut upf = Node::new(NodeConfig {
+        heartbeat: Some(Duration::from_secs(10)),
+        request_port: None,
+        ..config(UPF, Function::Up)
+    });
+    upf.handle_datagram(at(0), ephemeral, &setup_of(SMF, 1, 1000));
+    let (inbound, _) = request(&mut upf);
+    upf.respond(at(0), &inbound, setup_answer()).unwrap();
+    sent(&mut upf);
+    upf.handle_timeout(at(10));
+    assert_eq!(sent(&mut upf)[0].to, ephemeral);
+}
+
 trait IntoSocket {
     fn into_socket(self, port: u16) -> SocketAddr;
 }
