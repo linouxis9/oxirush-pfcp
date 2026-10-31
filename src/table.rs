@@ -84,7 +84,18 @@ pub struct Row {
     /// The interfaces that have it.
     pub interfaces: Interfaces,
     /// The rows that share the field, when several do.
-    pub roles: &'static [&'static str],
+    pub roles: &'static [Role],
+}
+
+/// One of the rows of a table that share a field: the wire does not tell them apart.
+#[derive(Debug)]
+pub struct Role {
+    /// The name that the table gives the row: `SGW-C FQ-CSID`.
+    pub name: &'static str,
+    /// Its presence.
+    pub presence: Presence,
+    /// The interfaces that have it.
+    pub interfaces: Interfaces,
 }
 
 /// A table of clause 7: of a message, or of the content of a grouped IE in one place.

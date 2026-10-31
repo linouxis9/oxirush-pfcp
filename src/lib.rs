@@ -50,7 +50,7 @@ pub use registry::{
     CreatePdr, Form, HeartbeatRequest, HeartbeatResponse, IE_TYPES, IeTypeInfo, Pdi,
     SessionEstablishmentRequest, ie_type_info, type_name,
 };
-pub use table::{Interfaces, Presence, Repeat, Row, Table};
+pub use table::{Interfaces, Presence, Repeat, Role, Row, Table};
 pub use values::*;
 
 /// Why a message does not decode or encode.

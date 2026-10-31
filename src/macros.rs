@@ -214,13 +214,14 @@ macro_rules! pfcp_layout {
 /// A row is `field: "Name" P TYPE [INTERFACES]`, where `P` is `M`, `C` or `O`, followed by
 /// `*` for a list or `*N` for a list of at most N, and `TYPE` the type of its value, or
 /// `raw N` for an IE type that the crate keeps as octets. A field that several rows
-/// share, which the wire does not tell apart, lists them after `roles`.
+/// share, which the wire does not tell apart, lists them after `roles`, each with its
+/// presence and its interfaces.
 macro_rules! pfcp_table {
     (
         $(#[$meta:meta])*
         $kind:ident $ty:ident = $code:literal, $name:literal, $id:literal {
             $( $field:ident : $row:literal $p:ident $(* $($max:literal)?)? $vty:ident $($raw:literal)?
-                [$($interface:ident)*] $(roles [$($role:literal),*])? , )*
+                [$($interface:ident)*] $(roles [$($role:literal $rp:ident [$($ri:ident)*]),*])? , )*
         }
     ) => { pastey::paste! {
         $(#[$meta])*
@@ -247,7 +248,11 @@ macro_rules! pfcp_table {
                     presence: pfcp_table!(@presence $p),
                     repeat: pfcp_table!(@repeat $(* $($max)?)?),
                     interfaces: crate::table::Interfaces(0 $(| crate::table::Interfaces::$interface.0)*),
-                    roles: &[$($($role),*)?],
+                    roles: &[$($(crate::table::Role {
+                        name: $role,
+                        presence: pfcp_table!(@presence $rp),
+                        interfaces: crate::table::Interfaces(0 $(| crate::table::Interfaces::$ri.0)*),
+                    }),*)?],
                 },
             )*],
         };

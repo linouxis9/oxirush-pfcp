@@ -494,7 +494,8 @@ pfcp_table! {
         create_traffic_endpoint: "Create Traffic Endpoint" C* raw 127 [SXA SXB SXC N4 N4MB],
         pdn_type: "PDN Type" C raw 113 [SXA SXB N4],
         fq_csid: "FQ-CSID" C*5 raw 65 [SXA SXB N4]
-            roles ["SGW-C FQ-CSID", "MME FQ-CSID", "PGW-C/SMF FQ-CSID", "ePDG FQ-CSID", "TWAN FQ-CSID"],
+            roles ["SGW-C FQ-CSID" C [SXA SXB], "MME FQ-CSID" C [SXA SXB], "PGW-C/SMF FQ-CSID" C [SXA SXB N4],
+                "ePDG FQ-CSID" C [SXB], "TWAN FQ-CSID" C [SXB]],
         user_plane_inactivity_timer: "User Plane Inactivity Timer" O raw 117 [SXB SXC N4 N4MB],
         user_id: "User ID" O raw 141 [SXA SXB SXC N4],
         trace_information: "Trace Information" O raw 152 [SXA SXB SXC N4],
@@ -571,7 +572,7 @@ pfcp_table! {
         source_interface_type: "Source Interface Type" C raw 160 [SXA SXB N4 N4MB],
         ip_multicast_addressing_info: "IP Multicast Addressing Info" O* raw 188 [N4 N4MB],
         dns_query_response_filter: "DNS Query/Response Filter" O* raw 294 [N4]
-            roles ["DNS Query Filter", "DNS Response Filter"],
+            roles ["DNS Query Filter" O [N4], "DNS Response Filter" O [N4]],
         mbs_session_identifier: "MBS Session Identifier" C raw 305 [N4],
         area_session_id: "Area Session ID" C raw 314 [N4],
         protocol_description: "Protocol Description" O raw 334 [N4],
