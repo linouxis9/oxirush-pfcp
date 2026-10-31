@@ -200,6 +200,9 @@ macro_rules! pfcp_layout {
             }
         }
 
+        #[cfg(feature = "serde")]
+        oxirush_utils::impl_serde!($ty<'a>);
+
         #[cfg(feature = "tree")]
         impl oxirush_utils::tree::Tree for $ty<'_> {
             const NAME: &'static str = <Self as crate::ie::IeType>::TYPE_NAME;
@@ -428,6 +431,9 @@ macro_rules! pfcp_bits {
                 $( pfcp_bits!(@check [$($kind)? $(+ $octet2 $low2 $width2)?] self.$field, path, found); )*
             }
         }
+
+        #[cfg(feature = "serde")]
+        oxirush_utils::impl_serde!($ty<'a>);
 
         /// The flags that are set and the fields, with `Spare`, `length` (the octets of
         /// the fields that the value has, when it lacks some) and `extra` where they are
@@ -1059,6 +1065,9 @@ macro_rules! pfcp_table {
                 crate::check::check_scope(self, path, context, found);
             }
         }
+
+        #[cfg(feature = "serde")]
+        oxirush_utils::impl_serde!($ty<'a>);
 
         #[cfg(feature = "tree")]
         impl oxirush_utils::tree::Tree for $ty<'_> {

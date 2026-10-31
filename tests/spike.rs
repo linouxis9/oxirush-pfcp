@@ -102,8 +102,8 @@ fn what_the_table_does_not_have_is_kept_in_its_place() {
 
     let tree = decoded.to_tree();
     println!("{tree}");
-    // The tree has the IEs of a name together, where they first come: the second Node
-    // ID comes before the Recovery Time Stamp that was between them. The message means
+    // The tree is in the order of the table, the IEs of a row together: the second Node
+    // ID with the first, the vendor IE and the IE of no release last. The message means
     // the same, and its tree is the same.
     let read = Message::from_tree(&tree).unwrap();
     let encoded = read.encode().unwrap();

@@ -21,6 +21,8 @@ default = ["std"]
 std = []
 # The tree of a message, its paths and its edits, on the engine of oxirush-utils.
 tree = ["oxirush-utils/tree"]
+# `Serialize` and `Deserialize` for a message and each of its IEs, through its tree.
+serde = ["tree", "oxirush-utils/serde"]
 
 [dependencies]
 pastey = "0.2"
@@ -28,6 +30,7 @@ oxirush-utils = { version = "0.1.0", default-features = false, features = ["allo
 
 [dev-dependencies]
 hex = "0.4.3"
+serde_json = "1.0.154"
 
 [[test]]
 name = "spike"
@@ -35,6 +38,10 @@ required-features = ["tree"]
 
 [[test]]
 name = "spec"
+
+[[test]]
+name = "serde"
+required-features = ["serde"]
 
 # `pfcp_borrowed`: decoded values borrow their octets, for the measurement of the two
 # forms. cargo-fuzz sets `fuzzing`, and docs.rs `docsrs`.

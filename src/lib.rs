@@ -15,11 +15,20 @@
    limitations under the License.
 */
 
-//! PFCP, the protocol between the control plane and the user plane of 3GPP (TS 29.244,
-//! Release 19): N4 between an SMF and a UPF, and Sxa, Sxb and Sxc in EPC.
+//! PFCP, the protocol between the control plane and the user plane of 3GPP (TS 29.244
+//! V19.6.0, Release 19): N4 between an SMF and a UPF, N4mb, and Sxa, Sxb and Sxc in EPC.
 //!
-//! This is the spike of the design: the header, the IE framing, a typed scope from its
-//! table, three layouts with conditional octets, the check and the tree, for one message.
+//! - [`Message`] decodes and encodes a message, byte for byte. Its [`Body`] has a struct
+//!   for each message type of Table 7.3-1, with a field for each row of its table; each
+//!   IE has its type, with the fields of its figure in clause 8.2.
+//! - [`Message::check`] and [`Message::check_on`] say how a message is not as TS 29.244
+//!   has a sender construct it, with the clause and the Cause of the answer.
+//! - With the feature `tree`, a message is a tree that prints as JSON, read and edited by
+//!   path ([`tree`]); with `serde`, it is serialized as its tree.
+//! - [`framing`] walks the IEs of a message as slices, without decoding them.
+//!
+//! The [README](https://github.com/linouxis9/oxirush-pfcp#readme) has an example of
+//! each.
 
 #![no_std]
 #![deny(unsafe_code)]
@@ -61,6 +70,11 @@ pub use table::{Interfaces, Presence, Repeat, Role, Row, Table};
 pub use values::*;
 pub use values_gen::*;
 pub use values_hand::*;
+
+/// The examples of the README, which the documentation tests compile and run.
+#[cfg(all(doctest, feature = "serde"))]
+#[doc = include_str!("../README.md")]
+struct Readme;
 
 /// Why a message does not decode or encode.
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -651,6 +651,9 @@ macro_rules! pfcp_number {
             }
         }
 
+        #[cfg(feature = "serde")]
+        oxirush_utils::impl_serde!($ty<'a>);
+
         /// The number alone, or `{"Rule ID": 1, "extra": "00"}` with the octets of a later
         /// release.
         #[cfg(feature = "tree")]
@@ -899,6 +902,9 @@ impl NodeId<'_> {
     }
 }
 
+#[cfg(feature = "serde")]
+oxirush_utils::impl_serde!(NodeId<'a>);
+
 /// An address as text, or `{"FQDN": "upf.example"}`, or the octets of another Node ID.
 #[cfg(feature = "tree")]
 impl oxirush_utils::tree::Tree for NodeId<'_> {
@@ -1010,6 +1016,9 @@ impl<'a> IntoOwned for NetworkInstance<'a> {
     }
 }
 
+#[cfg(feature = "serde")]
+oxirush_utils::impl_serde!(NetworkInstance<'a>);
+
 #[cfg(feature = "tree")]
 impl oxirush_utils::tree::Tree for NetworkInstance<'_> {
     const NAME: &'static str = "Network Instance";
@@ -1071,6 +1080,9 @@ macro_rules! pfcp_fields {
                 $ty { $($field: self.$field,)* extra: self.extra.into_owned() }
             }
         }
+
+        #[cfg(feature = "serde")]
+        oxirush_utils::impl_serde!($ty<'a>);
 
         #[cfg(feature = "tree")]
         impl oxirush_utils::tree::Tree for $ty<'_> {
@@ -1297,6 +1309,9 @@ macro_rules! pfcp_octets {
                 $ty(self.0.into_owned())
             }
         }
+
+        #[cfg(feature = "serde")]
+        oxirush_utils::impl_serde!($ty<'a>);
 
         #[cfg(feature = "tree")]
         impl oxirush_utils::tree::Tree for $ty<'_> {

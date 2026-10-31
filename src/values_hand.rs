@@ -526,6 +526,9 @@ impl<'a> IntoOwned for HmacKeyStamp<'a> {
     }
 }
 
+#[cfg(feature = "serde")]
+oxirush_utils::impl_serde!(HmacKeyStamp<'a>);
+
 #[cfg(feature = "tree")]
 impl oxirush_utils::tree::Tree for HmacKeyStamp<'_> {
     const NAME: &'static str = "HMAC Key (STAMP)";
@@ -651,6 +654,9 @@ impl<'a> IntoOwned for FqCsid<'a> {
     }
 }
 
+#[cfg(feature = "serde")]
+oxirush_utils::impl_serde!(FqCsid<'a>);
+
 /// `{"FQ-CSID Node-ID Type": 0, "Node-Address": "10.0.0.1", "PDN Connection Set Identifiers": [1]}`:
 /// an IPv4 or IPv6 address as text, the other Node-Address as its octets.
 #[cfg(feature = "tree")]
@@ -770,6 +776,9 @@ macro_rules! mac_addresses {
                 $ty { mac_addresses: self.mac_addresses, c_tag: self.c_tag, s_tag: self.s_tag, extra: self.extra.into_owned() }
             }
         }
+
+        #[cfg(feature = "serde")]
+        oxirush_utils::impl_serde!($ty<'a>);
 
         #[cfg(feature = "tree")]
         impl oxirush_utils::tree::Tree for $ty<'_> {

@@ -28,7 +28,13 @@
 use alloc::string::String;
 use alloc::vec::Vec;
 
-use oxirush_utils::tree::{self, ErrorKind, Map, Members, Reading, Refused, Root, Value};
+use oxirush_utils::tree::{ErrorKind, Map, Members, Reading, Refused, Root};
+
+/// The engine of the trees, oxirush-utils' `tree`, and its macro `tree!`, which writes a
+/// tree as JSON is written.
+pub use oxirush_utils::tree;
+/// A tree.
+pub use oxirush_utils::tree::Value;
 
 use crate::ie::{Placed, RawIe};
 use crate::registry::IE_TYPES;

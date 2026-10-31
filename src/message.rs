@@ -56,6 +56,21 @@ pfcp_messages! {
     57 SessionReportResponse [SXA SXB SXC N4 N4MB],
 }
 
+/// The name of the message, its SEID and its sequence number: `PFCP Session
+/// Establishment Request (SEID 0, sequence 7)`.
+impl core::fmt::Display for Message<'_> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self.body.name() {
+            Some(name) => f.write_str(name)?,
+            None => write!(f, "PFCP message type {}", self.body.message_type())?,
+        }
+        match self.header.seid {
+            Some(seid) => write!(f, " (SEID {seid:#x}, sequence {})", self.header.sequence),
+            None => write!(f, " (sequence {})", self.header.sequence),
+        }
+    }
+}
+
 /// A message type as Table 7.3-1 has it.
 #[derive(Debug, Clone, Copy)]
 pub struct MessageTypeInfo {
@@ -388,6 +403,9 @@ mod forms {
         "Message Length",
         "ies",
     ];
+
+    #[cfg(feature = "serde")]
+    oxirush_utils::impl_serde!(Message<'a>);
 
     /// `{"message": NAME, "SEID": ..., "Sequence Number": ..., "ies": {...}}`, with the
     /// other members of the header where they are not what a sender writes.
