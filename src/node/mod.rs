@@ -1050,7 +1050,7 @@ impl Node {
         if header.version != 1 {
             // Answered once, and the rest of the datagram, whose framing the node does
             // not know, discarded (§7.6.2).
-            self.other_version(now, from, header, message_type);
+            self.other_version(now, from, octets, header, message_type);
             return;
         }
         let parts = datagram_parts(octets);
@@ -1090,11 +1090,24 @@ impl Node {
     }
 
     /// A message of another version than 1 (§7.6.2): a request is answered with a
-    /// Version Not Supported Response, and a response ends its request.
-    fn other_version(&mut self, now: Duration, from: SocketAddr, header: Header, message_type: u8) {
+    /// Version Not Supported Response, a Version Not Supported Response of any version
+    /// ends the requests to the peer, and another response ends its request.
+    fn other_version(
+        &mut self,
+        now: Duration,
+        from: SocketAddr,
+        octets: &[u8],
+        header: Header,
+        message_type: u8,
+    ) {
         let error = crate::Error::Version {
             version: header.version,
         };
+        if message_type == 11 {
+            // Of the peer's highest version (§7.4.4.7): no fault of its own.
+            self.version_not_supported(now, from, octets);
+            return;
+        }
         if is_request(message_type) {
             let message = Message {
                 header: Header::node(header.sequence),
@@ -1153,6 +1166,23 @@ impl Node {
             }
         }
         self.events.push_back(Event::Malformed { from, error });
+    }
+
+    /// A Version Not Supported Response, whose sequence number says nothing (§7.2.2.2):
+    /// every request to the peer fails.
+    fn version_not_supported(&mut self, now: Duration, from: SocketAddr, octets: &[u8]) {
+        let to_peer: Vec<u32> = self
+            .outstanding
+            .iter()
+            .filter(|(_, request)| request.to == from)
+            .map(|(sequence, _)| *sequence)
+            .collect();
+        if to_peer.is_empty() {
+            self.violation(from, ViolationKind::UnknownSequence, octets);
+        }
+        for sequence in to_peer {
+            self.fail(now, from, sequence, Failure::VersionNotSupported);
+        }
     }
 
     /// End the request of `sequence` to `from` without its response.
@@ -1385,19 +1415,7 @@ impl Node {
         let sequence = message.header.sequence;
         let message_type = message.body.message_type();
         if message_type == 11 {
-            // Its sequence number says nothing (§7.2.2.2): every request to the peer fails.
-            let to_peer: Vec<u32> = self
-                .outstanding
-                .iter()
-                .filter(|(_, request)| request.to == from)
-                .map(|(sequence, _)| *sequence)
-                .collect();
-            if to_peer.is_empty() {
-                self.violation(from, ViolationKind::UnknownSequence, octets);
-            }
-            for sequence in to_peer {
-                self.fail(now, from, sequence, Failure::VersionNotSupported);
-            }
+            self.version_not_supported(now, from, octets);
             return;
         }
         let Some(request) = self.outstanding.get(&sequence) else {
@@ -1784,10 +1802,7 @@ impl Node {
         request: &Outstanding,
         message: &Message,
     ) {
-        let accepted = message
-            .body
-            .cause()
-            .is_some_and(|cause| cause.effective().value() < 64);
+        let accepted = accepts(&message.body);
         match &message.body {
             Body::AssociationSetupResponse(response) if accepted => {
                 if let Some(node_id) = &response.node_id {
@@ -1853,10 +1868,7 @@ impl Node {
 
     /// What an answer of the caller changes: the association, the session.
     fn answered_effects(&mut self, now: Duration, request: &Inbound, message: &Message) {
-        let accepted = message
-            .body
-            .cause()
-            .is_some_and(|cause| cause.effective().value() < 64);
+        let accepted = accepts(&message.body);
         if !accepted {
             return;
         }
@@ -2001,6 +2013,13 @@ impl Node {
             sessions: ended,
         });
     }
+}
+
+/// Whether a response accepts its request: a Cause of acceptance, as read (Table
+/// 8.2.1-1), and not the reserved 0, an invalid IE.
+fn accepts(body: &Body) -> bool {
+    body.cause()
+        .is_some_and(|cause| (1..64).contains(&cause.effective().value()))
 }
 
 /// Whether sequence number `new` comes after `known`, through a roll-over of 32 bits.

@@ -1606,37 +1606,70 @@ fn an_erroneous_response_ends_its_request() {
 /// request to the peer ends with it.
 #[test]
 fn version_not_supported_ends_the_requests_to_the_peer() {
-    let mut smf = node(SMF, Function::Cp);
-    let first = smf.request(at(0), UPF, heartbeat()).unwrap();
-    let second = smf.request(at(0), UPF, heartbeat()).unwrap();
-    let other = smf.request(at(0), OTHER, heartbeat()).unwrap();
-    sent(&mut smf);
-    let answer = Message {
-        header: Header::node(0x777),
-        body: VersionNotSupportedResponse::default().into(),
-    };
-    smf.handle_datagram(at(1), UPF, &answer.encode().unwrap());
-    let failed: Vec<RequestId> = events(&mut smf)
-        .into_iter()
-        .filter_map(|event| match event {
-            Event::Failed {
-                request,
-                failure: Failure::VersionNotSupported,
-                ..
-            } => Some(request),
-            _ => None,
-        })
-        .collect();
-    assert_eq!(failed, [first, second]);
-    smf.handle_timeout(T1);
-    assert_eq!(
-        sent(&mut smf)
-            .iter()
-            .map(|transmit| transmit.to)
-            .collect::<Vec<_>>(),
-        [OTHER]
-    );
-    let _ = other;
+    // Its version is the highest of the peer (§7.4.4.7): 1 is as good as any other.
+    for version in [2, 1, 7] {
+        let mut smf = node(SMF, Function::Cp);
+        let first = smf.request(at(0), UPF, heartbeat()).unwrap();
+        let second = smf.request(at(0), UPF, heartbeat()).unwrap();
+        smf.request(at(0), OTHER, heartbeat()).unwrap();
+        sent(&mut smf);
+        let answer = Message {
+            header: Header::node(0x777),
+            body: VersionNotSupportedResponse::default().into(),
+        };
+        let mut octets = answer.encode().unwrap();
+        octets[0] = (octets[0] & 0x1f) | version << 5;
+        smf.handle_datagram(at(1), UPF, &octets);
+        let got = events(&mut smf);
+        assert!(
+            !got.iter()
+                .any(|event| matches!(event, Event::Malformed { .. }))
+        );
+        let failed: Vec<RequestId> = got
+            .into_iter()
+            .filter_map(|event| match event {
+                Event::Failed {
+                    request,
+                    failure: Failure::VersionNotSupported,
+                    ..
+                } => Some(request),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(failed, [first, second], "version {version}");
+        smf.handle_timeout(T1);
+        assert_eq!(
+            sent(&mut smf)
+                .iter()
+                .map(|transmit| transmit.to)
+                .collect::<Vec<_>>(),
+            [OTHER]
+        );
+    }
+}
+
+/// Table 8.2.1-1: a Cause of 0 is an invalid IE, and accepts nothing.
+#[test]
+fn a_cause_of_zero_accepts_nothing() {
+    let (mut smf, mut upf) = (node(SMF, Function::Cp), node(UPF, Function::Up));
+    let setup = AssociationSetupRequest::new(node_id(SMF), RecoveryTimeStamp::new(1000));
+    smf.request(
+        at(0),
+        UPF,
+        Message {
+            header: Header::node(0),
+            body: setup.into(),
+        },
+    )
+    .unwrap();
+    pass(&mut smf, &mut upf, UPF, at(0));
+    let (inbound, _) = request(&mut upf);
+    let zero = Cause::new(CauseValue::from_value(0));
+    let answer = AssociationSetupResponse::new(node_id(UPF), zero, RecoveryTimeStamp::new(1000));
+    upf.respond(at(0), &inbound, answer).unwrap();
+    pass(&mut upf, &mut smf, SMF, at(0));
+    assert!(upf.association(SMF).is_none());
+    assert!(smf.association(UPF).is_none());
 }
 
 /// §7.6.2: a datagram of another version is answered once: the node does not follow
