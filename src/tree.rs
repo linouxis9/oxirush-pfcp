@@ -243,7 +243,7 @@ pub struct Paths;
 impl tree::Family for Paths {
     type Shape = ();
 
-    fn root(&self) -> Root {
+    fn root(&self) -> Root<'_> {
         Root::new("pfcp", &["ies"], false)
     }
 }

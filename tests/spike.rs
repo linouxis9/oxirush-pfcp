@@ -367,3 +367,105 @@ fn a_value_after_the_octets_of_its_row() {
     let back = Message::from_tree(&tree).unwrap();
     assert_eq!(back.to_tree(), tree);
 }
+
+/// An IE of no row whose type has the name of another row of the table: Packet Rate
+/// Status Report (type 252) in a Session Modification Response, whose row of that name
+/// is of type 264. Its tree is under its number, and reads back to the same octets
+/// (found by the fuzz target `tree`).
+#[test]
+fn an_ie_of_no_row_named_as_a_row() {
+    for (ie_type, length) in [(252u16, 0u16), (252, 2), (264, 0)] {
+        let response = SessionModificationResponse::new(Cause::new(CauseValue::RequestAccepted));
+        let mut octets = Message { header: Header::session(1, 9), body: response.into() }.encode().unwrap();
+        octets.extend_from_slice(&ie_type.to_be_bytes());
+        octets.extend_from_slice(&length.to_be_bytes());
+        octets.extend(std::iter::repeat_n(0xff, usize::from(length)));
+        let total = (octets.len() - 4) as u16;
+        octets[2..4].copy_from_slice(&total.to_be_bytes());
+        let decoded = Message::decode(&octets).unwrap();
+        let tree = decoded.to_tree();
+        let back = Message::from_tree(&tree).unwrap_or_else(|error| panic!("{ie_type} of {length}: {error}: {tree}"));
+        assert_eq!(back.encode().unwrap(), octets, "{ie_type} of {length}: {tree}");
+    }
+}
+
+/// Every row of every message, a list or not, with each kind of kept IE in it: one of a
+/// null length, one that does not decode, each once and repeated; and each row of the
+/// grouped IEs that a message has at its level, in one of them. Each tree reads back to
+/// itself, and to the octets that it encodes.
+#[test]
+fn kept_ies_in_every_row_read_back() {
+    // An IE: its type, its length, its content.
+    let ie = |ie_type: u16, content: &[u8]| [&ie_type.to_be_bytes()[..], &(content.len() as u16).to_be_bytes(), content].concat();
+    let message = |message_type: u8, ies: &[u8]| {
+        let session = !is_node_related(message_type);
+        let header = if session { Header::session(1, 9) } else { Header::node(9) };
+        let mut octets = Message { header, body: HeartbeatRequest::default().into() }.encode().unwrap();
+        octets[1] = message_type;
+        octets.truncate(if session { 16 } else { 8 });
+        octets.extend_from_slice(ies);
+        let total = (octets.len() - 4) as u16;
+        octets[2..4].copy_from_slice(&total.to_be_bytes());
+        octets
+    };
+    let read_back = |octets: &[u8], what: &str| {
+        let decoded = Message::decode(octets).unwrap_or_else(|error| panic!("{what}: {error}"));
+        let tree = decoded.to_tree();
+        let back = Message::from_tree(&tree).unwrap_or_else(|error| panic!("{what}: {error}: {tree}"));
+        assert_eq!(back.to_tree(), tree, "{what}");
+        assert_eq!(Message::decode(&back.encode().unwrap()).unwrap().to_tree(), tree, "{what}");
+    };
+    let kinds: [(&[u8], usize); 4] = [(&[], 1), (&[], 2), (&[0xff], 1), (&[0xff], 2)];
+    let mut checked = 0;
+    for info in MESSAGE_TYPES {
+        let messages = info.table;
+        for row in messages.rows {
+            for (content, copies) in kinds {
+                let ies: Vec<u8> = (0..copies).flat_map(|_| ie(row.ie_type, content)).collect();
+                read_back(&message(info.message_type, &ies), &format!("{} {} {content:?} x{copies}", messages.name, row.name));
+                checked += 1;
+            }
+            // The rows of a grouped IE of the message, in it
+            for table in IE_TYPES.iter().filter(|ie_type| ie_type.ie_type == row.ie_type).flat_map(|ie_type| ie_type.tables) {
+                for inner in table.rows {
+                    for (content, copies) in kinds {
+                        let inside: Vec<u8> = (0..copies).flat_map(|_| ie(inner.ie_type, content)).collect();
+                        let what = format!("{} {} {} {content:?} x{copies}", messages.name, row.name, inner.name);
+                        read_back(&message(info.message_type, &ie(row.ie_type, &inside)), &what);
+                        checked += 1;
+                    }
+                }
+            }
+        }
+    }
+    // The IEs of a type that no row of the message has, whose name is a row's
+    let letters = |name: &str| name.chars().filter(char::is_ascii_alphanumeric).map(|c| c.to_ascii_lowercase()).collect::<String>();
+    for info in MESSAGE_TYPES {
+        let rows = info.table.rows;
+        for other in IE_TYPES.iter().filter(|other| rows.iter().all(|row| row.ie_type != other.ie_type)) {
+            if rows.iter().any(|row| letters(row.name) == letters(other.name)) {
+                for (content, copies) in kinds {
+                    let ies: Vec<u8> = (0..copies).flat_map(|_| ie(other.ie_type, content)).collect();
+                    read_back(&message(info.message_type, &ies), &format!("{} {} {content:?} x{copies}", info.table.name, other.ie_type));
+                    checked += 1;
+                }
+            }
+        }
+    }
+    // And in the grouped IEs of a message
+    for info in MESSAGE_TYPES {
+        for row in info.table.rows {
+            for table in IE_TYPES.iter().filter(|ie_type| ie_type.ie_type == row.ie_type).flat_map(|ie_type| ie_type.tables) {
+                let rows = table.rows;
+                for other in IE_TYPES.iter().filter(|other| rows.iter().all(|inner| inner.ie_type != other.ie_type)) {
+                    if rows.iter().any(|inner| letters(inner.name) == letters(other.name)) {
+                        let inside = ie(other.ie_type, &[]);
+                        read_back(&message(info.message_type, &ie(row.ie_type, &inside)), &format!("{} {} {}", info.table.name, row.name, other.ie_type));
+                        checked += 1;
+                    }
+                }
+            }
+        }
+    }
+    assert!(checked > 3600, "{checked}");
+}

@@ -283,8 +283,8 @@ impl Ids {
 /// Version Not Supported Response, and the even ones of the session related messages.
 pub fn is_request(message_type: u8) -> bool {
     match is_node_related(message_type) {
-        true => message_type % 2 == 1 && message_type != 11,
-        false => message_type % 2 == 0,
+        true => !message_type.is_multiple_of(2) && message_type != 11,
+        false => message_type.is_multiple_of(2),
     }
 }
 

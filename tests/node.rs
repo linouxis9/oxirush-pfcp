@@ -173,7 +173,7 @@ fn retransmit_until_response() {
     smf.handle_timeout(at(2));
     assert!(sent(&mut smf).is_empty(), "not before T1");
     smf.handle_timeout(T1);
-    assert_eq!(sent(&mut smf), [original.clone()]);
+    assert_eq!(sent(&mut smf), std::slice::from_ref(&original));
     let response = Message { header: decoded(&original).header, body: HeartbeatResponse::new(RecoveryTimeStamp::new(1)).into() };
     smf.handle_datagram(at(4), UPF, &response.encode().unwrap());
     smf.handle_timeout(at(60));

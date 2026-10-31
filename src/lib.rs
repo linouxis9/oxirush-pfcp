@@ -152,8 +152,14 @@ pub(crate) fn tree_name(ie_type: u16, table: Option<&Table>) -> String {
     if let Some(row) = table.and_then(|table| table.row_of(ie_type)) {
         return row.name.to_string();
     }
+    // A type whose name is that of a row of the table, for another type, goes by its
+    // number: Packet Rate Status Report is the name of types 252 and of the row of 264.
+    let letters = |name: &str| name.chars().filter(char::is_ascii_alphanumeric).map(|c| c.to_ascii_lowercase()).collect::<String>();
     match ie_type {
         VENDOR.. => ie_type.to_string(),
-        known => type_name(known).map_or_else(|| known.to_string(), str::to_string),
+        known => match type_name(known) {
+            Some(name) if !table.is_some_and(|table| table.rows.iter().any(|row| letters(row.name) == letters(name))) => name.to_string(),
+            _ => known.to_string(),
+        },
     }
 }

@@ -74,3 +74,9 @@ jobs:
           for target in decode tree node; do
             cargo fuzz run "$target" -- -max_total_time=60
           done
+      # The input that failed, to reproduce it: `cargo fuzz run TARGET FILE`
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: fuzz-artifacts
+          path: fuzz/artifacts
