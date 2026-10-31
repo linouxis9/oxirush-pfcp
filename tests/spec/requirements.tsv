@@ -119,7 +119,7 @@
 6.2.6.2.2	2	The UP function answers with an Association Setup Response.	test association_setup_by_cp
 6.2.6.2.2	3	A request of an unsupported version gets a Version Not Supported Response.	test version_not_supported
 6.2.6.2.2	4	A rejected request gets a response with its error cause.	application: whether the UP function accepts
-6.2.6.2.2	5	A setup for a Node ID already associated replaces the association.	test association_setup_again
+6.2.6.2.2	5	A setup for a Node ID already associated replaces the association, and ends its sessions but those that the request retains.	test reassociation_ends_the_old_sessions
 6.2.6.2.2	6	A UPF configured for IPUPS sets the UUPSI flag.	application: what the UP function answers
 6.2.6.3	0	The title of association setup by the UP function.	informative: a title
 6.2.6.3.1	1	The UP function knows the CP functions to associate with.	application: the configuration of the UP function

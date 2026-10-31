@@ -32,6 +32,7 @@
 
 #![no_std]
 #![deny(unsafe_code)]
+#![cfg_attr(docsrs, feature(doc_cfg))]
 
 extern crate alloc;
 #[cfg(feature = "std")]
@@ -45,14 +46,17 @@ mod macros;
 mod list;
 mod message;
 #[cfg(feature = "node")]
+#[cfg_attr(docsrs, doc(cfg(feature = "node")))]
 pub mod node;
 #[cfg(feature = "endpoint")]
+#[cfg_attr(docsrs, doc(cfg(feature = "endpoint")))]
 pub mod endpoint;
 mod octets;
 pub mod framing;
 mod registry;
 mod table;
 #[cfg(feature = "tree")]
+#[cfg_attr(docsrs, doc(cfg(feature = "tree")))]
 pub mod tree;
 mod values;
 mod values_gen;
@@ -117,6 +121,11 @@ pub enum Error {
         /// The length of the content.
         length: usize,
     },
+    /// A message of a version of PFCP other than 1 (§7.6.2).
+    Version {
+        /// The version.
+        version: u8,
+    },
     /// A field of the header whose value its bits cannot hold (§7.2.2).
     HeaderField {
         /// The field.
@@ -150,6 +159,7 @@ impl fmt::Display for Error {
                 write!(f, "the Message Length is {length}, and {available} octets follow the first four (TS 29.244 7.6.3)")
             }
             Self::Ies { fault, .. } => write!(f, "the IEs do not fit the message: {fault} (TS 29.244 7.6.7)"),
+            Self::Version { version } => write!(f, "version {version} of PFCP is not supported (TS 29.244 7.6.2)"),
             Self::HeaderField { field, value } => write!(f, "{value} is more than the bits of the {field} of the header hold (TS 29.244 7.2.2)"),
             Self::TooLong { ie_type, length } => write!(f, "{length} octets of IE type {ie_type} are more than a Length says"),
             Self::FieldLength { ie, field } => write!(f, "{field} of {ie} is longer than its length can say"),

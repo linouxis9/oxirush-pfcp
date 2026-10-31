@@ -37,7 +37,8 @@ pub struct Association {
 /// A session: the peer, and its SEID once the node knows it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Session {
-    /// The peer's address.
+    /// Where its messages go: the address of the peer's F-SEID (§5.6.2), on the port of
+    /// the peer.
     pub peer: SocketAddr,
     /// The peer's SEID: the SEID of the header of what goes to it.
     pub peer_seid: Option<u64>,
@@ -62,6 +63,8 @@ pub struct OverloadControl {
     pub sequence: u32,
     /// Its Overload Reduction Metric: the percentage of the requests to throttle.
     pub metric: u8,
+    /// Its Period of Validity: `None` for an infinite one.
+    pub validity: Option<Duration>,
     /// When its period of validity ends: `None` for never.
     pub until: Option<Duration>,
     /// What the "Loss" algorithm owes, in hundredths of a request.
@@ -73,6 +76,18 @@ pub struct OverloadControl {
 pub(crate) enum Scope {
     Address(IpAddr),
     Node(Vec<u8>),
+}
+
+/// What the response to a request of the node changes, besides the association.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Change {
+    /// None.
+    Nothing,
+    /// The session of the request ends: a deletion, or a report of a session that the UP
+    /// function deleted (PSDBU, §5.18).
+    Ends,
+    /// The session goes to another local SEID: a modification of the CP F-SEID.
+    Moves(u64),
 }
 
 /// A request of the node, until its response or its last retransmission.
@@ -87,14 +102,32 @@ pub(crate) struct Outstanding {
     pub(crate) priority: u8,
     /// A heartbeat of the node's own, whose response goes to no event.
     pub(crate) heartbeat: bool,
-    /// The local SEID of an establishment.
+    /// The local SEID of the session of a session request.
     pub(crate) local_seid: Option<u64>,
+    pub(crate) change: Change,
 }
 
-/// A request that the node received: its octets, and its response once given.
+/// What the answer to a request of a peer changes, once accepted.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum Effect {
+    /// None besides what the answer itself says.
+    Nothing,
+    /// An association setup: the addresses of the CP PFCP entities whose sessions the old
+    /// association of the Node ID keeps, `None` for no PFCP Session Retention
+    /// Information, and an empty list for all of them (§6.2.6.2.2).
+    Setup(Option<Vec<IpAddr>>),
+    /// The peer's F-SEID of an establishment, or the new CP F-SEID of a modification.
+    PeerFSeid(u64, IpAddr),
+    /// A report of a session that the UP function deleted (PSDBU, §5.18).
+    Deleted,
+}
+
+/// A request that the node received: its octets, its response once given, and what an
+/// answer that accepts it changes.
 #[derive(Debug, Clone)]
 pub(crate) struct Answered {
     pub(crate) request: Vec<u8>,
     pub(crate) response: Option<Vec<u8>>,
     pub(crate) expires: Duration,
+    pub(crate) effect: Effect,
 }

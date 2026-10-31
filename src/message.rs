@@ -130,22 +130,8 @@ impl Message {
     /// message without the FO flag is the rest of the datagram, which has no octets after
     /// it (§7.6.3); after an FO flag, a datagram that has no octets left ends with
     /// [`Error::TooShort`]. A Message Length that runs past the datagram ends it.
-    pub fn decode_datagram(mut octets: &[u8]) -> Vec<Result<Self, Error>> {
-        let mut messages = Vec::new();
-        loop {
-            let Some((header, _, length)) = Header::decode(octets) else {
-                messages.push(Err(Error::TooShort { octets: octets.len() }));
-                return messages;
-            };
-            let end = 4 + usize::from(length);
-            let whole = header.follow_on && end <= octets.len() && end >= header.len();
-            let this = if whole { &octets[..end] } else { octets };
-            messages.push(Self::decode(this));
-            if !whole {
-                return messages;
-            }
-            octets = &octets[end..];
-        }
+    pub fn decode_datagram(octets: &[u8]) -> Vec<Result<Self, Error>> {
+        datagram_parts(octets).into_iter().map(|(_, message)| message).collect()
     }
 
     fn decode_first(octets: &[u8]) -> Result<(Self, usize), Error> {
@@ -249,6 +235,26 @@ impl Message {
             found.push(Deviation::new("/pfcp", clause, DeviationKind::RuleChangedTwice { rule, id }));
         }
         found
+    }
+}
+
+/// The messages of a datagram, as [`Message::decode_datagram`] has them, each with its
+/// octets.
+pub(crate) fn datagram_parts(mut octets: &[u8]) -> Vec<(&[u8], Result<Message, Error>)> {
+    let mut messages = Vec::new();
+    loop {
+        let Some((header, _, length)) = Header::decode(octets) else {
+            messages.push((octets, Err(Error::TooShort { octets: octets.len() })));
+            return messages;
+        };
+        let end = 4 + usize::from(length);
+        let whole = header.follow_on && end <= octets.len() && end >= header.len();
+        let this = if whole { &octets[..end] } else { octets };
+        messages.push((this, Message::decode(this)));
+        if !whole {
+            return messages;
+        }
+        octets = &octets[end..];
     }
 }
 
