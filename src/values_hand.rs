@@ -182,11 +182,11 @@ pfcp_layout! {
 }
 
 pfcp_layout! {
-    /// PMF Control Information (§8.2.156): its flags, then the number of QFIs and the QFIs,
+    /// PMF Control Information (§8.2.156): its flags, then, with PQPM, the number of QFIs and the QFIs,
     /// kept as their octets.
     pub struct PmfControlInformation "8.2.156" {
         flags(u8) { pqpm "PQPM": 3, drtti "DRTTI": 2, pmfi "PMFI": 1 }
-        qfis "value of QFI": Counted<u8> if true,
+        qfis "value of QFI": Counted<u8> if pqpm,
     }
 }
 
