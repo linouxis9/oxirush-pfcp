@@ -1,0 +1,34 @@
+[package]
+name = "oxirush-pfcp"
+version = "0.0.0"
+edition = "2024"
+description = "PFCP (3GPP TS 29.244, Release 19) in Rust: decode, build, check and encode every message and IE of N4, Sxa, Sxb and Sxc, and edit them as JSON. no_std."
+license = "Apache-2.0"
+repository = "https://github.com/linouxis9/oxirush-pfcp"
+authors = ["Valentin D'Emmanuele"]
+rust-version = "1.88"
+keywords = ["pfcp", "5g", "lte", "n4", "3gpp"]
+categories = ["network-programming", "encoding", "parser-implementations", "no-std"]
+readme = "README.md"
+publish = false
+
+# The crate builds alone, outside any workspace that it sits in.
+[workspace]
+
+[features]
+default = ["std"]
+# The standard library. Without it the crate is `no_std` and needs an allocator.
+std = []
+# The tree of a message, its paths and its edits, on the engine of oxirush-utils.
+tree = ["oxirush-utils/tree"]
+
+[dependencies]
+pastey = "0.2"
+oxirush-utils = { version = "0.1.0", default-features = false, features = ["alloc"] }
+
+[dev-dependencies]
+hex = "0.4.3"
+
+[[test]]
+name = "spike"
+required-features = ["tree"]

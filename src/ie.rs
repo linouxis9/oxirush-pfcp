@@ -1,0 +1,193 @@
+/*
+   OxiRush
+   Copyright 2026 Valentin D'Emmanuele
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+   http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+*/
+
+//! The information element of TS 29.244 §8.1.1, the IEs that a typed scope keeps as
+//! octets, and the order of a scope on the wire.
+
+use alloc::vec::Vec;
+
+use crate::Error;
+
+/// The first IE type of a vendor (§8.1.1): from here an IE has an Enterprise ID.
+pub const VENDOR: u16 = 0x8000;
+
+/// What a type of the crate is as an IE: its IE type and its name in Table 8.1.2-1.
+/// The registry writes it for each type.
+pub trait IeType {
+    /// The IE type.
+    const IE_TYPE: u16;
+    /// Its name in Table 8.1.2-1.
+    const TYPE_NAME: &'static str;
+}
+
+/// How a value is read from the octets of its IE, after the Length, and written back.
+pub trait Codec: Sized {
+    /// The value of the octets, or `None` for octets that are not one: the scope keeps
+    /// them as they are.
+    fn decode(octets: &[u8]) -> Option<Self>;
+
+    /// Write the value.
+    ///
+    /// # Errors
+    ///
+    /// A value whose fields disagree with what its flags say, as its clause has them.
+    fn encode(&self, out: &mut Vec<u8>) -> Result<(), Error>;
+}
+
+/// An IE that a scope keeps as its octets, in its place: one whose type the table of the
+/// scope does not have (§7.6.9) or that no release has, a vendor IE, one of a null
+/// length, one whose value does not decode as its type, and one that repeats an IE that
+/// the table has once (§7.6.10).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RawIe {
+    /// The IE type.
+    pub ie_type: u16,
+    /// The Enterprise ID of a vendor IE, which its octets follow.
+    pub enterprise_id: Option<u16>,
+    /// A Length to write in place of the one of the octets: a false length, which a test
+    /// sends on purpose. A decoded IE never has one.
+    pub length: Option<u16>,
+    /// The content after the Length, or after the Enterprise ID of a vendor IE.
+    pub octets: Vec<u8>,
+}
+
+impl RawIe {
+    /// The IE of `ie_type` whose content is `octets`, whatever they are: none for an IE
+    /// of a null length.
+    pub fn new(ie_type: u16, octets: Vec<u8>) -> Self {
+        Self {
+            ie_type,
+            enterprise_id: None,
+            length: None,
+            octets,
+        }
+    }
+
+    /// Write the IE.
+    pub(crate) fn encode(&self, out: &mut Vec<u8>) -> Result<(), Error> {
+        let at = begin(self.ie_type, out);
+        if let Some(enterprise) = self.enterprise_id {
+            out.extend_from_slice(&enterprise.to_be_bytes());
+        }
+        out.extend_from_slice(&self.octets);
+        finish(self.ie_type, at, self.length, out)
+    }
+}
+
+/// Where an IE of a decoded scope went: what the order of a scope keeps, from the first
+/// IE that is not where the table has it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Placed {
+    /// The next value of the field of this IE type.
+    Field(u16),
+    /// The next IE of the scope's raw IEs.
+    Raw,
+}
+
+/// What a typed scope did with an IE of its octets.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Placing {
+    /// It is the value of its field.
+    Placed,
+    /// Its row is there as many times as the table allows already.
+    Repeated,
+    /// Its value does not decode as the type of its row.
+    Malformed,
+    /// The table has no row of its type.
+    Unexpected,
+}
+
+/// Why the IEs of a scope do not decode.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum IeFault {
+    /// Fewer octets than the four of an IE header are left (§7.6.7).
+    HeaderCut {
+        /// How many there are.
+        octets: usize,
+    },
+    /// The Length of an IE runs past its scope (§7.6.7).
+    Length {
+        /// The IE type.
+        ie_type: u16,
+        /// Its Length.
+        length: u16,
+        /// The octets that the scope has after the IE header.
+        available: usize,
+    },
+}
+
+/// Each IE of a scope: its type and its content, in the order of the wire.
+pub(crate) fn split(mut octets: &[u8]) -> impl Iterator<Item = Result<(u16, &[u8]), IeFault>> {
+    core::iter::from_fn(move || {
+        if octets.is_empty() {
+            return None;
+        }
+        let Some(header) = octets.get(..4) else {
+            let fault = IeFault::HeaderCut { octets: octets.len() };
+            octets = &[];
+            return Some(Err(fault));
+        };
+        let ie_type = u16::from_be_bytes([header[0], header[1]]);
+        let length = u16::from_be_bytes([header[2], header[3]]);
+        let end = 4 + usize::from(length);
+        let Some(body) = octets.get(4..end) else {
+            let available = octets.len() - 4;
+            octets = &[];
+            return Some(Err(IeFault::Length { ie_type, length, available }));
+        };
+        octets = &octets[end..];
+        Some(Ok((ie_type, body)))
+    })
+}
+
+/// The raw IE of `ie_type` and its content.
+pub(crate) fn raw(ie_type: u16, body: &[u8]) -> RawIe {
+    match (ie_type >= VENDOR, body) {
+        (true, [high, low, rest @ ..]) => RawIe {
+            ie_type,
+            enterprise_id: Some(u16::from_be_bytes([*high, *low])),
+            length: None,
+            octets: rest.to_vec(),
+        },
+        _ => RawIe::new(ie_type, body.to_vec()),
+    }
+}
+
+/// Start an IE of `ie_type`: where its Length goes.
+pub(crate) fn begin(ie_type: u16, out: &mut Vec<u8>) -> usize {
+    out.extend_from_slice(&ie_type.to_be_bytes());
+    out.extend_from_slice(&[0, 0]);
+    out.len() - 2
+}
+
+/// Write the Length of the IE that starts at `at`: `length`, or that of its content.
+pub(crate) fn finish(ie_type: u16, at: usize, length: Option<u16>, out: &mut [u8]) -> Result<(), Error> {
+    let written = out.len() - at - 2;
+    let length = match length {
+        Some(length) => length,
+        None => u16::try_from(written).map_err(|_| Error::TooLong { ie_type, length: written })?,
+    };
+    out[at..at + 2].copy_from_slice(&length.to_be_bytes());
+    Ok(())
+}
+
+/// Write the IE of a value.
+pub(crate) fn encode_value<T: IeType + Codec>(value: &T, out: &mut Vec<u8>) -> Result<(), Error> {
+    let at = begin(T::IE_TYPE, out);
+    value.encode(out)?;
+    finish(T::IE_TYPE, at, None, out)
+}
