@@ -1234,11 +1234,7 @@ impl Node {
     fn handle_request(&mut self, now: Duration, from: SocketAddr, octets: &[u8], message: Message) {
         let sequence = message.header.sequence;
         let message_type = message.body.message_type();
-        let peer_sends = match self.config.function {
-            Function::Cp => Function::Up,
-            Function::Up => Function::Cp,
-        };
-        if !sends(peer_sends, message_type) {
+        if !self.peer_sends(message_type) {
             self.violation(from, ViolationKind::WrongDirection, octets);
             return;
         }
@@ -1525,6 +1521,16 @@ impl Node {
         Err(NodeError::NoSequence)
     }
 
+    /// Whether a peer of the node, of the other function, sends requests of
+    /// `message_type`.
+    fn peer_sends(&self, message_type: u8) -> bool {
+        let peer = match self.config.function {
+            Function::Cp => Function::Up,
+            Function::Up => Function::Cp,
+        };
+        sends(peer, message_type)
+    }
+
     /// The local SEID of the session with `peer` whose peer's SEID is `peer_seid`.
     fn local_seid_of(&self, peer: SocketAddr, peer_seid: u64) -> Option<u64> {
         self.sessions
@@ -1591,7 +1597,8 @@ impl Node {
         message_type: u8,
         offending: Option<u16>,
     ) {
-        if !is_request(message_type) || message_type == 1 {
+        // Nor one that the peer does not send, which is discarded (§7.6.5).
+        if !is_request(message_type) || message_type == 1 || !self.peer_sends(message_type) {
             return;
         }
         let Some(body) = rejection_body(

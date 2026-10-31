@@ -1799,6 +1799,12 @@ fn a_request_of_the_wrong_direction_is_discarded() {
     smf.handle_datagram(at(0), OTHER, &pfd.encode().unwrap());
     assert_eq!(kinds_of(&events(&mut smf)), [ViolationKind::WrongDirection]);
     assert!(sent(&mut smf).is_empty());
+    // Not answered either when it does not decode
+    let mut octets = pfd.encode().unwrap();
+    octets.extend_from_slice(&[0xde, 0xad, 0xbe, 0xef, 0, 0, 0, 0, 1, 2, 3]);
+    smf.handle_datagram(at(0), OTHER, &octets);
+    assert!(sent(&mut smf).is_empty());
+    events(&mut smf);
     let mut upf = node(UPF, Function::Up);
     assert_eq!(
         upf.request(at(0), SMF, pfd.clone()),
