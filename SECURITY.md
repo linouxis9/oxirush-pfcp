@@ -14,4 +14,4 @@ peer.
 
 ## Supported versions
 
-The latest version on crates.io receives the fixes.
+The crate is not on crates.io yet: the `main` branch receives the fixes.

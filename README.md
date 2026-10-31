@@ -1,7 +1,6 @@
 # oxirush-pfcp
 
-[![Crates.io](https://img.shields.io/crates/v/oxirush-pfcp.svg)](https://crates.io/crates/oxirush-pfcp)
-[![Documentation](https://docs.rs/oxirush-pfcp/badge.svg)](https://docs.rs/oxirush-pfcp)
+[![CI](https://github.com/linouxis9/oxirush-pfcp/actions/workflows/ci.yml/badge.svg)](https://github.com/linouxis9/oxirush-pfcp/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
 PFCP, the protocol between the control plane and the user plane of 5G and 4G
@@ -54,12 +53,14 @@ Each example is followed by its output.
 
 ## Installation
 
+The crate is not on crates.io yet: take it from GitHub.
+
 ```toml
 [dependencies]
-oxirush-pfcp = "0.1"
+oxirush-pfcp = { git = "https://github.com/linouxis9/oxirush-pfcp" }
 hex = "0.4" # for the examples of this page
 # With JSON, and the PFCP entity on a Tokio socket:
-# oxirush-pfcp = { version = "0.1", features = ["serde", "endpoint"] }
+# oxirush-pfcp = { git = "https://github.com/linouxis9/oxirush-pfcp", features = ["serde", "endpoint"] }
 ```
 
 | Feature | Adds | Needs |
