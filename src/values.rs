@@ -15,8 +15,8 @@
    limitations under the License.
 */
 
-//! The values of the IE types that the spike reads: numbers, an enumeration, the layouts
-//! with conditional octets, and the Node ID.
+//! The fields of the values, and the values that the others are written after: numbers,
+//! an enumeration, the layouts with conditional octets, and the Node ID.
 
 use alloc::string::String;
 use alloc::vec::Vec;

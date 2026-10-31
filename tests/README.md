@@ -9,7 +9,7 @@
 | `check` | What `check()` and `check_on()` find, with the clause and the Cause of each |
 | `node` | The procedures of clause 6 on a `Node`: one test for each requirement of `spec/requirements.tsv` that names it |
 | `endpoint` | Two endpoints on the loopback, and a request that times out |
-| `spike` | The codec, the trees and paths, the IEs that a scope keeps as octets, and the vectors of `PFCP_VECTORS` |
+| `codec` | The codec, the trees and paths, the IEs that a scope keeps as octets, and the vectors of `PFCP_VECTORS` |
 | `serde` | A message and an IE as JSON through serde |
 | `readme` | Each Rust block of the README prints what the README shows |
 
@@ -39,7 +39,7 @@ committed, for `PFCP_VECTORS`:
 
 ```sh
 python3 tests/go-pfcp-vectors.py "$(go mod download -json github.com/wmnsk/go-pfcp@v0.0.24 | jq -r .Dir)" /tmp/vectors.tsv
-PFCP_VECTORS=/tmp/vectors.tsv cargo test --all-features --test spike other_vectors -- --nocapture
+PFCP_VECTORS=/tmp/vectors.tsv cargo test --all-features --test codec other_vectors -- --nocapture
 ```
 
 Each decodes and encodes back byte for byte, and its tree reads back. 16 of them have

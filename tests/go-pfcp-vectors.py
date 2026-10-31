@@ -3,7 +3,7 @@
 go-pfcp's message tests, with its file and its description.
 
     python3 tests/go-pfcp-vectors.py GO_PFCP_DIR OUT.tsv
-    PFCP_VECTORS=OUT.tsv cargo test --all-features --test spike other_vectors -- --nocapture
+    PFCP_VECTORS=OUT.tsv cargo test --all-features --test codec other_vectors -- --nocapture
 
 GO_PFCP_DIR is go-pfcp at the version that tests/README.md names, as
 `go mod download -json github.com/wmnsk/go-pfcp@v0.0.24` gives its "Dir". The vectors are

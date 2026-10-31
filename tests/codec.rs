@@ -1,6 +1,23 @@
-//! What the spike proves: the codec of a typed message from its table is lossless, its
-//! tree reads back, its paths go through the engine of oxirush-utils, and `check()` names
-//! the clause of each deviation.
+/*
+   OxiRush
+   Copyright 2026 Valentin D'Emmanuele
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+   http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+*/
+
+//! The codec of a typed message from its table is lossless, its tree reads back, its paths
+//! go through the engine of oxirush-utils, and `check()` names the clause of each
+//! deviation.
 
 use std::net::Ipv4Addr;
 
@@ -243,7 +260,7 @@ fn ie_types(mut octets: &[u8], out: &mut Vec<u16>) {
 }
 
 /// For a comparison with a dissector, when `PFCP_DUMP` names a file: each message of
-/// `PFCP_VECTORS` and of this spike, its IE types depth first, and values by their paths.
+/// `PFCP_VECTORS` and of this file, its IE types depth first, and values by their paths.
 #[test]
 fn dump_for_a_dissector() {
     let (Ok(file), Ok(dump)) = (std::env::var("PFCP_VECTORS"), std::env::var("PFCP_DUMP")) else { return };
@@ -255,7 +272,7 @@ fn dump_for_a_dissector() {
             (format!("{} {}", fields[0], fields[1]), hex::decode(fields[2]).unwrap())
         })
         .collect();
-    messages.push(("spike establishment".into(), establishment().encode().unwrap()));
+    messages.push(("establishment".into(), establishment().encode().unwrap()));
     let paths = [
         ("pfcp.f_teid.teid", "/pfcp/Create PDR/*/PDI/Local F-TEID/TEID"),
         ("pfcp.f_teid.ipv4_addr", "/pfcp/Create PDR/*/PDI/Local F-TEID/IPv4 address"),
@@ -288,7 +305,7 @@ fn dump_for_a_dissector() {
 }
 
 /// Rough times of the codec and the tree, in an optimized build: `cargo test --release
-/// --features tree --test spike rough_times -- --ignored --nocapture`. No figure of it is
+/// --features tree --test codec rough_times -- --ignored --nocapture`. No figure of it is
 /// evidence: the machine is shared.
 #[test]
 #[ignore]
