@@ -2538,6 +2538,104 @@ fn requests_to_the_port_of_the_peer() {
     assert_eq!(sent(&mut upf)[0].to, ephemeral);
 }
 
+// ── Local SEIDs, one session each ──────────────────────────────────────────
+
+/// An establishment of the SMF with `cp_seid` in its CP F-SEID.
+fn establishment(cp_seid: u64) -> Message {
+    let f_seid = FSeid {
+        v4: true,
+        seid: Some(cp_seid),
+        ipv4: Some(Ipv4Addr::new(10, 0, 0, 1)),
+        ..Default::default()
+    };
+    let pdr = CreatePdr::new_n4(
+        PdrId::new(1),
+        Precedence::new(1),
+        Pdi::new(SourceInterface::new(SourceInterfaceValue::Access)),
+    );
+    let far = CreateFar::new(
+        FarId::new(1),
+        ApplyAction {
+            forw: true,
+            ..Default::default()
+        },
+    );
+    Message {
+        header: Header::session(0, 0),
+        body: SessionEstablishmentRequest::new_n4(node_id(SMF), f_seid, pdr, far).into(),
+    }
+}
+
+/// An establishment of a local SEID that a session or another establishment has is
+/// not sent, and a rejected establishment leaves the other sessions alone.
+#[test]
+fn an_establishment_of_a_seid_in_use_is_refused() {
+    let (mut smf, mut upf) = associated(at(0));
+    let (cp_seid, _) = established(&mut smf, &mut upf, at(0));
+    assert_eq!(
+        smf.request(at(1), UPF, establishment(cp_seid)),
+        Err(NodeError::SeidInUse)
+    );
+    // A SEID of the caller's own is the establishment's until it ends
+    let own = 0x1001;
+    smf.request(at(1), UPF, establishment(own)).unwrap();
+    assert_eq!(
+        smf.request(at(1), UPF, establishment(own)),
+        Err(NodeError::SeidInUse)
+    );
+    for _ in 0..0x1001 {
+        assert_ne!(smf.new_session(UPF), own);
+    }
+    pass(&mut smf, &mut upf, UPF, at(1));
+    let (inbound, _) = request(&mut upf);
+    let rejected =
+        SessionEstablishmentResponse::new(node_id(UPF), Cause::new(CauseValue::RequestRejected));
+    upf.respond(at(1), &inbound, rejected).unwrap();
+    pass(&mut upf, &mut smf, SMF, at(1));
+    assert!(smf.session(own).is_none());
+    assert!(smf.session(cp_seid).is_some());
+    // Nor does a session move to the SEID of another
+    let other = smf.new_session(UPF);
+    let moved = FSeid {
+        v4: true,
+        seid: Some(other),
+        ipv4: Some(Ipv4Addr::new(10, 0, 0, 1)),
+        ..Default::default()
+    };
+    let modification = SessionModificationRequest::default().with_cp_f_seid(moved);
+    assert_eq!(
+        smf.session_request(at(2), cp_seid, modification),
+        Err(NodeError::SeidInUse)
+    );
+}
+
+/// The UP function's answer that gives the local SEID of another session is not sent.
+#[test]
+fn an_answer_of_a_seid_in_use_is_refused() {
+    let (mut smf, mut upf) = associated(at(0));
+    let (_, up_seid) = established(&mut smf, &mut upf, at(0));
+    let other = smf.new_session(UPF);
+    smf.request(at(1), UPF, establishment(other)).unwrap();
+    pass(&mut smf, &mut upf, UPF, at(1));
+    let (inbound, _) = request(&mut upf);
+    let up_f_seid = FSeid {
+        v4: true,
+        seid: Some(up_seid),
+        ipv4: Some(Ipv4Addr::new(10, 0, 0, 2)),
+        ..Default::default()
+    };
+    let response =
+        SessionEstablishmentResponse::new(node_id(UPF), accepted()).with_up_f_seid(up_f_seid);
+    assert_eq!(
+        upf.respond(at(1), &inbound, response),
+        Err(NodeError::SeidInUse)
+    );
+    assert_eq!(
+        upf.session(up_seid).and_then(|session| session.peer_seid),
+        Some(1)
+    );
+}
+
 trait IntoSocket {
     fn into_socket(self, port: u16) -> SocketAddr;
 }

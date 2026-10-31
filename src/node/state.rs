@@ -44,6 +44,8 @@ pub struct Session {
     /// The peer's SEID: the SEID of the header of what goes to it.
     pub peer_seid: Option<u64>,
     pub(crate) node: Vec<u8>,
+    /// An establishment of the node's is outstanding for it.
+    pub(crate) establishing: bool,
 }
 
 /// The load control information of a peer (§6.2.3.3).
