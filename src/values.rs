@@ -302,6 +302,171 @@ impl<T: Field> Field for Counted<T> {
     }
 }
 
+/// Values up to the end of the IE, each after the other, without their number.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Each<T>(pub Vec<T>);
+
+impl<T: Field> Field for Each<T> {
+    fn read(octets: &mut &[u8]) -> Option<Self> {
+        let mut values = Vec::new();
+        while !octets.is_empty() {
+            values.push(T::read(octets)?);
+        }
+        Some(Self(values))
+    }
+    fn write(&self, out: &mut Vec<u8>) {
+        for value in &self.0 {
+            value.write(out);
+        }
+    }
+    fn size(&self) -> usize {
+        self.0.iter().map(Field::size).sum()
+    }
+    fn check(&self, path: &str, clause: &'static str, found: &mut Vec<Deviation>) {
+        for value in &self.0 {
+            value.check(path, clause, found);
+        }
+    }
+    #[cfg(feature = "tree")]
+    fn to_tree(&self) -> oxirush_utils::tree::Value {
+        oxirush_utils::tree::Value::Array(self.0.iter().map(Field::to_tree).collect())
+    }
+    #[cfg(feature = "tree")]
+    fn from_tree(
+        value: &oxirush_utils::tree::Value,
+        reading: &mut oxirush_utils::tree::Reading,
+    ) -> Result<Self, oxirush_utils::tree::Refused> {
+        reading.list(value, T::from_tree).map(Self)
+    }
+}
+
+/// A PLMN of three octets, the MCC and the MNC in the order of TS 24.008 clause 10.5.1.3:
+/// `"208-93"` in a tree, or the octets of digits that are not decimal.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct PlmnId(pub [u8; 3]);
+
+impl PlmnId {
+    /// The PLMN, when its digits are decimal.
+    pub fn plmn(self) -> Option<oxirush_utils::identity::Plmn> {
+        oxirush_utils::identity::Plmn::from_nas_octets(self.0).ok()
+    }
+}
+
+impl From<oxirush_utils::identity::Plmn> for PlmnId {
+    fn from(plmn: oxirush_utils::identity::Plmn) -> Self {
+        Self(plmn.to_nas_octets())
+    }
+}
+
+impl Field for PlmnId {
+    fn read(octets: &mut &[u8]) -> Option<Self> {
+        take(octets).map(Self)
+    }
+    fn write(&self, out: &mut Vec<u8>) {
+        out.extend_from_slice(&self.0);
+    }
+    fn size(&self) -> usize {
+        3
+    }
+    #[cfg(feature = "tree")]
+    fn to_tree(&self) -> oxirush_utils::tree::Value {
+        match self.plmn() {
+            Some(plmn) if plmn.to_nas_octets() == self.0 => oxirush_utils::tree::Value::String(alloc::format!("{plmn}")),
+            _ => oxirush_utils::tree::octets(&self.0),
+        }
+    }
+    #[cfg(feature = "tree")]
+    fn from_tree(
+        value: &oxirush_utils::tree::Value,
+        reading: &mut oxirush_utils::tree::Reading,
+    ) -> Result<Self, oxirush_utils::tree::Refused> {
+        if let Some(plmn) = value.as_str().and_then(|text| text.parse::<oxirush_utils::identity::Plmn>().ok()) {
+            return Ok(plmn.into());
+        }
+        reading.octet_array::<3>(value).map(Self)
+    }
+}
+
+/// An address after its type, of two bits, and its length, of six: an IPv4 address of
+/// type 0 and length 4, or an IPv6 address of type 1 and length 16 (§8.2.207). The tree
+/// is the address as text, or `{"Address Type": 2, "Address": "0a00"}` for another.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct TypedAddress {
+    /// The Address Type.
+    pub address_type: u8,
+    /// The Address, whose length is the Address Length.
+    pub address: Vec<u8>,
+}
+
+impl TypedAddress {
+    /// The address, when its type and its length are those of an IPv4 or IPv6 address.
+    pub fn ip(&self) -> Option<core::net::IpAddr> {
+        match (self.address_type, self.address.len()) {
+            (0, 4) => Some(Ipv4Addr::from(<[u8; 4]>::try_from(&self.address[..]).ok()?).into()),
+            (1, 16) => Some(Ipv6Addr::from(<[u8; 16]>::try_from(&self.address[..]).ok()?).into()),
+            _ => None,
+        }
+    }
+}
+
+impl From<core::net::IpAddr> for TypedAddress {
+    fn from(address: core::net::IpAddr) -> Self {
+        match address {
+            core::net::IpAddr::V4(address) => Self { address_type: 0, address: address.octets().to_vec() },
+            core::net::IpAddr::V6(address) => Self { address_type: 1, address: address.octets().to_vec() },
+        }
+    }
+}
+
+impl Field for TypedAddress {
+    fn read(octets: &mut &[u8]) -> Option<Self> {
+        let (&first, rest) = octets.split_first()?;
+        let (address, rest) = rest.split_at_checked(usize::from(first & 0x3f))?;
+        *octets = rest;
+        Some(Self { address_type: first >> 6, address: address.to_vec() })
+    }
+    fn write(&self, out: &mut Vec<u8>) {
+        // A type or an address longer than their bits can say is written cut: check()
+        // reports it.
+        out.push((self.address_type & 0x03) << 6 | (self.address.len().min(0x3f) as u8));
+        out.extend_from_slice(&self.address[..self.address.len().min(0x3f)]);
+    }
+    fn size(&self) -> usize {
+        1 + self.address.len().min(0x3f)
+    }
+    fn check(&self, path: &str, clause: &'static str, found: &mut Vec<Deviation>) {
+        if self.ip().is_none() {
+            found.push(Deviation::new(path, clause, DeviationKind::Rule("an address that is neither IPv4 of type 0 nor IPv6 of type 1")));
+        }
+    }
+    #[cfg(feature = "tree")]
+    fn to_tree(&self) -> oxirush_utils::tree::Value {
+        if let Some(address) = self.ip() {
+            return oxirush_utils::tree::Value::String(alloc::format!("{address}"));
+        }
+        let mut members = oxirush_utils::tree::Members::new();
+        members.put("Address Type", oxirush_utils::tree::unsigned(self.address_type.into()));
+        members.put("Address", oxirush_utils::tree::octets(&self.address));
+        members.finish()
+    }
+    #[cfg(feature = "tree")]
+    fn from_tree(
+        value: &oxirush_utils::tree::Value,
+        reading: &mut oxirush_utils::tree::Reading,
+    ) -> Result<Self, oxirush_utils::tree::Refused> {
+        if let Some(text) = value.as_str() {
+            return text.parse::<core::net::IpAddr>().map(Self::from).map_err(|_| reading.mismatch("an IP address", value));
+        }
+        let read = reading.members(value, &["Address Type", "Address"])?;
+        let address_type = reading.member(&read, 0, |value, reading| reading.unsigned(value, 0, 3))? as u8;
+        let address = reading.member(&read, 1, |value, reading| reading.octets(value))?;
+        if address.len() > 0x3f {
+            return Err(reading.mismatch("at most 63 octets", value));
+        }
+        Ok(Self { address_type, address })
+    }
+}
+
 /// A number of three octets.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct U24(pub u32);
@@ -417,6 +582,9 @@ macro_rules! pfcp_number {
         }
 
         impl $ty<'_> {
+            /// The name of its field.
+            pub const FIELDS: &'static [&'static str] = &[$field];
+
             /// The value.
             pub fn new(value: $t) -> Self {
                 Self { value, extra: Octets::new() }
@@ -662,6 +830,9 @@ impl Check for NodeId<'_> {
 }
 
 impl NodeId<'_> {
+    /// The names of its fields.
+    pub const FIELDS: &'static [&'static str] = &["Node ID Type", "Node ID value"];
+
     /// The Node ID Type (Table 8.2.38-2).
     pub fn node_id_type(&self) -> NodeIdType {
         match self {
@@ -780,6 +951,11 @@ pfcp_number! {
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct NetworkInstance<'a>(pub Octets<'a>);
 
+impl NetworkInstance<'_> {
+    /// The name of its field.
+    pub const FIELDS: &'static [&'static str] = &["Network Instance"];
+}
+
 impl<'a> Codec<'a> for NetworkInstance<'a> {
     fn decode(octets: &'a [u8]) -> Option<Self> {
         Some(Self(Octets::wire(octets)))
@@ -828,6 +1004,11 @@ macro_rules! pfcp_fields {
             )*
             /// The octets after the fields, which a later release adds.
             pub extra: Octets<'a>,
+        }
+
+        impl $ty<'_> {
+            /// The names of its fields.
+            pub const FIELDS: &'static [&'static str] = &[$($name),*];
         }
 
         impl<'a> Codec<'a> for $ty<'a> {
@@ -1064,6 +1245,11 @@ macro_rules! pfcp_octets {
         #[derive(Debug, Clone, Default, PartialEq, Eq)]
         pub struct $ty<'a>(pub Octets<'a>);
 
+        impl $ty<'_> {
+            /// The name of its field.
+            pub const FIELDS: &'static [&'static str] = &[$name];
+        }
+
         impl<'a> Codec<'a> for $ty<'a> {
             fn decode(octets: &'a [u8]) -> Option<Self> {
                 Some(Self(Octets::wire(octets)))
@@ -1088,7 +1274,7 @@ macro_rules! pfcp_octets {
 
         #[cfg(feature = "tree")]
         impl oxirush_utils::tree::Tree for $ty<'_> {
-            const NAME: &'static str = $name;
+            const NAME: &'static str = <$ty<'static> as crate::ie::IeType>::TYPE_NAME;
             fn to_tree(&self) -> oxirush_utils::tree::Value {
                 oxirush_utils::tree::octets(&self.0)
             }

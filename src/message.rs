@@ -28,14 +28,54 @@ use crate::octets::IntoOwned;
 use crate::macros::pfcp_messages;
 
 pfcp_messages! {
-    1 HeartbeatRequest, 2 HeartbeatResponse, 3 PfdManagementRequest, 4 PfdManagementResponse,
-    5 AssociationSetupRequest, 6 AssociationSetupResponse, 7 AssociationUpdateRequest,
-    8 AssociationUpdateResponse, 9 AssociationReleaseRequest, 10 AssociationReleaseResponse,
-    11 VersionNotSupportedResponse, 12 NodeReportRequest, 13 NodeReportResponse,
-    14 SessionSetDeletionRequest, 15 SessionSetDeletionResponse, 16 SessionSetModificationRequest,
-    17 SessionSetModificationResponse, 50 SessionEstablishmentRequest, 51 SessionEstablishmentResponse,
-    52 SessionModificationRequest, 53 SessionModificationResponse, 54 SessionDeletionRequest,
-    55 SessionDeletionResponse, 56 SessionReportRequest, 57 SessionReportResponse,
+    1 HeartbeatRequest [SXA SXB SXC N4 N4MB],
+    2 HeartbeatResponse [SXA SXB SXC N4 N4MB],
+    3 PfdManagementRequest [SXB SXC N4],
+    4 PfdManagementResponse [SXB SXC N4],
+    5 AssociationSetupRequest [SXA SXB SXC N4 N4MB],
+    6 AssociationSetupResponse [SXA SXB SXC N4 N4MB],
+    7 AssociationUpdateRequest [SXA SXB SXC N4 N4MB],
+    8 AssociationUpdateResponse [SXA SXB SXC N4 N4MB],
+    9 AssociationReleaseRequest [SXA SXB SXC N4 N4MB],
+    10 AssociationReleaseResponse [SXA SXB SXC N4 N4MB],
+    11 VersionNotSupportedResponse [SXA SXB SXC N4 N4MB],
+    12 NodeReportRequest [SXA SXB SXC N4 N4MB],
+    13 NodeReportResponse [SXA SXB SXC N4 N4MB],
+    14 SessionSetDeletionRequest [SXA SXB N4],
+    15 SessionSetDeletionResponse [SXA SXB N4],
+    16 SessionSetModificationRequest [SXB N4],
+    17 SessionSetModificationResponse [SXB N4],
+    50 SessionEstablishmentRequest [SXA SXB SXC N4 N4MB],
+    51 SessionEstablishmentResponse [SXA SXB SXC N4 N4MB],
+    52 SessionModificationRequest [SXA SXB SXC N4 N4MB],
+    53 SessionModificationResponse [SXA SXB SXC N4 N4MB],
+    54 SessionDeletionRequest [SXA SXB SXC N4 N4MB],
+    55 SessionDeletionResponse [SXA SXB SXC N4 N4MB],
+    56 SessionReportRequest [SXA SXB SXC N4 N4MB],
+    57 SessionReportResponse [SXA SXB SXC N4 N4MB],
+}
+
+/// A message type as Table 7.3-1 has it.
+#[derive(Debug, Clone, Copy)]
+pub struct MessageTypeInfo {
+    /// The message type.
+    pub message_type: u8,
+    /// The interfaces that have it: its Applicability columns.
+    pub interfaces: crate::table::Interfaces,
+    /// The table of its IEs.
+    pub table: &'static crate::table::Table,
+}
+
+impl MessageTypeInfo {
+    /// The name that Table 7.3-1 gives it.
+    pub fn name(&self) -> &'static str {
+        self.table.name
+    }
+}
+
+/// The message type of `message_type`.
+pub fn message_type_info(message_type: u8) -> Option<&'static MessageTypeInfo> {
+    MESSAGE_TYPES.iter().find(|info| info.message_type == message_type)
 }
 
 /// Whether a message type is one of a node related message (Table 7.3-1): from 1 to 49.

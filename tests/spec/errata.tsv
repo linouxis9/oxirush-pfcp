@@ -1,0 +1,49 @@
+# The errata of TS 29.244 V19.6.0 that the crate meets: what the document says, and what
+# the crate takes instead. The test `spec` applies each to the fixtures before it compares
+# them with the crate, and fails when one no longer finds what the document says. A
+# `note` is one that no fixture shows: a caption, a style, a length in a figure.
+#
+# name	kind	where	the document	the crate
+modifcation	message-name	17	PFCP Session Set Modifcation Response	PFCP Session Set Modification Response
+table-7.4.2.2-1-twice	table-number	Information Elements in a PFCP Session Set Modification Response	7.4.2.2-1	7.4.7.2-1
+ip-multicast-addressing-info-clause	ie-type-reference	188	Extendable / Clause 7.5.2.2-4	Extendable / Table 7.5.2.2-4
+source-ip-address-continued	row-name	7.5.2.2-4/3		Source IP Address
+source-ip-address-continued-type	row-ie-type	7.5.2.2-4/3		Source IP Address
+ethernet-inactivity-timer-type	row-ie-type	7.5.2.4-1/Ethernet Inactivity Timer		Ethernet Inactivity Timer
+rtfp-no-interface	row-interfaces	7.5.2.3-1/Redundant Transmission Forwarding Parameters		N4
+redundant-transmission-detection-parameters	row-ie-type	7.5.2.2-2/Redundant Transmission Detection Parameters	Redundant Transmission Detection Parameters	Redundant Transmission Parameters
+redundant-transmission-detection-parameters-create-traffic-endpoint	row-ie-type	7.5.2.7-1/Redundant Transmission Detection Parameters	Redundant Transmission Detection Parameters	Redundant Transmission Parameters
+redundant-transmission-detection-parameters-update-pdr	row-ie-type	7.5.4.13-1/Redundant Transmission Detection Parameters	Redundant Transmission Detection Parameters	Redundant Transmission Parameters
+dnn	row-ie-type	7.5.4.1-1/DNN	DNN	APN/DNN
+mac-addressed-detected	row-ie-type	7.5.4.21-1/MAC Addresses Detected	MAC Addressed Detected	MAC Addresses Detected
+cp-pfcp-entity-ip-address-type	figure-type	8.2.135	135	185
+event-quota-field	figure-field	8.2.112	Subsequent Event Quota	Event Quota
+update-urr-reference	ie-type-reference	13	Extendable / Table 7.5.4.4	Extendable / Table 7.5.4.4-1
+update-qer-reference	ie-type-reference	14	Extendable / Table 7.5.4.5	Extendable / Table 7.5.4.5-1
+remove-pdr-reference	ie-type-reference	15	Extendable / Table 7.5.4.6	Extendable / Table 7.5.4.6-1
+remove-far-reference	ie-type-reference	16	Extendable / Table 7.5.4.7	Extendable / Table 7.5.4.7-1
+remove-urr-reference	ie-type-reference	17	Extendable / Table 7.5.4.8	Extendable / Table 7.5.4.8-1
+remove-qer-reference	ie-type-reference	18	Extendable / Table 7.5.4.9	Extendable / Table 7.5.4.9-1
+create-traffic-endpoint-reference	ie-type-reference	127	Extendable / Table 7.5.2.7	Extendable / Table 7.5.2.7-1
+created-traffic-endpoint-reference	ie-type-reference	128	Extendable / Table 7.5.3.5	Extendable / Table 7.5.3.5-1
+update-traffic-endpoint-reference	ie-type-reference	129	Extendable / Table 7.5.4.13	Extendable / Table 7.5.4.13-1
+remove-traffic-endpoint-reference	ie-type-reference	130	Extendable / Table 7.5.4.14	Extendable / Table 7.5.4.14-1
+timer-reference	ie-type-reference	55	Extendable / Clause 8.2 35	Extendable / Clause 8.2.35
+pdr-id-reference	ie-type-reference	56	Extendable / Clause 8.2 36	Extendable / Clause 8.2.36
+f-seid-reference	ie-type-reference	57	Extendable / Clause 8.2 37	Extendable / Clause 8.2.37
+predefined-rules-name-reference	ie-type-reference	299	Variable Length / Clause 8.205	Variable Length / Clause 8.2.205
+rat-type-reference	ie-type-reference	275	Extendable / Table 8.2.186	Extendable / Clause 8.2.186
+update-srr-reference	ie-type-reference	213	Extendable/ Table 7.5.4.21-1	Extendable / Table 7.5.4.20-1
+session-report-reference	ie-type-reference	214	Extendable / Table 7.5.8.7-1	Extendable / Table 7.5.7.3-1
+peer-up-restart-report-reference	ie-type-reference	315	Extendable / Clause 7.4.5.1.7	Extendable / Table 7.4.5.1.7-1
+moq-information-reference	ie-type-reference	386	Extendable / Table 7.3.5.1-6	Extendable / Table 7.5.3.1-6
+pfcp-session-retention-information-length	ie-type-length	183	1	Not Applicable
+protocol-specific-configuration-parameters-length	ie-type-length	378	1	Not Applicable
+packet-rate-status-report-modification	row-ie-type	7.5.5.1-1/Packet Rate Status Report	Packet Rate Status Report	Packet Rate Status Report IE within PFCP Session Modification Response
+link-specific-multipath-adress	figure-field	8.2.158	Link-Specific Multipath IPv6 Adress for Non-3GPP Access	Link-Specific Multipath IPv6 Address for Non-3GPP Access
+data-network-access-identfier	figure-field	8.2.161	Data Network Access Identfier	Data Network Access Identifier
+remove-qer-caption	note	Table 7.5.4.9-1	T Table 7.5.4.9-1: Remove QER IE PFCP Session Modification Request	Table 7.5.4.9-1
+traffic-parameter-measurement-caption	note	Table 7.5.2.9-5	Table 7.5.2.9-5.: Traffic Parameter Measurement Control Information IE	Table 7.5.2.9-5
+session-report-request-prsr-reference	note	Table 7.5.8.1-1	the row of Packet Rate Status Report says "See Table 7.5.7.1-1"	Table 7.5.7.1-2, of IE type 252
+link-specific-multipath-ipv6	note	Figure 8.2.158-1	four octets for the Link-Specific Multipath IPv6 Address for Non-3GPP Access	sixteen, as for 3GPP access
+unstyled-headings	note	8.2.220, 8.2.221, 8.2.222 and 8.2.224	headings written as plain paragraphs	clauses of their own

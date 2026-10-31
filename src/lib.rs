@@ -52,7 +52,7 @@ pub use check::{Check, Deviation, DeviationKind};
 pub use enums::*;
 pub use header::Header;
 pub use ie::{Codec, IeFault, IeType, Listed, Placed, RawIe, VENDOR};
-pub use message::{Body, Message, is_node_related};
+pub use message::{Body, MESSAGE_TYPES, Message, MessageTypeInfo, is_node_related, message_type_info};
 pub use list::List;
 pub use octets::{IntoOwned, Octets};
 pub use registry::{

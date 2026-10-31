@@ -1,0 +1,351 @@
+# table	title	value	name
+8.2.1-1	Cause values	1	Request accepted (success)
+8.2.1-1	Cause values	2	More Usage Report to send
+8.2.1-1	Cause values	3	Request partially accepted
+8.2.1-1	Cause values	64	Request rejected (reason not specified)
+8.2.1-1	Cause values	65	Session context not found
+8.2.1-1	Cause values	66	Mandatory IE missing
+8.2.1-1	Cause values	67	Conditional IE missing
+8.2.1-1	Cause values	68	Invalid length
+8.2.1-1	Cause values	69	Mandatory IE incorrect
+8.2.1-1	Cause values	70	Invalid Forwarding Policy
+8.2.1-1	Cause values	71	Invalid F-TEID allocation option
+8.2.1-1	Cause values	72	No established PFCP Association
+8.2.1-1	Cause values	73	Rule creation/modification Failure
+8.2.1-1	Cause values	74	PFCP entity in congestion
+8.2.1-1	Cause values	75	No resources available
+8.2.1-1	Cause values	76	Service not supported
+8.2.1-1	Cause values	77	System failure
+8.2.1-1	Cause values	78	Redirection Requested
+8.2.1-1	Cause values	79	All dynamic addresses are occupied
+8.2.1-1	Cause values	80	Unknown Pre-defined Rule
+8.2.1-1	Cause values	81	Unknown Application ID
+8.2.1-1	Cause values	82	L2TP tunnel Establishment failure
+8.2.1-1	Cause values	83	L2TP session Establishment failure
+8.2.1-1	Cause values	84	L2TP tunnel release
+8.2.1-1	Cause values	85	L2TP session release
+8.2.1-1	Cause values	86	PFCP session restoration failure due to requested resource not available
+8.2.1-1	Cause values	87	L2TP tunnel Establishment failure – Tunnel Auth Failure
+8.2.1-1	Cause values	88	L2TP Session Establishment failure – Session Auth Failure
+8.2.1-1	Cause values	89	L2TP tunnel Establishment failure – LNS not reachable
+8.2.1-1	Cause values	90	PFD Contents Syntax Error
+8.2.1-1	Cause values	91	PFD Contents Semantics Error
+8.2.1-1	Cause values	92	PFD Application Id Unknown
+8.2.2-1	Interface value	0	Access
+8.2.2-1	Interface value	1	Core
+8.2.2-1	Interface value	2	SGi-LAN/N6-LAN
+8.2.2-1	Interface value	3	CP-function
+8.2.2-1	Interface value	4	5G VN Internal
+8.2.7-1	UL Gate	0	OPEN
+8.2.7-1	UL Gate	1	CLOSED
+8.2.7-2	DL Gate	0	OPEN
+8.2.7-2	DL Gate	1	CLOSED
+8.2.20-1	Redirect Address Type	0	IPv4 address
+8.2.20-1	Redirect Address Type	1	IPv6 address
+8.2.20-1	Redirect Address Type	2	URL
+8.2.20-1	Redirect Address Type	3	SIP URI
+8.2.20-1	Redirect Address Type	4	IPv4 and IPv6 addresses
+8.2.20-1	Redirect Address Type	5	Port
+8.2.20-1	Redirect Address Type	6	IPv4 address and Port
+8.2.20-1	Redirect Address Type	7	IPv6 address and Port
+8.2.20-1	Redirect Address Type	8	IPv4 and IPv6 addresses and Port
+8.2.24-1	Interface value	0	Access
+8.2.24-1	Interface value	1	Core
+8.2.24-1	Interface value	2	SGi-LAN/N6-LAN
+8.2.24-1	Interface value	3	CP- Function
+8.2.24-1	Interface value	4	LI Function
+8.2.24-1	Interface value	5	5G VN Internal
+8.2.25-1	UP Function Features	5/1	BUCP
+8.2.25-1	UP Function Features	5/2	DDND
+8.2.25-1	UP Function Features	5/3	DLBD
+8.2.25-1	UP Function Features	5/4	TRST
+8.2.25-1	UP Function Features	5/5	FTUP
+8.2.25-1	UP Function Features	5/6	PFDM
+8.2.25-1	UP Function Features	5/7	HEEU
+8.2.25-1	UP Function Features	5/8	TREU
+8.2.25-1	UP Function Features	6/1	EMPU
+8.2.25-1	UP Function Features	6/2	PDIU
+8.2.25-1	UP Function Features	6/3	UDBC
+8.2.25-1	UP Function Features	6/4	QUOAC
+8.2.25-1	UP Function Features	6/5	TRACE
+8.2.25-1	UP Function Features	6/6	FRRT
+8.2.25-1	UP Function Features	6/7	PFDE
+8.2.25-1	UP Function Features	6/8	EPFAR
+8.2.25-1	UP Function Features	7/1	DPDRA
+8.2.25-1	UP Function Features	7/2	ADPDP
+8.2.25-1	UP Function Features	7/3	UEIP
+8.2.25-1	UP Function Features	7/4	SSET
+8.2.25-1	UP Function Features	7/5	MNOP
+8.2.25-1	UP Function Features	7/6	MTE
+8.2.25-1	UP Function Features	7/7	BUNDL
+8.2.25-1	UP Function Features	7/8	GCOM
+8.2.25-1	UP Function Features	8/1	MPAS
+8.2.25-1	UP Function Features	8/2	RTTL
+8.2.25-1	UP Function Features	8/3	VTIME
+8.2.25-1	UP Function Features	8/4	NORP
+8.2.25-1	UP Function Features	8/5	IPTV
+8.2.25-1	UP Function Features	8/6	IP6PL
+8.2.25-1	UP Function Features	8/7	TSN
+8.2.25-1	UP Function Features	8/8	MPTCP
+8.2.25-1	UP Function Features	9/1	ATSSS-LL
+8.2.25-1	UP Function Features	9/2	QFQM
+8.2.25-1	UP Function Features	9/3	GPQM
+8.2.25-1	UP Function Features	9/4	MT-EDT
+8.2.25-1	UP Function Features	9/5	CIOT
+8.2.25-1	UP Function Features	9/6	ETHAR
+8.2.25-1	UP Function Features	9/7	DDDS
+8.2.25-1	UP Function Features	9/8	RDS
+8.2.25-1	UP Function Features	10/1	RTTWP
+8.2.25-1	UP Function Features	10/2	QUASF
+8.2.25-1	UP Function Features	10/3	NSPOC
+8.2.25-1	UP Function Features	10/4	L2TP
+8.2.25-1	UP Function Features	10/5	UPBER
+8.2.25-1	UP Function Features	10/6	RESPS
+8.2.25-1	UP Function Features	10/7	IPREP
+8.2.25-1	UP Function Features	10/8	DNSTS
+8.2.25-1	UP Function Features	11/1	DRQOS
+8.2.25-1	UP Function Features	11/2	MBSN4
+8.2.25-1	UP Function Features	11/3	PSUPRM
+8.2.25-1	UP Function Features	11/4	EPPPI
+8.2.25-1	UP Function Features	11/5	RATP
+8.2.25-1	UP Function Features	11/6	UPIDP
+8.2.25-1	UP Function Features	11/7	AFSFC
+8.2.25-1	UP Function Features	11/8	MPQUIC-UDP
+8.2.25-1	UP Function Features	12/1	REDSM
+8.2.25-1	UP Function Features	12/2	DBDM
+8.2.25-1	UP Function Features	12/3	TSCTS
+8.2.25-1	UP Function Features	12/4	DRTSC
+8.2.25-1	UP Function Features	12/5	N6JEDB
+8.2.25-1	UP Function Features	12/6	QMCON
+8.2.25-1	UP Function Features	12/7	DETNET
+8.2.25-1	UP Function Features	12/8	EML4S
+8.2.25-1	UP Function Features	13/1	PDUSM
+8.2.25-1	UP Function Features	13/2	CN-TL
+8.2.25-1	UP Function Features	13/3	QMDRM
+8.2.25-1	UP Function Features	13/4	EDBNC
+8.2.25-1	UP Function Features	13/5	MT-SDT
+8.2.25-1	UP Function Features	13/6	UPSBIES
+8.2.25-1	UP Function Features	13/7	UMN6IP
+8.2.25-1	UP Function Features	13/8	UN6TU
+8.2.25-1	UP Function Features	14/1	MBSCH
+8.2.25-1	UP Function Features	14/2	UN6DM
+8.2.25-1	UP Function Features	14/3	NATPUB
+8.2.25-1	UP Function Features	14/4	USHPH
+8.2.25-1	UP Function Features	14/5	MPQUIC-IP
+8.2.25-1	UP Function Features	14/6	MPQUIC-E
+8.2.25-1	UP Function Features	14/7	DYNTR
+8.2.25-1	UP Function Features	14/8	MUXMF
+8.2.25-1	UP Function Features	15/1	CONUDP
+8.2.25-1	UP Function Features	15/2	MOQ
+8.2.25-1	UP Function Features	15/3	ULM
+8.2.25-1	UP Function Features	15/4	PSITLM
+8.2.25-1	UP Function Features	15/5	UDPOPT
+8.2.25-1	UP Function Features	15/6	QMABR
+8.2.25-1	UP Function Features	15/7	PAPFD
+8.2.29.1	DL Buffering Duration	0	2 seconds
+8.2.29.1	DL Buffering Duration	1	1 minute
+8.2.29.1	DL Buffering Duration	2	10 minutes
+8.2.29.1	DL Buffering Duration	3	1 hour
+8.2.29.1	DL Buffering Duration	4	10 hours
+8.2.29.1	DL Buffering Duration	7	infinite
+8.2.35.1	Timer information element	0	2 seconds
+8.2.35.1	Timer information element	1	1 minute
+8.2.35.1	Timer information element	2	10 minutes
+8.2.35.1	Timer information element	3	1 hour
+8.2.35.1	Timer information element	4	10 hours
+8.2.35.1	Timer information element	7	infinite
+8.2.38-2	Node ID Type	0	IPv4 address
+8.2.38-2	Node ID Type	1	IPv6 address
+8.2.38-2	Node ID Type	2	FQDN
+8.2.43-2	Node Type	0	MME
+8.2.43-2	Node Type	1	SGW-C
+8.2.43-2	Node Type	2	PGW-C/SMF
+8.2.43-2	Node Type	3	ePDG
+8.2.43-2	Node Type	4	TWAN
+8.2.43-2	Node Type	5	PGW-U/SGW-U/UPF
+8.2.56-1	Outer Header Creation Description	5/1	GTP-U/UDP/IPv4
+8.2.56-1	Outer Header Creation Description	5/2	GTP-U/UDP/IPv6
+8.2.56-1	Outer Header Creation Description	5/3	UDP/IPv4
+8.2.56-1	Outer Header Creation Description	5/4	UDP/IPv6
+8.2.56-1	Outer Header Creation Description	5/5	IPv4
+8.2.56-1	Outer Header Creation Description	5/6	IPv6
+8.2.56-1	Outer Header Creation Description	5/7	C-TAG
+8.2.56-1	Outer Header Creation Description	5/8	S-TAG
+8.2.56-1	Outer Header Creation Description	6/1	N19 Indication
+8.2.56-1	Outer Header Creation Description	6/2	N6 Indication
+8.2.56-1	Outer Header Creation Description	6/3	Low Layer SSM and C-TEID
+8.2.58-1	CP Function Features	5/1	LOAD
+8.2.58-1	CP Function Features	5/2	OVRL
+8.2.58-1	CP Function Features	5/3	EPFAR
+8.2.58-1	CP Function Features	5/4	SSET
+8.2.58-1	CP Function Features	5/5	BUNDL
+8.2.58-1	CP Function Features	5/6	MPAS
+8.2.58-1	CP Function Features	5/7	ARDR
+8.2.58-1	CP Function Features	5/8	UIAUR
+8.2.58-1	CP Function Features	6/1	PSUCC
+8.2.58-1	CP Function Features	6/2	RPGUR
+8.2.58-1	CP Function Features	6/3	PAPFD
+8.2.61-1	Flow Direction	0	Unspecified
+8.2.61-1	Flow Direction	1	Downlink (traffic to the UE)
+8.2.61-1	Flow Direction	2	Uplink (traffic from the UE)
+8.2.61-1	Flow Direction	3	Bidirectional
+8.2.63.1	Uplink/Downlink Time Unit	0	minute
+8.2.63.1	Uplink/Downlink Time Unit	1	6 minutes
+8.2.63.1	Uplink/Downlink Time Unit	2	hour
+8.2.63.1	Uplink/Downlink Time Unit	3	day
+8.2.63.1	Uplink/Downlink Time Unit	4	week
+8.2.64-1	Outer Header Removal Description	0	GTP-U/UDP/IPv4
+8.2.64-1	Outer Header Removal Description	1	GTP-U/UDP/IPv6
+8.2.64-1	Outer Header Removal Description	2	UDP/IPv4
+8.2.64-1	Outer Header Removal Description	3	UDP/IPv6
+8.2.64-1	Outer Header Removal Description	4	IPv4
+8.2.64-1	Outer Header Removal Description	5	IPv6
+8.2.64-1	Outer Header Removal Description	6	GTP-U/UDP/IP
+8.2.64-1	Outer Header Removal Description	7	VLAN TAG POP (i.e. removal of one VLAN tag, S-TAG or C-TAG)
+8.2.64-1	Outer Header Removal Description	8	VLAN TAGs POP-POP (i.e. removal of 2 VLAN tags, S-TAG and C-TAG)
+8.2.64-2	GTP-U Extension Header Deletion	6/1	PDU Session Container
+8.2.67-1	Header Type	0	HTTP
+8.2.78.1	Graceful Release Period information element	0	2 seconds
+8.2.78.1	Graceful Release Period information element	1	1 minute
+8.2.78.1	Graceful Release Period information element	2	10 minutes
+8.2.78.1	Graceful Release Period information element	3	1 hour
+8.2.78.1	Graceful Release Period information element	4	10 hours
+8.2.78.1	Graceful Release Period information element	7	infinite
+8.2.79-1	PDN Type	1	IPv4
+8.2.79-1	PDN Type	2	IPv6
+8.2.79-1	PDN Type	3	IPv4v6
+8.2.79-1	PDN Type	4	Non-IP
+8.2.79-1	PDN Type	5	Ethernet
+8.2.80-1	Rule ID Type	0	PDR
+8.2.80-1	Rule ID Type	1	FAR
+8.2.80-1	Rule ID Type	2	QER
+8.2.80-1	Rule ID Type	3	URR
+8.2.80-1	Rule ID Type	4	BAR
+8.2.80-1	Rule ID Type	5	MAR
+8.2.80-1	Rule ID Type	6	SRR
+8.2.81-1	Base Time Interval Type	0	CTP
+8.2.81-1	Base Time Interval Type	1	DTP
+8.2.118-1	Interface Type value	0	S1-U
+8.2.118-1	Interface Type value	1	S5 /S8-U
+8.2.118-1	Interface Type value	2	S4-U
+8.2.118-1	Interface Type value	3	S11-U
+8.2.118-1	Interface Type value	4	S12
+8.2.118-1	Interface Type value	5	Gn/Gp-U
+8.2.118-1	Interface Type value	6	S2a-U
+8.2.118-1	Interface Type value	7	S2b-U
+8.2.118-1	Interface Type value	8	eNodeB GTP-U interface for DL data forwarding
+8.2.118-1	Interface Type value	9	eNodeB GTP-U interface for UL data forwarding
+8.2.118-1	Interface Type value	10	SGW/UPF GTP-U interface for DL data forwarding
+8.2.118-1	Interface Type value	11	N3 3GPP Access
+8.2.118-1	Interface Type value	12	N3 Trusted Non-3GPP Access
+8.2.118-1	Interface Type value	13	N3 Untrusted Non-3GPP Access
+8.2.118-1	Interface Type value	14	N3 for data forwarding
+8.2.118-1	Interface Type value	15	N9 (or N9 for non-roaming)
+8.2.118-1	Interface Type value	16	SGi
+8.2.118-1	Interface Type value	17	N6
+8.2.118-1	Interface Type value	18	N19
+8.2.118-1	Interface Type value	19	S8-U
+8.2.118-1	Interface Type value	20	Gp-U
+8.2.118-1	Interface Type value	21	N9 for roaming
+8.2.118-1	Interface Type value	22	Iu-U
+8.2.118-1	Interface Type value	23	N9 for data forwarding
+8.2.118-1	Interface Type value	24	Sxa-U
+8.2.118-1	Interface Type value	25	Sxb-U
+8.2.118-1	Interface Type value	26	Sxc-U
+8.2.118-1	Interface Type value	27	N4-U
+8.2.118-1	Interface Type value	28	SGW/UPF GTP-U interface for UL data forwarding
+8.2.118-1	Interface Type value	29	N6mb/Nmb9
+8.2.118-1	Interface Type value	30	N3mb
+8.2.118-1	Interface Type value	31	N19mb
+8.2.124-1	Steering Functionality value	0	ATSSS-LL
+8.2.124-1	Steering Functionality value	1	MPTCP
+8.2.124-1	Steering Functionality value	2	MPQUIC-UDP
+8.2.124-1	Steering Functionality value	3	MPQUIC-IP
+8.2.124-1	Steering Functionality value	4	MPQUIC-E
+8.2.125-1	Steering Mode value	0	Active-Standby
+8.2.125-1	Steering Mode value	1	Smallest Delay
+8.2.125-1	Steering Mode value	2	Load Balancing
+8.2.125-1	Steering Mode value	3	Priority-based
+8.2.125-1	Steering Mode value	4	Redundant
+8.2.127-1	Priority value	0	Active
+8.2.127-1	Priority value	1	Standby
+8.2.127-1	Priority value	2	No Standby
+8.2.127-1	Priority value	3	High
+8.2.127-1	Priority value	4	Low
+8.2.127-1	Priority value	5	Primary
+8.2.127-1	Priority value	6	Secondary
+8.2.153-1	Access Type	0	3GPP access type
+8.2.153-1	Access Type	1	Non-3GPP access type
+8.2.153-2	Availability Status	0	Access has become unavailable
+8.2.153-2	Availability Status	1	Access has become available
+8.2.186-1	RAT Type values	1	UTRAN
+8.2.186-1	RAT Type values	2	GERAN
+8.2.186-1	RAT Type values	3	WLAN
+8.2.186-1	RAT Type values	4	GAN
+8.2.186-1	RAT Type values	5	HSPA Evolution
+8.2.186-1	RAT Type values	6	EUTRAN (WB-E-UTRAN)
+8.2.186-1	RAT Type values	7	Virtual
+8.2.186-1	RAT Type values	8	EUTRAN-NB-IoT
+8.2.186-1	RAT Type values	9	LTE-M
+8.2.186-1	RAT Type values	10	NR
+8.2.186-1	RAT Type values	11	WB-E-UTRAN (LEO)
+8.2.186-1	RAT Type values	12	WB-E-UTRAN (MEO)
+8.2.186-1	RAT Type values	13	WB-E-UTRAN (GEO)
+8.2.186-1	RAT Type values	14	WB-E-UTRAN (OTHERSAT)
+8.2.186-1	RAT Type values	15	EUTRAN-NB-IoT (LEO)
+8.2.186-1	RAT Type values	16	EUTRAN-NB-IoT (MEO)
+8.2.186-1	RAT Type values	17	EUTRAN-NB-IoT (GEO)
+8.2.186-1	RAT Type values	18	EUTRAN-NB-IoT (OTHERSAT)
+8.2.186-1	RAT Type values	19	LTE-M (LEO)
+8.2.186-1	RAT Type values	20	LTE-M (MEO)
+8.2.186-1	RAT Type values	21	LTE-M (GEO)
+8.2.186-1	RAT Type values	22	LTE-M (OTHERSAT)
+8.2.186-1	RAT Type values	23	NR (LEO)
+8.2.186-1	RAT Type values	24	NR (MEO)
+8.2.186-1	RAT Type values	25	NR (GEO)
+8.2.186-1	RAT Type values	26	NR (OTHERSAT)
+8.2.186-1	RAT Type values	27	NR-REDCAP
+8.2.186-1	RAT Type values	28	NR-EREDCAP
+8.2.227-1	Transport Mode value	0	Datagram mode 1
+8.2.227-1	Transport Mode value	1	Datagram mode 2
+8.2.227-1	Transport Mode value	2	Stream mode
+8.2.229-1	Reporting Urgency value	0	Delay tolerant
+8.2.229-1	Reporting Urgency value	1	Non delay tolerant
+8.2.233-1	Media Transport Protocol	0	Unspecified
+8.2.233-1	Media Transport Protocol	1	RTP (Real-time Transport Protocol)
+8.2.233-1	Media Transport Protocol	2	SRTP (Secure Real-Time Protocol)
+8.2.233-1	Media Transport Protocol	3	MOQT (Media Over QUIC Transport protocol)
+8.2.234-1	RTP Header Extension Type	1	RTP Header Extension for PDU Set Marking
+8.2.234-1	RTP Header Extension Type	2	RTP header extension for Dynamically changing traffic characteristics
+8.2.234-1	RTP Header Extension Type	3	RTP header extension for Expedited Transfer Indication
+8.2.237-1	Payload Format	1	H.264
+8.2.237-1	Payload Format	2	H.265
+8.2.241-1	Format field	1	1-byte (short) format is used
+8.2.241-1	Format field	2	2-byte (long) format is used
+8.2.245-1	Job Type values	1	5GC UE Level Measurements only
+8.2.245-1	Job Type values	2	Trace and 5GC UE Level Measurements
+8.2.245-2	Measurement Type values	1	Average DL packet delay between PSA UPF and UE for a QoS flow
+8.2.245-2	Measurement Type values	2	Average UL packet delay between PSA UPF and UE for a QoS flow (excluding D1)
+8.2.245-2	Measurement Type values	3	Average UL packet delay between PSA UPF and UE for a QoS flow (including D1)
+8.2.245-2	Measurement Type values	4	Average UL packet delay between PSA UPF and NG-RAN for a QoS flow
+8.2.245-2	Measurement Type values	5	Average DL packet delay between PSA UPF and NG-RAN for a QoS flow
+8.2.245-2	Measurement Type values	6	Average round-trip packet delay between PSA UPF and NG-RAN
+8.2.245-2	Measurement Type values	7	Average round-trip packet delay between PSA UPF and NG-RAN for a S-NSSAI
+8.2.245-2	Measurement Type values	8	Average round-trip packet delay between PSA UPF and NG-RAN for a QFI
+8.2.245-2	Measurement Type values	9	Average round-trip packet delay between PSA UPF and NG-RAN for a S-NSSAI and QFI
+8.2.255-2	Action value	0	DETECT
+8.2.255-2	Action value	1	REMOVE
+8.2.255-2	Action value	2	REPLACE
+8.2.255-2	Action value	3	INSERT
+8.2.258-2	Condition value	0	EVERY_MATCH
+8.2.258-2	Condition value	1	FIRST_MATCH_ONLY
+8.2.261-1	Signaling method	0	Unspecified
+8.2.261-1	Signaling method	1	Connect-UDP
+8.2.263-1	Failure cause values	0	Unspecified
+8.2.263-1	Failure cause values	1	Connection Establishment Failure
+8.2.263-1	Failure cause values	2	Connection Lost
+8.2.263-1	Failure cause values	3	Authentication Failure
+8.2.271-1	Transferring method	0	Unspecified
+8.2.271-1	Transferring method	1	UDP Option (of outer UDP datagram)
+8.2.277-1	Remaining Data Reporting Indication value	0	Discard the collected data
+8.2.277-1	Remaining Data Reporting Indication value	1	Send the collected data to the consumer

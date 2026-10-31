@@ -1,0 +1,63 @@
+# Where a field of the crate stands for several names of a figure of clause 8.2: a value
+# after its length, a list after its number, one number in two places; and `*` for the
+# names whose bits a table of the clause names, each bit a flag of the crate. The test
+# `spec` fails on a line whose field the crate or whose names the figure no longer has.
+#
+# clause	field	names in the figure	why
+8.2.5	(S)RTP Multiplexed Media Identification Information	Number of (S)RTP Multiplexed Media Identification Information instances | Length of (S)RTP Multiplexed Media Identification Information 1 | (S)RTP Multiplexed Media Identification Information 1 | Length of (S)RTP Multiplexed Media Identification Information n | (S)RTP Multiplexed Media Identification Information n	a list after its number, each entry after its length
+8.2.5	Flow Description	Length of Flow Description | Flow Description	its length
+8.2.23	Forwarding Policy Identifier	Forwarding Policy Identifier Length | Forwarding Policy Identifier	its length
+8.2.25	*	Supported-Features | Additional Supported-Features 1 | Additional Supported-Features 2 | Additional Supported-Features 3 | Additional Supported-Features 4 | Additional Supported-Features 5	the bits of Table 8.2.25-1
+8.2.39	Additional Domain Name and Domain Name Protocol	Length of Additional Domain Name and Domain Name Protocol | Additional Domain Name and Domain Name Protocol	its length
+8.2.39	Additional Flow Description	Length of Additional Flow Description | Additional Flow Description	its length
+8.2.39	Additional URL	Length of Additional URL | Additional URL	its length
+8.2.39	Custom PFD Content	Length of Custom PFD Content | Custom PFD Content	its length
+8.2.39	Domain Name	Length of Domain Name | Domain Name	its length
+8.2.39	Domain Name Protocol	Length of Domain Name Protocol | Domain Name Protocol	its length
+8.2.39	Flow Description	Length of Flow Description | Flow Description	its length
+8.2.39	URL field	Length of URL | URL	its length
+8.2.43	PDN Connection Set Identifiers	Number of CSIDs= m | First PDN Connection Set Identifier (CSID) | Second PDN Connection Set Identifier (CSID) | m-th PDN Connection Set Identifier (CSID)	a list after its number
+8.2.56	*	Outer Header Creation Description	the bits of Table 8.2.56-1
+8.2.56	C-TAG field	C-TAG	C-TAG is the name of its bit
+8.2.56	S-TAG field	S-TAG	S-TAG is the name of its bit
+8.2.58	*	Supported-Features | Additional Supported-Features 1	the bits of Table 8.2.58-1
+8.2.61	Flow Description	Length of Flow Description | Flow Description	its length
+8.2.64	*	GTP-U Extension Header Deletion	the bits of Table 8.2.64-2
+8.2.67	Header Field Name	Length of Header Field Name | Header Field Name	its length
+8.2.67	Header Field Value	Length of Header Field Value | Header Field Value	its length
+8.2.70	Destination Interface field	Length of Destination Interface field | Destination Interface field	its length
+8.2.70	Network Instance field	Length of Network Instance field | Network Instance field	its length
+8.2.91	Number of Additional Usage Reports value	Number of Additional Usage Reports value | Number of Additional Usage Reports value	one number in two octets
+8.2.94	C-VID value	C-VID value | C-VID Value	one number in two octets
+8.2.95	S-VID value	S-VID value | S-VID value	one number in two octets
+8.2.101	GPSI	Length of GPSI | GPSI	its length
+8.2.101	IMEI	Length of IMEI | IMEI	its length
+8.2.101	IMSI	Length of IMSI | IMSI	its length
+8.2.101	MSISDN	Length of MSISDN | MSISDN	its length
+8.2.101	NAI	Length of NAI | NAI	its length
+8.2.101	PEI	Length of PEI | PEI	its length
+8.2.101	SUPI	Length of SUPI | SUPI	its length
+8.2.103	C-TAG	Length of C-TAG field | C-TAG	its length
+8.2.103	MAC address values	Number of MAC addresses (k) | MAC address value 1 | MAC address value 2 | MAC address value k	a list after its number
+8.2.103	S-TAG	Length of S-TAG field | S-TAG	its length
+8.2.104	C-TAG	Length of C-TAG field | C-TAG	its length
+8.2.104	MAC address values	Number of MAC addresses (k) | MAC address value 1 | MAC address value 2 | MAC address value k	a list after its number
+8.2.104	S-TAG	Length of S-TAG field | S-TAG	its length
+8.2.108	IP Address of Trace Collection Entity	Length of IP Address of Trace Collection Entity | IP Address of Trace Collection Entity	its length
+8.2.108	List of Interfaces	Length of List of Interfaces | List of Interfaces	its length
+8.2.108	MCC and MNC	MCC digit 2 | MCC digit 1 | MNC digit 3 | MCC digit 3 | MNC digit 2 | MNC digit 1	one PLMN
+8.2.108	Triggering Events	Length of Triggering Events | Triggering Events	its length
+8.2.128	UE IP address Pool Identity	UE IP address Pool Id Length | UE IP address Pool Identity	its length
+8.2.156	value of QFI	Number of QFI (=p) | value of QFI 1 | value of QFI 2 | value of QFI p	a list after its number
+8.2.187	Proxy Authen Challenge Value	Length of Proxy Authen Challenge | Proxy Authen Challenge Value	its length
+8.2.187	Proxy Authen Name Value	Length of Proxy Authen Name | Proxy Authen Name Value	its length
+8.2.187	Proxy Authen Response Value	Length of Proxy Authen Response | Proxy Authen Response Value	its length
+8.2.201	Domain Name Pattern	Length of Domain Name Pattern | Domain Name Pattern	its length
+8.2.206	TMGI field	TMGI	TMGI is the name of its flag
+8.2.207	IP Multicast Distribution Address (IPv4 or IPv6)	Address Type | Address Length | IP Multicast Distribution Address (IPv4 or IPv6)	an address after its type and length
+8.2.207	IP Source Address (IPv4 or IPv6)	Address Type | Address Length | IP Source Address (IPv4 or IPv6)	an address after its type and length
+8.2.214	DSCP Value	DSCP Value 1 | DSCP Value 2 | DSCP Value x	a list to the end of the IE
+8.2.217	Flags		octet 7, whose bits the figure writes as spare and the vendor defines
+8.2.245	Measurement Type	Number of Measurement Types (k) | Measurement Type value 1 | Measurement Type value 2 | Measurement Type value k	a list after its number
+8.2.276	Key ID	Length of Key ID | Key ID	its length
+8.2.276	Shared Secret	Length of Shared Secret | Shared Secret	its length

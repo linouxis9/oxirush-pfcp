@@ -73,7 +73,7 @@ pfcp_number! {
     /// Ethernet Inactivity Timer (§8.2.105).
     EthernetInactivityTimer(u32) "Ethernet Inactivity Timer" "8.2.105";
     /// Event Quota (§8.2.112).
-    EventQuota(u32) "Subsequent Event Quota" "8.2.112";
+    EventQuota(u32) "Event Quota" "8.2.112";
     /// Event Threshold (§8.2.113).
     EventThreshold(u32) "Event Threshold" "8.2.113";
     /// Subsequent Event Quota (§8.2.106).
@@ -167,10 +167,10 @@ pfcp_fields! {
     pub struct Multiplier "8.2.84" { value_digits "Value-Digits": u64, exponent "Exponent": u32 }
     /// S-NSSAI (§8.2.176).
     pub struct SNssai "8.2.176" { sst "SST": u8, sd "SD": U24 }
-    /// DL Periodicity (§8.2.219).
-    pub struct DlPeriodicity "8.2.219" { spare_field "Spare": u8, dl_periodicity "DL Periodicity": u32 }
-    /// UL Periodicity (§8.2.223).
-    pub struct UlPeriodicity "8.2.223" { spare_field "Spare": u8, ul_periodicity "UL Periodicity": u32 }
+    /// DL Periodicity (§8.2.221).
+    pub struct DlPeriodicity "8.2.221" { spare_field "Spare": Spare, dl_periodicity "DL Periodicity": u32 }
+    /// UL Periodicity (§8.2.224).
+    pub struct UlPeriodicity "8.2.224" { spare_field "Spare": Spare, ul_periodicity "UL Periodicity": u32 }
     /// HPLMN S-NSSAI (§8.2.232).
     pub struct HplmnSNssai "8.2.232" { sst "SST": u8, sd "SD": U24 }
 }
@@ -702,15 +702,15 @@ pfcp_bits! {
 
 pfcp_octets! {
     /// Application ID (§8.2.6).
-    ApplicationId "Application ID" "8.2.6";
+    ApplicationId "Application Identifier" "8.2.6";
     /// DL Buffering Suggested Packet Count (§8.2.30).
-    DlBufferingSuggestedPacketCount "DL Buffering Suggested Packet Count" "8.2.30";
+    DlBufferingSuggestedPacketCount "Packet Count Value" "8.2.30";
     /// Application Instance ID (§8.2.60).
-    ApplicationInstanceId "Application Instance ID" "8.2.60";
+    ApplicationInstanceId "Application Instance Identifier" "8.2.60";
     /// Activate Predefined Rules (§8.2.72).
-    ActivatePredefinedRules "Activate Predefined Rules" "8.2.72";
+    ActivatePredefinedRules "Predefined Rules Name" "8.2.72";
     /// Deactivate Predefined Rules (§8.2.73).
-    DeactivatePredefinedRules "Deactivate Predefined Rules" "8.2.73";
+    DeactivatePredefinedRules "Predefined Rules Name" "8.2.73";
     /// Framed-Route (§8.2.109).
     FramedRoute "Framed-Route" "8.2.109";
     /// Framed-IPv6-Route (§8.2.111).
@@ -718,15 +718,15 @@ pfcp_octets! {
     /// APN/DNN (§8.2.117).
     ApnDnn "APN/DNN" "8.2.117";
     /// Port Management Information Container (§8.2.144).
-    PortManagementInformationContainer "Port Management Information Container" "8.2.144";
+    PortManagementInformationContainer "Port Management Information" "8.2.144";
     /// Data Network Access Identifier (§8.2.161).
     DataNetworkAccessIdentifier "Data Network Access Identifier" "8.2.161";
     /// User Plane Node Management Information Container (§8.2.182).
-    UserPlaneNodeManagementInformationContainer "User Plane Node Management Information Container" "8.2.182";
+    UserPlaneNodeManagementInformationContainer "User Plane Node Management Information" "8.2.182";
     /// Calling Number (§8.2.190).
-    CallingNumber "Calling Number" "8.2.190";
+    CallingNumber "Calling Number value" "8.2.190";
     /// Called Number (§8.2.191).
-    CalledNumber "Called Number" "8.2.191";
+    CalledNumber "Called Number value" "8.2.191";
     /// Group ID (§8.2.198).
     GroupId "Group ID" "8.2.198";
     /// Event Notification URI (§8.2.202).
@@ -736,11 +736,11 @@ pfcp_octets! {
     /// Predefined Rules Name (§8.2.205).
     PredefinedRulesName "Predefined Rules Name" "8.2.205";
     /// Tunnel Password (§8.2.212).
-    TunnelPassword "Tunnel Password" "8.2.212";
+    TunnelPassword "Tunnel Password value" "8.2.212";
     /// Metadata (§8.2.219).
     Metadata "Metadata" "8.2.219";
     /// TL-Container (§8.2.230).
-    TlContainer "TL-Container" "8.2.230";
+    TlContainer "TL-Container Information" "8.2.230";
     /// URI (§8.2.244).
     Uri "URI" "8.2.244";
     /// Operator Configurable UPF Capability (§8.2.249).

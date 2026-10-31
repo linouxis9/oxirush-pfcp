@@ -1,0 +1,1051 @@
+# table|row|same	table	name, or the name of the row	heading, or presence	IE type, or interfaces	IE type
+table	7.4.2.1-1	Information Elements in Heartbeat Request	7.4.2.1 Heartbeat Request	
+row	7.4.2.1-1	Recovery Time Stamp	M	Sxa Sxb Sxc N4 N4mb	Recovery Time Stamp
+row	7.4.2.1-1	Source IP Address	O	Sxa Sxb Sxc N4 N4mb	Source IP Address
+table	7.4.2.2-1	Information Elements in Heartbeat Response	7.4.2.2 Heartbeat Response	
+row	7.4.2.2-1	Recovery Time Stamp	M	Sxa Sxb Sxc N4 N4mb	Recovery Time Stamp
+table	7.4.3.1-1	Information Elements in PFCP PFD Management Request	7.4.3.1 PFCP PFD Management Request	
+row	7.4.3.1-1	Application ID's PFDs	C	Sxb Sxc N4	Application ID's PFDs
+row	7.4.3.1-1	Node ID	O	Sxb Sxc N4	Node ID
+table	7.4.3.1-2	Application ID's PFDs	7.4.3.1 PFCP PFD Management Request	58
+row	7.4.3.1-2	Application ID	M	Sxb Sxc N4	Application ID
+row	7.4.3.1-2	PFD context	C	Sxb Sxc N4	PFD context
+table	7.4.3.1-3	PFD context	7.4.3.1 PFCP PFD Management Request	59
+row	7.4.3.1-3	PFD Contents	M	Sxb Sxc N4	PFD Contents
+table	7.4.3.2-1	Information Elements in PFCP PFD Management Response	7.4.3.2 PFCP PFD Management Response	
+row	7.4.3.2-1	Cause	M	Sxb Sxc N4	Cause
+row	7.4.3.2-1	Offending IE	C	Sxb Sxc N4	Offending IE
+row	7.4.3.2-1	Node ID	O	Sxb Sxc N4	Node ID
+row	7.4.3.2-1	PFD Partial Failure Information	C	Sxb Sxc N4	PFD Partial Failure Information
+table	7.4.3.2-2	PFD Partial Failure Information within PFCP PFD Management Response	7.4.3.2 PFCP PFD Management Response	397
+row	7.4.3.2-2	Application ID	M	Sxb Sxc N4	Application ID
+row	7.4.3.2-2	Failure Cause	M	Sxb Sxc N4	Cause
+table	7.4.4.1-1	Information Elements in a PFCP Association Setup Request	7.4.4.1.1 General	
+row	7.4.4.1-1	Node ID	M	Sxa Sxb Sxc N4 N4mb	Node ID
+row	7.4.4.1-1	Recovery Time Stamp	M	Sxa Sxb Sxc N4 N4mb	Recovery Time Stamp
+row	7.4.4.1-1	UP Function Features	C	Sxa Sxb Sxc N4 N4mb	UP Function Features
+row	7.4.4.1-1	CP Function Features	C	Sxa Sxb Sxc N4 N4mb	CP Function Features
+row	7.4.4.1-1	Alternative SMF IP Address	O	N4 N4mb	Alternative SMF IP Address
+row	7.4.4.1-1	SMF Set ID	C	N4 N4mb	SMF Set ID
+row	7.4.4.1-1	PFCP Session Retention Information	O	Sxa Sxb Sxc N4 N4mb	PFCP Session Retention Information
+row	7.4.4.1-1	UE IP address Pool Information	O	Sxb N4	UE IP address Pool Information
+row	7.4.4.1-1	GTP-U Path QoS Control Information	C	N4	GTP-U Path QoS Control Information
+row	7.4.4.1-1	Clock Drift Control Information	O	N4	Clock Drift Control Information
+row	7.4.4.1-1	UPF Instance ID	C	N4 N4mb	NF Instance ID
+row	7.4.4.1-1	PFCPASReq-Flags	O	N4	PFCPASReq-Flags
+row	7.4.4.1-1	N6 Delay Measurement Control Information	C	N4	N6 Delay Measurement Control Information
+row	7.4.4.1-1	N6 Delay Measurement Protocols	C	N4	N6 Delay Measurement Protocols
+row	7.4.4.1-1	Operator Configurable UPF Capability	O	N4	Operator Configurable UPF Capability
+row	7.4.4.1-1	Packet Inspection functionality	O	N4	Packet Inspection functionality
+table	7.4.4.1-2	PFCP Session Retention Information IE within PFCP Association Setup Request	7.4.4.1.1 General	183
+row	7.4.4.1-2	CP PFCP Entity IP Address	O	Sxa Sxb Sxc N4 N4mb	CP PFCP Entity IP Address
+table	7.4.4.1-3	UE IP address Pool Information IE within PFCP Association Setup Request	7.4.4.1.1 General	233
+row	7.4.4.1-3	UE IP address Pool Identity	M	Sxb N4	UE IP address Pool Identity
+row	7.4.4.1-3	Network Instance	O	Sxb N4	Network Instance
+row	7.4.4.1-3	S-NSSAI	O	N4	S-NSSAI
+row	7.4.4.1-3	IP version	O	N4	IP version
+table	7.4.4.1.2-1	Clock Drift Control Information within PFCP Association Setup Request	7.4.4.1.2 Clock Drift Control Information IE within PFCP Association Setup Request	203
+row	7.4.4.1.2-1	Requested Clock Drift Information	M	N4	Requested Clock Drift Information
+row	7.4.4.1.2-1	Time Domain Number	C	N4	Time Domain Number
+row	7.4.4.1.2-1	Configured Time Domain	C	N4	Configured Time Domain
+row	7.4.4.1.2-1	Time Offset Threshold	C	N4	Time Offset Threshold
+row	7.4.4.1.2-1	Cumulative rateRatio Threshold	C	N4	Cumulative rateRatio Threshold
+table	7.4.4.1.3-1	GTP-U Path QoS Control Information within PFCP Association Setup Request	7.4.4.1.3 GTP-U Path QoS Control Information IE within PFCP Association Setup Request	238
+row	7.4.4.1.3-1	Remote GTP-U Peer	C	N4	Remote GTP-U Peer
+row	7.4.4.1.3-1	GTP-U Path Interface Type	C	N4	GTP-U Path Interface Type
+row	7.4.4.1.3-1	QoS Report Trigger	M	N4	QoS Report Trigger
+row	7.4.4.1.3-1	DSCP	C	N4	Transport Level Marking
+row	7.4.4.1.3-1	Measurement Period	C	N4	Measurement Period
+row	7.4.4.1.3-1	Average Packet Delay Threshold	C	N4	Average Packet Delay
+row	7.4.4.1.3-1	Minimum Packet Delay Threshold	C	N4	Minimum Packet Delay
+row	7.4.4.1.3-1	Maximum Packet Delay Threshold	C	N4	Maximum Packet Delay
+row	7.4.4.1.3-1	Minimum Waiting Time	C	N4	Timer
+table	7.4.4.1.4-1	N6 Delay Measurement Control Information within PFCP Association Setup Request	7.4.4.1.4 N6 Delay Measurement Control Information IE within PFCP Association Setup Request	355
+row	7.4.4.1.4-1	N6 Delay Measurement Control Information ID	M	N4	N6 Delay Measurement Control Information ID
+row	7.4.4.1.4-1	Measurement Endpoint Address	M	N4	Measurement Endpoint Address
+row	7.4.4.1.4-1	Network Instance	M	N4	Network Instance
+row	7.4.4.1.4-1	Measurement Protocols	M	N4	N6 Delay Measurement Protocols
+row	7.4.4.1.4-1	Protocol Specific Configuration Parameters	O	N4	Protocol Specific Configuration Parameters
+row	7.4.4.1.4-1	Measurement Reporting Type	M	N4	Measurement Reporting Type
+row	7.4.4.1.4-1	Measurement Period	C	N4	Measurement Period
+row	7.4.4.1.4-1	Average Packet Delay Threshold	O	N4	Average Packet Delay
+row	7.4.4.1.4-1	Minimum Packet Delay Threshold	O	N4	Minimum Packet Delay
+row	7.4.4.1.4-1	Maximum Packet Delay Threshold	O	N4	Maximum Packet Delay
+row	7.4.4.1.4-1	Minimum Waiting Time	O	N4	Timer
+table	7.4.4.1.4-2	Protocol Specific Configuration Parameters	7.4.4.1.4 N6 Delay Measurement Control Information IE within PFCP Association Setup Request	378
+row	7.4.4.1.4-2	Measurement Protocol	M	N4	N6 Delay Measurement Protocols
+row	7.4.4.1.4-2	Measurement EndPoint Port Number	O	N4	Measurement EndPoint Port Number
+row	7.4.4.1.4-2	Security Mode (STAMP)	O	N4	Security Mode (STAMP)
+row	7.4.4.1.4-2	HMAC Key / (STAMP)	O	N4	HMAC Key / (STAMP)
+row	7.4.4.1.4-2	Session Reflector Mode (STAMP)	O	N4	Session Reflector Mode / (STAMP)
+row	7.4.4.1.4-2	Security Mode / (OWAMP or TWAMP)	O	N4	Security Mode (OWAMP or TWAMP)
+row	7.4.4.1.4-2	Key ID and Shared Secret / (OWAMP or TWAMP)	O	N4	Key ID and Shared Secret (OWAMP or TWAMP)
+table	7.4.4.2-1	Information Elements in a PFCP Association Setup Response	7.4.4.2 PFCP Association Setup Response	
+row	7.4.4.2-1	Node ID	M	Sxa Sxb Sxc N4 N4mb	Node ID
+row	7.4.4.2-1	Cause	M	Sxa Sxb Sxc N4 N4mb	Cause
+row	7.4.4.2-1	Recovery Time Stamp	M	Sxa Sxb Sxc N4 N4mb	Recovery Time Stamp
+row	7.4.4.2-1	UP Function Features	C	Sxa Sxb Sxc N4 N4mb	UP Function Features
+row	7.4.4.2-1	CP Function Features	C	Sxa Sxb Sxc N4 N4mb	CP Function Features
+row	7.4.4.2-1	Alternative SMF IP Address	O	N4 N4mb	Alternative SMF IP Address
+row	7.4.4.2-1	SMF Set ID	C	N4 N4mb	SMF Set ID
+row	7.4.4.2-1	PFCPASRsp-Flags	O	Sxa Sxb Sxc N4 N4mb	PFCPASRsp-Flags
+row	7.4.4.2-1	Clock Drift Control Information	C	N4	Clock Drift Control Information
+row	7.4.4.2-1	UE IP address Pool Information	O	Sxb N4	UE IP address Pool Information
+row	7.4.4.2-1	GTP-U Path QoS Control Information	C	N4	GTP-U Path QoS Control Information
+row	7.4.4.2-1	UPF Instance ID	C	N4 N4mb	NF Instance ID
+row	7.4.4.2-1	N6 Delay Measurement Control Information	C	N4	N6 Delay Measurement Control Information
+row	7.4.4.2-1	N6 Delay Measurement Protocols	C	N4	N6 Delay Measurement Protocols
+row	7.4.4.2-1	Operator Configurable UPF Capability	O	N4	Operator Configurable UPF Capability
+row	7.4.4.2-1	Packet Inspection functionality	O	N4	Packet Inspection functionality
+table	7.4.4.3-1	Information Elements in a PFCP Association Update Request	7.4.4.3 PFCP Association Update Request	
+row	7.4.4.3-1	Node ID	M	Sxa Sxb Sxc N4 N4mb	Node ID
+row	7.4.4.3-1	UP Function Features	O	Sxa Sxb Sxc N4 N4mb	UP Function Features
+row	7.4.4.3-1	CP Function Features	O	Sxa Sxb Sxc N4 N4mb	CP Function Features
+row	7.4.4.3-1	PFCP Association Release Request	C	Sxa Sxb Sxc N4 N4mb	PFCP Association Release Request
+row	7.4.4.3-1	Graceful Release Period	C	Sxa Sxb Sxc N4 N4mb	Graceful Release Period
+row	7.4.4.3-1	PFCPAUReq-Flags	O	Sxa Sxb Sxc N4	PFCPAUReq-Flags
+row	7.4.4.3-1	Alternative SMF IP Address	O	N4 N4mb	Alternative SMF IP Address
+row	7.4.4.3-1	SMF Set ID	O	N4 N4mb	SMF Set ID
+row	7.4.4.3-1	Clock Drift Control Information	C	N4	Clock Drift Control Information
+row	7.4.4.3-1	UE IP address Pool Information	O	Sxb N4	UE IP address Pool Information
+row	7.4.4.3-1	GTP-U Path QoS Control Information	C	N4	GTP-U Path QoS Control Information
+row	7.4.4.3-1	UE IP Address Usage Information	O	Sxb N4	UE IP Address Usage Information
+row	7.4.4.3-1	N6 Delay Measurement Control Information	C	N4	N6 Delay Measurement Control Information
+row	7.4.4.3-1	N6 Delay Measurement Protocols	C	N4	N6 Delay Measurement Protocols
+row	7.4.4.3-1	Operator Configurable UPF Capability	C	N4	Operator Configurable UPF Capability
+row	7.4.4.3-1	Packet Inspection functionality	O	N4	Packet Inspection functionality
+table	7.4.4.3.1-1	UE IP Address Usage Information IE within PFCP Association Update Request	7.4.4.3.1 UE IP Address Usage Information IE within PFCP Association Update Request	267
+row	7.4.4.3.1-1	UE IP Address Usage Sequence Number	M	Sxb N4	Sequence Number
+row	7.4.4.3.1-1	UE IP Address Usage Metric	M	Sxb N4	Metric
+row	7.4.4.3.1-1	Validity Timer	M	Sxb N4	Validity Timer
+row	7.4.4.3.1-1	Number of UE IP Addresses	M	Sxb N4	Number of UE IP Addresses
+row	7.4.4.3.1-1	Network Instance	M	Sxb N4	Network Instance
+row	7.4.4.3.1-1	UE IP Address Pool Id	O	Sxb N4	UE IP address Pool Identity
+row	7.4.4.3.1-1	S-NSSAI	O	Sxb N4	S-NSSAI
+table	7.4.4.4-1	Information Elements in a PFCP Association Update Response	7.4.4.4 PFCP Association Update Response	
+row	7.4.4.4-1	Node ID	M	Sxa Sxb Sxc N4 N4mb	Node ID
+row	7.4.4.4-1	Cause	M	Sxa Sxb Sxc N4 N4mb	Cause
+row	7.4.4.4-1	UP Function Features	O	Sxa Sxb Sxc N4 N4mb	UP Function Features
+row	7.4.4.4-1	CP Function Features	O	Sxa Sxb Sxc N4 N4mb	CP Function Features
+row	7.4.4.4-1	UE IP Address Usage Information	O	Sxb N4	UE IP Address Usage Information
+row	7.4.4.4-1	N6 Delay Measurement Protocols	O	N4	N6 Delay Measurement Protocols
+row	7.4.4.4-1	Operator Configurable UPF Capability	C	N4	Operator Configurable UPF Capability
+row	7.4.4.4-1	Packet Inspection functionality	O	N4	Packet Inspection functionality
+table	7.4.4.5-1	Information Elements in a PFCP Association Release Request	7.4.4.5 PFCP Association Release Request	
+row	7.4.4.5-1	Node ID	M	Sxa Sxb Sxc N4 N4mb	Node ID
+table	7.4.4.6-1	Information Elements in a PFCP Association Release Response	7.4.4.6 PFCP Association Release Response	
+row	7.4.4.6-1	Node ID	M	Sxa Sxb Sxc N4 N4mb	Node ID
+row	7.4.4.6-1	Cause	M	Sxa Sxb Sxc N4 N4mb	Cause
+table	7.4.5.1.1-1	Information Elements in PFCP Node Report Request	7.4.5.1.1 General	
+row	7.4.5.1.1-1	Node ID	M	Sxa Sxb Sxc N4 N4mb	Node ID
+row	7.4.5.1.1-1	Node Report Type	M	Sxa Sxb Sxc N4 N4mb	Node Report Type
+row	7.4.5.1.1-1	Vendor-Specific Node Report Type	C	Sxa Sxb Sxc N4 N4mb	Vendor-Specific Node Report Type
+row	7.4.5.1.1-1	User Plane Path Failure Report	C	Sxa Sxb N4 N4mb	User Plane Path Failure Report
+row	7.4.5.1.1-1	User Plane Path Recovery Report	C	Sxa Sxb N4 N4mb	User Plane Path Recovery Report
+row	7.4.5.1.1-1	Clock Drift Report	C	N4	Clock Drift Report
+row	7.4.5.1.1-1	GTP-U Path QoS Report	C	N4	GTP-U Path QoS Report
+row	7.4.5.1.1-1	Peer UP Restart Report	C	Sxa Sxb N4	Peer UP Restart Report
+row	7.4.5.1.1-1	N6 Delay Measurement Report	C	N4	N6 Delay Measurement Report
+table	7.4.5.1.2-1	User Plane Path Failure Report IE within PFCP Node Report Request	7.4.5.1.2 User Plane Path Failure Report IE within PFCP Node Report Request	102
+row	7.4.5.1.2-1	Remote GTP-U Peer	M	Sxa Sxb N4 N4mb	Remote GTP-U Peer
+table	7.4.5.1.3-1	User Plane Path Recovery Report IE within PFCP Node Report Request	7.4.5.1.3 User Plane Path Recovery Report IE within PFCP Node Report Request	187
+row	7.4.5.1.3-1	Remote GTP-U Peer	M	Sxa Sxb N4 N4mb	Remote GTP-U Peer
+table	7.4.5.1.4-1	Clock Drift Report IE within PFCP Node Report Request	7.4.5.1.4 Clock Drift Report IE within PFCP Node Report Request	205
+row	7.4.5.1.4-1	Time Domain Number	M	N4	Time Domain Number
+row	7.4.5.1.4-1	Time Offset Measurement	O	N4	Time Offset Measurement
+row	7.4.5.1.4-1	Cumulative rateRatio Measurement	O	N4	Cumulative rateRatio Measurement
+row	7.4.5.1.4-1	Time Stamp	O	N4	Time Stamp
+row	7.4.5.1.4-1	Network Instance	C	N4	Network Instance
+row	7.4.5.1.4-1	APN/DNN	C	N4	APN/DNN
+row	7.4.5.1.4-1	S-NSSAI	C	N4	S-NSSAI
+table	7.4.5.1.5-1	GTP-U Path QoS Report IE within PFCP Node Report Request	7.4.5.1.5 GTP-U Path QoS Report IE within PFCP Node Report Request	239
+row	7.4.5.1.5-1	Remote GTP-U Peer	M	N4	Remote GTP-U Peer
+row	7.4.5.1.5-1	GTP-U Path Interface Type	C	N4	GTP-U Path Interface Type
+row	7.4.5.1.5-1	QoS Report Trigger	M	N4	QoS Report Trigger
+row	7.4.5.1.5-1	Time Stamp	M	N4	Time Stamp
+row	7.4.5.1.5-1	Start Time	C	N4	Start Time
+row	7.4.5.1.5-1	QoS Information	M	N4	QoS Information
+table	7.4.5.1.6-1	QoS Information in GTP-U Path QoS Report IE	7.4.5.1.6 QoS Information in GTP-U Path QoS Report IE	240
+row	7.4.5.1.6-1	Average Packet Delay	M	N4	Average Packet Delay
+row	7.4.5.1.6-1	Minimum Packet Delay	C	N4	Minimum Packet Delay
+row	7.4.5.1.6-1	Maximum Packet Delay	C	N4	Maximum Packet Delay
+row	7.4.5.1.6-1	DSCP	C	N4	Transport Level Marking
+table	7.4.5.1.7-1	Peer UP Restart Report IE within PFCP Node Report Request	7.4.5.1.7 Peer UP Restart Report IE within PFCP Node Report Request	315
+row	7.4.5.1.7-1	Remote GTP-U Peer	M	Sxa Sxb N4 N4mb	Remote GTP-U Peer
+table	7.4.5.1.8-1	N6 Delay Measurement Report IE within PFCP Node Report Request	7.4.5.1.8 N6 Delay Measurement Report IE within PFCP Node Report Request	356
+row	7.4.5.1.8-1	Measurement EndPoint Address	M	N4	Measurement Endpoint Address
+row	7.4.5.1.8-1	Network Instance	M	N4	Network Instance
+row	7.4.5.1.8-1	Measurement Reporting Type	M	N4	Measurement Reporting Type
+row	7.4.5.1.8-1	Time Stamp	M	N4	Time Stamp
+row	7.4.5.1.8-1	Start Time	C	N4	Start Time
+row	7.4.5.1.8-1	N6 Delay Measurement Information	C	N4	N6 Delay Measurement Information
+row	7.4.5.1.8-1	N6 Delay Measurement Failure Information	C	N4	N6 Delay Measurement Failure Information
+row	7.4.5.1.8-1	Measurement EndPoint Port Number	O	N4	Measurement EndPoint Port Number
+table	7.4.5.2.1-1	Information Elements in PFCP Node Report Response	7.4.5.2.1 General	
+row	7.4.5.2.1-1	Node ID	M	Sxa Sxb Sxc N4 N4mb	Node ID
+row	7.4.5.2.1-1	Cause	M	Sxa Sxb Sxc N4 N4mb	Cause
+row	7.4.5.2.1-1	Offending IE	C	Sxa Sxb Sxc N4 N4mb	Offending IE
+table	7.4.6.1-1	Information Elements in a PFCP Session Set Deletion Request	7.4.6.1 PFCP Session Set Deletion Request	
+row	7.4.6.1-1	Node ID	M	Sxa Sxb N4	Node ID
+row	7.4.6.1-1	SGW-C FQ-CSID	C	Sxa Sxb	FQ-CSID
+row	7.4.6.1-1	PGW-C/SMF FQ-CSID	C	Sxa Sxb N4	FQ-CSID
+row	7.4.6.1-1	PGW-U/SGW-U/ UPF FQ-CSID	C	Sxa Sxb N4	FQ-CSID
+row	7.4.6.1-1	TWAN FQ-CSID	C	Sxb	FQ-CSID
+row	7.4.6.1-1	ePDG FQ-CSID	C	Sxb	FQ-CSID
+row	7.4.6.1-1	MME FQ-CSID	C	Sxa Sxb	FQ-CSID
+table	7.4.6.2-1	Information Elements in a PFCP Session Set Deletion Response	7.4.6.2 PFCP Session Set Deletion Response	
+row	7.4.6.2-1	Node ID	M	Sxa Sxb N4	Node ID
+row	7.4.6.2-1	Cause	M	Sxa Sxb N4	Cause
+row	7.4.6.2-1	Offending IE	C	Sxa Sxb N4	Offending IE
+table	7.4.7.1-1	Information Elements in a PFCP Session Set Modification Request	7.4.7.1 PFCP Session Set Modification Request	
+row	7.4.7.1-1	Node ID	M	Sxb N4	Node ID
+row	7.4.7.1-1	PFCP Session Change Info	M	Sxb N4	PFCP Session Change Info
+table	7.4.7.1-2	PFCP Session Change Info IE within PFCP Session Set Modification Request	7.4.7.1 PFCP Session Set Modification Request	290
+row	7.4.7.1-2	PGW-C/SMF FQ-CSID	C	Sxb N4	FQ-CSID
+row	7.4.7.1-2	Group Id	C	Sxb N4	Group-Id
+row	7.4.7.1-2	CP IP Address	C	Sxb N4	CP IP Address
+row	7.4.7.1-2	Alternative SMF/PGW-C IP Address	M	Sxb N4	Alternative SMF IP Address
+table	7.4.2.2-1	Information Elements in a PFCP Session Set Modification Response	7.4.7.2 PFCP Session Set Modification Response	
+row	7.4.2.2-1	Node ID	M	Sxb N4	Node ID
+row	7.4.2.2-1	Cause	M	Sxb N4	Cause
+row	7.4.2.2-1	Offending IE	C	Sxb N4	Offending IE
+table	7.5.2.1-1	Information Elements in a PFCP Session Establishment Request	7.5.2.1 General	
+row	7.5.2.1-1	Node ID	M	Sxa Sxb Sxc N4 N4mb	Node ID
+row	7.5.2.1-1	CP F-SEID	M	Sxa Sxb Sxc N4 N4mb	F-SEID
+row	7.5.2.1-1	Create PDR	M	Sxa Sxb Sxc N4 N4mb	Create PDR
+row	7.5.2.1-1	Create FAR	M	Sxa Sxb Sxc N4 N4mb	Create FAR
+row	7.5.2.1-1	Create URR	C	Sxa Sxb Sxc N4 N4mb	Create URR
+row	7.5.2.1-1	Create QER	C	Sxb Sxc N4 N4mb	Create QER
+row	7.5.2.1-1	Create BAR	O	Sxa N4	Create BAR
+row	7.5.2.1-1	Create Traffic Endpoint	C	Sxa Sxb Sxc N4 N4mb	Create Traffic Endpoint
+row	7.5.2.1-1	PDN Type	C	Sxa Sxb N4	PDN Type
+row	7.5.2.1-1	SGW-C FQ-CSID	C	Sxa Sxb	FQ-CSID
+row	7.5.2.1-1	MME FQ-CSID	C	Sxa Sxb	FQ-CSID
+row	7.5.2.1-1	PGW-C/SMF FQ-CSID	C	Sxa Sxb N4	FQ-CSID
+row	7.5.2.1-1	ePDG FQ-CSID	C	Sxb	FQ-CSID
+row	7.5.2.1-1	TWAN FQ-CSID	C	Sxb	FQ-CSID
+row	7.5.2.1-1	User Plane Inactivity Timer	O	Sxb Sxc N4 N4mb	User Plane Inactivity Timer
+row	7.5.2.1-1	User ID	O	Sxa Sxb Sxc N4	User ID
+row	7.5.2.1-1	Trace Information	O	Sxa Sxb Sxc N4	Trace Information
+row	7.5.2.1-1	APN/DNN	O	Sxa Sxb N4 N4mb	APN/DNN
+row	7.5.2.1-1	Create MAR	C	N4	Create MAR
+row	7.5.2.1-1	PFCPSEReq-Flags	C	Sxa Sxb N4	PFCPSEReq-Flags
+row	7.5.2.1-1	Create Bridge/Router Info	C	N4	Create Bridge/router Info
+row	7.5.2.1-1	Create SRR	O	N4	Create SRR
+row	7.5.2.1-1	Provide ATSSS Control Information	C	N4	Provide ATSSS Control Information
+row	7.5.2.1-1	Recovery Time Stamp	O	Sxa Sxb Sxc N4	Recovery Time Stamp
+row	7.5.2.1-1	S-NSSAI	O	N4 N4mb	S-NSSAI
+row	7.5.2.1-1	HPLMN S-NSSAI	C	N4	HPLMN S-NSSAI
+row	7.5.2.1-1	Provide RDS configuration information	O	Sxb N4	Provide RDS configuration information
+row	7.5.2.1-1	RAT Type	O	Sxa Sxb N4	RAT Type
+row	7.5.2.1-1	L2TP Tunnel Information	C	Sxb N4	L2TP Tunnel Information
+row	7.5.2.1-1	L2TP Session Information	C	Sxb N4	L2TP Session Information
+row	7.5.2.1-1	Group Id	O	Sxb N4	Group Id
+row	7.5.2.1-1	MBS Session N4mb Control Information	M	N4mb	MBS Session N4mb Control Information
+row	7.5.2.1-1	MBS Session N4 Control Information	C	N4	MBS Session N4 Control Information
+row	7.5.2.1-1	DSCP to PPI Control Information	O	N4	DSCP to PPI Control Information
+row	7.5.2.1-1	TL-Container	C	N4	TL-Container
+row	7.5.2.1-1	Trace Collection Entity URI	O	Sxa Sxb Sxc N4	URI
+row	7.5.2.1-1	UE Level Measurements Configuration	O	N4	UE Level Measurements Configuration
+row	7.5.2.1-1	Alternative SMF IP Address	O	N4	Alternative SMF IP Address
+row	7.5.2.1-1	MoQ Control Information	C	N4	MoQ Control Information
+table	7.5.2.1-2	L2TP Tunnel Information IE in the PFCP Session Establishment Request message	7.5.2.1 General	276
+row	7.5.2.1-2	LNS Address	M	Sxb N4	LNS Address
+row	7.5.2.1-2	Tunnel Password	O	Sxb N4	Tunnel Password
+row	7.5.2.1-2	Tunnel Preference	C	Sxb N4	Tunnel Preference
+table	7.5.2.1-3	L2TP Session Information IE in the PFCP Session Establishment Request message	7.5.2.1 General	277
+row	7.5.2.1-3	Calling Number	O	Sxb N4	Calling Number
+row	7.5.2.1-3	Called Number	O	Sxb N4	Called Number
+row	7.5.2.1-3	Maximum Receive Unit	O	Sxb N4	Maximum Receive Unit
+row	7.5.2.1-3	L2TP Session Indications	C	Sxb N4	L2TP session Indications
+row	7.5.2.1-3	L2TP User Authentication	O	Sxb N4	L2TP User Authentication
+table	7.5.2.1-4	MBS Session N4mb Control Information IE within PFCP Session Establishment Request	7.5.2.1 General	300
+row	7.5.2.1-4	MBS Session Identifier	M	N4mb	MBS Session Identifier
+row	7.5.2.1-4	Area Session ID	C	N4mb	Area Session ID
+row	7.5.2.1-4	MBSN4mbReq-Flags	C	N4mb	MBSN4mbReq-Flags
+row	7.5.2.1-4	Multicast Transport Information for N3mb and/or N19mb	C	N4mb	Multicast Transport Information
+table	7.5.2.1-5	MBS Session N4 Control Information IE within PFCP Session Establishment Request	7.5.2.1 General	310
+row	7.5.2.1-5	MBS Session Identifier	M	N4	MBS Session Identifier
+row	7.5.2.1-5	Area Session ID	C	N4	Area Session ID
+row	7.5.2.1-5	Multicast Transport Information	C	N4	Multicast Transport Information
+table	7.5.2.1-6	DSCP to PPI Control Information IE within PFCP Session Establishment Request	7.5.2.1 General	316
+row	7.5.2.1-6	DSCP to PPI Mapping Information	M	N4	DSCP to PPI Mapping Information
+row	7.5.2.1-6	QFI	O	N4	QFI
+table	7.5.2.2-1	Create PDR IE within PFCP Session Establishment Request	7.5.2.2 Create PDR IE within PFCP Session Establishment Request	1
+row	7.5.2.2-1	PDR ID	M	Sxa Sxb Sxc N4 N4mb	PDR ID
+row	7.5.2.2-1	Precedence	M	Sxb Sxc N4 N4mb	Precedence
+row	7.5.2.2-1	PDI	M	Sxa Sxb Sxc N4 N4mb	PDI
+row	7.5.2.2-1	Outer Header Removal	C	Sxa Sxb N4 N4mb	Outer Header Removal
+row	7.5.2.2-1	FAR ID	C	Sxa Sxb Sxc N4 N4mb	FAR ID
+row	7.5.2.2-1	URR ID	C	Sxa Sxb Sxc N4	URR ID
+row	7.5.2.2-1	QER ID	C	Sxb Sxc N4 N4mb	QER ID
+row	7.5.2.2-1	Activate Predefined Rules	C	Sxb Sxc N4	Activate Predefined Rules
+row	7.5.2.2-1	Activation Time	O	Sxb Sxc N4	Activation Time
+row	7.5.2.2-1	Deactivation Time	O	Sxb Sxc N4	Deactivation Time
+row	7.5.2.2-1	MAR ID	C	N4	MAR ID
+row	7.5.2.2-1	Packet Replication and Detection Carry-On Information	C	N4	Packet Replication and Detection Carry-On Information
+row	7.5.2.2-1	IP Multicast Addressing Info	O	N4	IP Multicast Addressing Info
+row	7.5.2.2-1	UE IP address Pool Identity	O	Sxb N4	UE IP address Pool Identity
+row	7.5.2.2-1	Multipath Applicable Indication	C	N4	Multipath Applicable Indication
+row	7.5.2.2-1	Transport Delay Reporting	C	N4	Transport Delay Reporting
+row	7.5.2.2-1	RAT Type	O	N4	RAT Type
+table	7.5.2.2-2	PDI IE within PFCP Session Establishment Request	7.5.2.2 Create PDR IE within PFCP Session Establishment Request	2
+row	7.5.2.2-2	Source Interface	M	Sxa Sxb Sxc N4 N4mb	Source Interface
+row	7.5.2.2-2	Local F-TEID	O	Sxa Sxb N4	F-TEID
+row	7.5.2.2-2	Local Ingress Tunnel	C	N4mb	Local Ingress Tunnel
+row	7.5.2.2-2	Network Instance	O	Sxa Sxb Sxc N4 N4mb	Network Instance
+row	7.5.2.2-2	Redundant Transmission Detection Parameters	O	N4	Redundant Transmission Detection Parameters
+row	7.5.2.2-2	UE IP address	O	Sxb Sxc N4	UE IP address
+row	7.5.2.2-2	Mapped N6 IP Address	O	N4	Mapped N6 IP Address
+row	7.5.2.2-2	N6 Routing Information	O	N4	N6 Routing Information
+row	7.5.2.2-2	Traffic Endpoint ID	C	Sxa Sxb Sxc N4 N4mb	Traffic Endpoint ID
+row	7.5.2.2-2	SDF Filter	O	Sxb Sxc N4 N4mb	SDF Filter
+row	7.5.2.2-2	Application ID	O	Sxb Sxc N4 N4mb	Application ID
+row	7.5.2.2-2	Ethernet PDU Session Information	O	N4	Ethernet PDU Session Information
+row	7.5.2.2-2	Ethernet Packet Filter	O	N4	Ethernet Packet Filter
+row	7.5.2.2-2	QFI	O	N4	QFI
+row	7.5.2.2-2	Framed-Route	O	Sxb N4	Framed-Route
+row	7.5.2.2-2	Framed-Routing	O	Sxb N4	Framed-Routing
+row	7.5.2.2-2	Framed-IPv6-Route	O	Sxb N4	Framed-IPv6-Route
+row	7.5.2.2-2	Source Interface Type	C	Sxa Sxb N4 N4mb	3GPP Interface Type
+row	7.5.2.2-2	IP Multicast Addressing Info	O	N4 N4mb	IP Multicast Addressing Info
+row	7.5.2.2-2	DNS Query Filter	O	N4	DNS Query/Response Filter
+row	7.5.2.2-2	MBS Session Identifier	C	N4	MBS Session Identifier
+row	7.5.2.2-2	Area Session ID	C	N4	Area Session ID
+row	7.5.2.2-2	Protocol Description	O	N4	Protocol Description
+row	7.5.2.2-2	DNS Response Filter	O	N4	DNS Query/Response Filter
+row	7.5.2.2-2	Expedited Transfer Indication	O	N4	Expedited Transfer Indication
+table	7.5.2.2-3	Ethernet Packet Filter IE within PFCP Session Establishment Request	7.5.2.2 Create PDR IE within PFCP Session Establishment Request	132
+row	7.5.2.2-3	Ethernet Filter ID	C	N4	Ethernet Filter ID
+row	7.5.2.2-3	Ethernet Filter Properties	C	N4	Ethernet Filter Properties
+row	7.5.2.2-3	MAC address	O	N4	MAC address
+row	7.5.2.2-3	Ethertype	O	N4	Ethertype
+row	7.5.2.2-3	C-TAG	O	N4	C-TAG
+row	7.5.2.2-3	S-TAG	O	N4	S-TAG
+row	7.5.2.2-3	SDF Filter	O	N4	SDF Filter
+table	7.5.2.2-4	IP Multicast Addressing Info IE within PFCP Session Establishment Request	7.5.2.2 Create PDR IE within PFCP Session Establishment Request	188
+row	7.5.2.2-4	IP Multicast Address	M	N4 N4mb	IP Multicast Address
+row	7.5.2.2-4	Source IP Address	O	N4	Source IP Address
+row	7.5.2.2-4		M	N4mb	
+table	7.5.2.2-5	Redundant Transmission Detection Parameters IE in PDI	7.5.2.2 Create PDR IE within PFCP Session Establishment Request	255
+row	7.5.2.2-5	Local F-TEID for Redundant Transmission	M	N4	F-TEID
+row	7.5.2.2-5	Network Instance for Redundant Transmission	C	N4	Network Instance
+table	7.5.2.2-6	Transport Delay Reporting IE in Create PDR IE	7.5.2.2 Create PDR IE within PFCP Session Establishment Request	271
+row	7.5.2.2-6	Preceding UL GTP-U Peer	M	N4	Remote GTP-U Peer
+row	7.5.2.2-6	DSCP	O	N4	Transport Level Marking
+table	7.5.2.2-7	Protocol Description IE	7.5.2.2 Create PDR IE within PFCP Session Establishment Request	334
+row	7.5.2.2-7	Transport Protocol	O	N4	Media Transport Protocol
+row	7.5.2.2-7	RTP Header Extension Information	C	N4	RTP Header Extension Information
+row	7.5.2.2-7	RTP Payload Information	O	N4	RTP Payload Information
+row	7.5.2.2-7	Media Related Information Transfer Info	O	N4	Media Related Information Transfer Info
+table	7.5.2.2-8	RTP Header Extension Information IE	7.5.2.2 Create PDR IE within PFCP Session Establishment Request	340
+row	7.5.2.2-8	RTP Header Extension Type	C	N4	RTP Header Extension Type
+row	7.5.2.2-8	RTP Header Extension ID	C	N4	RTP Header Extension ID
+row	7.5.2.2-8	RTP Header Extension Additional Information	O	N4	RTP Header Extension Additional Information
+table	7.5.2.2-9	RTP Payload Information IE	7.5.2.2 Create PDR IE within PFCP Session Establishment Request	341
+row	7.5.2.2-9	RTP Payload Type	C	N4	RTP Payload Type
+row	7.5.2.2-9	RTP Payload Format	O	N4	RTP Payload Format
+table	7.5.2.3-1	Create FAR IE within PFCP Session Establishment Request	7.5.2.3 Create FAR IE within PFCP Session Establishment Request	3
+row	7.5.2.3-1	FAR ID	M	Sxa Sxb Sxc N4 N4mb	FAR ID
+row	7.5.2.3-1	Apply Action	M	Sxa Sxb Sxc N4 N4mb	Apply Action
+row	7.5.2.3-1	Forwarding Parameters	C	Sxa Sxb Sxc N4	Forwarding Parameters
+row	7.5.2.3-1	Duplicating Parameters	C	Sxa Sxb	Duplicating Parameters
+row	7.5.2.3-1	BAR ID	O	Sxa N4	BAR ID
+row	7.5.2.3-1	Redundant Transmission Forwarding Parameters	C		Redundant Transmission Forwarding Parameters
+row	7.5.2.3-1	MBS Multicast Parameters	C	N4mb	MBS Multicast Parameters
+row	7.5.2.3-1	Add MBS Unicast Parameters	C	N4mb	Add MBS Unicast Parameters
+table	7.5.2.3-2	Forwarding Parameters IE in FAR	7.5.2.3 Create FAR IE within PFCP Session Establishment Request	4
+row	7.5.2.3-2	Destination Interface	M	Sxa Sxb Sxc N4	Destination Interface
+row	7.5.2.3-2	Network Instance	O	Sxa Sxb Sxc N4	Network Instance
+row	7.5.2.3-2	Redirect Information	C	Sxb Sxc N4	Redirect Information
+row	7.5.2.3-2	Outer Header Creation	C	Sxa Sxb N4	Outer Header Creation
+row	7.5.2.3-2	Transport Level Marking	C	Sxa Sxb N4	Transport Level Marking
+row	7.5.2.3-2	Extended Transport Level Marking	C	N4	Extended Transport Level Marking
+row	7.5.2.3-2	Transport Level Marking Indications	C	N4	Transport Level Marking Indications
+row	7.5.2.3-2	Forwarding Policy	C	Sxb Sxc N4	Forwarding Policy
+row	7.5.2.3-2	Metadata	O	N4	Metadata
+row	7.5.2.3-2	Header Enrichment	O	Sxb Sxc N4	Header Enrichment
+row	7.5.2.3-2	Linked Traffic Endpoint ID	C	Sxa Sxb N4	Traffic Endpoint ID
+row	7.5.2.3-2	Proxying	C	N4	Proxying
+row	7.5.2.3-2	Destination Interface Type	C	Sxa Sxb N4	3GPP Interface Type
+row	7.5.2.3-2	Data Network Access Identifier	C		Data Network Access Identifier
+row	7.5.2.3-2	IP Address and Port Number Replacement	C	N4	IP Address and Port Number Replacement
+row	7.5.2.3-2	N6 Routing Information	O	N4	N6 Routing Information
+row	7.5.2.3-2	Header Handling Control Rule	C	N4	Header Handling Control Rule
+row	7.5.2.3-2	On-path N6 Connection Information	O	N4	On-path N6 Connection Information
+table	7.5.2.3-3	Duplicating Parameters IE in FAR	7.5.2.3 Create FAR IE within PFCP Session Establishment Request	5
+row	7.5.2.3-3	Destination Interface	M	Sxa Sxb	Destination Interface
+row	7.5.2.3-3	Outer Header Creation	C	Sxa Sxb	Outer Header Creation
+row	7.5.2.3-3	Transport Level marking	C	Sxa Sxb	Transport Level Marking
+row	7.5.2.3-3	Forwarding Policy	C	Sxa Sxb	Forwarding Policy
+table	7.5.2.3-4	Redundant Transmission Forwarding Parameters IE in FAR	7.5.2.3 Create FAR IE within PFCP Session Establishment Request	270
+row	7.5.2.3-4	Outer Header Creation	M	N4	Outer Header Creation
+row	7.5.2.3-4	Network Instance for Redundant Transmission	C	N4	Network Instance
+table	7.5.2.3-5	MBS Multicast Parameters IE in the Create FAR IE	7.5.2.3 Create FAR IE within PFCP Session Establishment Request	301
+row	7.5.2.3-5	Destination Interface	M	N4mb	Destination Interface
+row	7.5.2.3-5	Network Instance	O	N4mb	Network Instance
+row	7.5.2.3-5	Outer Header Creation	M	N4mb	Outer Header Creation
+row	7.5.2.3-5	Transport Level marking	C	N4mb	Transport Level Marking
+row	7.5.2.3-5	Destination Interface Type	O	N4mb	3GPP Interface Type
+table	7.5.2.3-6	Add MBS Unicast Parameters IE in the Create FAR IE	7.5.2.3 Create FAR IE within PFCP Session Establishment Request	302
+row	7.5.2.3-6	Destination Interface	M	N4mb	Destination Interface
+row	7.5.2.3-6	MBS Unicast Parameters ID	M	N4mb	MBS Unicast Parameters ID
+row	7.5.2.3-6	Network Instance	O	N4mb	Network Instance
+row	7.5.2.3-6	Outer Header Creation	M	N4mb	Outer Header Creation
+row	7.5.2.3-6	Transport Level marking	C	N4mb	Transport Level Marking
+row	7.5.2.3-6	Destination Interface Type	O	N4mb	3GPP Interface Type
+table	7.5.2.3-7	Header Handling Control Rule IE in Forwarding Parameters	7.5.2.3 Create FAR IE within PFCP Session Establishment Request	361
+row	7.5.2.3-7	Header Handling Control Rule ID	M	N4	Header Handling Control Rule ID
+row	7.5.2.3-7	Header Detection Reference	M	N4	Header Detection Reference
+row	7.5.2.3-7	Header Detection Support Information	O	N4	Header Detection Support Information
+row	7.5.2.3-7	Header Handling Reporting Control Info	O	N4	Header Handling Reporting Control Info
+row	7.5.2.3-7	Header Handling Control information	M	N4	Header Handling Control information
+table	7.5.2.3-8	Header Handling Reporting Control Info IE in Header Handling Control Rule	7.5.2.3 Create FAR IE within PFCP Session Establishment Request	362
+row	7.5.2.3-8	Reporting Endpoint ID	M	N4	Reporting Endpoint ID
+row	7.5.2.3-8	Minimum Wait Time	C	N4	Minimum Wait Time
+row	7.5.2.3-8	Reporting Suggestion Info	O	N4	Reporting Suggestion Info
+row	7.5.2.3-8	Event Notification URI	M	N4	Event Notification URI
+row	7.5.2.3-8	Notification Binding Indication	C	N4	Binding Indication
+row	7.5.2.3-8	Notification Correlation ID	M	N4	Notification Correlation ID
+row	7.5.2.3-8	Header Handling Reporting Indication	C	N4	Header Handling Reporting Indication
+table	7.5.2.3-9	Header Handling Control information IE in Header Handling Control Rule	7.5.2.3 Create FAR IE within PFCP Session Establishment Request	363
+row	7.5.2.3-9	Header Handling Control ID	M	N4	Header Handling Control ID
+row	7.5.2.3-9	Header Handling Control Reference	C	N4	Header Handling Control Reference
+row	7.5.2.3-9	Header Handling Action	C	N4	Header Handling Action
+row	7.5.2.3-9	Header Information	C	N4	Header Information
+row	7.5.2.3-9	Header Value	C	N4	Header Value
+row	7.5.2.3-9	Header Handling Condition	C	N4	Header Handling Condition
+row	7.5.2.3-9	Header Handling Reporting	C	N4	Reporting Endpoint ID
+table	7.5.2.3-10	Extended Transport Level Marking IE in Forwarding Parameters IE	7.5.2.3 Create FAR IE within PFCP Session Establishment Request	383
+row	7.5.2.3-10	Transport Level Marking	M	N4	Transport Level Marking
+row	7.5.2.3-10	Associated PDU Set Importance values	M	N4	PDU Set Importance
+table	7.5.2.4-1	Create URR IE within PFCP Session Establishment Request	7.5.2.4 Create URR IE within PFCP Session Establishment Request	6
+row	7.5.2.4-1	URR ID	M	Sxa Sxb Sxc N4 N4mb	URR ID
+row	7.5.2.4-1	Measurement Method	M	Sxa Sxb Sxc N4 N4mb	Measurement Method
+row	7.5.2.4-1	Reporting Triggers	M	Sxa Sxb Sxc N4 N4mb	Reporting Triggers
+row	7.5.2.4-1	Measurement Period	C	Sxa Sxb Sxc N4 N4mb	Measurement Period
+row	7.5.2.4-1	Volume Threshold	C	Sxa Sxb Sxc N4 N4mb	Volume Threshold
+row	7.5.2.4-1	Volume Quota	C	Sxb Sxc N4	Volume Quota
+row	7.5.2.4-1	Event Threshold	C	Sxb Sxc N4	Event Threshold
+row	7.5.2.4-1	Event Quota	C	Sxb Sxc N4	Event Quota
+row	7.5.2.4-1	Time Threshold	C	Sxa Sxb Sxc N4	Time Threshold
+row	7.5.2.4-1	Time Quota	C	Sxb Sxc N4	Time Quota
+row	7.5.2.4-1	Quota Holding Time	C	Sxb Sxc N4	Quota Holding Time
+row	7.5.2.4-1	Dropped DL Traffic Threshold	C	Sxa N4	Dropped DL Traffic Threshold
+row	7.5.2.4-1	Quota Validity Time	C	Sxb N4	Quota Validity Time
+row	7.5.2.4-1	Monitoring Time	O	Sxa Sxb Sxc N4	Monitoring Time
+row	7.5.2.4-1	Subsequent Volume Threshold	O	Sxa Sxb Sxc N4	Subsequent Volume Threshold
+row	7.5.2.4-1	Subsequent Time Threshold	O	Sxa Sxb Sxc N4	Subsequent Time Threshold
+row	7.5.2.4-1	Subsequent Volume Quota	O	Sxb Sxc N4	Subsequent Volume Quota
+row	7.5.2.4-1	Subsequent Time Quota	O	Sxb Sxc N4	Subsequent Time Quota
+row	7.5.2.4-1	Subsequent Event Threshold	O	Sxb Sxc N4	Subsequent Event Threshold
+row	7.5.2.4-1	Subsequent Event Quota	O	Sxb Sxc N4	Subsequent Event Quota
+row	7.5.2.4-1	Inactivity Detection Time	C	Sxb Sxc N4	Inactivity Detection Time
+row	7.5.2.4-1	Linked URR ID	C	Sxb Sxc N4 N4mb	Linked URR ID
+row	7.5.2.4-1	Measurement Information	C	Sxa Sxb Sxc N4	Measurement Information
+row	7.5.2.4-1	Time Quota Mechanism	C	Sxb	Time Quota Mechanism
+row	7.5.2.4-1	Aggregated URRs	C	Sxb	Aggregated URRs
+row	7.5.2.4-1	FAR ID for Quota Action	C	Sxb Sxc N4	FAR ID
+row	7.5.2.4-1	Ethernet Inactivity Timer	C	N4	
+row	7.5.2.4-1	Additional Monitoring Time	O	Sxa Sxb Sxc N4	Additional Monitoring Time
+row	7.5.2.4-1	Number of Reports	O	Sxa Sxb Sxc N4	Number of Reports
+row	7.5.2.4-1	Exempted Application ID for Quota Action	O	Sxb Sxc N4	Application ID
+row	7.5.2.4-1	Exempted SDF Filter for Quota Action	O	Sxb Sxc N4	SDF Filter
+row	7.5.2.4-1	User Plane Inactivity Timer	C	N4	User Plane Inactivity Timer
+table	7.5.2.4-2	Aggregated URRs	7.5.2.4 Create URR IE within PFCP Session Establishment Request	118
+row	7.5.2.4-2	Aggregated URR ID	M	Sxb	Aggregated URR ID
+row	7.5.2.4-2	Multiplier	M	Sxb	Multiplier
+table	7.5.2.4-3	Additional Monitoring Time	7.5.2.4 Create URR IE within PFCP Session Establishment Request	147
+row	7.5.2.4-3	Monitoring Time	M	Sxa Sxb Sxc N4	Monitoring Time
+row	7.5.2.4-3	Subsequent Volume Threshold	O	Sxa Sxb Sxc N4	Subsequent Volume Threshold
+row	7.5.2.4-3	Subsequent Time Threshold	O	Sxa Sxb Sxc N4	Subsequent Time Threshold
+row	7.5.2.4-3	Subsequent Volume Quota	O	Sxb Sxc N4	Subsequent Volume Quota
+row	7.5.2.4-3	Subsequent Time Quota	O	Sxb Sxc N4	Subsequent Time Quota
+row	7.5.2.4-3	Subsequent Event Threshold	O	Sxb Sxc N4	Event Threshold
+row	7.5.2.4-3	Subsequent Event Quota	O	Sxb Sxc N4	Event Quota
+table	7.5.2.5-1	Create QER IE within PFCP Session Establishment Request	7.5.2.5 Create QER IE within PFCP Session Establishment Request	7
+row	7.5.2.5-1	QER ID	M	Sxb Sxc N4 N4mb	QER ID
+row	7.5.2.5-1	QER Correlation ID	C	Sxb N4	QER Correlation ID
+row	7.5.2.5-1	Gate Status	M	Sxb Sxc N4 N4mb	Gate Status
+row	7.5.2.5-1	Maximum Bitrate	C	Sxb Sxc N4 N4mb	MBR
+row	7.5.2.5-1	Guaranteed Bitrate	C	Sxb Sxc N4 N4mb	GBR
+row	7.5.2.5-1	Packet Rate	C	Sxb N4	Packet Rate
+row	7.5.2.5-1	Packet Rate Status	C	Sxb N4	Packet Rate Status
+row	7.5.2.5-1	DL Flow Level Marking	C	Sxb Sxc	DL Flow Level Marking
+row	7.5.2.5-1	QoS flow identifier	C	N4 N4mb	QFI
+row	7.5.2.5-1	Reflective QoS	C	N4	RQI
+row	7.5.2.5-1	Paging Policy Indicator	C	N4	Paging Policy Indicator
+row	7.5.2.5-1	Averaging Window	O	N4	Averaging Window
+row	7.5.2.5-1	QER Control Indications	C	Sxb N4	QER Control Indications
+row	7.5.2.5-1	QER Indications	C	N4 N4mb	QER Indications
+row	7.5.2.5-1	PDU Set Importance for N6-unmarked PDUs	C	N4	PDU Set Importance for N6-unmarked PDUs
+table	7.5.2.6-1	Create BAR IE within PFCP Session Establishment Request	7.5.2.6 Create BAR IE within PFCP Session Establishment Request	85
+row	7.5.2.6-1	BAR ID	M	Sxa N4	BAR ID
+row	7.5.2.6-1	Downlink Data Notification Delay	C	Sxa	Downlink Data Notification Delay
+row	7.5.2.6-1	Suggested Buffering Packets Count	C	Sxb Sxc N4	Suggested Buffering Packets Count
+row	7.5.2.6-1	MT-EDT Control Information	O	Sxa	MT-EDT Control Information
+row	7.5.2.6-1	MT-SDT Control Information	O	N4	MT-SDT Control Information
+row	7.5.2.6-1	DL Buffering Duration	C	Sxa N4	DL Buffering Duration
+row	7.5.2.6-1	DL Buffering Suggested Packet Count	O	Sxa N4	DL Buffering Suggested Packet Count
+table	7.5.2.7-1	Create Traffic Endpoint IE within PFCP Session Establishment Request	7.5.2.7 Create Traffic Endpoint IE within PFCP Session Establishment Request	127
+row	7.5.2.7-1	Traffic Endpoint ID	M	Sxa Sxb Sxc N4 N4mb	Traffic Endpoint ID
+row	7.5.2.7-1	Local F-TEID	O	Sxa Sxb N4	F-TEID
+row	7.5.2.7-1	Network Instance	O	Sxa Sxb Sxc N4 N4mb	Network Instance
+row	7.5.2.7-1	Redundant Transmission Detection Parameters	O	N4	Redundant Transmission Detection Parameters
+row	7.5.2.7-1	UE IP address	O	Sxb Sxc N4	UE IP address
+row	7.5.2.7-1	Mapped N6 IP Address	O	N4	Mapped N6 IP Address
+row	7.5.2.7-1	N6 Routing Information	O	N4	N6 Routing Information
+row	7.5.2.7-1	Ethernet PDU Session Information	O	N4	Ethernet PDU Session Information
+row	7.5.2.7-1	Framed-Route	O	Sxb N4	Framed-Route
+row	7.5.2.7-1	Framed-Routing	O	Sxb N4	Framed-Routing
+row	7.5.2.7-1	Framed-IPv6-Route	O	Sxb N4	Framed-IPv6-Route
+row	7.5.2.7-1	QFI	O	N4	QFI
+row	7.5.2.7-1	Source Interface Type	C	Sxa Sxb N4 N4mb	3GPP Interface Type
+row	7.5.2.7-1	Local Ingress Tunnel	C	N4mb	Local Ingress Tunnel
+row	7.5.2.7-1	IP Multicast Addressing Info	C	N4mb	IP Multicast Addressing Info
+row	7.5.2.7-1	MBS Session Identifier	C	N4	MBS Session Identifier
+row	7.5.2.7-1	Area Session ID	C	N4	Area Session ID
+row	7.5.2.7-1	RAT Type	O	N4	RAT Type
+table	7.5.2.8-1	Create MAR IE within PFCP Session Establishment Request	7.5.2.8 Create MAR IE within PFCP Session Establishment Request	165
+row	7.5.2.8-1	MAR ID	M	N4	MAR ID
+row	7.5.2.8-1	Steering Functionality	M	N4	Steering Functionality
+row	7.5.2.8-1	Steering Mode	M	N4	Steering Mode
+row	7.5.2.8-1	3GPP Access Forwarding Action Information	C	N4	3GPP Access Forwarding Action Information
+row	7.5.2.8-1	Non-3GPP Access Forwarding Action Information	C	N4	Non-3GPP Access Forwarding Action Information
+row	7.5.2.8-1	Threshold Values	C	N4	Thresholds
+row	7.5.2.8-1	Steering Mode Indicator	C	N4	Steering Mode Indicator
+row	7.5.2.8-1	Transport Mode	C	N4	Transport Mode
+table	7.5.2.8-2	3GPP Access Forwarding Action Information IE in the Create MAR IE	7.5.2.8 Create MAR IE within PFCP Session Establishment Request	166
+row	7.5.2.8-2	FAR ID	M	N4	FAR ID
+row	7.5.2.8-2	Weight	C	N4	Weight
+row	7.5.2.8-2	Priority	C	N4	Priority
+row	7.5.2.8-2	URR ID	C	N4	URR ID
+row	7.5.2.8-2	RAT Type	O	N4	RAT Type
+table	7.5.2.8-3	Non-3GPP Access Forwarding Action Information IE in the Create MAR IE	7.5.2.8 Create MAR IE within PFCP Session Establishment Request	167
+same	7.5.2.8-3	7.5.2.8-2
+table	7.5.2.9-1	Create SRR IE within PFCP Session Establishment Request	7.5.2.9 Create SRR IE within PFCP Session Establishment Request	212
+row	7.5.2.9-1	SRR ID	M	N4	SRR ID
+row	7.5.2.9-1	Access Availability Control Information	C	N4	Access Availability Control Information
+row	7.5.2.9-1	QoS Monitoring per QoS flow Control Information	C	N4	QoS Monitoring per QoS flow Control Information
+row	7.5.2.9-1	Direct Reporting Information	C	N4	Direct Reporting Information
+row	7.5.2.9-1	Traffic Parameter Measurement Control Information	C	N4	Traffic Parameter Measurement Control Information
+row	7.5.2.9-1	Reporting Control Information	C	N4	Reporting Control Information
+table	7.5.2.9-2	Access Availability Control Information	7.5.2.9 Create SRR IE within PFCP Session Establishment Request	216
+row	7.5.2.9-2	Requested Access Availability Information	M	N4	Requested Access Availability Information
+table	7.5.2.9-3	QoS Monitoring per QoS flow Control Information	7.5.2.9 Create SRR IE within PFCP Session Establishment Request	242
+row	7.5.2.9-3	QFI	M	N4	QFI
+row	7.5.2.9-3	Requested QoS Monitoring	M	N4	Requested QoS Monitoring
+row	7.5.2.9-3	Reporting Frequency	M	N4	Reporting Frequency
+row	7.5.2.9-3	Packet Delay Thresholds	C	N4	Packet Delay Thresholds
+row	7.5.2.9-3	Minimum Wait Time	C	N4	Minimum Wait Time
+row	7.5.2.9-3	Measurement Period	C	N4	Measurement Period
+row	7.5.2.9-3	Reporting Suggestion Info	C	N4	Reporting Suggestion Info
+row	7.5.2.9-3	Measurement Indication	C	N4	Measurement Indication
+row	7.5.2.9-3	Reporting Thresholds	C	N4	Reporting Thresholds
+row	7.5.2.9-3	Remaining Data Reporting Indication	O	N4	Remaining Data Reporting Indication
+table	7.5.2.9-4	Direct Reporting Information	7.5.2.9 Create SRR IE within PFCP Session Establishment Request	295
+row	7.5.2.9-4	Event Notification URI	M	N4	Event Notification URI
+row	7.5.2.9-4	Notification Correlation ID	C	N4	Notification Correlation ID
+row	7.5.2.9-4	Notification Binding Indication	C	N4	Binding Indication
+row	7.5.2.9-4	Reporting Flags	C	N4	Reporting Flags
+table	7.5.2.9-5	Traffic Parameter Measurement Control Information IE	7.5.2.9 Create SRR IE within PFCP Session Establishment Request	323
+row	7.5.2.9-5	QFI	M	N4	QFI
+row	7.5.2.9-5	Traffic Parameter Measurement Indication	M	N4	Traffic Parameter Measurement Indication
+row	7.5.2.9-5	Measurement Period	C	N4	Measurement Period
+row	7.5.2.9-5	DL Periodicity	C	N4	DL Periodicity
+row	7.5.2.9-5	Traffic Parameter Threshold	C	N4	Traffic Parameter Threshold
+table	7.5.2.10-1	Provide ATSSS Control Information IE within PFCP Session Establishment Request	7.5.2.10 Provide ATSSS Control Information IE within PFCP Session Establishment Request	220
+row	7.5.2.10-1	MPTCP Control Information	C	N4	MPTCP Control Information
+row	7.5.2.10-1	ATSSS-LL Control Information	C	N4	ATSSS-LL Control Information
+row	7.5.2.10-1	PMF Control Information	C	N4	PMF Control Information
+row	7.5.2.10-1	MPQUIC Control Information	C	N4	MPQUIC Control Information
+table	7.5.2.11-1	Provide RDS Configuration Information IE within PFCP Session Establishment Request	7.5.2.11 Provide RDS Configuration Information IE within PFCP Session Establishment Request	261
+row	7.5.2.11-1	RDS Configuration Information	O	Sxb N4	RDS Configuration Information
+table	7.5.3.1-1	Information Elements in a PFCP Session Establishment Response	7.5.3.1 General	
+row	7.5.3.1-1	Node ID	M	Sxa Sxb Sxc N4 N4mb	Node ID
+row	7.5.3.1-1	Cause	M	Sxa Sxb Sxc N4 N4mb	Cause
+row	7.5.3.1-1	Offending IE	C	Sxa Sxb Sxc N4 N4mb	Offending IE
+row	7.5.3.1-1	UP F-SEID	C	Sxa Sxb Sxc N4 N4mb	F-SEID
+row	7.5.3.1-1	Created PDR	C	Sxa Sxb N4 N4mb	Created PDR
+row	7.5.3.1-1	Load Control Information	O	Sxa Sxb Sxc N4 N4mb	Load Control Information
+row	7.5.3.1-1	Overload Control Information	O	Sxa Sxb Sxc N4 N4mb	Overload Control Information
+row	7.5.3.1-1	PGW-U/SGW-U /UPF FQ-CSID	C	Sxa Sxb N4	FQ-CSID
+row	7.5.3.1-1	Failed Rule ID	C	Sxa Sxb Sxc N4 N4mb	Failed Rule ID
+row	7.5.3.1-1	Created Traffic Endpoint	C	Sxa Sxb N4 N4mb	Created Traffic Endpoint
+row	7.5.3.1-1	Created Bridge/Router Info	C	N4	Created Bridge/Router Info
+row	7.5.3.1-1	ATSSS Control Parameters	C	N4	ATSSS Control Parameters
+row	7.5.3.1-1	RDS configuration information	O	Sxb N4	RDS configuration information
+row	7.5.3.1-1	Partial Failure Information	C	Sxb Sxc N4 N4mb	Partial Failure Information
+row	7.5.3.1-1	Created L2TP Session	O	Sxb N4	Created L2TP Session
+row	7.5.3.1-1	MBS Session N4mb Information	C	N4mb	MBS Session N4mb Information
+row	7.5.3.1-1	MBS Session N4 Information	C	N4	MBS Session N4 Information
+row	7.5.3.1-1	TL-Container	C	N4	TL-Container
+row	7.5.3.1-1	MoQ Information	C	N4	MoQ Information
+table	7.5.3.1-2	Information Elements in a Partial Failure Information	7.5.3.1 General	272
+row	7.5.3.1-2	Failed Rule ID	M	Sxb Sxc N4 N4mb	Failed Rule ID
+row	7.5.3.1-2	Failure Cause	M	Sxb Sxc N4 N4mb	Cause
+row	7.5.3.1-2	Offending IE Information	M	Sxb Sxc N4 N4mb	Offending IE Information
+table	7.5.3.1-3	Created L2TP Session IE in the PFCP Session Establishment Response message	7.5.3.1 General	279
+row	7.5.3.1-3	DNS Server Address	O	Sxb N4	DNS Server Address
+row	7.5.3.1-3	NBNS Server Address	O	Sxb N4	NBNS Server Address
+row	7.5.3.1-3	LNS Address	O	Sxb N4	LNS Address
+table	7.5.3.1-4	MBS Session N4mb Information IE within PFCP Session Establishment Response	7.5.3.1 General	303
+row	7.5.3.1-4	Multicast Transport Information	C	N4mb	Multicast Transport Information
+table	7.5.3.1-5	MBS Session N4 Information IE within PFCP Session Establishment Response	7.5.3.1 General	311
+row	7.5.3.1-5	MBS Session Identifier	M	N4	MBS Session Identifier
+row	7.5.3.1-5	Area Session ID	C	N4	Area Session ID
+row	7.5.3.1-5	N19mb DL Tunnel ID	C	N4	F-TEID
+row	7.5.3.1-5	MBSN4Resp-Flags	C	N4	MBSN4Resp-Flags
+table	7.5.3.1-6	MoQ Information IE within PFCP Session Establishment Response	7.5.3.1 General	386
+row	7.5.3.1-6	MoQ Relay Address	C	N4	MoQ Relay IP Address
+table	7.5.3.2-1	Created PDR IE within PFCP Session Establishment Response	7.5.3.2 Created PDR IE within PFCP Session Establishment Response	8
+row	7.5.3.2-1	PDR ID	M	Sxa Sxb N4 N4mb	PDR ID
+row	7.5.3.2-1	Local F-TEID	C	Sxa Sxb N4	F-TEID
+row	7.5.3.2-1	Local F-TEID for Redundant Transmission	C	N4	F-TEID
+row	7.5.3.2-1	UE IP Address	C	Sxb N4	UE IP Address
+row	7.5.3.2-1	Mapped N6 IP Address	C	N4	Mapped N6 IP Address
+row	7.5.3.2-1	Local Ingress Tunnel	C	N4mb	Local Ingress Tunnel
+table	7.5.3.3-1	Load Control Information IE within PFCP Session Establishment Response	7.5.3.3 Load Control Information IE within PFCP Session Establishment Response	51
+row	7.5.3.3-1	Load Control Sequence Number	M	Sxa Sxb Sxc N4 N4mb	Sequence Number
+row	7.5.3.3-1	Load Metric	M	Sxa Sxb Sxc N4 N4mb	Metric
+table	7.5.3.4-1	Overload Control Information IE within PFCP Session Establishment Response	7.5.3.4 Overload Control Information IE within PFCP Session Establishment Response	54
+row	7.5.3.4-1	Overload Control Sequence Number	M	Sxa Sxb Sxc N4 N4mb	Sequence Number
+row	7.5.3.4-1	Overload Reduction Metric	M	Sxa Sxb Sxc N4 N4mb	Metric
+row	7.5.3.4-1	Period of Validity	M	Sxa Sxb Sxc N4 N4mb	Timer
+row	7.5.3.4-1	Overload Control Information Flags	C	Sxa Sxb Sxc N4 N4mb	OCI Flags
+table	7.5.3.5-1	Created Traffic Endpoint IE within PFCP Session Establishment Response	7.5.3.5 Created Traffic Endpoint IE within PFCP Session Establishment Response	128
+row	7.5.3.5-1	Traffic Endpoint ID	M	Sxa Sxb N4 N4mb	Traffic Endpoint ID
+row	7.5.3.5-1	Local F-TEID	C	Sxa Sxb N4	F-TEID
+row	7.5.3.5-1	Local F-TEID for Redundant Transmission	C	N4	F-TEID
+row	7.5.3.5-1	UE IP Address	C	Sxb N4	UE IP Address
+row	7.5.3.5-1	Mapped N6 IP Address	C	N4	Mapped N6 IP Address
+row	7.5.3.5-1	Local Ingress Tunnel	C	N4mb	Local Ingress Tunnel
+table	7.5.3.6-1	Created Bridge/Router Info IE within PFCP Session Establishment Response	7.5.3.6 Created Bridge/Router Info IE within PFCP Session Establishment Response	195
+row	7.5.3.6-1	Port Number	C	N4	Port Number
+row	7.5.3.6-1	5GS User Plane Node ID	C	N4	5GS User Plane Node ID
+table	7.5.3.7-1	ATSSS Control Parameters IE within PFCP Session Establishment Response	7.5.3.7 ATSSS Control Parameters IE within PFCP Session Establishment Response	221
+row	7.5.3.7-1	MPTCP Parameters	C	N4	MPTCP Parameters
+row	7.5.3.7-1	ATSSS-LL Parameters	C	N4	ATSSS-LL Parameters
+row	7.5.3.7-1	PMF Parameters	C	N4	PMF Parameters
+row	7.5.3.7-1	MPQUIC Parameters	C	N4	MPQUIC Parameters
+table	7.5.3.7-2	MPTCP Parameters IE within PFCP Session Establishment Response	7.5.3.7 ATSSS Control Parameters IE within PFCP Session Establishment Response	225
+row	7.5.3.7-2	MPTCP Address Information	M	N4	MPTCP Address Information
+row	7.5.3.7-2	MPTCP Link-Specific IP Address	M	N4	Link-Specific Multipath IP Address
+table	7.5.3.7-3	ATSSS-LL Parameters IE within PFCP Session Establishment Response	7.5.3.7 ATSSS Control Parameters IE within PFCP Session Establishment Response	226
+row	7.5.3.7-3	ATSSS-LL Information	M	N4	ATSSS-LL Information
+table	7.5.3.7-4	PMF Parameters IE within PFCP Session Establishment Response	7.5.3.7 ATSSS Control Parameters IE within PFCP Session Establishment Response	227
+row	7.5.3.7-4	PMF Address Information	M	N4	PMF Address Information
+row	7.5.3.7-4	QoS flow identifier	O	N4	QFI
+table	7.5.3.7-5	MPQUIC Parameters IE within PFCP Session Establishment Response	7.5.3.7 ATSSS Control Parameters IE within PFCP Session Establishment Response	331
+row	7.5.3.7-5	MPQUIC Address Information	M	N4	MPQUIC Address Information
+row	7.5.3.7-5	MPQUIC Link-Specific IP Address	M	N4	Link-Specific Multipath IP Address
+table	7.5.4.1-1	Information Elements in a PFCP Session Modification Request	7.5.4.1 General	
+row	7.5.4.1-1	CP F-SEID	C	Sxa Sxb Sxc N4 N4mb	F-SEID
+row	7.5.4.1-1	Remove PDR	C	Sxa Sxb Sxc N4 N4mb	Remove PDR
+row	7.5.4.1-1	Remove FAR	C	Sxa Sxb Sxc N4 N4mb	Remove FAR
+row	7.5.4.1-1	Remove URR	C	Sxa Sxb Sxc N4 N4mb	Remove URR
+row	7.5.4.1-1	Remove QER	C	Sxb Sxc N4 N4mb	Remove QER
+row	7.5.4.1-1	Remove BAR	C	Sxa N4	Remove BAR
+row	7.5.4.1-1	Remove Traffic Endpoint	C	Sxa Sxb Sxc N4 N4mb	Remove Traffic Endpoint
+row	7.5.4.1-1	Create PDR	C	Sxa Sxb Sxc N4 N4mb	Create PDR
+row	7.5.4.1-1	Create FAR	C	Sxa Sxb Sxc N4 N4mb	Create FAR
+row	7.5.4.1-1	Create URR	C	Sxa Sxb Sxc N4 N4mb	Create URR
+row	7.5.4.1-1	Create QER	C	Sxb Sxc N4 N4mb	Create QER
+row	7.5.4.1-1	Create BAR	C	Sxa N4	Create BAR
+row	7.5.4.1-1	Create Traffic Endpoint	C	Sxa Sxb Sxc N4 N4mb	Create Traffic Endpoint
+row	7.5.4.1-1	Update PDR	C	Sxa Sxb Sxc N4 N4mb	Update PDR
+row	7.5.4.1-1	Update FAR	C	Sxa Sxb Sxc N4 N4mb	Update FAR
+row	7.5.4.1-1	Update URR	C	Sxa Sxb Sxc N4 N4mb	Update URR
+row	7.5.4.1-1	Update QER	C	Sxb Sxc N4 N4mb	Update QER
+row	7.5.4.1-1	Update BAR	C	Sxa N4	Update BAR
+row	7.5.4.1-1	Update Traffic Endpoint	C	Sxa Sxb Sxc N4 N4mb	Update Traffic Endpoint
+row	7.5.4.1-1	PFCPSMReq-Flags	C	Sxa Sxb Sxc N4 N4mb	PFCPSMReq-Flags
+row	7.5.4.1-1	Query URR	C	Sxa Sxb Sxc N4 N4mb	Query URR
+row	7.5.4.1-1	PGW-C/SMF FQ-CSID	C	Sxa Sxb N4	FQ-CSID
+row	7.5.4.1-1	SGW-C FQ-CSID	C	Sxa Sxb	FQ-CSID
+row	7.5.4.1-1	MME FQ-CSID	C	Sxa Sxb	FQ-CSID
+row	7.5.4.1-1	ePDG FQ-CSID	C	Sxb	FQ-CSID
+row	7.5.4.1-1	TWAN FQ-CSID	C	Sxb	FQ-CSID
+row	7.5.4.1-1	User Plane Inactivity Timer	C	Sxb Sxc N4 N4mb	User Plane Inactivity Timer
+row	7.5.4.1-1	Query URR Reference	O	Sxa Sxb Sxc N4 N4mb	Query URR Reference
+row	7.5.4.1-1	Trace Information	O	Sxa Sxb Sxc N4	Trace Information
+row	7.5.4.1-1	Remove MAR	C	N4	Remove MAR
+row	7.5.4.1-1	Update MAR	C	N4	Update MAR
+row	7.5.4.1-1	Create MAR	C	N4	Create MAR
+row	7.5.4.1-1	Node ID	C	N4 N4mb	Node ID
+row	7.5.4.1-1	TSC Management Information	C	N4	TSC Management Information
+row	7.5.4.1-1	Remove SRR	C	N4	Remove SRR
+row	7.5.4.1-1	Create SRR	C	N4	Create SRR
+row	7.5.4.1-1	Update SRR	C	N4	Update SRR
+row	7.5.4.1-1	Provide ATSSS Control Information	C	N4	Provide ATSSS Control Information
+row	7.5.4.1-1	Ethernet Context Information	C	N4	Ethernet Context Information
+row	7.5.4.1-1	Access Availability Information	O	N4	Access Availability Information
+row	7.5.4.1-1	Query Packet Rate Status	C	Sxb N4	Query Packet Rate Status
+row	7.5.4.1-1	S-NSSAI	O	N4 N4mb	S-NSSAI
+row	7.5.4.1-1	HPLMN S-NSSAI	C	N4	HPLMN S-NSSAI
+row	7.5.4.1-1	DNN	C	N4	DNN
+row	7.5.4.1-1	Group Id	C	Sxb N4	Group Id
+row	7.5.4.1-1	MBS Session N4 Control Information	C	N4	MBS Session N4 Control Information
+row	7.5.4.1-1	DSCP to PPI Control Information	C	N4	DSCP to PPI Control Information
+row	7.5.4.1-1	TL-Container	C	N4	TL-Container
+row	7.5.4.1-1	Trace Collection Entity URI	O	Sxa Sxb Sxc N4	URI
+row	7.5.4.1-1	UE Level Measurements Configuration	O	N4	UE Level Measurements Configuration
+row	7.5.4.1-1	Alternative SMF IP Address	O	N4	Alternative SMF IP Address
+row	7.5.4.1-1	MoQ Control Information	C	N4	MoQ Control Information
+table	7.5.4.2-1	Update PDR IE within PFCP Session Modification Request	7.5.4.2 Update PDR IE within PFCP Session Modification Request	9
+row	7.5.4.2-1	PDR ID	M	Sxa Sxb Sxc N4 N4mb	PDR ID
+row	7.5.4.2-1	Outer Header Removal	C	Sxa Sxb N4 N4mb	Outer Header Removal
+row	7.5.4.2-1	Precedence	C	Sxb Sxc N4 N4mb	Precedence
+row	7.5.4.2-1	PDI	C	Sxa Sxb Sxc N4 N4mb	PDI
+row	7.5.4.2-1	FAR ID	C	Sxa Sxb Sxc N4 N4mb	FAR ID
+row	7.5.4.2-1	URR ID	C	Sxa Sxb Sxc N4	URR ID
+row	7.5.4.2-1	QER ID	C	Sxb Sxc N4 N4mb	QER ID
+row	7.5.4.2-1	Activate Predefined Rules	C	Sxb Sxc N4	Activate Predefined Rules
+row	7.5.4.2-1	Deactivate Predefined Rules	C	Sxb Sxc N4	Deactivate Predefined Rules
+row	7.5.4.2-1	Activation Time	O	Sxb Sxc N4	Activation Time
+row	7.5.4.2-1	Deactivation Time	O	Sxb Sxc N4	Deactivation Time
+row	7.5.4.2-1	IP Multicast Addressing Info	O	N4	IP Multicast Addressing Info
+row	7.5.4.2-1	Transport Delay Reporting	C	N4	Transport Delay Reporting
+row	7.5.4.2-1	RAT Type	O	N4	RAT Type
+table	7.5.4.3-1	Update FAR IE within PFCP Session Modification Request	7.5.4.3 Update FAR IE within PFCP Session Modification Request	10
+row	7.5.4.3-1	FAR ID	M	Sxa Sxb Sxc N4 N4mb	FAR ID
+row	7.5.4.3-1	Apply Action	C	Sxa Sxb Sxc N4 N4mb	Apply Action
+row	7.5.4.3-1	Update Forwarding parameters	C	Sxa Sxb Sxc N4	Update Forwarding Parameters
+row	7.5.4.3-1	Update Duplicating Parameters	C	Sxa Sxb	Update Duplicating Parameters
+row	7.5.4.3-1	Redundant Transmission Forwarding Parameters	C	N4	Redundant Transmission Forwarding Parameters
+row	7.5.4.3-1	BAR ID	C	Sxa N4	BAR ID
+row	7.5.4.3-1	Add MBS Unicast Parameters	C	N4mb	Add MBS Unicast Parameters
+row	7.5.4.3-1	Remove MBS Unicast Parameters	C	N4mb	Remove MBS Unicast Parameters
+table	7.5.4.3-2	Update Forwarding Parameters IE in the Update FAR IE	7.5.4.3 Update FAR IE within PFCP Session Modification Request	11
+row	7.5.4.3-2	Destination Interface	C	Sxa Sxb Sxc N4	Destination Interface
+row	7.5.4.3-2	Network instance	C	Sxa Sxb Sxc N4	Network Instance
+row	7.5.4.3-2	Redirect Information	C	Sxb Sxc N4	Redirect Information
+row	7.5.4.3-2	Outer Header Creation	C	Sxa Sxb N4	Outer Header Creation
+row	7.5.4.3-2	Transport Level Marking	C	Sxa Sxb N4	Transport Level Marking
+row	7.5.4.3-2	Extended Transport Level Marking	C	N4	Extended Transport Level Marking
+row	7.5.4.3-2	Transport Level Marking Indications	C	N4	Transport Level Marking Indications
+row	7.5.4.3-2	Forwarding Policy	C	Sxb Sxc N4	Forwarding Policy
+row	7.5.4.3-2	Metadata	C	N4	Metadata
+row	7.5.4.3-2	Header Enrichment	C	Sxb Sxc N4	Header Enrichment
+row	7.5.4.3-2	PFCPSMReq-Flags	C	Sxa Sxb N4	PFCPSMReq-Flags
+row	7.5.4.3-2	Linked Traffic Endpoint ID	C	Sxa Sxb N4	Traffic Endpoint ID
+row	7.5.4.3-2	Destination Interface Type	C	Sxa Sxb N4	3GPP Interface Type
+row	7.5.4.3-2	Data Network Access Identifier	C		Data Network Access Identifier
+row	7.5.4.3-2	IP Address and Port Number Replacement	C	N4	IP Address and Port Number Replacement
+row	7.5.4.3-2	Header Handling Control Rule	C	N4	Header Handling Control Rule
+table	7.5.4.3-3	Update Duplicating Parameters IE in the Update FAR IE	7.5.4.3 Update FAR IE within PFCP Session Modification Request	105
+row	7.5.4.3-3	Destination Interface	C	Sxa Sxb	Destination Interface
+row	7.5.4.3-3	Outer Header Creation	C	Sxa Sxb	Outer Header Creation
+row	7.5.4.3-3	Transport Level Marking	C	Sxa Sxb	Transport Level Marking
+row	7.5.4.3-3	Forwarding Policy	C	Sxb	Forwarding Policy
+table	7.5.4.3-4	Remove MBS Unicast Parameters IE in the Update FAR IE	7.5.4.3 Update FAR IE within PFCP Session Modification Request	304
+row	7.5.4.3-4	MBS Unicast Parameters ID	M	N4mb	MBS Unicast Parameters ID
+table	7.5.4.4-1	Update URR IE within PFCP Session Modification Request	7.5.4.4 Update URR IE within PFCP Session Modification Request	13
+row	7.5.4.4-1	URR ID	M	Sxa Sxb Sxc N4	URR ID
+row	7.5.4.4-1	Measurement Method	C	Sxa Sxb Sxc N4	Measurement Method
+row	7.5.4.4-1	Reporting Triggers	C	Sxa Sxb Sxc N4 N4mb	Reporting Triggers
+row	7.5.4.4-1	Measurement Period	C	Sxa Sxb Sxc N4 N4mb	Measurement Period
+row	7.5.4.4-1	Volume Threshold	C	Sxa Sxb Sxc N4 N4mb	Volume Threshold
+row	7.5.4.4-1	Volume Quota	C	Sxb Sxc N4	Volume Quota
+row	7.5.4.4-1	Time Threshold	C	Sxa Sxb Sxc N4	Time Threshold
+row	7.5.4.4-1	Time Quota	C	Sxb Sxc N4	Time Quota
+row	7.5.4.4-1	Event Threshold	C	Sxb Sxc N4	Event Threshold
+row	7.5.4.4-1	Event Quota	C	Sxb Sxc N4	Event Quota
+row	7.5.4.4-1	Quota Holding Time	C	Sxb Sxc N4	Quota Holding Time
+row	7.5.4.4-1	Dropped DL Traffic Threshold	C	Sxa N4	Dropped DL Traffic Threshold
+row	7.5.4.4-1	Quota Validity Time	C	Sxb N4	Quota Validity Time
+row	7.5.4.4-1	Monitoring Time	C	Sxa Sxb Sxc N4	Monitoring Time
+row	7.5.4.4-1	Subsequent Volume Threshold	C	Sxa Sxb Sxc N4	Subsequent Volume Threshold
+row	7.5.4.4-1	Subsequent Time Threshold	C	Sxa Sxb Sxc N4	Subsequent Time Threshold
+row	7.5.4.4-1	Subsequent Volume Quota	C	Sxb Sxc N4	Subsequent Volume Quota
+row	7.5.4.4-1	Subsequent Time Quota	C	Sxb Sxc N4	Subsequent Time Quota
+row	7.5.4.4-1	Subsequent Event Threshold	O	Sxb Sxc N4	Subsequent Event Threshold
+row	7.5.4.4-1	Subsequent Event Quota	O	Sxb Sxc N4	Subsequent Event Quota
+row	7.5.4.4-1	Inactivity Detection Time	C	Sxb Sxc N4	Inactivity Detection Time
+row	7.5.4.4-1	Linked URR ID	C	Sxb Sxc N4 N4mb	Linked URR ID
+row	7.5.4.4-1	Measurement Information	C	Sxa Sxb Sxc N4	Measurement Information
+row	7.5.4.4-1	Time Quota Mechanism	C	Sxb	Time Quota Mechanism
+row	7.5.4.4-1	Aggregated URRs	C	Sxb	Aggregated URRs
+row	7.5.4.4-1	FAR ID for Quota Action	C	Sxb Sxc N4	FAR ID
+row	7.5.4.4-1	Ethernet Inactivity Timer	C	N4	Ethernet Inactivity Timer
+row	7.5.4.4-1	Additional Monitoring Time	O	Sxa Sxb Sxc N4	Additional Monitoring Time
+row	7.5.4.4-1	Number of Reports	O	Sxa Sxb Sxc N4	Number of Reports
+row	7.5.4.4-1	Exempted Application ID for Quota Action	C	Sxb Sxc N4	Application ID
+row	7.5.4.4-1	Exempted SDF Filter for Quota Action	C	Sxb Sxc N4	SDF Filter
+row	7.5.4.4-1	User Plane Inactivity Timer	C	N4	User Plane Inactivity Timer
+table	7.5.4.5-1	Update QER IE within PFCP Session Modification Request	7.5.4.5 Update QER IE within PFCP Session Modification Request	14
+row	7.5.4.5-1	QER ID	M	Sxb Sxc N4 N4mb	QER ID
+row	7.5.4.5-1	QER Correlation ID	C	Sxb N4	QER Correlation ID
+row	7.5.4.5-1	Gate Status	C	Sxb Sxc N4 N4mb	Gate Status
+row	7.5.4.5-1	Maximum Bitrate	C	Sxb Sxc N4 N4mb	MBR
+row	7.5.4.5-1	Guaranteed Bitrate	C	Sxb Sxc N4 N4mb	GBR
+row	7.5.4.5-1	Packet Rate	C	Sxb N4	Packet Rate
+row	7.5.4.5-1	DL Flow Level Marking	C	Sxb Sxc	DL Flow Level Marking
+row	7.5.4.5-1	QoS flow identifier	C	N4 N4mb	QFI
+row	7.5.4.5-1	Reflective QoS	C	N4	RQI
+row	7.5.4.5-1	Paging Policy Indicator	C	N4	Paging Policy Indicator
+row	7.5.4.5-1	Averaging Window	O	N4	Averaging Window
+row	7.5.4.5-1	QER Control Indications	C	Sxb N4	QER Control Indications
+row	7.5.4.5-1	QER Indications	C	N4	QER Indications
+row	7.5.4.5-1	PDU Set Importance for N6-unmarked PDUs	C	N4	PDU Set Importance for N6-unmarked PDUs
+table	7.5.4.6-1	Remove PDR IE within PFCP Session Modification Request	7.5.4.6 Remove PDR IE within PFCP Session Modification Request	15
+row	7.5.4.6-1	PDR ID	M	Sxa Sxb Sxc N4 N4mb	PDR ID
+table	7.5.4.7-1	Remove FAR IE within PFCP Session Modification Request	7.5.4.7 Remove FAR IE within PFCP Session Modification Request	16
+row	7.5.4.7-1	FAR ID	M	Sxa Sxb Sxc N4 N4mb	FAR ID
+table	7.5.4.8-1	Remove URR IE within PFCP Session Modification Request	7.5.4.8 Remove URR IE within PFCP Session Modification Request	17
+row	7.5.4.8-1	URR ID	M	Sxa Sxb Sxc N4 N4mb	URR ID
+table	7.5.4.9-1	Remove QER IE PFCP Session Modification Request	7.5.4.9 Remove QER IE PFCP Session Modification Request	18
+row	7.5.4.9-1	QER ID	M	Sxb Sxc N4 N4mb	QER ID
+table	7.5.4.10-1	Query URR IE within PFCP Session Modification Request	7.5.4.10 Query URR IE within PFCP Session Modification Request	77
+row	7.5.4.10-1	URR ID	M	Sxa Sxb Sxc N4 N4mb	URR ID
+table	7.5.4.11-1	Update BAR IE within PFCP Session Modification Request	7.5.4.11 Update BAR IE within PFCP Session Modification Request	86
+row	7.5.4.11-1	BAR ID	M	Sxa N4	BAR ID
+row	7.5.4.11-1	Downlink Data Notification Delay	C	Sxa	Downlink Data Notification Delay
+row	7.5.4.11-1	Suggested Buffering Packets Count	C	Sxb Sxc N4	Suggested Buffering Packets Count
+row	7.5.4.11-1	DL Buffering Duration	C	Sxa N4	DL Buffering Duration
+row	7.5.4.11-1	DL Buffering Suggested Packet Count	O	Sxa N4	DL Buffering Suggested Packet Count
+row	7.5.4.11-1	MT-EDT Control Information	O	Sxa	MT-EDT Control Information
+row	7.5.4.11-1	MT-SDT Control Information	O	N4	MT-SDT Control Information
+row	7.5.4.11-1	Extended DL Buffering Notification Policy	C	N4	Extended DL Buffering Notification Policy
+table	7.5.4.12-1	Remove BAR IE within PFCP Session Modification Request	7.5.4.12 Remove BAR IE within PFCP Session Modification Request	87
+row	7.5.4.12-1	BAR ID	M	Sxa N4	BAR ID
+table	7.5.4.13-1	Update Traffic Endpoint IE within PFCP Session Modification Request	7.5.4.13 Update Traffic Endpoint IE within PFCP Session Modification Request	129
+row	7.5.4.13-1	Traffic Endpoint ID	M	Sxa Sxb Sxc N4 N4mb	Traffic Endpoint ID
+row	7.5.4.13-1	Local F-TEID	C	Sxa N4	F-TEID
+row	7.5.4.13-1	Network Instance	O	Sxa Sxb Sxc N4 N4mb	Network Instance
+row	7.5.4.13-1	Redundant Transmission Detection Parameters	C	N4	Redundant Transmission Detection Parameters
+row	7.5.4.13-1	UE IP address	C	Sxb Sxc N4	UE IP address
+row	7.5.4.13-1	Framed-Route	C	Sxb N4	Framed-Route
+row	7.5.4.13-1	Framed-Routing	C	Sxb N4	Framed-Routing
+row	7.5.4.13-1	Framed-IPv6-Route	C	Sxb N4	Framed-IPv6-Route
+row	7.5.4.13-1	QFI	C	N4	QFI
+row	7.5.4.13-1	Source Interface Type	C	Sxa Sxb N4 N4mb	3GPP Interface Type
+row	7.5.4.13-1	RAT Type	O	N4	RAT Type
+table	7.5.4.14-1	Remove Traffic Endpoint IE within PFCP Session Modification Request	7.5.4.14 Remove Traffic Endpoint IE within PFCP Session Modification Request	130
+row	7.5.4.14-1	Traffic Endpoint ID	M	Sxa Sxb Sxc N4 N4mb	Traffic Endpoint ID
+table	7.5.4.15-1	Remove MAR IE within PFCP Session Modification Request	7.5.4.15 Remove MAR IE within PFCP Session Modification Request	168
+row	7.5.4.15-1	MAR ID	M	N4	MAR ID
+table	7.5.4.16-1	Update MAR IE within PFCP Session Modification Request	7.5.4.16 Update MAR IE within PFCP Session Modification Request	169
+row	7.5.4.16-1	MAR ID	M	N4	MAR ID
+row	7.5.4.16-1	Steering Functionality	C	N4	Steering Functionality
+row	7.5.4.16-1	Steering Mode	C	N4	Steering Mode
+row	7.5.4.16-1	Update 3GPP Access Forwarding Action Information	C	N4	Update 3GPP Access Forwarding Action Information
+row	7.5.4.16-1	Update Non-3GPP Access Forwarding Action Information	C	N4	Update Non-3GPP Access Forwarding Action Information
+row	7.5.4.16-1	3GPP Access Forwarding Action Information	C	N4	3GPP Access Forwarding Action Information
+row	7.5.4.16-1	Non-3GPP Access Forwarding Action Information	C	N4	Non-3GPP Access Forwarding Action Information
+row	7.5.4.16-1	Threshold values	C	N4	Thresholds
+row	7.5.4.16-1	Steering Mode Indicator	C	N4	Steering Mode Indicator
+row	7.5.4.16-1	Transport Mode	C	N4	Transport Mode
+table	7.5.4.16-2	Update 3GPP Access Forwarding Action Information IE in Update MAR IE	7.5.4.16 Update MAR IE within PFCP Session Modification Request	175
+row	7.5.4.16-2	FAR ID	C	N4	FAR ID
+row	7.5.4.16-2	Weight	C	N4	Weight
+row	7.5.4.16-2	Priority	C	N4	Priority
+row	7.5.4.16-2	URR ID	C	N4	URR ID
+row	7.5.4.16-2	RAT Type	O	N4	RAT Type
+table	7.5.4.16-3	Update Non-3GPP Access Forwarding Action Information IE in Update MAR IE	7.5.4.16 Update MAR IE within PFCP Session Modification Request	176
+same	7.5.4.16-3	7.5.4.16-2
+table	7.5.4.18-1	TSC Management Information IE within PFCP Session Modification Request	7.5.4.18 TSC Management Information IE within PFCP Session Modification Request	199
+row	7.5.4.18-1	Port Management Information Container	O	N4	Port Management Information Container
+row	7.5.4.18-1	User Plane Node Management Information Container	O	N4	User Plane Node Management Information Container
+row	7.5.4.18-1	NW-TT Port Number	C	N4	NW-TT Port Number
+row	7.5.4.18-1	Direct Reporting Information	C	N4	Direct Reporting Information
+table	7.5.4.18-2	Direct Reporting Information	7.5.4.18 TSC Management Information IE within PFCP Session Modification Request	295
+row	7.5.4.18-2	Event Notification URI	M	N4	Event Notification URI
+row	7.5.4.18-2	Notification Correlation ID	C	N4	Notification Correlation ID
+row	7.5.4.18-2	Notification Binding Indication	C	N4	Binding Indication
+table	7.5.4.19-1	Remove SRR IE within PFCP Session Modification Request	7.5.4.19 Remove SRR IE within PFCP Session Modification Request	211
+row	7.5.4.19-1	SRR ID	M	N4	SRR ID
+table	7.5.4.20-1	Update SRR IE within PFCP Session Modification Request	7.5.4.20 Update SRR IE within PFCP Session Modification Request	213
+row	7.5.4.20-1	SRR ID	M	N4	SRR ID
+row	7.5.4.20-1	Access Availability Control Information	C	N4	Access Availability Control Information
+row	7.5.4.20-1	QoS Monitoring per QoS flow Control Information	C	N4	QoS Monitoring per QoS flow Control Information
+row	7.5.4.20-1	Direct Reporting Information	C	N4	Direct Reporting Information
+row	7.5.4.20-1	Traffic Parameter Measurement Control Information	C	N4	Traffic Parameter Measurement Control Information
+table	7.5.4.21-1	Ethernet Context Information IE within PFCP Session Modification Request	7.5.4.21 Ethernet Context Information within PFCP Session Modification Request	254
+row	7.5.4.21-1	MAC Addresses Detected	M	N4	MAC Addressed Detected
+table	7.5.4.22-1	Query Packet Rate Status IE within PFCP Session Modification Request	7.5.4.22 Query Packet Rate Status IE within PFCP Session Modification Request	263
+row	7.5.4.22-1	QER ID	M	Sxb N4	QER ID
+table	7.5.5.1-1	Information Elements in a PFCP Session Modification Response	7.5.5.1 General	
+row	7.5.5.1-1	Cause	M	Sxa Sxb Sxc N4 N4mb	Cause
+row	7.5.5.1-1	Offending IE	C	Sxa Sxb Sxc N4 N4mb	Offending IE
+row	7.5.5.1-1	Created PDR	C	Sxa Sxb N4 N4mb	Created PDR
+row	7.5.5.1-1	Load Control Information	O	Sxa Sxb Sxc N4 N4mb	Load Control Information
+row	7.5.5.1-1	Overload Control Information	O	Sxa Sxb Sxc N4 N4mb	Overload Control Information
+row	7.5.5.1-1	Usage Report	C	Sxa Sxb Sxc N4 N4mb	Usage Report
+row	7.5.5.1-1	Failed Rule ID	C	Sxa Sxb Sxc N4 N4mb	Failed Rule ID
+row	7.5.5.1-1	Additional Usage Reports Information	C	Sxa Sxb Sxc N4 N4mb	Additional Usage Reports Information
+row	7.5.5.1-1	Created/Updated Traffic Endpoint	C	Sxa Sxb N4 N4mb	Created Traffic Endpoint
+row	7.5.5.1-1	TSC Management Information	C	N4	TSC Management Information
+row	7.5.5.1-1	ATSSS Control Parameters	C	N4	ATSSS Control Parameters
+row	7.5.5.1-1	Updated PDR	C	Sxb N4	Updated PDR
+row	7.5.5.1-1	Packet Rate Status Report	C	Sxb N4	Packet Rate Status Report
+row	7.5.5.1-1	Partial Failure Information	C	Sxb Sxc N4 N4mb	Partial Failure Information
+row	7.5.5.1-1	MBS Session N4 Information	C	N4	MBS Session N4 Information
+row	7.5.5.1-1	TL-Container	C	N4	TL-Container
+row	7.5.5.1-1	MoQ Information	C	N4	MoQ Information
+table	7.5.5.2-1	Usage Report IE within PFCP Session Modification Response	7.5.5.2 Usage Report IE within PFCP Session Modification Response	78
+row	7.5.5.2-1	URR ID	M	Sxa Sxb Sxc N4 N4mb	URR ID
+row	7.5.5.2-1	UR-SEQN	M	Sxa Sxb Sxc N4 N4mb	UR-SEQN
+row	7.5.5.2-1	Usage Report Trigger	M	Sxa Sxb Sxc N4 N4mb	Usage Report Trigger
+row	7.5.5.2-1	Start Time	C	Sxa Sxb Sxc N4 N4mb	Start Time
+row	7.5.5.2-1	End Time	C	Sxa Sxb Sxc N4 N4mb	End Time
+row	7.5.5.2-1	Volume Measurement	C	Sxa Sxb Sxc N4 N4mb	Volume Measurement
+row	7.5.5.2-1	Duration Measurement	C	Sxa Sxb Sxc N4	Duration Measurement
+row	7.5.5.2-1	Time of First Packet	C	Sxb Sxc N4 N4mb	Time of First Packet
+row	7.5.5.2-1	Time of Last Packet	C	Sxb Sxc N4 N4mb	Time of Last Packet
+row	7.5.5.2-1	Usage Information	C	Sxa Sxb Sxc N4	Usage Information
+row	7.5.5.2-1	Query URR Reference	C	Sxa Sxb Sxc N4 N4mb	Query URR Reference
+row	7.5.5.2-1	Ethernet Traffic Information	C	N4	Ethernet Traffic Information
+table	7.5.5.3-1	TSC Management Information IE within PFCP Session Modification Response	7.5.5.3 TSC Management Information IE within PFCP Session Modification Response	200
+row	7.5.5.3-1	Port Management Information Container	O	N4	Port Management Information Container
+row	7.5.5.3-1	User Plane Node Management Information Container	O	N4	User Plane Node Management Information Container
+row	7.5.5.3-1	NW-TT Port Number	C	N4	NW-TT Port Number
+table	7.5.5.4-1	Packet Rate Status Report IE within PFCP Session Modification Response message	7.5.5.4 Packet Rate Status Report IE within PFCP Session Modification Response	264
+row	7.5.5.4-1	QER ID	M	Sxb N4	QER ID
+row	7.5.5.4-1	Packet Rate Status	M	Sxb N4	Packet Rate Status
+table	7.5.5.5-1	Updated PDR IE in PFCP Session Modification Response	7.5.5.5 Updated PDR IE within PFCP Session Modification Response	256
+row	7.5.5.5-1	PDR ID	M	N4	PDR ID
+row	7.5.5.5-1	Local F-TEID for Redundant Transmission	C	N4	F-TEID
+row	7.5.5.5-1	Local F-TEID	C	Sxb	F-TEID
+row	7.5.5.5-1	UE IP Address	C	Sxb N4	UE IP Address
+table	7.5.6-1	Information Elements in a PFCP Session Deletion Request	7.5.6 PFCP Session Deletion Request	
+row	7.5.6-1	TL-Container	C	N4	TL-Container
+row	7.5.6-1	Node ID	C	N4 N4mb	Node ID
+row	7.5.6-1	CP F-SEID	C	N4 N4mb	F-SEID
+table	7.5.7.1-1	Information Elements in a PFCP Session Deletion Response	7.5.7.1 General	
+row	7.5.7.1-1	Cause	M	Sxa Sxb Sxc N4 N4mb	Cause
+row	7.5.7.1-1	Offending IE	C	Sxa Sxb Sxc N4 N4mb	Offending IE
+row	7.5.7.1-1	Load Control Information	O	Sxa Sxb Sxc N4 N4mb	Load Control Information
+row	7.5.7.1-1	Overload Control Information	O	Sxa Sxb Sxc N4 N4mb	Overload Control Information
+row	7.5.7.1-1	Usage Report	C	Sxa Sxb Sxc N4 N4mb	Usage Report
+row	7.5.7.1-1	Additional Usage Reports Information	C	Sxa Sxb Sxc N4 N4mb	Additional Usage Reports Information
+row	7.5.7.1-1	Packet Rate Status Report	C	Sxb N4	Packet Rate Status Report
+row	7.5.7.1-1	MBS Session N4 Information	C	N4	MBS Session N4 Information
+row	7.5.7.1-1	PFCPSDRsp-Flags	C	Sxa Sxb Sxc N4	PFCPSDRsp-Flags
+row	7.5.7.1-1	TL-Container	C	N4	TL-Container
+row	7.5.7.1-1	Session Report	O	N4	Session Report
+table	7.5.7.1-2	Packet Rate Status Report IE within PFCP Session Deletion Response message	7.5.7.1 General	252
+row	7.5.7.1-2	QER ID	M	Sxb N4	QER ID
+row	7.5.7.1-2	Packet Rate Status	M	Sxb N4	Packet Rate Status
+table	7.5.7.2-1	Usage Report IE within PFCP Session Deletion Response	7.5.7.2 Usage Report IE within PFCP Session Deletion Response	79
+row	7.5.7.2-1	URR ID	M	Sxa Sxb Sxc N4 N4mb	URR ID
+row	7.5.7.2-1	UR-SEQN	M	Sxa Sxb Sxc N4 N4mb	UR-SEQN
+row	7.5.7.2-1	Usage Report Trigger	M	Sxa Sxb Sxc N4 N4mb	Usage Report Trigger
+row	7.5.7.2-1	Start Time	C	Sxa Sxb Sxc N4 N4mb	Start Time
+row	7.5.7.2-1	End Time	C	Sxa Sxb Sxc N4 N4mb	End Time
+row	7.5.7.2-1	Volume Measurement	C	Sxa Sxb Sxc N4 N4mb	Volume Measurement
+row	7.5.7.2-1	Duration Measurement	C	Sxa Sxb Sxc N4	Duration Measurement
+row	7.5.7.2-1	Time of First Packet	C	Sxb Sxc N4 N4mb	Time of First Packet
+row	7.5.7.2-1	Time of Last Packet	C	Sxb Sxc N4 N4mb	Time of Last Packet
+row	7.5.7.2-1	Usage Information	C	Sxa Sxb Sxc N4	Usage Information
+row	7.5.7.2-1	Ethernet Traffic Information	C	N4	Ethernet Traffic Information
+table	7.5.7.3-1	Session Report IE within PFCP Session Deletion Response	7.5.7.3 Session Report IE within PFCP Session Deletion Response	214
+row	7.5.7.3-1	SRR ID	M	N4	SRR ID
+row	7.5.7.3-1	QoS Monitoring Report	C	N4	QoS Monitoring Report
+table	7.5.8.1-1	Information Elements in a PFCP Session Report Request	7.5.8.1 General	
+row	7.5.8.1-1	Report Type	M	Sxa Sxb Sxc N4 N4mb	Report Type
+row	7.5.8.1-1	Downlink Data Report	C	Sxa N4 N4mb	Downlink Data Report
+row	7.5.8.1-1	Usage Report	C	Sxa Sxb Sxc N4 N4mb	Usage Report
+row	7.5.8.1-1	Error Indication Report	C	Sxa Sxb N4 N4mb	Error Indication Report
+row	7.5.8.1-1	Load Control Information	O	Sxa Sxb Sxc N4 N4mb	Load Control Information
+row	7.5.8.1-1	Overload Control Information	O	Sxa Sxb Sxc N4 N4mb	Overload Control Information
+row	7.5.8.1-1	Additional Usage Reports Information	C	Sxa Sxb Sxc N4 N4mb	Additional Usage Reports Information
+row	7.5.8.1-1	PFCPSRReq-Flags	C	Sxa Sxb Sxc N4 N4mb	PFCPSRReq-Flags
+row	7.5.8.1-1	Old CP F-SEID	C	N4 N4mb	F-SEID
+row	7.5.8.1-1	SMF Change Reason	O	N4 N4mb	SMF Change Reason
+row	7.5.8.1-1	Packet Rate Status Report	C	Sxb N4	Packet Rate Status Report
+row	7.5.8.1-1	TSC Management Information	C	N4	TSC Management Information
+row	7.5.8.1-1	Session Report	C	N4	Session Report
+row	7.5.8.1-1	Cause	O	Sxb N4	Cause
+table	7.5.8.2-1	Downlink Data Report IE within PFCP Session Report Request	7.5.8.2 Downlink Data Report IE within PFCP Session Report Request	83
+row	7.5.8.2-1	PDR ID	M	Sxa N4 N4mb	PDR ID
+row	7.5.8.2-1	Downlink Data Service Information	C	Sxa N4	Downlink Data Service Information
+row	7.5.8.2-1	DL Data Packets Size	O	Sxa	DL Data Packets Size
+row	7.5.8.2-1	DL Data Status	O	N4	Data Status
+table	7.5.8.3-1	Usage Report IE within PFCP Session Report Request	7.5.8.3 Usage Report IE within PFCP Session Report Request	80
+row	7.5.8.3-1	URR ID	M	Sxa Sxb Sxc N4 N4mb	URR ID
+row	7.5.8.3-1	UR-SEQN	M	Sxa Sxb Sxc N4 N4mb	UR-SEQN
+row	7.5.8.3-1	Usage Report Trigger	M	Sxa Sxb Sxc N4 N4mb	Usage Report Trigger
+row	7.5.8.3-1	Start Time	C	Sxa Sxb Sxc N4 N4mb	Start Time
+row	7.5.8.3-1	End Time	C	Sxa Sxb Sxc N4 N4mb	End Time
+row	7.5.8.3-1	Volume Measurement	C	Sxa Sxb Sxc N4 N4mb	Volume Measurement
+row	7.5.8.3-1	Duration Measurement	C	Sxa Sxb Sxc N4	Duration Measurement
+row	7.5.8.3-1	Application Detection Information	C	Sxb Sxc N4	Application Detection Information
+row	7.5.8.3-1	UE IP address	C	Sxc N4	UE IP address
+row	7.5.8.3-1	Network Instance	C	Sxc N4	Network Instance
+row	7.5.8.3-1	Time of First Packet	C	Sxb Sxc N4 N4mb	Time of First Packet
+row	7.5.8.3-1	Time of Last Packet	C	Sxb Sxc N4 N4mb	Time of Last Packet
+row	7.5.8.3-1	Usage Information	C	Sxa Sxb Sxc N4	Usage Information
+row	7.5.8.3-1	Query URR Reference	C	Sxa Sxb Sxc N4 N4mb	Query URR Reference
+row	7.5.8.3-1	Event Time Stamp	C	Sxb Sxc N4	Time Stamp
+row	7.5.8.3-1	Ethernet Traffic Information	C	N4	Ethernet Traffic Information
+row	7.5.8.3-1	Join IP Muticast Information	C	N4	Join IP Multicast Information
+row	7.5.8.3-1	Leave IP Muticast Information	C	N4	Leave IP Multicast Information
+row	7.5.8.3-1	Predefined Rules Name	O	Sxb N4	Predefined Rules Name
+table	7.5.8.3-2	Application Detection Information IE within Usage Report IE	7.5.8.3 Usage Report IE within PFCP Session Report Request	68
+row	7.5.8.3-2	Application ID	M	Sxb Sxc N4	Application ID
+row	7.5.8.3-2	Application Instance ID	C	Sxb Sxc N4	Application Instance ID
+row	7.5.8.3-2	Flow Information	C	Sxb Sxc N4	Flow Information
+row	7.5.8.3-2	PDR ID	O	Sxb Sxc N4	PDR ID
+table	7.5.8.3-3	Ethernet Traffic Information IE within Usage Report IE	7.5.8.3 Usage Report IE within PFCP Session Report Request	143
+row	7.5.8.3-3	MAC Addresses Detected	C	N4	MAC Addresses Detected
+row	7.5.8.3-3	MAC Addresses Removed	C	N4	MAC Addresses Removed
+table	7.5.8.3-4	Join IP Multicast Information IE within Usage Report IE	7.5.8.3 Usage Report IE within PFCP Session Report Request	189
+row	7.5.8.3-4	IP Multicast Address	M	N4	IP Multicast Address
+row	7.5.8.3-4	Source IP Address	C	N4	Source IP Address
+table	7.5.8.3-5	Leave IP Multicast Information IE within Usage Report IE	7.5.8.3 Usage Report IE within PFCP Session Report Request	190
+row	7.5.8.3-5	IP Multicast Address	M	N4	IP Multicast Address
+row	7.5.8.3-5	Source IP Address	C	N4	Source IP Address
+table	7.5.8.4-1	Error Indication Report IE within PFCP Session Report Request	7.5.8.4 Error Indication Report IE within PFCP Session Report Request	99
+row	7.5.8.4-1	Remote F-TEID	M	Sxa Sxb N4 N4mb	F-TEID
+table	7.5.8.5-1	TSC Management Information IE within PFCP Session Report Request	7.5.8.5 TSC Management Information IE within PFCP Session Report Request	201
+row	7.5.8.5-1	Port Management Information Container	O	N4	Port Management Information Container
+row	7.5.8.5-1	User Plane Node Management Information Container	O	N4	User Plane Node Management Information Container
+row	7.5.8.5-1	NW-TT Port Number	C	N4	NW-TT Port Number
+table	7.5.8.6-1	Session Report IE within PFCP Session Report Request	7.5.8.6 Session Report IE within PFCP Session Report Request	214
+row	7.5.8.6-1	SRR ID	M	N4	SRR ID
+row	7.5.8.6-1	Access Availability Report	C	N4	Access Availability Report
+row	7.5.8.6-1	QoS Monitoring Report	C	N4	QoS Monitoring Report
+row	7.5.8.6-1	Traffic Parameter Measurement Report	C	N4	Traffic Parameter Measurement Report
+table	7.5.8.6-2	Access Availability Report IE	7.5.8.6 Session Report IE within PFCP Session Report Request	218
+row	7.5.8.6-2	Access Availability Information	M	N4	Access Availability Information
+table	7.5.8.6-3	QoS Monitoring Report IE	7.5.8.6 Session Report IE within PFCP Session Report Request	247
+row	7.5.8.6-3	QFI	M	N4	QFI
+row	7.5.8.6-3	QoS Monitoring Measurement	M	N4	QoS Monitoring Measurement
+row	7.5.8.6-3	Redundant N3/N9 Transmission Information	C	N4	Redundant N3/N9 Transmission Information
+row	7.5.8.6-3	Time Stamp	M	N4	Time Stamp
+row	7.5.8.6-3	Start Time	O	N4	Start Time
+table	7.5.8.6-4	Traffic Parameter Measurement Report IE	7.5.8.6 Session Report IE within PFCP Session Report Request	324
+row	7.5.8.6-4	QFI	M	N4	QFI
+row	7.5.8.6-4	N6 Jitter Measurement	C	N4	N6 Jitter Measurement
+row	7.5.8.6-4	UL Periodicity	C	N4	UL Periodicity
+row	7.5.8.6-4	Time Stamp	M	N4	Time Stamp
+row	7.5.8.6-4	Start Time	O	N4	Start Time
+table	7.5.8.6-5	Redundant N3/N9 Transmission Information IE	7.5.8.6 Session Report IE within PFCP Session Report Request	399
+row	7.5.8.6-5	Local N3/N9 Tunnel Information	M	N4	Local N3/N9 Tunnel Information
+row	7.5.8.6-5	Remote N3/N9 Tunnel Information	M	N4	Remote N3/N9 Tunnel Information
+table	7.5.8.6-6	Local N3/N9 Tunnel Information IE	7.5.8.6 Session Report IE within PFCP Session Report Request	400
+row	7.5.8.6-6	F-TEID	M	N4	F-TEID
+row	7.5.8.6-6	Network Instance	O	N4	Network Instance
+table	7.5.8.6-7	Remote N3/N9 Tunnel Information IE	7.5.8.6 Session Report IE within PFCP Session Report Request	401
+row	7.5.8.6-7	F-TEID	M	N4	F-TEID
+row	7.5.8.6-7	Network Instance	O	N4	Network Instance
+table	7.5.9.1-1	Information Elements in a PFCP Session Report Response	7.5.9.1 General	
+row	7.5.9.1-1	Cause	M	Sxa Sxb Sxc N4 N4mb	Cause
+row	7.5.9.1-1	Offending IE	C	Sxa Sxb Sxc N4 N4mb	Offending IE
+row	7.5.9.1-1	Update BAR	C	Sxa N4	Update BAR
+row	7.5.9.1-1	PFCPSRRsp-Flags	C	Sxa N4	PFCPSRRsp-Flags
+row	7.5.9.1-1	CP F-SEID	O	N4 N4mb	F-SEID
+row	7.5.9.1-1	N4-u F-TEID	O	N4	F-TEID
+row	7.5.9.1-1	Alternative SMF IP Address	O	N4 N4mb	Alternative SMF IP Address
+row	7.5.9.1-1	PGW-C/SMF FQ-CSID	O	Sxb N4	FQ-CSID
+row	7.5.9.1-1	Group Id	C	Sxb N4	Group Id
+row	7.5.9.1-1	Node ID	C	N4 N4mb	Node ID
+row	7.5.9.1-1	Alternative SMF IP Address	O	N4	Alternative SMF IP Address
+table	7.5.9.2-1	Update BAR IE in PFCP Session Report Response	7.5.9.2 Update BAR IE within PFCP Session Report Response	12
+row	7.5.9.2-1	BAR ID	M	Sxa N4	BAR ID
+row	7.5.9.2-1	Downlink Data Notification Delay	C	Sxa	Downlink Data Notification Delay
+row	7.5.9.2-1	DL Buffering Duration	C	Sxa N4	DL Buffering Duration
+row	7.5.9.2-1	DL Buffering Suggested Packet Count	O	Sxa N4	DL Buffering Suggested Packet Count
+row	7.5.9.2-1	Suggested Buffering Packets Count	C	Sxb Sxc N4	Suggested Buffering Packets Count
+row	7.5.9.2-1	Extended DL Buffering Notification Policy	C	N4	Extended DL Buffering Notification Policy

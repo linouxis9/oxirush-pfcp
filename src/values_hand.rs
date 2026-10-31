@@ -43,7 +43,7 @@ pfcp_layout! {
         security_parameter_index "Security Parameter Index": u32 if spi,
         flow_label "Flow Label": U24 if fl,
         sdf_filter_id "SDF Filter ID": u32 if bid,
-        rtp_multiplexed_media "(S)RTP Multiplexed Media Identification Information": Rest if smmii,
+        rtp_multiplexed_media "(S)RTP Multiplexed Media Identification Information": Counted<Lv16> if smmii,
     }
 }
 
@@ -105,9 +105,9 @@ pfcp_layout! {
         downlink_time_unit "Downlink Time Unit": TimeUnit if dlpr,
         maximum_downlink_packet_rate "Maximum Downlink Packet Rate": u16 if dlpr,
         additional_uplink_time_unit "Additional Uplink Time Unit": TimeUnit if aprc && ulpr,
-        maximum_additional_uplink_packet_rate "Maximum Additional Uplink Packet Rate": u16 if aprc && ulpr,
+        additional_maximum_uplink_packet_rate "Additional Maximum Uplink Packet Rate": u16 if aprc && ulpr,
         additional_downlink_time_unit "Additional Downlink Time Unit": TimeUnit if aprc && dlpr,
-        maximum_additional_downlink_packet_rate "Maximum Additional Downlink Packet Rate": u16 if aprc && dlpr,
+        additional_maximum_downlink_packet_rate "Additional Maximum Downlink Packet Rate": u16 if aprc && dlpr,
     }
 }
 
@@ -186,7 +186,7 @@ pfcp_layout! {
     /// kept as their octets.
     pub struct PmfControlInformation "8.2.156" {
         flags(u8) { pqpm "PQPM": 3, drtti "DRTTI": 2, pmfi "PMFI": 1 }
-        qfis "Number of QFI and the QFIs": Rest if true,
+        qfis "value of QFI": Counted<u8> if true,
     }
 }
 
@@ -268,7 +268,7 @@ pfcp_layout! {
     /// each in an octet with two spare bits.
     pub struct DscpToPpiMappingInformation "8.2.214" {
         flags(u8) { ppi_value "PPI Value": 1 / 3 }
-        dscp_values "DSCP Values": Rest if true,
+        dscp_values "DSCP Value": Each<u8> if true,
     }
 }
 
@@ -348,7 +348,7 @@ pfcp_fields! {
     /// Multicast Transport Information (§8.2.207): a spare octet, the Common Tunnel
     /// Endpoint Identifier, then the IP multicast distribution address and the source
     /// address, each after its type and length, kept as their octets.
-    pub struct MulticastTransportInformation "8.2.207" { spare_octet "Spare": Spare, common_tunnel_endpoint_identifier "Common Tunnel Endpoint Identifier": u32, addresses "IP Multicast Distribution Address and IP Source Address": Rest }
+    pub struct MulticastTransportInformation "8.2.207" { spare_octet "Spare": Spare, common_tunnel_endpoint_identifier "Common Tunnel Endpoint Identifier": u32, ip_multicast_distribution_address "IP Multicast Distribution Address (IPv4 or IPv6)": TypedAddress, ip_source_address "IP Source Address (IPv4 or IPv6)": TypedAddress }
     /// Vendor-Specific Node Report Type (§8.2.217): the Enterprise ID and its octet of
     /// flags, which the vendor defines.
     pub struct VendorSpecificNodeReportType "8.2.217" { enterprise_id "Enterprise ID": u16, flags "Flags": u8 }
@@ -356,9 +356,20 @@ pfcp_fields! {
     /// Measurement Types after their number (Table 8.2.245-2), and the Time Period, in
     /// seconds.
     pub struct UeLevelMeasurementsConfiguration "8.2.245" { job_type "Job Type": JobType, measurement_types "Measurement Type": Counted<MeasurementType>, time_period "Time Period": U24 }
-    /// L2TP User Authentication (§8.2.187): the Proxy Authen Type, its flags, then the name,
-    /// the challenge, the response and the ID that they announce, kept as their octets.
-    pub struct L2tpUserAuthentication "8.2.187" { proxy_authen_type_value "Proxy Authen Type Value": u8, flags "Flags": u8, authentication "Proxy Authen Name, Challenge, Response and ID": Rest }
+}
+
+pfcp_layout! {
+    /// L2TP User Authentication (§8.2.187): the Proxy Authen Type, then the name, the
+    /// challenge, the response and the ID that its flags announce, each as the Attribute
+    /// Value of its AVP (IETF RFC 2661).
+    pub struct L2tpUserAuthentication "8.2.187" {
+        head { proxy_authen_type_value "Proxy Authen Type Value": u16 }
+        flags(u8) { pai "PAI": 4, par "PAR": 3, pac "PAC": 2, pan "PAN": 1 }
+        proxy_authen_name_value "Proxy Authen Name Value": Lv8 if pan,
+        proxy_authen_challenge_value "Proxy Authen Challenge Value": Lv8 if pac,
+        proxy_authen_response_value "Proxy Authen Response Value": Lv8 if par,
+        proxy_authen_id "Proxy Authen ID": u8 if pai,
+    }
 }
 
 pfcp_number! {
@@ -368,7 +379,7 @@ pfcp_number! {
 
 pfcp_octets! {
     /// LNS Address (§8.2.188): an IPv4 or an IPv6 address.
-    LnsAddress "LNS Address" "8.2.188";
+    LnsAddress "LNS Address value" "8.2.188";
     /// Binding Indication (§8.2.281).
     BindingIndication "Binding Indication" "8.2.281";
 }
@@ -379,8 +390,7 @@ pfcp_bits! {
     /// Additional Usage Reports Information (§8.2.91): AURI, and the number of additional
     /// usage reports, its seven high bits in octet 5 and its eight low ones in octet 6.
     pub struct AdditionalUsageReportsInformation "8.2.91" octets 2 min 2 {
-        auri "AURI": 0 8 1, number_high "Number of Additional Usage Reports value (high)": 0 1 7,
-        number_low "Number of Additional Usage Reports value (low)": 1 1 8,
+        auri "AURI": 0 8 1, number "Number of Additional Usage Reports value": 0 1 7 + 1 1 8,
     }
 }
 
@@ -389,8 +399,7 @@ pfcp_bits! {
     /// four high bits in octet 6 and its eight low ones in octet 7.
     pub struct CTag "8.2.94" octets 3 min 3 {
         pcp "PCP": 0 1 1, dei "DEI": 0 2 1, vid "VID": 0 3 1,
-        pcp_value "PCP value": 1 1 3, dei_flag "DEI Flag": 1 4 1, cvid_high "C-VID value (high)": 1 5 4,
-        cvid_low "C-VID value (low)": 2 1 8,
+        pcp_value "PCP value": 1 1 3, dei_flag "DEI Flag": 1 4 1, cvid "C-VID value": 1 5 4 + 2 1 8,
     }
 }
 
@@ -398,29 +407,7 @@ pfcp_bits! {
     /// S-TAG (§8.2.95): as C-TAG, with the S-VID.
     pub struct STag "8.2.95" octets 3 min 3 {
         pcp "PCP": 0 1 1, dei "DEI": 0 2 1, vid "VID": 0 3 1,
-        pcp_value "PCP value": 1 1 3, dei_flag "DEI Flag": 1 4 1, svid_high "S-VID value (high)": 1 5 4,
-        svid_low "S-VID value (low)": 2 1 8,
-    }
-}
-
-impl AdditionalUsageReportsInformation<'_> {
-    /// The number of additional usage reports.
-    pub fn number(&self) -> u16 {
-        u16::from(self.number_high) << 8 | u16::from(self.number_low)
-    }
-}
-
-impl CTag<'_> {
-    /// The C-VID.
-    pub fn cvid(&self) -> u16 {
-        u16::from(self.cvid_high) << 8 | u16::from(self.cvid_low)
-    }
-}
-
-impl STag<'_> {
-    /// The S-VID.
-    pub fn svid(&self) -> u16 {
-        u16::from(self.svid_high) << 8 | u16::from(self.svid_low)
+        pcp_value "PCP value": 1 1 3, dei_flag "DEI Flag": 1 4 1, svid "S-VID value": 1 5 4 + 2 1 8,
     }
 }
 
@@ -512,6 +499,11 @@ impl fmt::Debug for HmacKeyStamp<'_> {
     }
 }
 
+impl HmacKeyStamp<'_> {
+    /// The name of its field.
+    pub const FIELDS: &'static [&'static str] = &["HMAC Key"];
+}
+
 impl<'a> Codec<'a> for HmacKeyStamp<'a> {
     fn decode(octets: &'a [u8]) -> Option<Self> {
         Some(Self(Octets::wire(octets)))
@@ -568,7 +560,7 @@ pfcp_fields! {
     /// the Trace ID, the triggering events, the depth, the interfaces and the IP address of
     /// the Trace Collection Entity.
     pub struct TraceInformation "8.2.108" {
-        mcc_mnc "MCC and MNC": VlanTag, trace_id "Trace ID": U24, triggering_events "Triggering Events": Lv8,
+        mcc_mnc "MCC and MNC": PlmnId, trace_id "Trace ID": U24, triggering_events "Triggering Events": Lv8,
         session_trace_depth "Session Trace Depth": u8, list_of_interfaces "List of Interfaces": Lv8,
         ip_address_of_trace_collection_entity "IP Address of Trace Collection Entity": Lv8,
     }
@@ -593,6 +585,9 @@ pub struct FqCsid<'a> {
 }
 
 impl FqCsid<'_> {
+    /// The names of its fields.
+    pub const FIELDS: &'static [&'static str] = &["FQ-CSID Node-ID Type", "Node-Address", "PDN Connection Set Identifiers", "Node Type"];
+
     /// The length of the Node-Address of a Node-ID Type: `None` for a spare type.
     fn address_length(node_id_type: u8) -> Option<usize> {
         match node_id_type {
@@ -656,7 +651,7 @@ impl<'a> IntoOwned for FqCsid<'a> {
     }
 }
 
-/// `{"Node-ID Type": 0, "Node-Address": "10.0.0.1", "PDN Connection Set Identifiers": [1]}`:
+/// `{"FQ-CSID Node-ID Type": 0, "Node-Address": "10.0.0.1", "PDN Connection Set Identifiers": [1]}`:
 /// an IPv4 or IPv6 address as text, the other Node-Address as its octets.
 #[cfg(feature = "tree")]
 impl oxirush_utils::tree::Tree for FqCsid<'_> {
@@ -664,7 +659,7 @@ impl oxirush_utils::tree::Tree for FqCsid<'_> {
     fn to_tree(&self) -> oxirush_utils::tree::Value {
         use oxirush_utils::tree;
         let mut members = tree::Members::new();
-        members.put("Node-ID Type", tree::unsigned(self.node_id_type.into()));
+        members.put("FQ-CSID Node-ID Type", tree::unsigned(self.node_id_type.into()));
         let address = match (self.node_id_type, self.node_address.len()) {
             (0, 4) => tree::Value::String(alloc::format!("{}", Ipv4Addr::from(<[u8; 4]>::try_from(&self.node_address[..]).unwrap_or_default()))),
             (1, 16) => tree::Value::String(alloc::format!("{}", Ipv6Addr::from(<[u8; 16]>::try_from(&self.node_address[..]).unwrap_or_default()))),
@@ -684,7 +679,7 @@ impl oxirush_utils::tree::Tree for FqCsid<'_> {
         value: &oxirush_utils::tree::Value,
         reading: &mut oxirush_utils::tree::Reading,
     ) -> Result<Self, oxirush_utils::tree::Refused> {
-        let read = reading.members(value, &["Node-ID Type", "Node-Address", "PDN Connection Set Identifiers", "Node Type", "extra"])?;
+        let read = reading.members(value, &["FQ-CSID Node-ID Type", "Node-Address", "PDN Connection Set Identifiers", "Node Type", "extra"])?;
         let node_id_type = reading.member(&read, 0, |value, reading| reading.unsigned(value, 0, 15))? as u8;
         let node_address = reading.member(&read, 1, |value, reading| {
             let text = value.as_str().unwrap_or_default();
@@ -724,6 +719,11 @@ macro_rules! mac_addresses {
             pub s_tag: Option<Lv8>,
             /// The octets after them, which a later release adds.
             pub extra: Octets<'a>,
+        }
+
+        impl $ty<'_> {
+            /// The names of its fields.
+            pub const FIELDS: &'static [&'static str] = &["MAC address values", "C-TAG", "S-TAG"];
         }
 
         impl<'a> Codec<'a> for $ty<'a> {

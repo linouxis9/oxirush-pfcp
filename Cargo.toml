@@ -33,6 +33,9 @@ hex = "0.4.3"
 name = "spike"
 required-features = ["tree"]
 
+[[test]]
+name = "spec"
+
 # `pfcp_borrowed`: decoded values borrow their octets, for the measurement of the two
 # forms. cargo-fuzz sets `fuzzing`, and docs.rs `docsrs`.
 [lints.rust]

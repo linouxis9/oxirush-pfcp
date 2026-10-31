@@ -38,7 +38,7 @@ pub enum Form {
 }
 
 /// An IE type as Table 8.1.2-1 has it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy)]
 pub struct IeTypeInfo {
     /// The IE type.
     pub ie_type: u16,
@@ -50,6 +50,12 @@ pub struct IeTypeInfo {
     pub fixed: Option<u16>,
     /// The clause of its layout, or the table of its content.
     pub clause: &'static str,
+    /// The names of the flags and fields of its layout, as its tree has them: none for a
+    /// grouped IE.
+    pub fields: &'static [&'static str],
+    /// The tables of its content, for a grouped IE: one, or one per place for an IE that
+    /// has different content in different places.
+    pub tables: &'static [&'static crate::table::Table],
 }
 
 /// The IE type of `ie_type`.
@@ -388,11 +394,11 @@ pfcp_ies! {
     322 "Metadata" variable "8.2.219" => Metadata;
     323 "Traffic Parameter Measurement Control Information" grouped "7.5.2.9-5" => TrafficParameterMeasurementControlInformation;
     324 "Traffic Parameter Measurement Report" grouped "7.5.8.6-4" => TrafficParameterMeasurementReport;
-    325 "Traffic Parameter Threshold" extendable(1) "8.2.219" => TrafficParameterThreshold;
-    326 "DL Periodicity" extendable(5) "8.2.219" => DlPeriodicity;
-    327 "N6 Jitter Measurement" extendable(1) "8.2.219" => N6JitterMeasurement;
+    325 "Traffic Parameter Threshold" extendable(1) "8.2.220" => TrafficParameterThreshold;
+    326 "DL Periodicity" extendable(5) "8.2.221" => DlPeriodicity;
+    327 "N6 Jitter Measurement" extendable(1) "8.2.222" => N6JitterMeasurement;
     328 "Traffic Parameter Measurement Indication" extendable(1) "8.2.223" => TrafficParameterMeasurementIndication;
-    329 "UL Periodicity" extendable(5) "8.2.223" => UlPeriodicity;
+    329 "UL Periodicity" extendable(5) "8.2.224" => UlPeriodicity;
     330 "MPQUIC Control Information" extendable(1) "8.2.225" => MpquicControlInformation;
     331 "MPQUIC Parameters" grouped "7.5.3.7-5" => MpquicParameters;
     332 "MPQUIC Address Information" extendable(4) "8.2.226" => MpquicAddressInformation;

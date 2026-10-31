@@ -1,0 +1,502 @@
+/*
+   OxiRush
+   Copyright 2026 Valentin D'Emmanuele
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+   http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+*/
+
+//! The crate against the document that it follows, TS 29.244 V19.6.0: the fixtures of
+//! `tests/spec`, which `extract.py` writes from the document, with the errata of
+//! `errata.tsv` applied. Every message type, IE type, table and row of clause 7, figure of
+//! clause 8.2 and table of values is compared, and each test fails on anything that is
+//! missing or different, with the whole list.
+
+use std::cell::Cell;
+use std::collections::{BTreeMap, BTreeSet};
+
+use oxirush_pfcp::*;
+
+/// The lines of a fixture, without its comments, as their cells.
+fn records(text: &'static str) -> Vec<Vec<&'static str>> {
+    text.lines().filter(|line| !line.starts_with('#') && !line.is_empty()).map(|line| line.split('\t').collect()).collect()
+}
+
+/// A name in any case, with its letters and digits only.
+fn key(name: &str) -> String {
+    name.chars().filter(char::is_ascii_alphanumeric).map(|c| c.to_ascii_lowercase()).collect()
+}
+
+/// The errata of the document, each applied where it says, once.
+struct Errata {
+    list: Vec<(&'static str, &'static str, &'static str, &'static str, &'static str)>,
+    used: Vec<Cell<bool>>,
+}
+
+impl Errata {
+    fn new() -> Self {
+        let list: Vec<_> = records(include_str!("spec/errata.tsv"))
+            .into_iter()
+            .map(|cells| (cells[0], cells[1], cells[2], cells[3], cells[4]))
+            .collect();
+        let used = list.iter().map(|_| Cell::new(false)).collect();
+        Self { list, used }
+    }
+
+    /// The value that the crate takes where the document says `value`.
+    fn apply<'v>(&self, kind: &str, place: &str, value: &'v str) -> &'v str
+    where
+        'static: 'v,
+    {
+        for ((_, k, at, document, taken), used) in self.list.iter().zip(&self.used) {
+            if *k == kind && *at == place && *document == value {
+                used.set(true);
+                return taken;
+            }
+        }
+        value
+    }
+
+    /// The errata that found nothing to apply to.
+    fn unused(&self, kinds: &[&str]) -> Vec<String> {
+        self.list
+            .iter()
+            .zip(&self.used)
+            .filter(|((_, kind, ..), used)| kinds.contains(kind) && !used.get())
+            .map(|((name, kind, at, document, _), _)| format!("erratum {name}: no {kind} at {at} says {document:?}"))
+            .collect()
+    }
+}
+
+fn interfaces(names: &str) -> Interfaces {
+    Interfaces(names.split_whitespace().fold(0, |bits, name| {
+        bits | match name {
+            "Sxa" => Interfaces::SXA.0,
+            "Sxb" => Interfaces::SXB.0,
+            "Sxc" => Interfaces::SXC.0,
+            "N4" => Interfaces::N4.0,
+            "N4mb" => Interfaces::N4MB.0,
+            other => panic!("no interface {other}"),
+        }
+    }))
+}
+
+fn presence(letter: &str) -> Presence {
+    match letter {
+        "M" => Presence::Mandatory,
+        "C" => Presence::Conditional,
+        "O" => Presence::Optional,
+        other => panic!("no presence {other}"),
+    }
+}
+
+fn report(problems: Vec<String>) {
+    assert!(problems.is_empty(), "{} differences from TS 29.244 V19.6.0:\n{}", problems.len(), problems.join("\n"));
+}
+
+/// Table 7.3-1: each message type, its name and its interfaces.
+#[test]
+fn message_types() {
+    let errata = Errata::new();
+    let mut problems = Vec::new();
+    let mut seen = BTreeSet::new();
+    for cells in records(include_str!("spec/message-types.tsv")) {
+        let value: u8 = cells[0].parse().unwrap();
+        seen.insert(value);
+        let name = errata.apply("message-name", cells[0], cells[1]);
+        let Some(info) = message_type_info(value) else {
+            problems.push(format!("message type {value} {name}: not in the crate"));
+            continue;
+        };
+        if info.name() != name {
+            problems.push(format!("message type {value}: {:?} in the crate, {name:?} in the document", info.name()));
+        }
+        if info.interfaces != interfaces(cells[2]) {
+            problems.push(format!("message type {value}: interfaces {:?}, {} in the document", info.interfaces, cells[2]));
+        }
+    }
+    for info in MESSAGE_TYPES {
+        if !seen.contains(&info.message_type) {
+            problems.push(format!("message type {}: not in the document", info.message_type));
+        }
+    }
+    problems.extend(errata.unused(&["message-name"]));
+    report(problems);
+}
+
+/// Table 8.1.2-1: each IE type, its name, its form, its reference and its length.
+#[test]
+fn ie_types() {
+    let errata = Errata::new();
+    let mut problems = Vec::new();
+    let mut seen = BTreeSet::new();
+    for cells in records(include_str!("spec/ie-types.tsv")) {
+        let Ok(ie_type) = cells[0].parse::<u16>() else { continue };
+        let name = cells[1];
+        if ["reserved", "spare", "can be used"].iter().any(|word| name.to_lowercase().starts_with(word)) {
+            if ie_type_info(ie_type).is_some() {
+                problems.push(format!("IE type {ie_type}: {name} in the document, and the crate has it"));
+            }
+            continue;
+        }
+        seen.insert(ie_type);
+        let Some(info) = ie_type_info(ie_type) else {
+            problems.push(format!("IE type {ie_type} {name}: not in the crate"));
+            continue;
+        };
+        if info.name != name {
+            problems.push(format!("IE type {ie_type}: {:?} in the crate, {name:?} in the document", info.name));
+        }
+        let reference = errata.apply("ie-type-reference", cells[0], cells[2]);
+        let (form, place) = reference.split_once('/').unwrap_or((reference, ""));
+        let place = place.split(',').next().unwrap().trim();
+        let (grouped, clause) = match place.split_once(' ') {
+            Some(("Table", table)) => (true, table),
+            Some(("Clause", clause)) => (false, clause),
+            _ => (false, ""),
+        };
+        let expected = match (grouped, form.split_whitespace().next()) {
+            (true, Some("Extendable")) => Some(Form::Grouped),
+            (false, Some("Extendable")) => Some(Form::Extendable),
+            (false, Some("Fixed")) => Some(Form::Fixed),
+            (false, Some("Variable")) => Some(Form::Variable),
+            _ => None,
+        };
+        if expected != Some(info.form) {
+            problems.push(format!("IE type {ie_type} {name}: {:?} in the crate, {reference:?} in the document", info.form));
+        }
+        if info.clause != clause {
+            problems.push(format!("IE type {ie_type} {name}: clause {} in the crate, {reference:?} in the document", info.clause));
+        }
+        let length = errata.apply("ie-type-length", cells[0], cells.get(3).copied().unwrap_or(""));
+        let fixed = length.parse::<u16>().ok();
+        if info.fixed != fixed {
+            problems.push(format!("IE type {ie_type} {name}: length {:?} in the crate, {length:?} in the document", info.fixed));
+        }
+    }
+    for info in IE_TYPES {
+        if !seen.contains(&info.ie_type) {
+            problems.push(format!("IE type {} {}: not in the document", info.ie_type, info.name));
+        }
+    }
+    problems.extend(errata.unused(&["ie-type-reference", "ie-type-length"]));
+    report(problems);
+}
+
+/// The IE type of the cell "IE Type" of a row: its name in Table 8.1.2-1, or, for a name
+/// that several IE types share with what they add ("Usage Report (Session Report
+/// Request)", "TSC Management Information IE within ..."), the one whose table is
+/// nearest to the table of the row.
+fn ie_type_of(cell: &str, table: &str) -> Option<u16> {
+    let names = || IE_TYPES.iter().filter(|info| !info.name.is_empty());
+    if let Some(info) = names().find(|info| key(info.name) == key(cell)) {
+        return Some(info.ie_type);
+    }
+    let base = |name: &str| {
+        let name = name.split(" (").next().unwrap();
+        let cut = [" IE within ", " within ", " in "].iter().filter_map(|word| name.find(word)).min();
+        key(&name[..cut.unwrap_or(name.len())])
+    };
+    let common = |a: &str, b: &str| a.split('.').zip(b.split('.')).take_while(|(x, y)| x == y).count();
+    names()
+        .filter(|info| base(info.name) == key(cell))
+        .max_by_key(|info| common(info.clause.split('-').next().unwrap(), table.split('-').next().unwrap()))
+        .map(|info| info.ie_type)
+}
+
+/// A table of the document: its title, the IE type that it says, and its rows (name,
+/// presence, interfaces, IE type).
+type DocumentTable = (&'static str, &'static str, Vec<(&'static str, &'static str, &'static str, &'static str)>);
+
+/// A row of the crate: the field that has it, its name, presence, interfaces and IE type,
+/// and whether a row of the document is it.
+type CrateRow = (usize, &'static str, Presence, Interfaces, u16, Cell<bool>);
+
+/// The tables of clause 7: each row, with its name, its presence, its interfaces and its
+/// IE type, in the order of the table; a field that rows of one IE type share has them
+/// as its roles.
+#[test]
+fn tables() {
+    let errata = Errata::new();
+    let mut problems = Vec::new();
+    // The tables of the document, after their errata, with the rows of "Same IEs" tables.
+    let mut document: BTreeMap<&str, DocumentTable> = BTreeMap::new();
+    let mut current = "";
+    let mut same = Vec::new();
+    for cells in records(include_str!("spec/tables.tsv")) {
+        match cells[0] {
+            "table" => {
+                current = errata.apply("table-number", cells[2], cells[1]);
+                if document.insert(current, (cells[2], cells[4], Vec::new())).is_some() {
+                    problems.push(format!("Table {current}: twice in the document"));
+                }
+            }
+            "same" => same.push((cells[1], cells[2])),
+            _ => {
+                let rows = &mut document.get_mut(current).unwrap().2;
+                let place = format!("{current}/{}", if cells[2].is_empty() { (rows.len() + 1).to_string() } else { cells[2].into() });
+                let name = errata.apply("row-name", &place, cells[2]);
+                let place = format!("{current}/{}", if name.is_empty() { (rows.len() + 1).to_string() } else { name.into() });
+                let numbered = format!("{current}/{}", rows.len() + 1);
+                let ie_type = errata.apply("row-ie-type", &place, errata.apply("row-ie-type", &numbered, cells[5]));
+                let interfaces = errata.apply("row-interfaces", &place, cells[4]);
+                rows.push((name, cells[3], interfaces, ie_type));
+            }
+        }
+    }
+    for (table, like) in same {
+        let rows = document[like].2.clone();
+        document.get_mut(table).unwrap().2 = rows;
+    }
+    let crate_tables: BTreeMap<&str, &Table> = MESSAGE_TYPES
+        .iter()
+        .map(|info| info.table)
+        .chain(IE_TYPES.iter().flat_map(|info| info.tables.iter().copied()))
+        .map(|table| (table.id, table))
+        .collect();
+    for (id, table) in &crate_tables {
+        // Version Not Supported Response has no IE and no table: its clause stands for one.
+        let clause_only = table.rows.is_empty() && !id.contains('-');
+        if !document.contains_key(id) && !clause_only {
+            problems.push(format!("Table {id} {}: not in the document", table.name));
+        }
+    }
+    let messages: BTreeMap<&str, u8> = MESSAGE_TYPES.iter().map(|info| (info.table.id, info.message_type)).collect();
+    for (id, (title, ie_type, rows)) in &document {
+        let Some(table) = crate_tables.get(id) else {
+            problems.push(format!("Table {id} {title}: not in the crate"));
+            continue;
+        };
+        // A table of a grouped IE says its type; that of a message ends with its name.
+        match (ie_type.parse::<u16>(), messages.get(id)) {
+            (Ok(ie_type), None) if ie_type == table.code => {}
+            (Err(_), Some(_)) if key(title).ends_with(&key(table.name.trim_start_matches("PFCP "))) => {}
+            _ => problems.push(format!("Table {id} {title} (IE type {ie_type:?}): {} {} in the crate", table.code, table.name)),
+        }
+        // The rows of the crate, a role each, with the field that has it.
+        let mut entries: Vec<CrateRow> = Vec::new();
+        for (field, row) in table.rows.iter().enumerate() {
+            if row.roles.is_empty() {
+                entries.push((field, row.name, row.presence, row.interfaces, row.ie_type, Cell::new(false)));
+            }
+            for role in row.roles {
+                entries.push((field, role.name, role.presence, role.interfaces, row.ie_type, Cell::new(false)));
+            }
+        }
+        let mut first_of_field = vec![usize::MAX; table.rows.len()];
+        for (at, (name, p, ifs, ie_type)) in rows.iter().enumerate() {
+            let Some(entry) = entries.iter().find(|entry| !entry.5.get() && entry.1 == *name) else {
+                problems.push(format!("Table {id}, row {name:?}: not in the crate"));
+                continue;
+            };
+            entry.5.set(true);
+            first_of_field[entry.0] = first_of_field[entry.0].min(at);
+            if entry.2 != presence(p) {
+                problems.push(format!("Table {id}, row {name:?}: {:?} in the crate, {p} in the document", entry.2));
+            }
+            if entry.3 != interfaces(ifs) {
+                problems.push(format!("Table {id}, row {name:?}: interfaces {:?} in the crate, {ifs:?} in the document", entry.3));
+            }
+            match ie_type_of(ie_type, id) {
+                Some(number) if number == entry.4 => {}
+                found => problems.push(format!(
+                    "Table {id}, row {name:?}: IE type {} in the crate, {ie_type:?} ({found:?}) in the document",
+                    entry.4
+                )),
+            }
+        }
+        for entry in entries.iter().filter(|entry| !entry.5.get()) {
+            problems.push(format!("Table {id}, row {:?}: not in the document", entry.1));
+        }
+        let found: Vec<usize> = first_of_field.into_iter().filter(|at| *at != usize::MAX).collect();
+        if !found.windows(2).all(|pair| pair[0] <= pair[1]) {
+            problems.push(format!("Table {id}: the fields are not in the order of the table"));
+        }
+    }
+    problems.extend(errata.unused(&["table-number", "row-name", "row-ie-type", "row-interfaces"]));
+    report(problems);
+}
+
+/// The tables of clause 8.2 that name values: each is an enumeration of the crate with
+/// the same values and names; and those of bits name flags of their IE type.
+#[test]
+fn value_tables() {
+    let enumerations: &[(&str, &[(u8, &str)])] = &[
+        (CauseValue::TABLE, CauseValue::NAMES),
+        (SourceInterfaceValue::TABLE, SourceInterfaceValue::NAMES),
+        (Gate::TABLE, Gate::NAMES),
+        (RedirectAddressType::TABLE, RedirectAddressType::NAMES),
+        (DestinationInterfaceValue::TABLE, DestinationInterfaceValue::NAMES),
+        (TimerUnit::TABLE, TimerUnit::NAMES),
+        (NodeIdType::TABLE, NodeIdType::NAMES),
+        (NodeType::TABLE, NodeType::NAMES),
+        (FlowDirection::TABLE, FlowDirection::NAMES),
+        (TimeUnit::TABLE, TimeUnit::NAMES),
+        (OuterHeaderRemovalDescription::TABLE, OuterHeaderRemovalDescription::NAMES),
+        (HeaderType::TABLE, HeaderType::NAMES),
+        (PdnTypeValue::TABLE, PdnTypeValue::NAMES),
+        (RuleIdType::TABLE, RuleIdType::NAMES),
+        (BaseTimeIntervalType::TABLE, BaseTimeIntervalType::NAMES),
+        (InterfaceTypeValue::TABLE, InterfaceTypeValue::NAMES),
+        (SteeringFunctionalityValue::TABLE, SteeringFunctionalityValue::NAMES),
+        (SteeringModeValue::TABLE, SteeringModeValue::NAMES),
+        (PriorityValue::TABLE, PriorityValue::NAMES),
+        (AccessType::TABLE, AccessType::NAMES),
+        (AvailabilityStatus::TABLE, AvailabilityStatus::NAMES),
+        (RatTypeValue::TABLE, RatTypeValue::NAMES),
+        (TransportModeValue::TABLE, TransportModeValue::NAMES),
+        (ReportingUrgencyValue::TABLE, ReportingUrgencyValue::NAMES),
+        (MediaTransportProtocolValue::TABLE, MediaTransportProtocolValue::NAMES),
+        (RtpHeaderExtensionTypeValue::TABLE, RtpHeaderExtensionTypeValue::NAMES),
+        (PayloadFormat::TABLE, PayloadFormat::NAMES),
+        (FormatField::TABLE, FormatField::NAMES),
+        (JobType::TABLE, JobType::NAMES),
+        (MeasurementType::TABLE, MeasurementType::NAMES),
+        (ActionValue::TABLE, ActionValue::NAMES),
+        (ConditionValue::TABLE, ConditionValue::NAMES),
+        (SignalingMethod::TABLE, SignalingMethod::NAMES),
+        (FailureCause::TABLE, FailureCause::NAMES),
+        (TransferringMethod::TABLE, TransferringMethod::NAMES),
+        (RemainingDataReportingIndicationValue::TABLE, RemainingDataReportingIndicationValue::NAMES),
+    ];
+    let mut document: BTreeMap<&str, Vec<(&str, &str)>> = BTreeMap::new();
+    for cells in records(include_str!("spec/value-tables.tsv")) {
+        document.entry(cells[0]).or_default().push((cells[2], cells[3]));
+    }
+    let mut problems = Vec::new();
+    let mut covered = BTreeSet::new();
+    for (tables, names) in enumerations {
+        for table in tables.split(" and ") {
+            let table = table.strip_prefix("Table ").unwrap();
+            covered.insert(table);
+            let Some(rows) = document.get(table) else {
+                problems.push(format!("Table {table}: not in the document"));
+                continue;
+            };
+            let rows: Vec<(u8, &str)> = rows.iter().map(|(value, name)| (value.parse().unwrap(), *name)).collect();
+            if rows != *names {
+                problems.push(format!("Table {table}: {names:?} in the crate, {rows:?} in the document"));
+            }
+        }
+    }
+    for (table, rows) in &document {
+        if covered.contains(table) {
+            continue;
+        }
+        // A table of bits names flags of the IE type of its clause.
+        let clause = table.split(['-', '.']).take(3).collect::<Vec<_>>().join(".");
+        let Some(info) = IE_TYPES.iter().find(|info| info.clause == clause) else {
+            problems.push(format!("Table {table}: no IE type of clause {clause} in the crate"));
+            continue;
+        };
+        if !rows.iter().all(|(bit, _)| bit.contains('/')) {
+            problems.push(format!("Table {table}: no enumeration in the crate"));
+            continue;
+        }
+        for (bit, name) in rows {
+            if !info.fields.iter().any(|field| key(field) == key(name)) {
+                problems.push(format!("Table {table}, bit {bit} {name:?}: no flag of {} in the crate", info.name));
+            }
+        }
+    }
+    report(problems);
+}
+
+/// The names of a figure that a field of the crate stands for, and whether it was found.
+type Mapped = (Vec<&'static str>, Cell<bool>);
+
+/// The figures of clause 8.2: each flag and field of a figure is one of the IE type in the
+/// crate, by its name, and each of the crate is in the figure; `fields.tsv` says where a
+/// field of the crate stands for several names of the figure, and which names a table of
+/// bits stands for, whose bits are flags of the crate (as `value_tables` checks).
+#[test]
+fn layouts() {
+    let errata = Errata::new();
+    let mut mapping: BTreeMap<(&str, &str), Mapped> = BTreeMap::new();
+    for cells in records(include_str!("spec/fields.tsv")) {
+        let names = cells[2].split(" | ").filter(|name| !name.is_empty()).collect();
+        if mapping.insert((cells[0], cells[1]), (names, Cell::new(false))).is_some() {
+            panic!("fields.tsv: {} {} twice", cells[0], cells[1]);
+        }
+    }
+    let mut figures: BTreeMap<&str, (Vec<&str>, Vec<&str>)> = BTreeMap::new();
+    for cells in records(include_str!("spec/layouts.tsv")) {
+        let entry = figures.entry(cells[0]).or_default();
+        entry.0.push(errata.apply("figure-type", cells[0], cells[1]));
+        for name in cells.get(2).map_or("", |names| names).split(" | ").filter(|name| !name.is_empty()) {
+            entry.1.push(errata.apply("figure-field", cells[0], name));
+        }
+    }
+    // The bits that the tables of bits of each clause name.
+    let mut bits: BTreeMap<String, Vec<&str>> = BTreeMap::new();
+    for cells in records(include_str!("spec/value-tables.tsv")) {
+        if cells[2].contains('/') {
+            let clause = cells[0].split(['-', '.']).take(3).collect::<Vec<_>>().join(".");
+            bits.entry(clause).or_default().push(cells[3]);
+        }
+    }
+    let mut problems = Vec::new();
+    for info in IE_TYPES.iter().filter(|info| info.tables.is_empty()) {
+        let Some((types, names)) = figures.remove(info.clause) else {
+            problems.push(format!("IE type {} {}: no figure of clause {} in the document", info.ie_type, info.name, info.clause));
+            continue;
+        };
+        if types.iter().any(|ie_type| ie_type.parse() != Ok(info.ie_type)) {
+            problems.push(format!("clause {}: the figure has type {types:?}, and the crate {}", info.clause, info.ie_type));
+        }
+        let covered: Vec<Cell<bool>> = names.iter().map(|_| Cell::new(false)).collect();
+        let cover = |name: &str| match names.iter().zip(&covered).find(|(known, used)| !used.get() && key(known) == key(name)) {
+            Some((_, used)) => {
+                used.set(true);
+                true
+            }
+            None => false,
+        };
+        let table_bits = bits.get(info.clause).map(Vec::as_slice).unwrap_or_default();
+        let fields = info
+            .fields
+            .iter()
+            .filter(|field| !field.starts_with("Spare") && !table_bits.iter().any(|bit| key(bit) == key(field)))
+            .copied();
+        for field in fields.chain(core::iter::once("*")) {
+            let listed = mapping.get(&(info.clause, field));
+            if let Some((_, used)) = listed {
+                used.set(true);
+            }
+            let wanted = match listed {
+                Some((names, _)) => names.clone(),
+                None if field == "*" => Vec::new(),
+                None => vec![field],
+            };
+            for name in wanted {
+                if !cover(name) {
+                    problems.push(format!("clause {} {}: {field:?} is {name:?}, which the figure does not have", info.clause, info.name));
+                }
+            }
+        }
+        for (name, used) in names.iter().zip(&covered) {
+            if !used.get() {
+                problems.push(format!("clause {} {}: {name:?} of the figure is no field of the crate", info.clause, info.name));
+            }
+        }
+    }
+    for (clause, (types, _)) in figures {
+        problems.push(format!("clause {clause}: a figure of type {types:?} that no IE type of the crate has"));
+    }
+    for ((clause, field), (_, used)) in &mapping {
+        if !used.get() {
+            problems.push(format!("fields.tsv: {clause} {field} is no field of the crate"));
+        }
+    }
+    problems.extend(errata.unused(&["figure-type", "figure-field"]));
+    report(problems);
+}
