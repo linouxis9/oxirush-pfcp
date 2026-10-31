@@ -110,6 +110,16 @@ macro_rules! pfcp_layout {
             /// The clause of the layout.
             pub const CLAUSE: &'static str = $clause;
 
+            /// The first field of the octet of flags whose value is wider than its bits.
+            fn wide(&self) -> Option<&'static str> {
+                $(
+                    if pfcp_layout!(@fwide self.$flag $(, $width $(as $fkind)?)?) {
+                        return Some($flag_name);
+                    }
+                )*
+                None
+            }
+
             /// Whether each field is there as its flags say: the name of the first that is
             /// not.
             #[allow(unused_variables)]
@@ -154,6 +164,22 @@ macro_rules! pfcp_layout {
                         clause: $clause,
                     });
                 }
+                let ie = <Self as crate::ie::IeType>::TYPE_NAME;
+                if let Some(field) = self.wide() {
+                    return Err(crate::Error::FieldLength { ie, field });
+                }
+                $($(
+                    if !crate::values::Field::fits(&self.$head) {
+                        return Err(crate::Error::FieldLength { ie, field: $head_name });
+                    }
+                )*)?
+                $(
+                    if let Some(field) = &self.$field
+                        && !crate::values::Field::fits(field)
+                    {
+                        return Err(crate::Error::FieldLength { ie, field: $field_name });
+                    }
+                )*
                 $($( crate::values::Field::write(&self.$head, out); )*)?
                 crate::values::Field::write(&(self.spare & !Self::FLAGS $( | pfcp_layout!(@fwrite $fk, self.$flag, $bit $(, $width $(as $fkind)?)?) )*), out);
                 $(
@@ -175,6 +201,9 @@ macro_rules! pfcp_layout {
             fn check(&self, path: &crate::check::Path, found: &mut alloc::vec::Vec<crate::check::Deviation>) {
                 if let Some(field) = self.inconsistent() {
                     found.push(crate::check::Deviation::new(path, $clause, crate::check::DeviationKind::Inconsistent { field }));
+                }
+                if self.wide().is_some() {
+                    found.push(crate::check::Deviation::new(path, $clause, crate::check::DeviationKind::Rule("a value wider than its bits")));
                 }
                 if self.spare != 0 {
                     found.push(crate::check::Deviation::new(path, "8.1.2", crate::check::DeviationKind::SpareBits));
@@ -266,6 +295,9 @@ macro_rules! pfcp_layout {
     (@ft) => { bool };
     (@ft $width:literal) => { u8 };
     (@ft $width:literal as $kind:ident) => { $kind };
+    (@fwide $value:expr) => { false };
+    (@fwide $value:expr, $width:literal) => { u16::from($value) >= (1u16 << $width) };
+    (@fwide $value:expr, $width:literal as $kind:ident) => { u16::from($value.value()) >= (1u16 << $width) };
     (@fmask $bit:literal) => { 1 << ($bit - 1) };
     (@fmask $bit:literal, $width:literal) => { ((1 << $width) - 1) << ($bit - 1) };
     (@fread $first:ident, $bit:literal) => { $first & 1 << ($bit - 1) != 0 };
@@ -398,6 +430,9 @@ macro_rules! pfcp_bits {
             }
 
             fn encode(&self, out: &mut alloc::vec::Vec<u8>) -> Result<(), crate::Error> {
+                if let Some(field) = self.wide() {
+                    return Err(crate::Error::FieldLength { ie: <Self as crate::ie::IeType>::TYPE_NAME, field });
+                }
                 let (octets, used) = self.octets();
                 out.extend_from_slice(&octets[..used]);
                 out.extend_from_slice(&self.extra);
@@ -409,8 +444,24 @@ macro_rules! pfcp_bits {
             }
         }
 
+        impl $ty {
+            /// The first field whose value is wider than its bits: encode() refuses it.
+            #[allow(unused_comparisons)]
+            fn wide(&self) -> Option<&'static str> {
+                $(
+                    if pfcp_bits!(@wide $width [$($kind)? $(+ $octet2 $low2 $width2)?] self.$field) {
+                        return Some($name);
+                    }
+                )*
+                None
+            }
+        }
+
         impl crate::check::Check for $ty {
             fn check(&self, path: &crate::check::Path, found: &mut alloc::vec::Vec<crate::check::Deviation>) {
+                if self.wide().is_some() {
+                    found.push(crate::check::Deviation::new(path, $clause, crate::check::DeviationKind::Rule("a value wider than its bits")));
+                }
                 if self.spare.iter().any(|spare| *spare != 0) {
                     found.push(crate::check::Deviation::new(path, "8.1.2", crate::check::DeviationKind::SpareBits));
                 }
@@ -484,6 +535,10 @@ macro_rules! pfcp_bits {
     // A field of one bit is a flag; of a few, a number or a value of its table (`as`); of
     // two parts (`+`), a number whose high bits are in the first and low bits in the second.
     (@type $width:tt [+ $octet2:literal $low2:literal $width2:tt]) => { u16 };
+    (@wide 1 [] $value:expr) => { false };
+    (@wide $width:tt [] $value:expr) => { u16::from($value) >= (1u16 << $width) };
+    (@wide $width:tt [$kind:ident] $value:expr) => { u16::from($value.value()) >= (1u16 << $width) };
+    (@wide $width:tt [+ $octet2:literal $low2:literal $width2:tt] $value:expr) => { u32::from($value) >= (1u32 << ($width + $width2)) };
     (@type 1 []) => { bool };
     (@type $width:tt []) => { u8 };
     (@type $width:tt [$kind:ident]) => { $kind };
@@ -1114,12 +1169,16 @@ macro_rules! pfcp_table {
 macro_rules! pfcp_enum {
     ($(
         $(#[$meta:meta])*
-        pub enum $ty:ident $table:literal bits $bits:literal $(reserved [$($reserved:literal),*])? {
+        pub enum $ty:ident $table:literal bits $bits:literal $(reserved [$($reserved:literal),*])?
+            $(read [$($from:literal ..= $to:literal as $target:literal),+])? {
             $( $value:literal $variant:ident $name:literal ),* $(,)?
         }
     )*) => {$(
         $(#[$meta])*
-        #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+        ///
+        /// Two values are equal when their numbers are: `Other` of a number that the table
+        /// names is the variant of that name, which [`from_value`](Self::from_value) gives.
+        #[derive(Debug, Clone, Copy)]
         #[non_exhaustive]
         pub enum $ty {
             $(
@@ -1128,6 +1187,30 @@ macro_rules! pfcp_enum {
             )*
             /// A value that the table has as spare or reserved, or does not have.
             Other(u8),
+        }
+
+        impl PartialEq for $ty {
+            fn eq(&self, other: &Self) -> bool {
+                self.value() == other.value()
+            }
+        }
+
+        impl Eq for $ty {}
+
+        impl core::hash::Hash for $ty {
+            fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
+                self.value().hash(state);
+            }
+        }
+
+        impl crate::values::Narrowable for $ty {
+            const BITS: u32 = $bits;
+            fn from_value(value: u8) -> Self {
+                Self::from_value(value)
+            }
+            fn value(self) -> u8 {
+                self.value()
+            }
         }
 
         impl $ty {
@@ -1154,6 +1237,15 @@ macro_rules! pfcp_enum {
                 match self {
                     $( Self::$variant => $value, )*
                     Self::Other(value) => value,
+                }
+            }
+
+            /// The value as a receiver takes it: a value that the table has a sender not
+            /// send, and a receiver read as another, is that other (§7.6.8).
+            pub const fn effective(self) -> Self {
+                match self.value() {
+                    $($( $from..=$to => Self::from_value($target), )+)?
+                    _ => self,
                 }
             }
 
@@ -1219,7 +1311,8 @@ macro_rules! pfcp_enum {
             }
         }
 
-        /// A whole octet: a value with a spare bit set is `Other`.
+        /// A whole octet; a value of fewer bits, whose octet has spare bits, is a
+        /// [`Narrow`](crate::Narrow) field.
         impl crate::values::Field for $ty {
             fn read(octets: &mut &[u8]) -> Option<Self> {
                 let (&first, rest) = octets.split_first()?;
@@ -1235,9 +1328,10 @@ macro_rules! pfcp_enum {
             fn check(&self, path: &crate::check::Path, clause: &'static str, found: &mut alloc::vec::Vec<crate::check::Deviation>) {
                 if self.name().is_none() {
                     let value = self.value().into();
-                    let kind = match Self::RESERVED.contains(&self.value()) {
-                        true => crate::check::DeviationKind::ReservedValue { value },
-                        false => crate::check::DeviationKind::SpareValue { value },
+                    let kind = match (Self::RESERVED.contains(&self.value()), self.effective().value()) {
+                        (true, _) => crate::check::DeviationKind::ReservedValue { value },
+                        (false, read) if u32::from(read) != value => crate::check::DeviationKind::ReadAs { value, read: read.into() },
+                        (false, _) => crate::check::DeviationKind::SpareValue { value },
                     };
                     found.push(crate::check::Deviation::new(path, clause, kind));
                 }

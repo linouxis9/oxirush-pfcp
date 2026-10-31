@@ -592,7 +592,7 @@ pfcp_table! {
         clock_drift_control_information: "Clock Drift Control Information" C* ClockDriftControlInformation [N4],
         ue_ip_address_pool_information: "UE IP address Pool Information" O* UeIpAddressPoolInformation [SXB N4],
         gtp_u_path_qos_control_information: "GTP-U Path QoS Control Information" C* GtpUPathQoSControlInformation [N4],
-        ue_ip_address_usage_information: "UE IP Address Usage Information" O UeIpAddressUsageInformation [SXB N4],
+        ue_ip_address_usage_information: "UE IP Address Usage Information" O* UeIpAddressUsageInformation [SXB N4],
         n6_delay_measurement_control_information: "N6 Delay Measurement Control Information" C* N6DelayMeasurementControlInformation [N4],
         n6_delay_measurement_protocols: "N6 Delay Measurement Protocols" C N6DelayMeasurementProtocols [N4],
         operator_configurable_upf_capability: "Operator Configurable UPF Capability" C* OperatorConfigurableUpfCapability [N4],
@@ -607,7 +607,7 @@ pfcp_table! {
         cause: "Cause" M Cause [SXA SXB SXC N4 N4MB],
         up_function_features: "UP Function Features" O UpFunctionFeatures [SXA SXB SXC N4 N4MB],
         cp_function_features: "CP Function Features" O CpFunctionFeatures [SXA SXB SXC N4 N4MB],
-        ue_ip_address_usage_information: "UE IP Address Usage Information" O UeIpAddressUsageInformation [SXB N4],
+        ue_ip_address_usage_information: "UE IP Address Usage Information" O* UeIpAddressUsageInformation [SXB N4],
         n6_delay_measurement_protocols: "N6 Delay Measurement Protocols" O N6DelayMeasurementProtocols [N4],
         operator_configurable_upf_capability: "Operator Configurable UPF Capability" C* OperatorConfigurableUpfCapability [N4],
         packet_inspection_functionality: "Packet Inspection functionality" O PacketInspectionFunctionality [N4],
@@ -2126,7 +2126,7 @@ pfcp_table! {
     /// Downlink Data Report IE within PFCP Session Report Request (Table 7.5.8.2-1).
     group DownlinkDataReport = 83, "Downlink Data Report", "7.5.8.2-1" {
         pdr_id: "PDR ID" M* PdrId [SXA N4 N4MB],
-        downlink_data_service_information: "Downlink Data Service Information" C DownlinkDataServiceInformation [SXA N4],
+        downlink_data_service_information: "Downlink Data Service Information" C* DownlinkDataServiceInformation [SXA N4],
         dl_data_packets_size: "DL Data Packets Size" O DlDataPacketsSize [SXA],
         dl_data_status: "DL Data Status" O DataStatus [N4],
     }

@@ -39,6 +39,11 @@ pub trait Field: Sized {
     fn size(&self) -> usize;
     /// What it breaks of the clause of its layout: a value that its table does not name.
     fn check(&self, _path: &crate::check::Path, _clause: &'static str, _found: &mut Vec<Deviation>) {}
+    /// Whether its length, its number or its type fit the bits that say them: a value
+    /// that does not is refused by `encode()` and reported by `check()`.
+    fn fits(&self) -> bool {
+        true
+    }
     /// Its tree.
     #[cfg(feature = "tree")]
     fn to_tree(&self) -> oxirush_utils::tree::Value;
@@ -83,6 +88,118 @@ macro_rules! number_field {
     )*};
 }
 number_field!(u8, u16, u32, u64);
+
+/// The signed numbers of the clause, in two's complement.
+macro_rules! signed_field {
+    ($($t:ty),*) => {$(
+        impl Field for $t {
+            fn read(octets: &mut &[u8]) -> Option<Self> {
+                take(octets).map(<$t>::from_be_bytes)
+            }
+            fn write(&self, out: &mut Vec<u8>) {
+                out.extend_from_slice(&self.to_be_bytes());
+            }
+            fn size(&self) -> usize {
+                core::mem::size_of::<$t>()
+            }
+            #[cfg(feature = "tree")]
+            fn to_tree(&self) -> oxirush_utils::tree::Value {
+                oxirush_utils::tree::signed((*self).into())
+            }
+            #[cfg(feature = "tree")]
+            fn from_tree(
+                value: &oxirush_utils::tree::Value,
+                reading: &mut oxirush_utils::tree::Reading,
+            ) -> Result<Self, oxirush_utils::tree::Refused> {
+                Ok(reading.signed(value, <$t>::MIN.into(), <$t>::MAX.into())? as $t)
+            }
+        }
+    )*};
+}
+signed_field!(i32, i64);
+
+/// An enumeration of the tables of values, as a [`Narrow`] field reads it.
+pub trait Narrowable: Copy + Field {
+    /// The width of its field, in bits.
+    const BITS: u32;
+    /// The value of a number.
+    fn from_value(value: u8) -> Self;
+    /// The number.
+    fn value(self) -> u8;
+}
+
+/// A value of the low bits of its octet, whose other bits are spare (§8.1.2): a Time Unit
+/// of a Packet Rate (§8.2.63), the Node Type of an FQ-CSID (§8.2.43). Its tree is the
+/// value, or `{"value": ..., "Spare": ...}` for spare bits that are set.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Narrow<E> {
+    /// The value.
+    pub value: E,
+    /// The other bits of the octet, which are spare: zero from a sender.
+    pub spare: u8,
+}
+
+impl<E: Narrowable> Narrow<E> {
+    const MASK: u8 = ((1u16 << E::BITS) - 1) as u8;
+
+    /// The value, without spare bits.
+    pub fn new(value: E) -> Self {
+        Self { value, spare: 0 }
+    }
+}
+
+impl<E: Narrowable> Field for Narrow<E> {
+    fn read(octets: &mut &[u8]) -> Option<Self> {
+        let octet = u8::read(octets)?;
+        Some(Self { value: E::from_value(octet & Self::MASK), spare: octet & !Self::MASK })
+    }
+    fn write(&self, out: &mut Vec<u8>) {
+        out.push(self.spare & !Self::MASK | self.value.value() & Self::MASK);
+    }
+    fn size(&self) -> usize {
+        1
+    }
+    fn fits(&self) -> bool {
+        self.value.value() <= Self::MASK && self.spare & Self::MASK == 0
+    }
+    fn check(&self, path: &crate::check::Path, clause: &'static str, found: &mut Vec<Deviation>) {
+        if !self.fits() {
+            found.push(Deviation::new(path, clause, DeviationKind::Rule("a value wider than its bits")));
+        }
+        if self.spare != 0 {
+            found.push(Deviation::new(path, "8.1.2", DeviationKind::SpareBits));
+        }
+        Field::check(&self.value, path, clause, found);
+    }
+    #[cfg(feature = "tree")]
+    fn to_tree(&self) -> oxirush_utils::tree::Value {
+        if self.spare == 0 {
+            return self.value.to_tree();
+        }
+        let mut members = oxirush_utils::tree::Members::new();
+        members.put("value", self.value.to_tree());
+        members.put("Spare", oxirush_utils::tree::unsigned(self.spare.into()));
+        members.finish()
+    }
+    #[cfg(feature = "tree")]
+    fn from_tree(
+        value: &oxirush_utils::tree::Value,
+        reading: &mut oxirush_utils::tree::Reading,
+    ) -> Result<Self, oxirush_utils::tree::Refused> {
+        let narrow = match value.is_object() {
+            false => Self::new(E::from_tree(value, reading)?),
+            true => {
+                let read = reading.members(value, &["value", "Spare"])?;
+                let spare = reading.optional(&read, 1, |value, reading| reading.unsigned(value, 0, 255))?.unwrap_or(0) as u8;
+                Self { value: reading.member(&read, 0, E::from_tree)?, spare }
+            }
+        };
+        if !narrow.fits() {
+            return Err(reading.mismatch("a value of its bits, and spare bits of the others", value));
+        }
+        Ok(narrow)
+    }
+}
 
 /// A number of five octets: a bitrate of MBR and GBR, in kbps.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -163,14 +280,21 @@ macro_rules! length_value {
                 Some(Self(value.to_vec()))
             }
             fn write(&self, out: &mut Vec<u8>) {
-                // A value longer than its length can say is written with the length cut:
-                // check() reports it.
+                // encode() refuses a value longer than its length can say.
                 let length = <$length>::try_from(self.0.len()).unwrap_or(<$length>::MAX);
                 out.extend_from_slice(&length.to_be_bytes());
                 out.extend_from_slice(&self.0);
             }
             fn size(&self) -> usize {
                 core::mem::size_of::<$length>() + self.0.len()
+            }
+            fn fits(&self) -> bool {
+                self.0.len() <= usize::from(<$length>::MAX)
+            }
+            fn check(&self, path: &crate::check::Path, clause: &'static str, found: &mut Vec<Deviation>) {
+                if !self.fits() {
+                    found.push(Deviation::new(path, clause, DeviationKind::Rule("more octets than their length can say")));
+                }
             }
             #[cfg(feature = "tree")]
             fn to_tree(&self) -> oxirush_utils::tree::Value {
@@ -221,7 +345,8 @@ impl Field for Rest {
     }
 }
 
-/// A percentage, from 0 to 100: a receiver takes another value as 0 (§8.2.34).
+/// A percentage, from 0 to 100: a receiver takes another value as 0 (§8.2.34, §8.2.126,
+/// §8.2.196).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Percent(pub u8);
 
@@ -237,7 +362,7 @@ impl Field for Percent {
     }
     fn check(&self, path: &crate::check::Path, clause: &'static str, found: &mut Vec<Deviation>) {
         if self.0 > 100 {
-            found.push(Deviation::new(path, clause, DeviationKind::SpareValue { value: self.0.into() }));
+            found.push(Deviation::new(path, clause, DeviationKind::ReadAs { value: self.0.into(), read: 0 }));
         }
     }
     #[cfg(feature = "tree")]
@@ -309,6 +434,9 @@ impl<T: Field> Field for Counted<T> {
     fn size(&self) -> usize {
         1 + self.0.iter().map(Field::size).sum::<usize>()
     }
+    fn fits(&self) -> bool {
+        self.0.len() <= usize::from(u8::MAX) && self.0.iter().all(Field::fits)
+    }
     fn check(&self, path: &crate::check::Path, clause: &'static str, found: &mut Vec<Deviation>) {
         if self.0.len() > usize::from(u8::MAX) {
             found.push(Deviation::new(path, clause, DeviationKind::Rule("more values than their number can say")));
@@ -353,6 +481,9 @@ impl<T: Field> Field for Each<T> {
     }
     fn size(&self) -> usize {
         self.0.iter().map(Field::size).sum()
+    }
+    fn fits(&self) -> bool {
+        self.0.iter().all(Field::fits)
     }
     fn check(&self, path: &crate::check::Path, clause: &'static str, found: &mut Vec<Deviation>) {
         for value in &self.0 {
@@ -458,16 +589,20 @@ impl Field for TypedAddress {
         Some(Self { address_type: first >> 6, address: address.to_vec() })
     }
     fn write(&self, out: &mut Vec<u8>) {
-        // A type or an address longer than their bits can say is written cut: check()
-        // reports it.
+        // encode() refuses a type or an address longer than their bits can say.
         out.push((self.address_type & 0x03) << 6 | (self.address.len().min(0x3f) as u8));
         out.extend_from_slice(&self.address[..self.address.len().min(0x3f)]);
     }
     fn size(&self) -> usize {
         1 + self.address.len().min(0x3f)
     }
+    fn fits(&self) -> bool {
+        self.address_type <= 3 && self.address.len() <= 0x3f
+    }
     fn check(&self, path: &crate::check::Path, clause: &'static str, found: &mut Vec<Deviation>) {
-        if self.ip().is_none() {
+        if !self.fits() {
+            found.push(Deviation::new(path, clause, DeviationKind::Rule("an Address Type or an Address longer than their bits can say")));
+        } else if self.ip().is_none() {
             found.push(Deviation::new(path, clause, DeviationKind::Rule("an address that is neither IPv4 of type 0 nor IPv6 of type 1")));
         }
     }
@@ -1069,6 +1204,11 @@ macro_rules! pfcp_fields {
                 Some(Self { $($field,)* extra: Octets::wire(octets) })
             }
             fn encode(&self, out: &mut Vec<u8>) -> Result<(), Error> {
+                $(
+                    if !Field::fits(&self.$field) {
+                        return Err(Error::FieldLength { ie: <Self as crate::ie::IeType>::TYPE_NAME, field: $name });
+                    }
+                )*
                 $( Field::write(&self.$field, out); )*
                 out.extend_from_slice(&self.extra);
                 Ok(())

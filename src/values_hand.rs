@@ -96,17 +96,17 @@ pfcp_layout! {
 }
 
 pfcp_layout! {
-    /// Packet Rate (§8.2.63): each rate after its time unit (Table 8.2.63.1), in the octet
-    /// of the unit with its spare bits.
+    /// Packet Rate (§8.2.63): each rate after its time unit (Table 8.2.63.1), in bits 3 to
+    /// 1 of its octet, whose other bits are spare.
     pub struct PacketRate "8.2.63" {
         flags(u8) { aprc "APRC": 3, dlpr "DLPR": 2, ulpr "ULPR": 1 }
-        uplink_time_unit "Uplink Time Unit": TimeUnit if ulpr,
+        uplink_time_unit "Uplink Time Unit": Narrow<TimeUnit> if ulpr,
         maximum_uplink_packet_rate "Maximum Uplink Packet Rate": u16 if ulpr,
-        downlink_time_unit "Downlink Time Unit": TimeUnit if dlpr,
+        downlink_time_unit "Downlink Time Unit": Narrow<TimeUnit> if dlpr,
         maximum_downlink_packet_rate "Maximum Downlink Packet Rate": u16 if dlpr,
-        additional_uplink_time_unit "Additional Uplink Time Unit": TimeUnit if aprc && ulpr,
+        additional_uplink_time_unit "Additional Uplink Time Unit": Narrow<TimeUnit> if aprc && ulpr,
         additional_maximum_uplink_packet_rate "Additional Maximum Uplink Packet Rate": u16 if aprc && ulpr,
-        additional_downlink_time_unit "Additional Downlink Time Unit": TimeUnit if aprc && dlpr,
+        additional_downlink_time_unit "Additional Downlink Time Unit": Narrow<TimeUnit> if aprc && dlpr,
         additional_maximum_downlink_packet_rate "Additional Maximum Downlink Packet Rate": u16 if aprc && dlpr,
     }
 }
@@ -243,13 +243,59 @@ pfcp_layout! {
 }
 
 pfcp_layout! {
-    /// MBS Session Identifier (§8.2.206): the TMGI, then, with SSMI, the Source Specific IP
-    /// Multicast Address and what follows it, kept as their octets.
+    /// MBS Session Identifier (§8.2.206): the TMGI, the Source Specific IP Multicast
+    /// Address, and the NID, each as its flag says.
     pub struct MbsSessionIdentifier "8.2.206" {
         flags(u8) { nidi "NIDI": 3, ssmi "SSMI": 2, tmgi "TMGI": 1 }
         tmgi_field "TMGI field": Mac if tmgi,
-        nid "NID": Mac if nidi && !ssmi,
-        source_specific_ip_multicast_address "Source Specific IP Multicast Address": Rest if ssmi,
+        source_specific_ip_multicast_address "Source Specific IP Multicast Address": SsmAddress if ssmi,
+        nid "NID": Mac if nidi,
+    }
+}
+
+/// A Source Specific IP Multicast Address (§8.2.206): octets 10 to m of the Multicast
+/// Transport Information (§8.2.207), the IP Multicast Distribution Address and the IP
+/// Source Address, each after its type and its length.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct SsmAddress {
+    /// The IP Multicast Distribution Address.
+    pub distribution: TypedAddress,
+    /// The IP Source Address.
+    pub source: TypedAddress,
+}
+
+impl Field for SsmAddress {
+    fn read(octets: &mut &[u8]) -> Option<Self> {
+        Some(Self { distribution: TypedAddress::read(octets)?, source: TypedAddress::read(octets)? })
+    }
+    fn write(&self, out: &mut Vec<u8>) {
+        self.distribution.write(out);
+        self.source.write(out);
+    }
+    fn size(&self) -> usize {
+        self.distribution.size() + self.source.size()
+    }
+    fn check(&self, path: &crate::check::Path, clause: &'static str, found: &mut Vec<Deviation>) {
+        self.distribution.check(path, clause, found);
+        self.source.check(path, clause, found);
+    }
+    #[cfg(feature = "tree")]
+    fn to_tree(&self) -> oxirush_utils::tree::Value {
+        let mut members = oxirush_utils::tree::Members::new();
+        members.put("IP Multicast Distribution Address", self.distribution.to_tree());
+        members.put("IP Source Address", self.source.to_tree());
+        members.finish()
+    }
+    #[cfg(feature = "tree")]
+    fn from_tree(
+        value: &oxirush_utils::tree::Value,
+        reading: &mut oxirush_utils::tree::Reading,
+    ) -> Result<Self, oxirush_utils::tree::Refused> {
+        let read = reading.members(value, &["IP Multicast Distribution Address", "IP Source Address"])?;
+        Ok(Self {
+            distribution: reading.member(&read, 0, TypedAddress::from_tree)?,
+            source: reading.member(&read, 1, TypedAddress::from_tree)?,
+        })
     }
 }
 
@@ -285,8 +331,8 @@ pfcp_layout! {
     pub struct N6JitterMeasurement "8.2.222" {
         flags(u8) { dl "DL": 1 }
         dl_periodicity "DL Periodicity": u32 if dl,
-        lower_dl_jitter_measurement "Lower DL Jitter Measurement": u32 if dl,
-        higher_dl_jitter_measurement "Higher DL Jitter Measurement": u32 if dl,
+        lower_dl_jitter_measurement "Lower DL Jitter Measurement": i32 if dl,
+        higher_dl_jitter_measurement "Higher DL Jitter Measurement": i32 if dl,
     }
 }
 
@@ -470,6 +516,14 @@ impl Field for SecretLv8 {
     fn size(&self) -> usize {
         1 + self.0.len()
     }
+    fn fits(&self) -> bool {
+        self.0.len() <= usize::from(u8::MAX)
+    }
+    fn check(&self, path: &crate::check::Path, clause: &'static str, found: &mut Vec<Deviation>) {
+        if !self.fits() {
+            found.push(Deviation::new(path, clause, crate::check::DeviationKind::Rule("more octets than their length can say")));
+        }
+    }
     #[cfg(feature = "tree")]
     fn to_tree(&self) -> oxirush_utils::tree::Value {
         oxirush_utils::tree::octets(&self.0)
@@ -480,6 +534,118 @@ impl Field for SecretLv8 {
         reading: &mut oxirush_utils::tree::Reading,
     ) -> Result<Self, oxirush_utils::tree::Refused> {
         reading.secret(|reading| Lv8::from_tree(value, reading)).map(|value| Self(value.0))
+    }
+}
+
+/// Digits after a length of one octet, as TBCD: an IMSI, an IMEI or an MSISDN, as TS
+/// 29.274 §8.3, §8.10 and §8.11 write them. Its tree is the digits, or `{"octets": ...}`
+/// for octets that are no TBCD string.
+#[derive(Clone, Default, PartialEq, Eq)]
+pub struct DigitsLv8(pub Vec<u8>);
+
+impl DigitsLv8 {
+    /// The digits, as `tbcd::encode` gives back their octets.
+    pub fn digits(&self) -> Option<alloc::string::String> {
+        let text = oxirush_utils::identity::tbcd::decode(&self.0).ok()?;
+        (oxirush_utils::identity::tbcd::encode(&text).ok()? == self.0).then_some(text)
+    }
+
+    /// The octets of `digits`.
+    ///
+    /// # Errors
+    ///
+    /// A character that TBCD does not have.
+    pub fn new(digits: &str) -> Result<Self, oxirush_utils::identity::Error> {
+        oxirush_utils::identity::tbcd::encode(digits).map(Self)
+    }
+}
+
+impl fmt::Debug for DigitsLv8 {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self.digits() {
+            Some(digits) => write!(f, "DigitsLv8({digits:?})"),
+            None => write!(f, "DigitsLv8({:?})", Octets::copied(&self.0)),
+        }
+    }
+}
+
+/// Text after a length of one octet: a NAI, a SUPI, a GPSI or a PEI. Its tree is the
+/// text, or `{"octets": ...}` for octets that are no UTF-8.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct TextLv8(pub Vec<u8>);
+
+impl TextLv8 {
+    /// The text.
+    pub fn text(&self) -> Option<&str> {
+        core::str::from_utf8(&self.0).ok()
+    }
+}
+
+impl From<&str> for TextLv8 {
+    fn from(text: &str) -> Self {
+        Self(text.as_bytes().to_vec())
+    }
+}
+
+macro_rules! identity_lv8 {
+    ($($ty:ident $as_text:ident $from_text:expr),*) => {$(
+        impl Field for $ty {
+            fn read(octets: &mut &[u8]) -> Option<Self> {
+                Lv8::read(octets).map(|value| Self(value.0))
+            }
+            fn write(&self, out: &mut Vec<u8>) {
+                out.push(u8::try_from(self.0.len()).unwrap_or(u8::MAX));
+                out.extend_from_slice(&self.0);
+            }
+            fn size(&self) -> usize {
+                1 + self.0.len()
+            }
+            fn fits(&self) -> bool {
+                self.0.len() <= usize::from(u8::MAX)
+            }
+            fn check(&self, path: &crate::check::Path, clause: &'static str, found: &mut Vec<Deviation>) {
+                if !self.fits() {
+                    found.push(Deviation::new(path, clause, crate::check::DeviationKind::Rule("more octets than their length can say")));
+                }
+            }
+            #[cfg(feature = "tree")]
+            fn to_tree(&self) -> oxirush_utils::tree::Value {
+                match self.$as_text() {
+                    Some(text) => oxirush_utils::tree::text(&text),
+                    None => oxirush_utils::tree::alternative("octets", oxirush_utils::tree::octets(&self.0)),
+                }
+            }
+            #[cfg(feature = "tree")]
+            fn from_tree(
+                value: &oxirush_utils::tree::Value,
+                reading: &mut oxirush_utils::tree::Reading,
+            ) -> Result<Self, oxirush_utils::tree::Refused> {
+                let octets = match value.as_str() {
+                    Some(text) => {
+                        let from_text: fn(&str) -> Option<Vec<u8>> = $from_text;
+                        from_text(text).ok_or_else(|| reading.mismatch(stringify!($ty), value))?
+                    }
+                    None => {
+                        let (_, content) = reading.alternative(value, &["octets"])?;
+                        reading.within("octets", content, |content, reading| reading.octets(content))?
+                    }
+                };
+                if octets.len() > usize::from(u8::MAX) {
+                    return Err(reading.mismatch("at most 255 octets", value));
+                }
+                Ok(Self(octets))
+            }
+        }
+    )*};
+}
+identity_lv8!(
+    DigitsLv8 digits |text| oxirush_utils::identity::tbcd::encode(text).ok(),
+    TextLv8 text_owned |text| Some(text.as_bytes().to_vec())
+);
+
+impl TextLv8 {
+    fn text_owned(&self) -> Option<alloc::string::String> {
+        self.text().map(alloc::string::String::from)
     }
 }
 
@@ -591,7 +757,7 @@ pub struct FqCsid {
     pub csids: Vec<u16>,
     /// The octet of the Node Type, bits 4 to 1, and four spare bits: absent from a sender
     /// of an earlier release.
-    pub node_type: Option<NodeType>,
+    pub node_type: Option<Narrow<NodeType>>,
     /// The octets after them, which a later release adds.
     pub extra: Octets,
 }
@@ -619,7 +785,7 @@ impl Codec for FqCsid {
         for _ in 0..first & 0x0f {
             csids.push(u16::read(&mut rest)?);
         }
-        let node_type = NodeType::read(&mut rest);
+        let node_type = Narrow::read(&mut rest);
         Some(Self { node_id_type, node_address: address.to_vec(), csids, node_type, extra: Octets::wire(rest) })
     }
     fn encode(&self, out: &mut Vec<u8>) -> Result<(), Error> {
@@ -635,7 +801,10 @@ impl Codec for FqCsid {
             return Err(Error::Inconsistent { ie: "FQ-CSID", field: "Node Type", clause: "8.2.43" });
         }
         if let Some(node_type) = self.node_type {
-            out.push(node_type.value());
+            if !node_type.fits() {
+                return Err(Error::FieldLength { ie: "FQ-CSID", field: "Node Type" });
+            }
+            node_type.write(out);
         }
         out.extend_from_slice(&self.extra);
         Ok(())
@@ -651,7 +820,7 @@ impl Check for FqCsid {
             found.push(Deviation::new(path, "8.2.43", crate::check::DeviationKind::SpareValue { value: self.node_id_type.into() }));
         }
         if let Some(node_type) = self.node_type {
-            node_type.check(path, "8.2.43", found);
+            Field::check(&node_type, path, "8.2.43", found);
         }
     }
 }
@@ -676,7 +845,7 @@ impl oxirush_utils::tree::Tree for FqCsid {
         members.put("Node-Address", address);
         members.put("PDN Connection Set Identifiers", tree::Value::Array(self.csids.iter().map(|csid| tree::unsigned((*csid).into())).collect()));
         if let Some(node_type) = self.node_type {
-            members.put("Node Type", node_type.tree());
+            members.put("Node Type", Field::to_tree(&node_type));
         }
         if !self.extra.is_empty() {
             members.put("extra", tree::octets(&self.extra));
@@ -698,7 +867,7 @@ impl oxirush_utils::tree::Tree for FqCsid {
             }
         })?;
         let csids = reading.member(&read, 2, |value, reading| reading.list(value, |value, reading| Ok(reading.unsigned(value, 0, 0xffff)? as u16)))?;
-        let node_type = reading.optional(&read, 3, NodeType::from_tree)?;
+        let node_type = reading.optional(&read, 3, Narrow::from_tree)?;
         let extra = reading.optional(&read, 4, |value, reading| reading.octets(value))?;
         let fq_csid = Self { node_id_type, node_address, csids, node_type, extra: extra.map(Octets::from).unwrap_or_default() };
         if fq_csid.node_type.is_none() && !fq_csid.extra.is_empty() {

@@ -28,6 +28,7 @@ use crate::macros::{pfcp_bits, pfcp_layout};
 use crate::octets::Octets;
 use crate::enums::*;
 use crate::values::*;
+use crate::values_hand::{DigitsLv8, TextLv8};
 
 pfcp_number! {
     /// Cause (§8.2.1).
@@ -91,7 +92,7 @@ pfcp_number! {
     /// MAR ID (§8.2.123).
     MarId(u16) "MAR ID value" "8.2.123";
     /// Weight (§8.2.126).
-    Weight(u8) "Weight Value" "8.2.126";
+    Weight(Percent) "Weight Value" "8.2.126";
     /// Quota Validity Time (§8.2.132).
     QuotaValidityTime(u32) "Validity Time value" "8.2.132";
     /// Number of Reports (§8.2.133).
@@ -103,13 +104,13 @@ pfcp_number! {
     /// Time Domain Number (§8.2.146).
     TimeDomainNumber(u8) "Time Domain Number value" "8.2.146";
     /// Time Offset Threshold (§8.2.147).
-    TimeOffsetThreshold(u64) "Time Offset Threshold" "8.2.147";
+    TimeOffsetThreshold(i64) "Time Offset Threshold" "8.2.147";
     /// Cumulative rateRatio Threshold (§8.2.148).
-    CumulativeRateRatioThreshold(u32) "Cumulative rateRatio Threshold" "8.2.148";
+    CumulativeRateRatioThreshold(i32) "Cumulative rateRatio Threshold" "8.2.148";
     /// Time Offset Measurement (§8.2.149).
-    TimeOffsetMeasurement(u64) "Time Offset Measurement" "8.2.149";
+    TimeOffsetMeasurement(i64) "Time Offset Measurement" "8.2.149";
     /// Cumulative rateRatio Measurement (§8.2.150).
-    CumulativeRateRatioMeasurement(u32) "Cumulative rateRatio Measurement" "8.2.150";
+    CumulativeRateRatioMeasurement(i32) "Cumulative rateRatio Measurement" "8.2.150";
     /// SRR ID (§8.2.151).
     SrrId(u8) "SRR ID value" "8.2.151";
     /// Average Packet Delay (§8.2.162).
@@ -163,8 +164,9 @@ pfcp_number! {
 }
 
 pfcp_fields! {
-    /// Multiplier (§8.2.84).
-    pub struct Multiplier "8.2.84" { value_digits "Value-Digits": u64, exponent "Exponent": u32 }
+    /// Multiplier (§8.2.84): the Value-Digits (Integer64) and the Exponent (Integer32) of the
+    /// Unit-Value AVP of TS 32.299.
+    pub struct Multiplier "8.2.84" { value_digits "Value-Digits": i64, exponent "Exponent": i32 }
     /// S-NSSAI (§8.2.176).
     pub struct SNssai "8.2.176" { sst "SST": u8, sd "SD": U24 }
     /// DL Periodicity (§8.2.221).
@@ -957,16 +959,17 @@ pfcp_layout! {
 }
 
 pfcp_layout! {
-    /// User ID (§8.2.101).
+    /// User ID (§8.2.101): the IMSI, the IMEI and the MSISDN as their digits, the others as
+    /// text.
     pub struct UserId "8.2.101" {
         flags(u8) { peif "PEIF": 7, gpsif "GPSIF": 6, supif "SUPIF": 5, naif "NAIF": 4, msisdnf "MSISDNF": 3, imeif "IMEIF": 2, imsif "IMSIF": 1 }
-        imsi "IMSI": Lv8 if imsif,
-        imei "IMEI": Lv8 if imeif,
-        msisdn "MSISDN": Lv8 if msisdnf,
-        nai "NAI": Lv8 if naif,
-        supi "SUPI": Lv8 if supif,
-        gpsi "GPSI": Lv8 if gpsif,
-        pei "PEI": Lv8 if peif,
+        imsi "IMSI": DigitsLv8 if imsif,
+        imei "IMEI": DigitsLv8 if imeif,
+        msisdn "MSISDN": DigitsLv8 if msisdnf,
+        nai "NAI": TextLv8 if naif,
+        supi "SUPI": TextLv8 if supif,
+        gpsi "GPSI": TextLv8 if gpsif,
+        pei "PEI": TextLv8 if peif,
     }
 }
 
@@ -1026,7 +1029,7 @@ pfcp_layout! {
     /// Number of UE IP Addresses (§8.2.183).
     pub struct NumberOfUeIpAddresses "8.2.183" {
         flags(u8) { ipv6 "IPv6": 2, ipv4 "IPv4": 1 }
-        number_of_ue_ipv4_addresses "Number of UE IPv4 Addresses": Ipv4Addr if ipv4,
+        number_of_ue_ipv4_addresses "Number of UE IPv4 Addresses": u32 if ipv4,
         number_of_ue_ipv6_addresses "Number of UE IPv6 Addresses": u32 if ipv6,
     }
 }
@@ -1036,7 +1039,7 @@ pfcp_layout! {
     pub struct Thresholds "8.2.196" {
         flags(u8) { plr "PLR": 2, rtt "RTT": 1 }
         rtt_value "RTT value": u16 if rtt,
-        packet_loss_rate_value "Packet Loss Rate value": u8 if plr,
+        packet_loss_rate_value "Packet Loss Rate value": Percent if plr,
     }
 }
 

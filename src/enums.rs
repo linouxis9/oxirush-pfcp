@@ -22,7 +22,7 @@ use crate::macros::pfcp_enum;
 
 pfcp_enum! {
     /// Cause values (Table 8.2.1-1).
-    pub enum CauseValue "Table 8.2.1-1" bits 8 reserved [0] {
+    pub enum CauseValue "Table 8.2.1-1" bits 8 reserved [0] read [4 ..= 63 as 1, 93 ..= 255 as 64] {
         1 RequestAccepted "Request accepted (success)",
         2 MoreUsageReportToSend "More Usage Report to send",
         3 RequestPartiallyAccepted "Request partially accepted",
@@ -65,7 +65,7 @@ pfcp_enum! {
         4 FiveGVnInternal "5G VN Internal",
     }
     /// UL Gate and DL Gate (Table 8.2.7-1 and Table 8.2.7-2).
-    pub enum Gate "Table 8.2.7-1 and Table 8.2.7-2" bits 2 {
+    pub enum Gate "Table 8.2.7-1 and Table 8.2.7-2" bits 2 read [2 ..= 3 as 1] {
         0 Open "OPEN",
         1 Closed "CLOSED",
     }
@@ -91,7 +91,7 @@ pfcp_enum! {
         5 FiveGVnInternal "5G VN Internal",
     }
     /// Timer unit (Table 8.2.29.1 and Table 8.2.35.1 and Table 8.2.78.1).
-    pub enum TimerUnit "Table 8.2.29.1 and Table 8.2.35.1 and Table 8.2.78.1" bits 3 {
+    pub enum TimerUnit "Table 8.2.29.1 and Table 8.2.35.1 and Table 8.2.78.1" bits 3 read [5 ..= 6 as 1] {
         0 TwoSeconds "2 seconds",
         1 OneMinute "1 minute",
         2 TenMinutes "10 minutes",
@@ -115,14 +115,14 @@ pfcp_enum! {
         5 PgwUSgwUUpf "PGW-U/SGW-U/UPF",
     }
     /// Flow Direction (Table 8.2.61-1).
-    pub enum FlowDirection "Table 8.2.61-1" bits 3 {
+    pub enum FlowDirection "Table 8.2.61-1" bits 3 read [4 ..= 7 as 0] {
         0 Unspecified "Unspecified",
         1 Downlink "Downlink (traffic to the UE)",
         2 Uplink "Uplink (traffic from the UE)",
         3 Bidirectional "Bidirectional",
     }
     /// Uplink/Downlink Time Unit (Table 8.2.63.1).
-    pub enum TimeUnit "Table 8.2.63.1" bits 3 {
+    pub enum TimeUnit "Table 8.2.63.1" bits 3 read [5 ..= 7 as 0] {
         0 Minute "minute",
         1 SixMinutes "6 minutes",
         2 Hour "hour",
@@ -154,7 +154,7 @@ pfcp_enum! {
         5 Ethernet "Ethernet",
     }
     /// Rule ID Type (Table 8.2.80-1).
-    pub enum RuleIdType "Table 8.2.80-1" bits 5 {
+    pub enum RuleIdType "Table 8.2.80-1" bits 5 read [7 ..= 31 as 1] {
         0 Pdr "PDR",
         1 Far "FAR",
         2 Qer "QER",

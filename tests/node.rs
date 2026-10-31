@@ -467,7 +467,7 @@ fn overload_control_from_any_message() {
 fn overloaded(smf: NodeConfig, metric: u8) -> (Node, u64) {
     let (mut smf, mut upf) = associated_as(smf, at(0));
     let (cp_seid, _) = established(&mut smf, &mut upf, at(0));
-    modified(&mut smf, &mut upf, cp_seid, at(1), with_overload(1, metric, 60, false));
+    modified(&mut smf, &mut upf, cp_seid, at(1), with_overload(1, metric, 30, false));
     (smf, cp_seid)
 }
 

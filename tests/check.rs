@@ -176,7 +176,7 @@ fn check_overload_reduction_metric() {
         ..Default::default()
     };
     let message = Message { header: Header::session(0x1001, 7), body: response.into() };
-    assert_eq!(kinds(&message, Interfaces::N4), [DeviationKind::SpareValue { value: 101 }]);
+    assert_eq!(kinds(&message, Interfaces::N4), [DeviationKind::ReadAs { value: 101, read: 0 }]);
 }
 
 /// §7.6.8: a reserved value is an incorrect IE, a spare one is ignored; Table 8.1.2-1: an

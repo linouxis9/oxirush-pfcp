@@ -623,3 +623,77 @@ fn keys_are_not_printed() {
     let printed = format!("{parameters:?}");
     assert_eq!(printed.matches("aabbcc").count() + printed.matches("170, 187, 204").count(), 1, "{printed}");
 }
+
+/// The values that review round 1 found misread: each as its clause has it.
+#[test]
+fn values_as_their_clauses_have_them() {
+    // Table 7.5.8.2-1: a Downlink Data Service Information for each PDR ID
+    let service = DownlinkDataServiceInformation { ppi: true, paging_policy_indication: Some(3), ..Default::default() };
+    let report = DownlinkDataReport::new(PdrId::new(1)).with_pdr_id(PdrId::new(2)).with_downlink_data_service_information(service.clone()).with_downlink_data_service_information(service);
+    let message = Message { header: Header::session(1, 1), body: SessionReportRequest::new(ReportType { dldr: true, ..Default::default() }).with_downlink_data_report(report).into() };
+    assert!(message.check().is_empty(), "{:?}", message.check());
+    let decoded = Message::decode(&message.encode().unwrap()).unwrap();
+    assert_eq!(decoded, message);
+    // §8.2.183: the number of UE IPv4 addresses is a number
+    let usage = UeIpAddressUsageInformation::default().with_number_of_ue_ip_addresses(NumberOfUeIpAddresses { ipv4: true, number_of_ue_ipv4_addresses: Some(10), ..Default::default() });
+    let tree = tree::Tree::to_tree(&usage);
+    assert_eq!(tree["Number of UE IP Addresses"]["Number of UE IPv4 Addresses"], 10, "{tree}");
+    // §8.2.63: the spare bits of a Time Unit are not the unit
+    let rate = PacketRate::decode(&[0x01, 0x82, 0x00, 0x10]).unwrap();
+    assert_eq!(rate.uplink_time_unit.map(|unit| unit.value), Some(TimeUnit::Hour));
+    assert_eq!(rate.check_kinds(), [DeviationKind::SpareBits]);
+    let mut octets = Vec::new();
+    rate.encode(&mut octets).unwrap();
+    assert_eq!(octets, [0x01, 0x82, 0x00, 0x10]);
+    // §8.2.43: nor those of a Node Type
+    let fq_csid = FqCsid::decode(&[0x01, 10, 0, 0, 1, 0, 7, 0x12]).unwrap();
+    assert_eq!(fq_csid.node_type.map(|node_type| (node_type.value, node_type.spare)), Some((NodeType::PgwCSmf, 0x10)));
+    // Table 8.2.7-1: a Gate of 2 is read as CLOSED; Table 8.2.1-1: a Cause of 70 is a rejection
+    assert_eq!(Gate::from_value(2).effective(), Gate::Closed);
+    assert_eq!(CauseValue::from_value(99).effective(), CauseValue::RequestRejected);
+    assert_eq!(CauseValue::from_value(5).effective(), CauseValue::RequestAccepted);
+    let gate = GateStatus { ul_gate: Gate::from_value(2), ..Default::default() };
+    assert_eq!(gate.check_kinds(), [DeviationKind::ReadAs { value: 2, read: 1 }]);
+    // §8.2.84: the Exponent is an Integer32
+    let multiplier = Multiplier { value_digits: 5, exponent: -2, extra: Octets::new() };
+    let tree = tree::Tree::to_tree(&multiplier);
+    assert_eq!(tree["Exponent"], -2, "{tree}");
+    assert_eq!(tree::from_value::<Multiplier>(&tree).unwrap(), multiplier);
+    let mut octets = Vec::new();
+    multiplier.encode(&mut octets).unwrap();
+    assert_eq!(&octets[8..], [0xff, 0xff, 0xff, 0xfe]);
+    // §8.2.206: the NID after the Source Specific IP Multicast Address
+    let content = [&[0x07][..], &[0x12, 0x34, 0x56, 0x02, 0xf8, 0x39], &[4, 239, 0, 0, 1], &[4, 10, 0, 0, 2], &[1, 2, 3, 4, 5, 0x60]].concat();
+    let identifier = MbsSessionIdentifier::decode(&content).unwrap();
+    assert_eq!(identifier.nid, Some([1, 2, 3, 4, 5, 0x60]));
+    assert_eq!(identifier.source_specific_ip_multicast_address.as_ref().and_then(|ssm| ssm.source.ip()), Some(Ipv4Addr::new(10, 0, 0, 2).into()));
+    assert!(identifier.extra.is_empty());
+    // A length-prefixed field longer than its length can say
+    let user = UserId { naif: true, nai: Some(TextLv8(vec![b'a'; 300])), ..Default::default() };
+    assert!(matches!(user.encode(&mut Vec::new()), Err(Error::FieldLength { field: "NAI", .. })));
+    assert_eq!(user.check_kinds(), [DeviationKind::Rule("more octets than their length can say")]);
+    // §8.2.101: an IMSI is its digits
+    let user = UserId { imsif: true, imsi: Some(DigitsLv8::new("208930000000001").unwrap()), ..Default::default() };
+    let tree = tree::Tree::to_tree(&user);
+    assert_eq!(tree["IMSI"], "208930000000001", "{tree}");
+    assert!(format!("{user:?}").contains("208930000000001"));
+    assert_eq!(tree::from_value::<UserId>(&tree).unwrap(), user);
+    // An enumeration compares by its number, and a value wider than its field is refused
+    assert_eq!(CauseValue::Other(1), CauseValue::RequestAccepted);
+    let interface = SourceInterface::new(SourceInterfaceValue::Other(0xff));
+    assert!(matches!(interface.encode(&mut Vec::new()), Err(Error::FieldLength { .. })));
+    assert!(interface.check_kinds().contains(&DeviationKind::Rule("a value wider than its bits")));
+}
+
+/// The kinds of the deviations of a value.
+trait CheckKinds {
+    fn check_kinds(&self) -> Vec<DeviationKind>;
+}
+
+impl<T: Check> CheckKinds for T {
+    fn check_kinds(&self) -> Vec<DeviationKind> {
+        let mut found = Vec::new();
+        self.check(&Path::Root("/value"), &mut found);
+        found.into_iter().map(|deviation| deviation.kind).collect()
+    }
+}

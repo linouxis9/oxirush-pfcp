@@ -134,6 +134,14 @@ pub enum DeviationKind {
         /// The value.
         value: u32,
     },
+    /// A value that its table has a sender not send, and a receiver read as another: a
+    /// Gate of 2 as CLOSED, a Metric of 101 as 0 (§7.6.8).
+    ReadAs {
+        /// The value.
+        value: u32,
+        /// The value that the receiver takes.
+        read: u32,
+    },
     /// A value that its table reserves: the receiver takes the IE as incorrect (§7.6.8).
     ReservedValue {
         /// The value.
@@ -199,6 +207,7 @@ impl fmt::Display for Deviation {
             DeviationKind::SpareBits => write!(f, "spare bits are not zero"),
             DeviationKind::SpareValue { value } => write!(f, "{value} is a spare value"),
             DeviationKind::ReservedValue { value } => write!(f, "{value} is a reserved value"),
+            DeviationKind::ReadAs { value, read } => write!(f, "{value} is no value to send, and is read as {read}"),
             DeviationKind::Inconsistent { field } => write!(f, "{field} disagrees with the flags of its IE"),
             DeviationKind::Rule(rule) => write!(f, "{rule}"),
         }?;
