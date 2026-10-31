@@ -10,9 +10,15 @@ script:
 
     message-types.tsv   Table 7.3-1: the message types and the interfaces that have them
     ie-types.tsv        Table 8.1.2-1: the IE types, their references and their lengths
-    tables.tsv          the tables of clause 7, one row each
+    tables.tsv          the tables of clause 7, one row each, and whether the comment of a
+                        row says that several IEs of it may be there
     layouts.tsv         the figures of clause 8.2: their clause, the type that they say, and
                         the names of their flags and fields, in order
+    figures.tsv         the place of each flag and field of those figures: the octets of its
+                        row, its lowest bit and how many bits it has
+    conditions.tsv      the sentences of clause 8.2 that make a field there or not as a flag
+                        is set or not: the flag, whether it is set, the field, whether it is
+                        there
     value-tables.tsv    the tables of clause 8.2 that name values, or bits as octet/bit; a
                         value that a table reserves is named <reserved>
     clause-6.tsv        the headings of clause 6, and how many sentences each has that say
@@ -70,7 +76,8 @@ def clean(value):
 
 
 def blocks(body):
-    """The paragraphs, as (style, text), and the tables, as rows of (text, span)."""
+    """The paragraphs, as (style, text), and the tables, as rows of (text, span), with the
+    widths of the cells of each row."""
     for child in body:
         if child.tag == W + 'p':
             style = child.find(f'{W}pPr/{W}pStyle')
@@ -78,15 +85,29 @@ def blocks(body):
             if value:
                 yield 'p', (style.get(W + 'val') if style is not None else '', value)
         elif child.tag == W + 'tbl':
-            rows = []
+            rows, widths = [], []
+            # A cell merged with the one above it (vMerge) has the text of that one.
+            above = {}
             for row in child.findall(W + 'tr'):
-                cells = []
+                cells, sizes = [], []
+                before = row.find(f'{W}trPr/{W}gridBefore')
+                column = int(before.get(W + 'val')) if before is not None else 0
                 for cell in row.findall(W + 'tc'):
                     span = cell.find(f'{W}tcPr/{W}gridSpan')
+                    width = cell.find(f'{W}tcPr/{W}tcW')
+                    merged = cell.find(f'{W}tcPr/{W}vMerge')
                     paragraphs = [text(p) for p in cell.iter(W + 'p')]
-                    cells.append((' / '.join(p for p in paragraphs if p), int(span.get(W + 'val')) if span is not None else 1))
+                    value = ' / '.join(p for p in paragraphs if p)
+                    if merged is not None and merged.get(W + 'val') != 'restart' and not value:
+                        value = above.get(column, '')
+                    above[column] = value
+                    span = int(span.get(W + 'val')) if span is not None else 1
+                    cells.append((value, span))
+                    sizes.append(int(width.get(W + 'w')) if width is not None and width.get(W + 'type', 'dxa') == 'dxa' else None)
+                    column += span
                 rows.append(cells)
-            yield 'tbl', rows
+                widths.append(sizes)
+            yield 'tbl', (rows, widths)
         elif child.tag == W + 'sdt':
             content = child.find(W + 'sdtContent')
             if content is not None:
@@ -106,17 +127,24 @@ def main():
     body = archive().find(W + 'body')
     heading, caption = '', None
     message_types, ie_types, tables, layouts, values, clause6 = [], [], [], [], [], []
+    figures, conditions = [], []
+    # The fields of octets of the figure of the clause, by name and by their octets.
+    fields, labels = [], {}
     for kind, block in blocks(body):
         if kind == 'p':
             style, value = block
             if style.startswith('Heading') or re.match(r'^8\.2\.\d+ [A-Z]', value) and style == '':
                 heading = value
+                fields, labels = [], {}
                 if re.match(r'^6(\.\d+)* ', value):
                     clause6.append(value.split(' ', 1) + [0])
             elif clause6 and re.match(r'^6(\.\d+)* ', heading):
                 clause6[-1][2] += len(requirements(value))
+            elif re.match(r'^8\.2\.\d+ ', heading):
+                conditions.extend([heading.split(' ', 1)[0]] + relation for relation in relations(value, fields, labels))
             caption = value if style == 'TH' else None
             continue
+        block, widths = block
         if clause6 and re.match(r'^6(\.\d+)* ', heading):
             clause6[-1][2] += sum(len(requirements(cell)) for row in block for cell, _ in row)
         rows = [[cell for cell, _ in row] for row in block]
@@ -143,7 +171,8 @@ def main():
                 elif re.match(r'Same IEs', row[0]):
                     tables.append(['same', number, re.search(r'Table (7\.[\d.]+-\d+)', row[0]).group(1)])
                 elif len(row) >= 9 and row[1] in ('M', 'C', 'O'):
-                    tables.append(['row', number, without_notes(row[0]), row[1], interfaces(row[3:8]), without_notes(row[8])])
+                    several = 'several' if SEVERAL.search(row[2]) else 'once'
+                    tables.append(['row', number, without_notes(row[0]), row[1], interfaces(row[3:8]), without_notes(row[8]), several])
         elif title and re.match(r'Table 8\.2\.\d+[.-]\d+', title):
             number = re.match(r'Table (8\.2\.\d+[.-]\d+)', title).group(1)
             values.extend(value_rows(number, title.split(':', 1)[1].strip(), rows))
@@ -151,12 +180,96 @@ def main():
             figure = members(rows, spans)
             if figure:
                 layouts.append([heading.split(' ', 1)[0]] + figure)
+                found = places(block, widths)
+                figures.extend([heading.split(' ', 1)[0]] + place for place in found)
+                fields = [name for _, name, _, bits in found if bits == '8']
+                labels = {re.sub(r'\s+', '', octets): name for octets, name, _, bits in found if bits == '8'}
     write('message-types.tsv', ['value', 'name', 'interfaces'], message_types)
     write('ie-types.tsv', ['type', 'name', 'reference', 'length'], ie_types)
     write('tables.tsv', ['table|row|same', 'table', 'name, or the name of the row', 'heading, or presence', 'IE type, or interfaces', 'IE type'], tables)
     write('layouts.tsv', ['clause', 'type in the figure', 'fields'], layouts)
+    write('figures.tsv', ['clause', 'octets', 'name', 'lowest bit', 'bits'], figures)
+    write('conditions.tsv', ['clause', 'flag', 'set', 'field', 'there'], conditions)
     write('value-tables.tsv', ['table', 'title', 'value', 'name'], values)
     write('clause-6.tsv', ['clause', 'title', 'requirements'], [[c, t, str(n)] for c, t, n in clause6])
+
+
+# The words of a comment that let several IEs of a row be there.
+SEVERAL = re.compile(r'(?i:several IEs?\b|several .{0,30}IEs|represent a list|two IEs|more than one IE|IEs? with the same (?:IE )?type|may be repeated|up to \d+ (?:IEs|times)|several instances|for each PDR\b|list of all)')
+
+
+def places(rows, widths):
+    """The flags and fields of a figure of clause 8.2, each with the octets of its row, its
+    lowest bit and its number of bits: the bits are those whose cells of the row of bit
+    numbers, by their widths, have their middle within the field's cell."""
+    header = next((at for at, row in enumerate(rows) if any(cell == 'Octets' for cell, _ in row)), None)
+    if header is None:
+        return []
+    def edges(row, sizes, spans_of):
+        at, out = 0, []
+        for (cell, span), size in zip(row, sizes):
+            width = size if size is not None else spans_of * span
+            out.append((cell, at, at + width))
+            at += width
+        return out
+    usable = all(size is not None for size in widths[header])
+    middles = {}
+    for cell, start, end in edges(rows[header], widths[header] if usable else [None] * len(rows[header]), 1):
+        if re.fullmatch(r'[1-8]', cell):
+            middles[int(cell)] = (start + end) / 2
+    if len(middles) != 8:
+        return []
+    out = []
+    for row, sizes in zip(rows[header + 1:], widths[header + 1:]):
+        sizes = sizes if usable and all(size is not None for size in sizes) else [None] * len(row)
+        cells = edges(row, sizes, 1)
+        label = next(((cell, end) for cell, _, end in cells if cell and cell != '.'), None)
+        if label is None or re.search(r'Type\s*=|Length\s*=', ' '.join(cell for cell, _, _ in cells)):
+            continue
+        octets, after = label
+        for cell, start, end in cells:
+            name = without_notes(cell)
+            if start < after or not name or 'explicitly specified' in name or re.fullmatch(r'(?i)spare|\.\.\.|…|\d+', name):
+                continue
+            bits = sorted(bit for bit, middle in middles.items() if start <= middle < end)
+            if bits:
+                out.append([octets, name, str(bits[0]), str(len(bits))])
+    return out
+
+
+def relations(paragraph, fields, labels):
+    """The relations of a paragraph of clause 8.2 between a flag and a field of its figure:
+    each sentence that makes fields there, or not, as a flag is set or not, before its
+    "otherwise". A field goes by its name, the longest first, or by its octets."""
+    out = []
+    bit = re.match(r'^-?\s*Bits? \d+ *[–-] *([A-Za-z0-9/-]+)', paragraph)
+    for sentence in re.split(r'(?<=[.;])\s+', paragraph):
+        sentence = re.split(r'\botherwise\b', sentence)[0]
+        found = re.search(r'(.+?)\s*shall (not )?be present', sentence)
+        if not found:
+            continue
+        flags = []
+        if bit and re.search(r'this bit is set to "1"', sentence):
+            flags.append((bit.group(1), 'set'))
+        for flag, negation in re.findall(r'the ([A-Za-z0-9/-]+) (?:bit|flag)(?: in octet \d+)? is (not )?set', sentence):
+            flags.append((flag, 'unset' if negation else 'set'))
+        for flag in re.findall(r'\bIf ([A-Z][A-Za-z0-9/-]+) is set to "1"', sentence):
+            flags.append((flag, 'set'))
+        segment = found.group(1)
+        absent = bool(found.group(2)) or bool(re.search(r'(?i)\b(neither|none) of\b', segment))
+        named = []
+        for label, name in labels.items():
+            if re.search(r'(?i)octets?"?' + re.escape(label) + r'(?![a-z0-9(])', segment.replace(' ', '')) and name not in named:
+                named.append(name)
+        rest = segment
+        for name in sorted(set(fields), key=len, reverse=True):
+            pattern = r'(?i)(?<![A-Za-z0-9])' + re.escape(name) + r'(?![A-Za-z0-9])'
+            if re.search(pattern, rest):
+                named.append(name)
+                rest = re.sub(pattern, ' ', rest)
+        for name in named:
+            out.extend([flag, state, name, 'absent' if absent else 'present'] for flag, state in flags)
+    return out
 
 
 def requirements(paragraph):

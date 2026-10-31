@@ -32,6 +32,7 @@ macro_rules! pfcp_ies {
                 fixed: pfcp_ies!(@fixed $($fixed)?),
                 clause: $clause,
                 fields: pfcp_ies!(@fields $form $($($ty),+)?),
+                layout: pfcp_ies!(@layout $form $($($ty),+)?),
                 tables: pfcp_ies!(@tables $form $($($ty),+)?),
             }, )*
         ];
@@ -56,6 +57,9 @@ macro_rules! pfcp_ies {
     (@length $form:ident $(($fixed:literal))?) => { None };
     (@fields grouped $($ty:ident),+) => { &[] };
     (@fields $form:ident $ty:ident) => { $ty::FIELDS };
+    (@layout grouped $($ty:ident),+) => { None };
+    (@layout $form:ident $ty:ident) => { $ty::LAYOUT };
+    (@layout $form:ident) => { None };
     (@tables grouped $($ty:ident),+) => { pastey::paste! { &[$(&[<$ty:snake:upper _TABLE>]),+] } };
     (@tables $form:ident $($ty:ident),*) => { &[] };
 }
@@ -107,6 +111,20 @@ macro_rules! pfcp_layout {
             const FLAGS: $fk = 0 $( | pfcp_layout!(@fmask $bit $(, $width)?) )*;
             /// The names of its flags and fields.
             pub const FIELDS: &'static [&'static str] = &[$($($head_name,)*)? $($flag_name,)* $($field_name),*];
+            /// The octets of the fields before its flags.
+            const HEAD_OCTETS: usize = 0 $($( + crate::values::octets_of(<$hkind as crate::values::Field>::OCTETS) )*)?;
+            /// Its layout.
+            pub const LAYOUT: Option<&'static crate::values::Layout> = Some(&crate::values::Layout {
+                head: &[$($(crate::values::Member { name: $head_name, octets: <$hkind as crate::values::Field>::OCTETS, condition: "true" }),*)?],
+                bits: &[$(crate::values::Bits {
+                    name: $flag_name,
+                    ident: stringify!($flag),
+                    octet: Self::HEAD_OCTETS + (core::mem::size_of::<$fk>() - 1 - ($bit - 1) / 8),
+                    bit: ($bit - 1) % 8 + 1,
+                    width: pfcp_layout!(@fwidth $($width)?),
+                }),*],
+                fields: &[$(crate::values::Member { name: $field_name, octets: <$kind $(<$param>)? as crate::values::Field>::OCTETS, condition: stringify!($cond) }),*],
+            });
             /// The clause of the layout.
             pub const CLAUSE: &'static str = $clause;
 
@@ -295,6 +313,8 @@ macro_rules! pfcp_layout {
     (@ft) => { bool };
     (@ft $width:literal) => { u8 };
     (@ft $width:literal as $kind:ident) => { $kind };
+    (@fwidth) => { 1 };
+    (@fwidth $width:literal) => { $width };
     (@fwide $value:expr) => { false };
     (@fwide $value:expr, $width:literal) => { u16::from($value) >= (1u16 << $width) };
     (@fwide $value:expr, $width:literal as $kind:ident) => { u16::from($value.value()) >= (1u16 << $width) };
@@ -380,6 +400,15 @@ macro_rules! pfcp_bits {
             pub const CLAUSE: &'static str = $clause;
             /// The names of its flags and fields.
             pub const FIELDS: &'static [&'static str] = &[$($name),*];
+            /// Its layout.
+            pub const LAYOUT: Option<&'static crate::values::Layout> = Some(&crate::values::Layout {
+                head: &[],
+                bits: &[$(
+                    crate::values::Bits { name: $name, ident: stringify!($field), octet: $octet, bit: $low, width: $width },
+                    $( crate::values::Bits { name: $name, ident: stringify!($field), octet: $octet2, bit: $low2, width: $width2 }, )?
+                )*],
+                fields: &[],
+            });
             /// Whether the tree is the value of the field alone: one field, not a flag.
             #[cfg(feature = "tree")]
             const BARE: bool = { let widths: &[u32] = &[$($width),*]; widths.len() == 1 && widths[0] > 1 };
@@ -1365,6 +1394,7 @@ macro_rules! pfcp_enum {
         /// A whole octet; a value of fewer bits, whose octet has spare bits, is a
         /// [`Narrow`](crate::Narrow) field.
         impl crate::values::Field for $ty {
+            const OCTETS: Option<usize> = Some(1);
             fn read(octets: &mut &[u8]) -> Option<Self> {
                 let (&first, rest) = octets.split_first()?;
                 *octets = rest;

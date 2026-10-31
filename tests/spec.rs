@@ -157,8 +157,15 @@ fn ie_types() {
             problems.push(format!("IE type {ie_type}: {:?} in the crate, {name:?} in the document", info.name));
         }
         let reference = errata.apply("ie-type-reference", cells[0], cells[2]);
-        let (form, place) = reference.split_once('/').unwrap_or((reference, ""));
-        let place = place.split(',').next().unwrap().trim();
+        let (form, places) = reference.split_once('/').unwrap_or((reference, ""));
+        let place = places.split(',').next().unwrap().trim();
+        // An IE type of several tables, one for each place, names each of them.
+        for other in places.split(',').skip(1).map(str::trim) {
+            let table = other.strip_prefix("Table ").unwrap_or(other);
+            if !info.tables.iter().any(|known| known.id == table) {
+                problems.push(format!("IE type {ie_type} {name}: {other} in the document, and the crate has no such table of it"));
+            }
+        }
         let (grouped, clause) = match place.split_once(' ') {
             Some(("Table", table)) => (true, table),
             Some(("Clause", clause)) => (false, clause),
@@ -214,8 +221,9 @@ fn ie_type_of(cell: &str, table: &str) -> Option<u16> {
 }
 
 /// A table of the document: its title, the IE type that it says, and its rows (name,
-/// presence, interfaces, IE type).
-type DocumentTable = (&'static str, &'static str, Vec<(&'static str, &'static str, &'static str, &'static str)>);
+/// presence, interfaces, IE type, and whether its comment lets several IEs of it be
+/// there).
+type DocumentTable = (&'static str, &'static str, Vec<(&'static str, &'static str, &'static str, &'static str, &'static str)>);
 
 /// A row of the crate: the field that has it, its name, presence, interfaces and IE type,
 /// and whether a row of the document is it.
@@ -249,7 +257,8 @@ fn tables() {
                 let numbered = format!("{current}/{}", rows.len() + 1);
                 let ie_type = errata.apply("row-ie-type", &place, errata.apply("row-ie-type", &numbered, cells[5]));
                 let interfaces = errata.apply("row-interfaces", &place, cells[4]);
-                rows.push((name, cells[3], interfaces, ie_type));
+                let several = errata.apply("row-repeat", &place, cells[6]);
+                rows.push((name, cells[3], interfaces, ie_type, several));
             }
         }
     }
@@ -293,7 +302,7 @@ fn tables() {
             }
         }
         let mut first_of_field = vec![usize::MAX; table.rows.len()];
-        for (at, (name, p, ifs, ie_type)) in rows.iter().enumerate() {
+        for (at, (name, p, ifs, ie_type, several)) in rows.iter().enumerate() {
             let Some(entry) = entries.iter().find(|entry| !entry.5.get() && entry.1 == *name) else {
                 problems.push(format!("Table {id}, row {name:?}: not in the crate"));
                 continue;
@@ -305,6 +314,12 @@ fn tables() {
             }
             if entry.3 != interfaces(ifs) {
                 problems.push(format!("Table {id}, row {name:?}: interfaces {:?} in the crate, {ifs:?} in the document", entry.3));
+            }
+            // A field that rows share is a list of their IEs; another is a list where its
+            // comment lets several IEs be there.
+            let field = &table.rows[entry.0];
+            if field.roles.is_empty() && (field.repeat != Repeat::Once) != (*several == "several") {
+                problems.push(format!("Table {id}, row {name:?}: {:?} in the crate, {several} in the document", field.repeat));
             }
             match ie_type_of(ie_type, id) {
                 Some(number) if number == entry.4 => {}
@@ -322,7 +337,7 @@ fn tables() {
             problems.push(format!("Table {id}: the fields are not in the order of the table"));
         }
     }
-    problems.extend(errata.unused(&["table-number", "row-name", "row-ie-type", "row-interfaces"]));
+    problems.extend(errata.unused(&["table-number", "row-name", "row-ie-type", "row-interfaces", "row-repeat"]));
     report(problems);
 }
 
@@ -616,5 +631,191 @@ fn constructors_by_interface() {
             problems.push(format!("{} {}: constructors {:?}, and its interfaces {:?} need {:?}", table.id, table.name, table.constructors, scope, expected));
         }
     }
+    report(problems);
+}
+
+/// How many octets a row of a figure has, by its label: `6 to 9`, `m to (m+3)`, `6-11`,
+/// one octet `q`; `None` for a length that the IE gives.
+fn octets_of_label(label: &str) -> Option<usize> {
+    let label = label.replace(' ', "");
+    if let Some((from, to)) = label.split_once("to").or_else(|| label.split_once('-')) {
+        if let (Ok(from), Ok(to)) = (from.parse::<usize>(), to.parse::<usize>()) {
+            return Some(to + 1 - from);
+        }
+        let to = to.strip_prefix('(').and_then(|to| to.strip_suffix(')'))?;
+        let (base, more) = to.split_once('+')?;
+        return (base == from).then(|| more.parse::<usize>().ok().map(|more| more + 1)).flatten();
+    }
+    (label.parse::<usize>().is_ok() || label.chars().all(|c| c.is_ascii_lowercase()) && label.len() == 1).then_some(1)
+}
+
+/// The figures of clause 8.2, place by place: each field of bits of the crate has the
+/// octet, the lowest bit and the bits of its cell in the figure, or the octet and the bit
+/// of its line in a table of bits of its clause; each field of octets of a fixed number
+/// has as many as its row of the figure; and the fields of octets come in the order of
+/// the rows of the figure.
+#[test]
+fn figure_places() {
+    let errata = Errata::new();
+    let mut places: BTreeMap<&str, Vec<(&str, &str, u8, u8)>> = BTreeMap::new();
+    for cells in records(include_str!("spec/figures.tsv")) {
+        let name = errata.apply("figure-field", cells[0], cells[2]);
+        let octets = errata.apply("figure-octets", &format!("{}/{}", cells[0], cells[1]), cells[1]);
+        places.entry(cells[0]).or_default().push((octets, name, cells[3].parse().unwrap(), cells[4].parse().unwrap()));
+    }
+    let mut table_bits: BTreeMap<String, Vec<(usize, u8, &str)>> = BTreeMap::new();
+    for cells in records(include_str!("spec/value-tables.tsv")) {
+        if let Some((octet, bit)) = cells[2].split_once('/') {
+            let clause = cells[0].split(['-', '.']).take(3).collect::<Vec<_>>().join(".");
+            table_bits.entry(clause).or_default().push((octet.parse().unwrap(), bit.parse().unwrap(), cells[3]));
+        }
+    }
+    let mut mapped: BTreeMap<(&str, &str), Vec<&str>> = BTreeMap::new();
+    for cells in records(include_str!("spec/fields.tsv")) {
+        mapped.insert((cells[0], cells[1]), cells[2].split(" | ").collect());
+    }
+    let mut problems = Vec::new();
+    let mut checked = 0;
+    for info in IE_TYPES {
+        let Some(layout) = info.layout else { continue };
+        let figure = places.get(info.clause).map(Vec::as_slice).unwrap_or_default();
+        // Each field of bits
+        let mut names: Vec<&str> = layout.bits.iter().map(|bits| bits.name).collect();
+        names.dedup();
+        for name in names {
+            let crate_places: Vec<(String, u8, u8)> = layout.bits.iter().filter(|bits| bits.name == name).map(|bits| ((bits.octet + 5).to_string(), bits.bit, bits.width)).collect();
+            // The cells of bits are in rows of one octet; a field of octets of the same name
+            // is another.
+            let in_figure: Vec<(String, u8, u8)> = figure
+                .iter()
+                .filter(|(octets, known, _, width)| key(known) == key(name) && (*width < 8 || octets_of_label(octets) == Some(1)))
+                .map(|(octets, _, bit, width)| (octets.to_string(), *bit, *width))
+                .collect();
+            let in_table: Vec<(String, u8, u8)> = table_bits
+                .get(info.clause)
+                .into_iter()
+                .flatten()
+                .filter(|(_, _, known)| key(known) == key(name))
+                .map(|(octet, bit, _)| (octet.to_string(), *bit, 1))
+                .collect();
+            let document = if in_figure.is_empty() { in_table } else { in_figure };
+            checked += 1;
+            if document.is_empty() {
+                problems.push(format!("clause {} {}: {name:?} is in no cell of the figure, nor in a table of bits", info.clause, info.name));
+            } else if document != crate_places {
+                problems.push(format!("clause {} {}: {name:?} at (octet, bit, bits) {crate_places:?} in the crate, {document:?} in the document", info.clause, info.name));
+            }
+        }
+        // Each field of octets: its octets, and its order
+        let mut last = 0;
+        for member in layout.head.iter().chain(layout.fields) {
+            let wanted: Vec<&str> = mapped.get(&(info.clause, member.name)).cloned().unwrap_or_else(|| vec![member.name]);
+            let Some(row) = figure.iter().position(|(_, known, _, width)| *width == 8 && wanted.iter().any(|name| key(known) == key(name))) else { continue };
+            checked += 1;
+            if row < last {
+                problems.push(format!("clause {} {}: {:?} comes before a field that the figure has before it", info.clause, info.name, member.name));
+            }
+            last = row;
+            let (label, _, _, width) = figure[row];
+            if let (Some(octets), Some(rows), 8, true) = (member.octets, octets_of_label(label), width, wanted.len() == 1)
+                && octets != rows
+            {
+                problems.push(format!("clause {} {}: {:?} has {octets} octets in the crate, and its row {label:?}", info.clause, info.name, member.name));
+            }
+        }
+    }
+    problems.extend(errata.unused(&["figure-octets"]));
+    report(problems);
+    assert!(checked > 800, "{checked} places checked");
+}
+
+/// The conditions of the fields of clause 8.2: each sentence that makes a field there, or
+/// not, as a flag is set or not (`conditions.tsv`) is a term of the condition of the
+/// field in the crate, of the same sense: "If CH is set, the TEID shall not be present"
+/// is `!ch` in the condition of TEID.
+#[test]
+fn figure_conditions() {
+    let errata = Errata::new();
+    let mut sentences: BTreeMap<&str, Vec<(&str, &str, &str, &str)>> = BTreeMap::new();
+    for cells in records(include_str!("spec/conditions.tsv")) {
+        sentences.entry(cells[0]).or_default().push((cells[1], cells[2], cells[3], cells[4]));
+    }
+    let mut labels: BTreeMap<(&str, String), &str> = BTreeMap::new();
+    for cells in records(include_str!("spec/figures.tsv")) {
+        labels.insert((cells[0], key(cells[1])), cells[2]);
+    }
+    let mut mapped: BTreeMap<&str, Vec<(&str, Vec<&str>)>> = BTreeMap::new();
+    for cells in records(include_str!("spec/fields.tsv")) {
+        mapped.entry(cells[0]).or_default().push((cells[1], cells[2].split(" | ").collect()));
+    }
+    let mut problems = Vec::new();
+    let mut checked = 0;
+    for info in IE_TYPES {
+        let Some(layout) = info.layout else { continue };
+        for (flag, set, field, there) in sentences.get(info.clause).into_iter().flatten() {
+            let Some(bits) = layout.bits.iter().find(|bits| key(bits.name) == key(flag)) else { continue };
+            // The field by its name, by the name in brackets of its octets, by the label of
+            // its octets, or by a name of the figure that it stands for
+            let named = field.split_once('(').and_then(|(_, rest)| rest.strip_suffix(')')).unwrap_or(field);
+            let label = field.strip_prefix("Octets ").or_else(|| field.strip_prefix("Octet ")).map(|label| key(label.trim_matches('"')));
+            let by_label = label.and_then(|label| labels.get(&(info.clause, label)).copied());
+            let member = layout.fields.iter().find(|member| {
+                let names = mapped.get(info.clause).into_iter().flatten().find(|(name, _)| *name == member.name).map(|(_, names)| names.clone()).unwrap_or_default();
+                [named, by_label.unwrap_or("\0")].iter().any(|name| key(member.name) == key(name) || names.iter().any(|known| key(known) == key(name)))
+            });
+            let Some(member) = member else { continue };
+            let positive = (*set == "set") == (*there == "present");
+            let term = if positive { bits.ident.to_string() } else { format!("!{}", bits.ident) };
+            let terms: Vec<String> = member.condition.replace(' ', "").split(['&', '|', '(', ')']).filter(|term| !term.is_empty()).map(String::from).collect();
+            checked += 1;
+            let sense = errata.apply("condition", &format!("{}/{}", info.clause, member.name), &term);
+            if !terms.iter().any(|known| *known == sense) {
+                problems.push(format!("clause {} {}: {:?} is there `if {}`, and the document has it {there} where {flag} is {set}", info.clause, info.name, member.name, member.condition));
+            }
+        }
+    }
+    problems.extend(errata.unused(&["condition"]));
+    report(problems);
+    assert!(checked >= 150, "{checked} conditions checked");
+}
+
+/// The errata that no fixture holds as the document has them, each checked for what it
+/// says: the table of a caption is found, the figures of the clauses of a heading without
+/// its style are found, and the row whose comment names another table is of the table
+/// that the erratum gives.
+#[test]
+fn notes() {
+    let mut problems = Vec::new();
+    let tables: BTreeSet<&str> = records(include_str!("spec/tables.tsv")).into_iter().filter(|cells| cells[0] == "table").map(|cells| cells[1]).collect();
+    let figures: BTreeSet<&str> = records(include_str!("spec/layouts.tsv")).into_iter().map(|cells| cells[0]).collect();
+    let mut checked = 0;
+    for cells in records(include_str!("spec/errata.tsv")) {
+        let (name, kind, at, crate_has) = (cells[0], cells[1], cells[2], cells[4]);
+        match kind {
+            "table-caption" => {
+                if !tables.contains(at) {
+                    problems.push(format!("erratum {name}: no table {at} in the fixtures"));
+                }
+            }
+            "heading" => {
+                for clause in at.split_whitespace() {
+                    if !figures.contains(clause) {
+                        problems.push(format!("erratum {name}: no figure of clause {clause} in the fixtures"));
+                    }
+                }
+            }
+            "row-table" => {
+                let (table, row) = at.split_once('/').unwrap();
+                let rows = MESSAGE_TYPES.iter().map(|info| info.table).find(|known| known.id == table).map_or(&[][..], |known| known.rows);
+                let of = rows.iter().find(|known| known.name == row).and_then(|known| ie_type_info(known.ie_type)).map(|info| info.clause);
+                if of != crate_has.strip_prefix("Table ") {
+                    problems.push(format!("erratum {name}: the row {row} of Table {table} is of {of:?} in the crate"));
+                }
+            }
+            _ => continue,
+        }
+        checked += 1;
+    }
+    assert_eq!(checked, 4);
     report(problems);
 }

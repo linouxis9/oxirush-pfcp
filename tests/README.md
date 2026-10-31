@@ -4,11 +4,11 @@
 
 | Test | What it checks |
 |---|---|
-| `spec` | The crate against TS 29.244 V19.6.0: every message type, IE type, table row, figure and table of values, and the requirements of clause 6 (`spec/`) |
+| `spec` | The crate against TS 29.244 V19.6.0: every message type and IE type; every row of a table, with its presence, interfaces, IE type and repetition; every flag and field of a figure, with its octet, bits, order and width, and the conditions that the sentences of its clause give; every table of values; the constructors by interface; and the requirements of clause 6 (`spec/`) |
 | `captures` | The 213 messages of the lab runs (`captures/`): each decodes, encodes back byte for byte, has a tree that reads back, and is checked on its interface |
-| `check` | What `check()` and `check_on()` find, with the clause and the Cause of each |
+| `check` | What `check()` finds on each interface, with the clause and the Cause of each |
 | `node` | The procedures of clause 6 on a `Node`: one test for each requirement of `spec/requirements.tsv` that names it |
-| `endpoint` | Two endpoints on the loopback, and a request that times out |
+| `endpoint` | Two endpoints on the loopback: a request that times out, a full queue, an answer that does not encode, a dropped request, `close()` |
 | `codec` | The codec, the trees and paths, the IEs that a scope keeps as octets, and the vectors of `PFCP_VECTORS` |
 | `serde` | A message and an IE as JSON through serde |
 | `readme` | Each Rust block of the README prints what the README shows |
@@ -16,9 +16,19 @@
 ## The document
 
 `spec/extract.py` writes the fixtures of `spec/` from TS 29.244 V19.6.0, which it checks by
-its SHA-256 (`--fetch` takes it from the 3GPP archive). `spec/errata.tsv` names the
-errata of the document that the crate meets, and what it takes instead; `spec/fields.tsv`
-where one field of the crate stands for several names of a figure.
+its SHA-256 (`--fetch` takes it from the 3GPP archive): CI writes them again and fails
+when they differ. The places of a figure are those of its cells by their widths, against
+the row of bit numbers. `spec/errata.tsv` names the errata of the document that the crate
+meets, and what it takes instead; `spec/fields.tsv` where one field of the crate stands
+for several names of a figure.
+
+`spec/mutations.tsv` has changes of the crate that the test `spec` must fail on: a value,
+a list, an interface, a bit, a condition, an order, a width, a constructor. `spec/mutate.py`
+makes each in a copy of the crate and runs the test, which CI does too:
+
+```sh
+python3 tests/spec/mutate.py
+```
 
 ## The lab runs
 

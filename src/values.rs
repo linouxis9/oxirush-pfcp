@@ -31,6 +31,8 @@ use crate::octets::Octets;
 
 /// A field of a layout: its octets, read in network order.
 pub trait Field: Sized {
+    /// How many octets it has, when they are fixed.
+    const OCTETS: Option<usize> = None;
     /// Read the field, and step over it.
     fn read(octets: &mut &[u8]) -> Option<Self>;
     /// Write the field.
@@ -55,6 +57,52 @@ pub trait Field: Sized {
     ) -> Result<Self, oxirush_utils::tree::Refused>;
 }
 
+/// How a value is laid out, as the crate reads it: what the test `spec` compares with the
+/// figure of its clause.
+#[derive(Debug)]
+pub struct Layout {
+    /// The fields before its flags, in order.
+    pub head: &'static [Member],
+    /// Its flags, and the fields of its octets of bits.
+    pub bits: &'static [Bits],
+    /// The fields after them, in order.
+    pub fields: &'static [Member],
+}
+
+/// A field of bits: where it is.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Bits {
+    /// Its name in the figure.
+    pub name: &'static str,
+    /// Its name in the crate, which the conditions of the fields after it say.
+    pub ident: &'static str,
+    /// Its octet, from 0 for octet 5 of the IE, the first after the Length.
+    pub octet: usize,
+    /// Its lowest bit, from 1.
+    pub bit: u8,
+    /// How many bits it has.
+    pub width: u8,
+}
+
+/// A field of octets: its octets when they are fixed, and when it is there.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Member {
+    /// Its name in the figure.
+    pub name: &'static str,
+    /// How many octets it has, when they are fixed.
+    pub octets: Option<usize>,
+    /// When it is there, as the crate writes it of the flags: `true` for always.
+    pub condition: &'static str,
+}
+
+/// The octets of a field whose octets are fixed, or 0.
+pub(crate) const fn octets_of(octets: Option<usize>) -> usize {
+    match octets {
+        Some(octets) => octets,
+        None => 0,
+    }
+}
+
 fn take<const N: usize>(octets: &mut &[u8]) -> Option<[u8; N]> {
     let (taken, rest) = octets.split_first_chunk::<N>()?;
     *octets = rest;
@@ -64,6 +112,7 @@ fn take<const N: usize>(octets: &mut &[u8]) -> Option<[u8; N]> {
 macro_rules! number_field {
     ($($t:ty),*) => {$(
         impl Field for $t {
+            const OCTETS: Option<usize> = Some(core::mem::size_of::<$t>());
             fn read(octets: &mut &[u8]) -> Option<Self> {
                 take(octets).map(<$t>::from_be_bytes)
             }
@@ -93,6 +142,7 @@ number_field!(u8, u16, u32, u64);
 macro_rules! signed_field {
     ($($t:ty),*) => {$(
         impl Field for $t {
+            const OCTETS: Option<usize> = Some(core::mem::size_of::<$t>());
             fn read(octets: &mut &[u8]) -> Option<Self> {
                 take(octets).map(<$t>::from_be_bytes)
             }
@@ -149,6 +199,7 @@ impl<E: Narrowable> Narrow<E> {
 }
 
 impl<E: Narrowable> Field for Narrow<E> {
+    const OCTETS: Option<usize> = Some(1);
     fn read(octets: &mut &[u8]) -> Option<Self> {
         let octet = u8::read(octets)?;
         Some(Self { value: E::from_value(octet & Self::MASK), spare: octet & !Self::MASK })
@@ -206,6 +257,7 @@ impl<E: Narrowable> Field for Narrow<E> {
 pub struct U40(pub u64);
 
 impl Field for U40 {
+    const OCTETS: Option<usize> = Some(5);
     fn read(octets: &mut &[u8]) -> Option<Self> {
         let [a, b, c, d, e] = take::<5>(octets)?;
         Some(Self(u64::from_be_bytes([0, 0, 0, a, b, c, d, e])))
@@ -237,6 +289,7 @@ pub type OctetArray16 = [u8; 16];
 
 /// Octets of a fixed number, as they are.
 impl<const N: usize> Field for [u8; N] {
+    const OCTETS: Option<usize> = Some(N);
     fn read(octets: &mut &[u8]) -> Option<Self> {
         take::<N>(octets)
     }
@@ -351,6 +404,7 @@ impl Field for Rest {
 pub struct Percent(pub u8);
 
 impl Field for Percent {
+    const OCTETS: Option<usize> = Some(1);
     fn read(octets: &mut &[u8]) -> Option<Self> {
         u8::read(octets).map(Self)
     }
@@ -383,6 +437,7 @@ impl Field for Percent {
 pub struct Spare(pub u8);
 
 impl Field for Spare {
+    const OCTETS: Option<usize> = Some(1);
     fn read(octets: &mut &[u8]) -> Option<Self> {
         u8::read(octets).map(Self)
     }
@@ -522,6 +577,7 @@ impl From<oxirush_utils::identity::Plmn> for PlmnId {
 }
 
 impl Field for PlmnId {
+    const OCTETS: Option<usize> = Some(3);
     fn read(octets: &mut &[u8]) -> Option<Self> {
         take(octets).map(Self)
     }
@@ -639,6 +695,7 @@ impl Field for TypedAddress {
 pub struct U24(pub u32);
 
 impl Field for U24 {
+    const OCTETS: Option<usize> = Some(3);
     fn read(octets: &mut &[u8]) -> Option<Self> {
         let [a, b, c] = take::<3>(octets)?;
         Some(Self(u32::from_be_bytes([0, a, b, c])))
@@ -665,6 +722,7 @@ impl Field for U24 {
 macro_rules! address_field {
     ($($t:ty, $n:literal);*) => {$(
         impl Field for $t {
+            const OCTETS: Option<usize> = Some($n);
             fn read(octets: &mut &[u8]) -> Option<Self> {
                 take::<$n>(octets).map(<$t>::from)
             }
@@ -744,6 +802,12 @@ macro_rules! pfcp_number {
         impl $ty {
             /// The name of its field.
             pub const FIELDS: &'static [&'static str] = &[$field];
+            /// Its layout.
+            pub const LAYOUT: Option<&'static Layout> = Some(&Layout {
+                head: &[],
+                bits: &[],
+                fields: &[Member { name: $field, octets: <$t as Field>::OCTETS, condition: "true" }],
+            });
 
             /// The value.
             pub fn new(value: $t) -> Self {
@@ -883,8 +947,8 @@ pfcp_layout! {
             ip6pl "IP6PL": 7, chv6 "CHV6": 6, chv4 "CHV4": 5, ipv6d "IPv6D": 4,
             sd "S/D": 3, v4 "V4": 2, v6 "V6": 1,
         }
-        ipv4 "IPv4 address": Ipv4Addr if v4,
-        ipv6 "IPv6 address": Ipv6Addr if v6,
+        ipv4 "IPv4 address": Ipv4Addr if v4 && !chv4,
+        ipv6 "IPv6 address": Ipv6Addr if v6 && !chv6,
         ipv6_prefix_delegation_bits "IPv6 Prefix Delegation Bits": u8 if ipv6d,
         ipv6_prefix_length "IPv6 Prefix Length": u8 if ip6pl,
     }
@@ -1008,6 +1072,8 @@ fn fqdn_labels(mut octets: &[u8]) -> Option<Vec<&[u8]>> {
 impl NodeId {
     /// The names of its fields.
     pub const FIELDS: &'static [&'static str] = &["Node ID Type", "Node ID value"];
+    /// Read by hand: its layout depends on its type.
+    pub const LAYOUT: Option<&'static Layout> = None;
 
     /// The Node ID Type (Table 8.2.38-2).
     pub fn node_id_type(&self) -> NodeIdType {
@@ -1145,6 +1211,8 @@ pub struct NetworkInstance(pub Octets);
 impl NetworkInstance {
     /// The name of its field.
     pub const FIELDS: &'static [&'static str] = &["Network Instance"];
+    /// Its layout.
+    pub const LAYOUT: Option<&'static Layout> = Some(&Layout { head: &[], bits: &[], fields: &[Member { name: "Network Instance", octets: None, condition: "true" }] });
 }
 
 impl Codec for NetworkInstance {
@@ -1196,6 +1264,12 @@ macro_rules! pfcp_fields {
         impl $ty {
             /// The names of its fields.
             pub const FIELDS: &'static [&'static str] = &[$($name),*];
+            /// Its layout.
+            pub const LAYOUT: Option<&'static Layout> = Some(&Layout {
+                head: &[],
+                bits: &[],
+                fields: &[$(Member { name: $name, octets: <$kind as Field>::OCTETS, condition: "true" }),*],
+            });
         }
 
         impl Codec for $ty {
@@ -1430,6 +1504,8 @@ macro_rules! pfcp_octets {
         impl $ty {
             /// The name of its field.
             pub const FIELDS: &'static [&'static str] = &[$name];
+            /// Its layout.
+            pub const LAYOUT: Option<&'static Layout> = Some(&Layout { head: &[], bits: &[], fields: &[Member { name: $name, octets: None, condition: "true" }] });
         }
 
         impl Codec for $ty {
