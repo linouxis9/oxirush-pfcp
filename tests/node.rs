@@ -665,6 +665,31 @@ fn overload_control_sequence_violation() {
     );
 }
 
+/// §6.2.4.3.2.1 NOTE 1: a new number with the same information extends its period of
+/// validity, and is no violation.
+#[test]
+fn overload_control_extended_by_a_new_number() {
+    let (mut smf, mut upf) = associated(at(0));
+    let (cp_seid, _) = established(&mut smf, &mut upf, at(0));
+    modified(
+        &mut smf,
+        &mut upf,
+        cp_seid,
+        at(1),
+        with_overload(5, 30, 5, false),
+    );
+    modified(
+        &mut smf,
+        &mut upf,
+        cp_seid,
+        at(2),
+        with_overload(6, 30, 5, false),
+    );
+    assert!(violations(&mut smf).is_empty());
+    let overload = smf.overload_control(UPF).unwrap();
+    assert_eq!((overload.sequence, overload.until), (6, Some(at(2 + 300))));
+}
+
 #[test]
 fn overload_control_scope() {
     let (mut smf, mut upf) = associated(at(0));

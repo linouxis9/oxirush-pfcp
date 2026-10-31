@@ -260,7 +260,8 @@ pub enum ViolationKind {
     /// values, or of a new one with the same values (§6.2.3.3.2).
     LoadControlSequence,
     /// Overload control information of a sequence number that the node has, with other
-    /// values, or of a new one with the same values (§6.2.4.3.2).
+    /// values (§6.2.4.3.2.1). A new number with the same values extends the period of
+    /// validity, as NOTE 1 has it.
     OverloadControlSequence,
     /// A node related message bundled with others (§6.5): discarded.
     BundledNodeMessage,
@@ -1725,11 +1726,9 @@ impl Node {
                     self.violation(from, ViolationKind::OverloadControlSequence, octets)
                 }
                 Some(known) if !newer(new.sequence, known.sequence) => {}
+                // A new number, even for the same information, restarts the period of
+                // validity (§6.2.4.3.2.1 NOTE 1).
                 Some(known) => {
-                    // A new number for the same information (§6.2.4.3.2.1).
-                    if (known.metric, known.validity) == (new.metric, new.validity) {
-                        self.violation(from, ViolationKind::OverloadControlSequence, octets);
-                    }
                     self.overload.insert(
                         scope,
                         OverloadControl {
