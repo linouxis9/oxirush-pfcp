@@ -1072,6 +1072,13 @@ impl Node {
         }
         let mut peers = BTreeSet::new();
         for (this, decoded) in parts {
+            if let Some((header, message_type, _)) = Header::decode(this)
+                && header.version != 1
+            {
+                // As the first: answered, and the rest discarded (§7.6.2).
+                self.other_version(now, from, this, header, message_type);
+                return;
+            }
             let message = match decoded {
                 Ok(message) => message,
                 Err(error) => {
