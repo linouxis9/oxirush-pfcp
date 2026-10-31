@@ -1619,7 +1619,8 @@ fn kinds_of(events: &[Event]) -> Vec<ViolationKind> {
 /// Length", and is no request for the caller.
 #[test]
 fn a_request_of_a_false_length_is_answered_invalid_length() {
-    let (_, mut upf) = associated(at(0));
+    let (mut smf, mut upf) = associated(at(0));
+    let (_, up_seid) = established(&mut smf, &mut upf, at(0));
     events(&mut upf);
     let mut octets = Message {
         header: Header::node(9),
@@ -1651,7 +1652,8 @@ fn a_request_of_a_false_length_is_answered_invalid_length() {
         "{:?}",
         answer.check(Interfaces::N4)
     );
-    // An IE that runs past its message is named in the answer (§7.6.7)
+    // An IE that runs past its message is named in the answer (§7.6.7): of a session
+    // that the node has, as a session that it does not have is answered so first
     let modification = SessionModificationRequest::default().with_cp_f_seid(FSeid {
         v4: true,
         seid: Some(1),
@@ -1659,7 +1661,7 @@ fn a_request_of_a_false_length_is_answered_invalid_length() {
         ..Default::default()
     });
     let mut octets = Message {
-        header: Header::session(7, 10),
+        header: Header::session(up_seid, 10),
         body: modification.into(),
     }
     .encode()

@@ -1071,31 +1071,22 @@ impl Node {
             return;
         }
         let mut peers = BTreeSet::new();
-        for (this, decoded) in parts {
-            if let Some((header, message_type, _)) = Header::decode(this)
-                && header.version != 1
-            {
+        for this in parts {
+            let Some((header, message_type, _)) = Header::decode(this) else {
+                let error = crate::Error::TooShort { octets: this.len() };
+                self.malformed(now, from, error);
+                continue;
+            };
+            if header.version != 1 {
                 // As the first: answered, and the rest discarded (§7.6.2).
                 self.other_version(now, from, this, header, message_type);
                 return;
             }
-            let message = match decoded {
-                Ok(message) => message,
-                Err(error) => {
-                    self.malformed(now, from, error);
-                    continue;
-                }
-            };
-            let message_type = message.body.message_type();
             if bundled && is_node_related(message_type) {
                 self.violation(from, ViolationKind::BundledNodeMessage, this);
                 continue;
             }
-            if bundled
-                && let Some(session) = message
-                    .header
-                    .seid
-                    .and_then(|seid| self.sessions.get(&seid))
+            if bundled && let Some(session) = header.seid.and_then(|seid| self.sessions.get(&seid))
             {
                 peers.insert(session.peer.ip());
                 if peers.len() > 1 {
@@ -1103,8 +1094,144 @@ impl Node {
                     continue;
                 }
             }
-            self.handle_message(now, from, this, message);
+            if self.screen(now, from, this, header, message_type) {
+                continue;
+            }
+            match Message::decode(this) {
+                Ok(message) => match is_request(message_type) {
+                    true => self.handle_request(now, from, this, message),
+                    false => self.handle_response(now, from, this, message),
+                },
+                Err(error) => self.malformed(now, from, error),
+            }
         }
+    }
+
+    /// What the node tells from the header of a message, and from the IEs that name the
+    /// peer of a request, before it decodes the rest: a message that it discards or
+    /// rejects costs it no more than its octets. `true` for a message that it handled.
+    fn screen(
+        &mut self,
+        now: Duration,
+        from: SocketAddr,
+        octets: &[u8],
+        header: Header,
+        message_type: u8,
+    ) -> bool {
+        if message_type_info(message_type).is_none() {
+            self.violation(from, ViolationKind::UnknownMessage, octets);
+            return true;
+        }
+        let sequence = header.sequence;
+        if !is_request(message_type) {
+            if message_type == 11 {
+                self.version_not_supported(now, from, octets);
+                return true;
+            }
+            let kind = match self.outstanding.get(&sequence) {
+                None => Some(match self.finished.get(&(sequence, from)) {
+                    Some((_, true)) => ViolationKind::LateResponse,
+                    Some((_, false)) => ViolationKind::DuplicateResponse,
+                    None => ViolationKind::UnknownSequence,
+                }),
+                Some(request) if request.to != from => Some(ViolationKind::WrongPeer),
+                Some(request) if message_type != request.message_type + 1 => {
+                    Some(ViolationKind::WrongResponseType)
+                }
+                Some(_) => None,
+            };
+            if let Some(kind) = kind {
+                self.violation(from, kind, octets);
+            }
+            return kind.is_some();
+        }
+        if !self.peer_sends(message_type) {
+            self.violation(from, ViolationKind::WrongDirection, octets);
+            return true;
+        }
+        let priority = header.priority.unwrap_or(self.config.default_priority);
+        if let Some(answered) = self.answers.get(&(from, sequence)) {
+            match (same_request(&answered.request, octets), &answered.response) {
+                (true, Some(response)) => {
+                    let transmit = Transmit {
+                        to: from,
+                        priority,
+                        octets: response.clone(),
+                    };
+                    self.queue(transmit);
+                    return true;
+                }
+                (true, None) => return true,
+                (false, None) => {
+                    self.violation(from, ViolationKind::ChangedRetransmission, octets);
+                    return true;
+                }
+                // A new request of a number whose request had its response (§6.4): a
+                // restarted peer numbers from the start again.
+                (false, Some(_)) => {
+                    self.answers.remove(&(from, sequence));
+                }
+            }
+        }
+        // What the node answers itself.
+        let (node_id, peer_seid) = match message_type {
+            7 | 9 | 12 | 14 | 16 | 50 => names(octets),
+            _ => (None, None),
+        };
+        let known_node = match &node_id {
+            Some(node_id) => self.associations.contains_key(&key_of(node_id)),
+            None => self.association_of(from).is_some(),
+        };
+        let rejection = match message_type {
+            7 | 9 if !known_node => Some((
+                CauseValue::NoEstablishedPfcpAssociation,
+                ViolationKind::UnknownNode,
+            )),
+            3 | 12 | 14 | 16 | 50 if !known_node => Some((
+                CauseValue::NoEstablishedPfcpAssociation,
+                ViolationKind::SessionWithoutAssociation,
+            )),
+            52 | 54 | 56
+                if header
+                    .seid
+                    .is_none_or(|seid| !self.sessions.contains_key(&seid)) =>
+            {
+                Some((
+                    CauseValue::SessionContextNotFound,
+                    ViolationKind::UnknownSeid,
+                ))
+            }
+            _ => None,
+        };
+        let Some((cause, kind)) = rejection else {
+            return false;
+        };
+        self.violation(from, kind, octets);
+        let inbound = Inbound {
+            from,
+            message_type,
+            sequence,
+            priority,
+            prioritized: header.priority.is_some(),
+            seid: header.seid,
+            peer_seid,
+            node_id,
+            effect: Effect::Nothing,
+        };
+        if let Some(body) = rejection_body(message_type, cause, None, &self.config.node_id) {
+            let mut header = self.response_header(&inbound);
+            // The peer's SEID is not known: SEID 0 (§7.2.2.4.2), but that of the F-SEID
+            // of an establishment without an association.
+            if header.seid.is_some() {
+                header.seid = Some(if kind == ViolationKind::SessionWithoutAssociation {
+                    inbound.peer_seid.unwrap_or(0)
+                } else {
+                    0
+                });
+            }
+            let _ = self.respond_with(now, &inbound, header, body, Delivery::Send, true);
+        }
+        true
     }
 
     /// A message of another version than 1 (§7.6.2): a request is answered with a
@@ -1226,51 +1353,10 @@ impl Node {
         }
     }
 
-    fn handle_message(&mut self, now: Duration, from: SocketAddr, octets: &[u8], message: Message) {
-        let message_type = message.body.message_type();
-        if message_type_info(message_type).is_none() {
-            self.violation(from, ViolationKind::UnknownMessage, octets);
-            return;
-        }
-        match is_request(message_type) {
-            true => self.handle_request(now, from, octets, message),
-            false => self.handle_response(now, from, octets, message),
-        }
-    }
-
+    /// A request that [`screen`](Self::screen) let through.
     fn handle_request(&mut self, now: Duration, from: SocketAddr, octets: &[u8], message: Message) {
         let sequence = message.header.sequence;
         let message_type = message.body.message_type();
-        if !self.peer_sends(message_type) {
-            self.violation(from, ViolationKind::WrongDirection, octets);
-            return;
-        }
-        if let Some(answered) = self.answers.get(&(from, sequence)) {
-            match (same_request(&answered.request, octets), &answered.response) {
-                (true, Some(response)) => {
-                    let transmit = Transmit {
-                        to: from,
-                        priority: message
-                            .header
-                            .priority
-                            .unwrap_or(self.config.default_priority),
-                        octets: response.clone(),
-                    };
-                    self.queue(transmit);
-                    return;
-                }
-                (true, None) => return,
-                (false, None) => {
-                    self.violation(from, ViolationKind::ChangedRetransmission, octets);
-                    return;
-                }
-                // A new request of a number whose request had its response (§6.4): a
-                // restarted peer numbers from the start again.
-                (false, Some(_)) => {
-                    self.answers.remove(&(from, sequence));
-                }
-            }
-        }
         self.note_recovery(now, from, &message.body);
         let effect = match &message.body {
             // A PFCP Session Retention Information of a null length keeps every session.
@@ -1341,64 +1427,21 @@ impl Node {
             node_id: node_id_of(&message.body),
             effect,
         };
-        // What the node answers itself.
-        let known_node = |node: &Self| match &inbound.node_id {
-            Some(node_id) => node.associations.contains_key(&key_of(node_id)),
-            None => node.association_of(from).is_some(),
-        };
-        let rejection = match message_type {
-            1 => {
-                // Answered from the state, the same each time: not kept.
-                let message = Message {
-                    header: self.response_header(&inbound),
-                    body: HeartbeatResponse::new(RecoveryTimeStamp::new(
-                        self.config.recovery_time_stamp,
-                    ))
-                    .into(),
-                };
-                if let Ok(octets) = message.encode() {
-                    self.queue(Transmit {
-                        to: from,
-                        priority: inbound.priority,
-                        octets,
-                    });
-                }
-                return;
-            }
-            7 | 9 if !known_node(self) => Some((
-                CauseValue::NoEstablishedPfcpAssociation,
-                ViolationKind::UnknownNode,
-            )),
-            3 | 12 | 14 | 16 | 50 if !known_node(self) => Some((
-                CauseValue::NoEstablishedPfcpAssociation,
-                ViolationKind::SessionWithoutAssociation,
-            )),
-            52 | 54 | 56
-                if inbound
-                    .seid
-                    .is_none_or(|seid| !self.sessions.contains_key(&seid)) =>
-            {
-                Some((
-                    CauseValue::SessionContextNotFound,
-                    ViolationKind::UnknownSeid,
+        if message_type == 1 {
+            // Answered from the state, the same each time: not kept.
+            let message = Message {
+                header: self.response_header(&inbound),
+                body: HeartbeatResponse::new(RecoveryTimeStamp::new(
+                    self.config.recovery_time_stamp,
                 ))
-            }
-            _ => None,
-        };
-        if let Some((cause, kind)) = rejection {
-            self.violation(from, kind, octets);
-            if let Some(body) = rejection_body(message_type, cause, None, &self.config.node_id) {
-                let mut header = self.response_header(&inbound);
-                // The peer's SEID is not known: SEID 0 (§7.2.2.4.2), but that of the
-                // F-SEID of an establishment without an association.
-                if header.seid.is_some() {
-                    header.seid = Some(if kind == ViolationKind::SessionWithoutAssociation {
-                        inbound.peer_seid.unwrap_or(0)
-                    } else {
-                        0
-                    });
-                }
-                let _ = self.respond_with(now, &inbound, header, body, Delivery::Send, true);
+                .into(),
+            };
+            if let Ok(octets) = message.encode() {
+                self.queue(Transmit {
+                    to: from,
+                    priority: inbound.priority,
+                    octets,
+                });
             }
             return;
         }
@@ -1419,6 +1462,8 @@ impl Node {
         });
     }
 
+    /// A response that [`screen`](Self::screen) let through: of an outstanding request,
+    /// from its peer, and of its type.
     fn handle_response(
         &mut self,
         now: Duration,
@@ -1427,28 +1472,6 @@ impl Node {
         message: Message,
     ) {
         let sequence = message.header.sequence;
-        let message_type = message.body.message_type();
-        if message_type == 11 {
-            self.version_not_supported(now, from, octets);
-            return;
-        }
-        let Some(request) = self.outstanding.get(&sequence) else {
-            let kind = match self.finished.get(&(sequence, from)) {
-                Some((_, true)) => ViolationKind::LateResponse,
-                Some((_, false)) => ViolationKind::DuplicateResponse,
-                None => ViolationKind::UnknownSequence,
-            };
-            self.violation(from, kind, octets);
-            return;
-        };
-        if request.to != from {
-            self.violation(from, ViolationKind::WrongPeer, octets);
-            return;
-        }
-        if message_type != request.message_type + 1 {
-            self.violation(from, ViolationKind::WrongResponseType, octets);
-            return;
-        }
         let request = self.outstanding.remove(&sequence).expect("outstanding");
         self.deadlines.remove(&(request.deadline, sequence));
         self.finish(now, sequence, from, false);
@@ -2105,6 +2128,24 @@ fn key_of(node_id: &NodeId) -> Vec<u8> {
         &mut octets,
     );
     octets
+}
+
+/// The Node ID and the SEID of the CP F-SEID of a request, read from its IEs alone:
+/// the first of each that decodes, as the decode of its table takes them.
+fn names(octets: &[u8]) -> (Option<NodeId>, Option<u64>) {
+    use crate::ie::Codec;
+    let Ok((_, _, ies)) = crate::framing::message_ies(octets) else {
+        return (None, None);
+    };
+    let (mut node_id, mut f_seid) = (None, None);
+    for ie in ies.map_while(Result::ok) {
+        match ie.ie_type {
+            60 if node_id.is_none() => node_id = NodeId::decode(ie.value),
+            57 if f_seid.is_none() => f_seid = FSeid::decode(ie.value),
+            _ => {}
+        }
+    }
+    (node_id, f_seid.and_then(|f_seid| f_seid.seid))
 }
 
 /// The Node ID that a node related request carries.
