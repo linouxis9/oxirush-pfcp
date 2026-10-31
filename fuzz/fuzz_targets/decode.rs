@@ -15,21 +15,26 @@
    limitations under the License.
 */
 
-//! Any octets: a datagram that decodes encodes back to its octets, byte for byte, and its
-//! check and its framing do not panic.
+//! Any octets: a message that decodes encodes back to its octets, byte for byte, and so
+//! does a datagram whose messages all decode, the whole of it; its check and its framing
+//! do not panic.
 #![no_main]
 
 use libfuzzer_sys::fuzz_target;
 use oxirush_pfcp::{Message, framing};
 
 fuzz_target!(|octets: &[u8]| {
-    if let Ok(messages) = Message::decode_datagram(octets) {
+    if let Ok(message) = Message::decode(octets) {
+        let _ = message.check();
+        assert_eq!(message.encode().expect("a decoded message encodes"), octets, "decode then encode");
+    }
+    let messages = Message::decode_datagram(octets);
+    if messages.iter().all(Result::is_ok) {
         let mut again = Vec::new();
-        for message in &messages {
-            let _ = message.check();
+        for message in messages.iter().flatten() {
             again.extend(message.encode().expect("a decoded message encodes"));
         }
-        assert_eq!(again, octets[..again.len()], "decode then encode");
+        assert_eq!(again, octets, "a datagram decoded then encoded");
     }
     if let Ok((_, _, ies)) = framing::message_ies(octets) {
         for ie in ies.flatten() {

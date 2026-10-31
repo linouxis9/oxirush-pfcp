@@ -124,23 +124,28 @@ impl Message {
         Ok(message)
     }
 
-    /// Decode each message of a datagram, which the FO flag of each chains (§7.2.1A).
-    ///
-    /// # Errors
-    ///
-    /// Those of [`decode`](Self::decode), for the first message that has one.
-    pub fn decode_datagram(mut octets: &[u8]) -> Result<Vec<Self>, Error> {
+    /// Decode each message of a datagram, which the FO flag of each chains (§7.2.1A),
+    /// each on its own (§6.5): a message that does not decode is the error of
+    /// [`decode`](Self::decode) in its place, and the next one is decoded after it. The
+    /// message without the FO flag is the rest of the datagram, which has no octets after
+    /// it (§7.6.3); after an FO flag, a datagram that has no octets left ends with
+    /// [`Error::TooShort`]. A Message Length that runs past the datagram ends it.
+    pub fn decode_datagram(mut octets: &[u8]) -> Vec<Result<Self, Error>> {
         let mut messages = Vec::new();
         loop {
-            let (message, used) = Self::decode_first(octets)?;
-            let follows = message.header.follow_on;
-            messages.push(message);
-            octets = &octets[used..];
-            if !follows || octets.is_empty() {
-                break;
+            let Some((header, _, length)) = Header::decode(octets) else {
+                messages.push(Err(Error::TooShort { octets: octets.len() }));
+                return messages;
+            };
+            let end = 4 + usize::from(length);
+            let whole = header.follow_on && end <= octets.len() && end >= header.len();
+            let this = if whole { &octets[..end] } else { octets };
+            messages.push(Self::decode(this));
+            if !whole {
+                return messages;
             }
+            octets = &octets[end..];
         }
-        Ok(messages)
     }
 
     fn decode_first(octets: &[u8]) -> Result<(Self, usize), Error> {
@@ -168,9 +173,7 @@ impl Message {
         self.body.encode(&mut out)?;
         let body = out.len() - header;
         debug_assert_eq!(body, expected, "the encoded length of the IEs is the one computed first");
-        self.header
-            .encode_into(self.body.message_type(), body, &mut out)
-            .ok_or(Error::TooLong { ie_type: 0, length: body })?;
+        self.header.encode_into(self.body.message_type(), body, &mut out)?;
         Ok(out)
     }
 
@@ -192,7 +195,18 @@ impl Message {
         if header.version != 1 {
             found.push(Deviation::new(path, "7.2.2.4.1", DeviationKind::Rule("the version is not 1")));
         }
-        if header.spare != 0 || (header.priority.is_none() && header.spare_last != 0) {
+        if let Some((field, _)) = header.overflow() {
+            let rule = match field {
+                "Version" => "a version of more than 3 bits",
+                "Spare" => "spare bits of octet 1 of more than 2 bits",
+                "Sequence Number" => "a sequence number of more than 24 bits",
+                "Message Priority" => "a message priority of more than 4 bits",
+                _ => "spare bits of the last octet of more than its bits",
+            };
+            found.push(Deviation::new(path, "7.2.2.1", DeviationKind::Rule(rule)));
+        }
+        // The last octet is spare, or its bits after the priority are (§7.2.2.3).
+        if header.spare != 0 || header.spare_last != 0 {
             found.push(Deviation::new(path, "7.2.2.1", DeviationKind::SpareBits));
         }
         if known && node && header.seid.is_some() {
@@ -447,7 +461,7 @@ mod forms {
             let seid = reading.optional(&read, 4, |value, reading| reading.unsigned(value, 0, u64::MAX))?;
             let sequence = reading.member(&read, 5, |value, reading| reading.unsigned(value, 0, 0xff_ffff))? as u32;
             let priority = small(reading, 6, 15)?.map(|priority| priority as u8);
-            let spare_last = small(reading, 7, 255)?.unwrap_or(0) as u8;
+            let spare_last = small(reading, 7, if priority.is_some() { 15 } else { 255 })?.unwrap_or(0) as u8;
             let length = small(reading, 8, 65535)?.map(|length| length as u16);
             let header = Header { version, spare, follow_on, seid, sequence, priority, spare_last, length };
             let body = reading.member(&read, 9, |value, reading| Body::from_ies_tree(kind, value, reading))?;

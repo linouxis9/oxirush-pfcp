@@ -117,6 +117,13 @@ pub enum Error {
         /// The length of the content.
         length: usize,
     },
+    /// A field of the header whose value its bits cannot hold (§7.2.2).
+    HeaderField {
+        /// The field.
+        field: &'static str,
+        /// Its value.
+        value: u64,
+    },
     /// A value whose fields disagree with its flags, as its clause has them.
     Inconsistent {
         /// The IE type.
@@ -135,7 +142,8 @@ impl fmt::Display for Error {
             Self::MessageLength { length, available, .. } => {
                 write!(f, "the Message Length is {length}, and {available} octets follow the first four (TS 29.244 7.6.3)")
             }
-            Self::Ies { fault, .. } => write!(f, "the IEs do not fit the message: {fault:?} (TS 29.244 7.6.7)"),
+            Self::Ies { fault, .. } => write!(f, "the IEs do not fit the message: {fault} (TS 29.244 7.6.7)"),
+            Self::HeaderField { field, value } => write!(f, "{value} is more than the bits of the {field} of the header hold (TS 29.244 7.2.2)"),
             Self::TooLong { ie_type, length } => write!(f, "{length} octets of IE type {ie_type} are more than a Length says"),
             Self::Inconsistent { ie, field, clause } => {
                 write!(f, "{field} of {ie} disagrees with its flags (TS 29.244 {clause})")

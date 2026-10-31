@@ -198,13 +198,10 @@ fn other_vectors_round_trip() {
     for line in std::fs::read_to_string(file).unwrap().lines() {
         let fields: Vec<&str> = line.split('\t').collect();
         let octets = hex::decode(fields[2]).unwrap();
-        let messages = match Message::decode_datagram(&octets) {
-            Ok(messages) => messages,
-            Err(error) => {
-                println!("{} {}: {error}", fields[0], fields[1]);
-                continue;
-            }
-        };
+        let messages: Vec<Message> = Message::decode_datagram(&octets)
+            .into_iter()
+            .collect::<Result<_, _>>()
+            .unwrap_or_else(|error| panic!("{} {}: {error}", fields[0], fields[1]));
         let mut again = Vec::new();
         for message in &messages {
             again.extend(message.encode().unwrap());
@@ -534,4 +531,80 @@ fn node_id_forms() {
         let written = tree!({"FQDN": name});
         assert!(tree::from_value::<NodeId>(&written).is_err(), "{name}");
     }
+}
+
+/// A session related message of `message_type`, its FO flag and its IEs.
+fn bundled(message_type: u8, follow_on: bool, ies: &[u8]) -> Vec<u8> {
+    let flags = 0x21 | u8::from(follow_on) << 2;
+    [&[flags, message_type][..], &((12 + ies.len()) as u16).to_be_bytes(), &1u64.to_be_bytes(), &[0, 0, 7, 0], ies].concat()
+}
+
+/// §6.5, §7.2.1A, §7.6.3: each message of a datagram is decoded on its own; one that does
+/// not decode is an error in its place, and does not take the others with it. The last
+/// message is the rest of the datagram, and an FO flag on it says that a message follows
+/// that is not there.
+#[test]
+fn each_message_of_a_datagram_on_its_own() {
+    let heartbeat = Message { header: Header::node(1), ..heartbeat_request() }.encode().unwrap();
+    let junk = [heartbeat.clone(), vec![0xde, 0xad, 0xbe, 0xef, 0, 1, 2, 3, 4, 5]].concat();
+    assert!(matches!(&Message::decode_datagram(&junk)[..], [Err(Error::MessageLength { length: 12, available: 22, .. })]));
+    assert!(Message::decode(&junk).is_err());
+    let first = bundled(52, true, &[]);
+    let cut = [first.clone(), vec![0x21, 52, 0, 0xff]].concat();
+    assert!(matches!(&Message::decode_datagram(&cut)[..], [Ok(_), Err(Error::TooShort { octets: 4 })]));
+    assert!(matches!(&Message::decode_datagram(&first)[..], [Ok(_), Err(Error::TooShort { octets: 0 })]));
+    // An IE that runs past its message, then a message that decodes
+    let broken = [bundled(52, true, &[0, 60, 0, 9, 0]), bundled(54, false, &[])].concat();
+    let messages = Message::decode_datagram(&broken);
+    assert!(matches!(&messages[..], [Err(Error::Ies { .. }), Ok(message)] if message.body.message_type() == 54), "{messages:?}");
+    // A Message Length that runs past the datagram ends it
+    let past = [bundled(52, true, &[])[..12].to_vec(), vec![0; 2]].concat();
+    assert!(matches!(&Message::decode_datagram(&past)[..], [Err(Error::TooShort { .. })]));
+    let mut long = bundled(52, true, &[]);
+    long[3] = 200;
+    assert!(matches!(&Message::decode_datagram(&long)[..], [Err(Error::MessageLength { .. })]));
+}
+
+fn heartbeat_request() -> Message {
+    Message { header: Header::node(1), body: HeartbeatRequest::new(RecoveryTimeStamp::new(1)).into() }
+}
+
+/// A list of grouped IEs is sized for the IEs that its values can be: not for those of a
+/// null length, nor for those whose IEs run past them, which stay octets.
+#[test]
+fn a_list_is_sized_for_its_values() {
+    for content in [&[][..], &[0, 56, 0, 9]] {
+        let ies: Vec<u8> = (0..(65_535 - 12) / (4 + content.len())).flat_map(|_| [&[0, 1][..], &(content.len() as u16).to_be_bytes(), content].concat()).collect();
+        let octets = [&[0x21, 50][..], &((12 + ies.len()) as u16).to_be_bytes(), &0u64.to_be_bytes(), &[0, 0, 1, 0], &ies].concat();
+        let message = Message::decode(&octets).unwrap();
+        let Body::SessionEstablishmentRequest(request) = &message.body else { panic!() };
+        // One, of the IE decoded in its place, which does not decode
+        assert!(request.create_pdr.capacity() <= 1, "{content:?}: {}", request.create_pdr.capacity());
+        assert_eq!(message.encode().unwrap(), octets);
+    }
+}
+
+/// §7.2.2: a header value that its bits cannot hold is not cut: encode() refuses it, and
+/// check() says it; a tree cannot write it.
+#[test]
+fn a_header_value_that_its_bits_cannot_hold() {
+    let message = |header: Header| Message { header, body: SessionDeletionRequest::default().into() };
+    for header in [
+        Header::session(1, 0x0100_0005),
+        Header { priority: Some(17), ..Header::session(1, 5) },
+        Header { priority: Some(1), spare_last: 0x35, ..Header::session(1, 5) },
+        Header { version: 9, ..Header::session(1, 5) },
+        Header { spare: 4, ..Header::session(1, 5) },
+    ] {
+        let message = message(header);
+        assert!(matches!(message.encode(), Err(Error::HeaderField { .. })), "{header:?}");
+        assert!(!message.check().is_empty(), "{header:?}");
+    }
+    // The spare bits after the priority are spare (§7.2.2.3)
+    let mut octets = message(Header { priority: Some(3), ..Header::session(1, 5) }).encode().unwrap();
+    octets[15] |= 0x05;
+    let decoded = Message::decode(&octets).unwrap();
+    assert_eq!(decoded.check().iter().map(|deviation| deviation.kind.clone()).collect::<Vec<_>>(), [DeviationKind::SpareBits]);
+    let written = tree!({"message": "PFCP Session Deletion Request", "SEID": 1, "Sequence Number": 1, "Message Priority": 3, "Spare octet": 0x35, "ies": {}});
+    assert!(Message::from_tree(&written).is_err());
 }

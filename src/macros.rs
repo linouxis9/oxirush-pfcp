@@ -783,13 +783,20 @@ macro_rules! pfcp_table {
 
             const PRESIZE: bool = false $( || pfcp_table!(@large [$(* $($max)?)?] (pfcp_table!(@type_static $vty $($raw)?))) )*;
 
+            // Only the IEs that can be values are counted: not one of a null length, nor
+            // one whose IEs run past it, which the scope keeps as octets.
             #[allow(unused_variables)]
             fn presize(&mut self, octets: &[u8]) {
                 $( let mut [<count_ $field>] = 0usize; )*
                 for ie in crate::framing::ies(octets).flatten() {
                     $(
-                        if ie.ie_type == <pfcp_table!(@type_any $vty $($raw)?) as crate::ie::IeType>::IE_TYPE {
-                            [<count_ $field>] += 1;
+                        if pfcp_table!(@large [$(* $($max)?)?] (pfcp_table!(@type_static $vty $($raw)?)))
+                            && ie.ie_type == <pfcp_table!(@type_any $vty $($raw)?) as crate::ie::IeType>::IE_TYPE
+                        {
+                            let content = ie.content();
+                            if !content.is_empty() && crate::framing::ies(content).all(|inner| inner.is_ok()) {
+                                [<count_ $field>] += 1;
+                            }
                             continue;
                         }
                     )*

@@ -192,6 +192,17 @@ pub enum IeFault {
     },
 }
 
+impl core::fmt::Display for IeFault {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Self::HeaderCut { octets } => write!(f, "{octets} octets are left, fewer than the four of an IE header"),
+            Self::Length { ie_type, length, available } => {
+                write!(f, "IE type {ie_type} has the Length {length}, and {available} octets follow its header")
+            }
+        }
+    }
+}
+
 /// The raw IE of `ie_type` and its content.
 pub(crate) fn raw(ie_type: u16, body: &[u8]) -> RawIe {
     match (ie_type >= VENDOR, body) {

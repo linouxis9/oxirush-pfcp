@@ -396,7 +396,7 @@ fn mandatory(row: &Row, context: Context) -> usize {
     }
     let (_, mandatory) = on(row, context.interface);
     match context.rejected {
-        // The Node ID and the Offending IE follow their rows; the others may be missing.
+        // The Cause and the Node ID follow their rows; the others may be missing.
         true => mandatory.min(usize::from(matches!(row.ie_type, 19 | 60))),
         false => mandatory,
     }
