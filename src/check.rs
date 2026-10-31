@@ -428,7 +428,9 @@ pub(crate) fn check_row(
 ) {
     let rejected = context.rejected && !WITH_REJECTION.contains(&row.ie_type);
     let off = !row.interfaces.has(context.interface) && !on(row, context.interface).0;
-    let over = matches!(row.repeat, Repeat::AtMost(most) if count > usize::from(most));
+    // A field that rows share has at most one IE for each of them on the interface.
+    let shared = !row.roles.is_empty() && count > row.roles.iter().filter(|role| role.interfaces.has(context.interface)).count();
+    let over = shared || matches!(row.repeat, Repeat::AtMost(most) if count > usize::from(most));
     if rejected || off || over {
         row_deviations(table, row, [rejected, off, over], path, found);
     }

@@ -425,3 +425,80 @@ fn eps_cups_on_its_interfaces() {
     assert!(both.check(Interfaces::SXA_SXB).is_empty(), "{:?}", both.check(Interfaces::SXA_SXB));
     assert!(!both.check(Interfaces::N4).is_empty());
 }
+
+/// Messages of each interface and procedure, built, decoded back and checked where they
+/// are and where they are not: Sxb modification and report, association update and
+/// release, PFD management on Sxb and Sxc, session set deletion with the FQ-CSIDs of
+/// its roles, a TDF's establishment on Sxc, an MB-SMF's on N4mb.
+#[test]
+fn messages_of_each_interface() {
+    let node = NodeId::Ipv4(SMF);
+    let fq_csid = |node_id_type_address: [u8; 4], csid: u16| FqCsid { node_id_type: 0, node_address: node_id_type_address.to_vec(), csids: vec![csid], node_type: None, extra: Octets::new() };
+    let seid = FSeid { v4: true, seid: Some(0x1001), ipv4: Some(SMF), ..Default::default() };
+    let pdi = || Pdi::new(SourceInterface::new(SourceInterfaceValue::Core));
+    let urr = UsageReport::new(UrrId::new(1), UrSeqn::new(0), UsageReportTrigger { perio: true, ..Default::default() });
+    let pfd = PfdContents { fd: true, spare_octet: Some(Spare(0)), flow_description: Some(Lv16(b"permit out ip from any to any".to_vec())), ..Default::default() };
+    let cases: Vec<(Message, Interfaces, Option<Interfaces>)> = vec![
+        (
+            Message {
+                header: Header::session(0x2001, 1),
+                body: SessionModificationRequest::default()
+                    .with_update_far(UpdateFar::new(FarId::new(1)).with_apply_action(ApplyAction { drop: true, ..Default::default() }))
+                    .with_remove_qer(RemoveQer::new(QerId::new(1)))
+                    .into(),
+            },
+            Interfaces::SXB,
+            Some(Interfaces::SXA),
+        ),
+        (Message { header: Header::session(0x2001, 2), body: SessionReportRequest::new(ReportType { usar: true, ..Default::default() }).with_usage_report(urr).into() }, Interfaces::SXB, None),
+        (Message { header: Header::node(3), body: AssociationUpdateRequest::new(node.clone()).into() }, Interfaces::SXA, None),
+        (Message { header: Header::node(4), body: AssociationReleaseRequest::new(node.clone()).into() }, Interfaces::SXB, None),
+        (
+            Message { header: Header::node(5), body: PfdManagementRequest::default().with_application_ids_pfds(ApplicationIDsPFDs::new(ApplicationId(b"app".to_vec().into())).with_pfd_context(PfdContext::new(pfd))).into() },
+            Interfaces::SXC,
+            Some(Interfaces::SXA),
+        ),
+        (
+            Message { header: Header::node(6), body: SessionSetDeletionRequest::new(node.clone()).with_fq_csid(fq_csid([10, 0, 0, 1], 1)).with_fq_csid(fq_csid([10, 0, 0, 5], 2)).into() },
+            Interfaces::SXA,
+            Some(Interfaces::SXC),
+        ),
+        (
+            Message { header: Header::session(0, 7), body: SessionEstablishmentRequest::new_sxc(node.clone(), seid.clone(), CreatePdr::new_sxc(PdrId::new(1), Precedence::new(1), pdi().with_application_id(ApplicationId(b"app".to_vec().into()))), CreateFar::new(FarId::new(1), ApplyAction { drop: true, ..Default::default() })).into() },
+            Interfaces::SXC,
+            Some(Interfaces::SXA),
+        ),
+        (
+            Message {
+                header: Header::session(0, 8),
+                body: SessionEstablishmentRequest::new_n4mb(
+                    node.clone(),
+                    seid,
+                    CreatePdr::new_n4mb(PdrId::new(1), Precedence::new(1), pdi()),
+                    CreateFar::new(FarId::new(1), ApplyAction { drop: true, ..Default::default() }),
+                    MbsSessionN4mbControlInformation::new(MbsSessionIdentifier { tmgi: true, tmgi_field: Some([1, 2, 3, 4, 5, 6]), ..Default::default() }),
+                )
+                .into(),
+            },
+            Interfaces::N4MB,
+            Some(Interfaces::SXA),
+        ),
+    ];
+    for (message, on, off) in cases {
+        let octets = message.encode().unwrap();
+        assert_eq!(Message::decode(&octets).unwrap(), message);
+        let found = message.check(on);
+        assert!(found.is_empty(), "{message} on {on:?}: {found:?}");
+        if let Some(off) = off {
+            assert!(!message.check(off).is_empty(), "{message} on {off:?}");
+        }
+    }
+    // The FQ-CSIDs of Session Set Deletion: one of each role on the interface
+    let mut deletion = SessionSetDeletionRequest::new(node);
+    for csid in 0..3 {
+        deletion = deletion.with_fq_csid(fq_csid([10, 0, 0, 1], csid));
+    }
+    let deletion = Message { header: Header::node(9), body: deletion.into() };
+    assert!(deletion.check(Interfaces::SXA).is_empty());
+    assert_eq!(deletion.check(Interfaces::N4).iter().map(|deviation| deviation.kind.clone()).collect::<Vec<_>>(), [DeviationKind::Repeated { ie_type: 65 }]);
+}
