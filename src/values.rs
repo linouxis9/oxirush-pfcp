@@ -112,15 +112,19 @@ impl Field for U40 {
 /// A VLAN tag of three octets: the C-TAG and S-TAG of Outer Header Creation.
 pub type VlanTag = [u8; 3];
 
-impl Field for [u8; 3] {
+/// Sixteen octets that their clause does not split: an NF Instance ID (a UUID).
+pub type OctetArray16 = [u8; 16];
+
+/// Octets of a fixed number, as they are.
+impl<const N: usize> Field for [u8; N] {
     fn read(octets: &mut &[u8]) -> Option<Self> {
-        take::<3>(octets)
+        take::<N>(octets)
     }
     fn write(&self, out: &mut Vec<u8>) {
         out.extend_from_slice(self);
     }
     fn size(&self) -> usize {
-        3
+        N
     }
     #[cfg(feature = "tree")]
     fn to_tree(&self) -> oxirush_utils::tree::Value {
@@ -131,7 +135,35 @@ impl Field for [u8; 3] {
         value: &oxirush_utils::tree::Value,
         reading: &mut oxirush_utils::tree::Reading,
     ) -> Result<Self, oxirush_utils::tree::Refused> {
-        reading.octet_array::<3>(value)
+        reading.octet_array::<N>(value)
+    }
+}
+
+/// A number of three octets.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct U24(pub u32);
+
+impl Field for U24 {
+    fn read(octets: &mut &[u8]) -> Option<Self> {
+        let [a, b, c] = take::<3>(octets)?;
+        Some(Self(u32::from_be_bytes([0, a, b, c])))
+    }
+    fn write(&self, out: &mut Vec<u8>) {
+        out.extend_from_slice(&self.0.to_be_bytes()[1..]);
+    }
+    fn size(&self) -> usize {
+        3
+    }
+    #[cfg(feature = "tree")]
+    fn to_tree(&self) -> oxirush_utils::tree::Value {
+        oxirush_utils::tree::unsigned(self.0.into())
+    }
+    #[cfg(feature = "tree")]
+    fn from_tree(
+        value: &oxirush_utils::tree::Value,
+        reading: &mut oxirush_utils::tree::Reading,
+    ) -> Result<Self, oxirush_utils::tree::Refused> {
+        Ok(Self(reading.unsigned(value, 0, 0xff_ffff)? as u32))
     }
 }
 
@@ -1004,3 +1036,52 @@ impl<'a, const N: u16> crate::ie::Listed<'a> for Raw<'a, N> {
         true
     }
 }
+
+/// A value that is octets that its clause does not split.
+macro_rules! pfcp_octets {
+    ($( $(#[$meta:meta])* $ty:ident $name:literal $clause:literal; )*) => {$(
+        $(#[$meta])*
+        #[derive(Debug, Clone, Default, PartialEq, Eq)]
+        pub struct $ty<'a>(pub Octets<'a>);
+
+        impl<'a> Codec<'a> for $ty<'a> {
+            fn decode(octets: &'a [u8]) -> Option<Self> {
+                Some(Self(Octets::wire(octets)))
+            }
+            fn encode(&self, out: &mut Vec<u8>) -> Result<(), Error> {
+                out.extend_from_slice(&self.0);
+                Ok(())
+            }
+            fn encoded_len(&self) -> usize {
+                self.0.len()
+            }
+        }
+
+        impl Check for $ty<'_> {}
+
+        impl<'a> IntoOwned for $ty<'a> {
+            type Owned = $ty<'static>;
+            fn into_owned(self) -> $ty<'static> {
+                $ty(self.0.into_owned())
+            }
+        }
+
+        #[cfg(feature = "tree")]
+        impl oxirush_utils::tree::Tree for $ty<'_> {
+            const NAME: &'static str = $name;
+            fn to_tree(&self) -> oxirush_utils::tree::Value {
+                oxirush_utils::tree::octets(&self.0)
+            }
+            fn from_tree(
+                value: &oxirush_utils::tree::Value,
+                reading: &mut oxirush_utils::tree::Reading,
+            ) -> Result<Self, oxirush_utils::tree::Refused> {
+                reading.octets(value).map(|octets| Self(octets.into()))
+            }
+        }
+
+        crate::ie::listed_value!($ty);
+    )*};
+}
+
+pub(crate) use {pfcp_fields, pfcp_number, pfcp_octets};

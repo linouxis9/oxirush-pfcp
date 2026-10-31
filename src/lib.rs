@@ -41,6 +41,7 @@ mod table;
 #[cfg(feature = "tree")]
 pub mod tree;
 mod values;
+mod values_gen;
 
 use alloc::string::{String, ToString};
 use core::fmt;
@@ -57,6 +58,7 @@ pub use registry::{
 };
 pub use table::{Interfaces, Presence, Repeat, Role, Row, Table};
 pub use values::*;
+pub use values_gen::*;
 
 /// Why a message does not decode or encode.
 #[derive(Debug, Clone, PartialEq, Eq)]
