@@ -54,7 +54,7 @@ length first, and `check` allocates nothing for a message without a deviation.
 messages of the lab runs in a round. Built with `--cfg pfcp_borrowed`, a decoded octet
 string borrows the datagram in place of being copied: that took 5.3% fewer instructions on
 the captures (660,493 against 625,602 a round, both 425 allocations), 8.4% on go-pfcp's
-Session Establishment Request and 7.0% on ser-16, at 96bc6ad. The crate is owned: its
+Session Establishment Request and 7.0% on ser-16, at f0eea08. The crate is owned: its
 values have no lifetime.
 
 ## Against go-pfcp
