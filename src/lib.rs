@@ -42,6 +42,7 @@ mod table;
 pub mod tree;
 mod values;
 mod values_gen;
+mod values_hand;
 
 use alloc::string::{String, ToString};
 use core::fmt;
@@ -59,6 +60,7 @@ pub use registry::{
 pub use table::{Interfaces, Presence, Repeat, Role, Row, Table};
 pub use values::*;
 pub use values_gen::*;
+pub use values_hand::*;
 
 /// Why a message does not decode or encode.
 #[derive(Debug, Clone, PartialEq, Eq)]

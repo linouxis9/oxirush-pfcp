@@ -189,6 +189,35 @@ macro_rules! length_value {
 }
 length_value!(Lv8 u8, Lv16 u16);
 
+/// The octets up to the end of the IE: the last field of a layout whose length its clause
+/// does not give.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Rest(pub Vec<u8>);
+
+impl Field for Rest {
+    fn read(octets: &mut &[u8]) -> Option<Self> {
+        let all = core::mem::take(octets);
+        Some(Self(all.to_vec()))
+    }
+    fn write(&self, out: &mut Vec<u8>) {
+        out.extend_from_slice(&self.0);
+    }
+    fn size(&self) -> usize {
+        self.0.len()
+    }
+    #[cfg(feature = "tree")]
+    fn to_tree(&self) -> oxirush_utils::tree::Value {
+        oxirush_utils::tree::octets(&self.0)
+    }
+    #[cfg(feature = "tree")]
+    fn from_tree(
+        value: &oxirush_utils::tree::Value,
+        reading: &mut oxirush_utils::tree::Reading,
+    ) -> Result<Self, oxirush_utils::tree::Refused> {
+        reading.octets(value).map(Self)
+    }
+}
+
 /// A number of three octets.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct U24(pub u32);
