@@ -569,3 +569,52 @@ fn test_sources() -> Vec<String> {
     }
     sources
 }
+
+/// The interfaces on which each table is: of a message, the Appl. columns of Table 7.3-1;
+/// of a grouped IE, those of the rows of its type, on which their scopes are.
+fn applicable() -> BTreeMap<&'static str, Interfaces> {
+    let mut on: BTreeMap<&'static str, Interfaces> = MESSAGE_TYPES.iter().map(|info| (info.table.id, info.interfaces)).collect();
+    let tables: Vec<&'static Table> = MESSAGE_TYPES.iter().map(|info| info.table).chain(IE_TYPES.iter().flat_map(|info| info.tables.iter().copied())).collect();
+    loop {
+        let mut changed = false;
+        for table in &tables {
+            let Some(&scope) = on.get(table.id) else { continue };
+            for row in table.rows {
+                let Some(info) = ie_type_info(row.ie_type) else { continue };
+                for inner in info.tables {
+                    let here = on.entry(inner.id).or_insert(Interfaces(0));
+                    let more = Interfaces(here.0 | (scope.0 & row.interfaces.0));
+                    if more != *here {
+                        *here = more;
+                        changed = true;
+                    }
+                }
+            }
+        }
+        if !changed {
+            return on;
+        }
+    }
+}
+
+/// A table whose mandatory IEs differ between the interfaces that it is on has a
+/// constructor for each of them, and the others one `new()` (§4, the Appl. columns).
+#[test]
+fn constructors_by_interface() {
+    let mut problems = Vec::new();
+    let on = applicable();
+    let tables: Vec<&'static Table> = MESSAGE_TYPES.iter().map(|info| info.table).chain(IE_TYPES.iter().flat_map(|info| info.tables.iter().copied())).collect();
+    for table in tables {
+        let scope = on.get(table.id).copied().unwrap_or(Interfaces(0));
+        let each: Vec<Interfaces> = [Interfaces::SXA, Interfaces::SXB, Interfaces::SXC, Interfaces::N4, Interfaces::N4MB].into_iter().filter(|interface| scope.has(*interface)).collect();
+        let mandatory = |interface: Interfaces| -> Vec<&str> {
+            table.rows.iter().filter(|row| row.presence == Presence::Mandatory && row.interfaces.has(interface)).map(|row| row.name).collect()
+        };
+        let differ = each.windows(2).any(|pair| mandatory(pair[0]) != mandatory(pair[1]));
+        let expected = if differ { scope } else { Interfaces(0) };
+        if table.constructors != expected {
+            problems.push(format!("{} {}: constructors {:?}, and its interfaces {:?} need {:?}", table.id, table.name, table.constructors, scope, expected));
+        }
+    }
+    report(problems);
+}

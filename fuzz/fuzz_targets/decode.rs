@@ -21,11 +21,13 @@
 #![no_main]
 
 use libfuzzer_sys::fuzz_target;
-use oxirush_pfcp::{Message, framing};
+use oxirush_pfcp::{Interfaces, Message, framing};
 
 fuzz_target!(|octets: &[u8]| {
     if let Ok(message) = Message::decode(octets) {
-        let _ = message.check();
+        for interface in [Interfaces::N4, Interfaces::SXA, Interfaces::SXB, Interfaces::SXA_SXB, Interfaces::ALL] {
+            let _ = message.check(interface);
+        }
         assert_eq!(message.encode().expect("a decoded message encodes"), octets, "decode then encode");
     }
     let messages = Message::decode_datagram(octets);

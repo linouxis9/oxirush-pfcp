@@ -68,9 +68,9 @@ async fn an_smf_and_a_upf_set_up_an_association_and_a_session() {
 
     let seid = smf.new_session(upf_address).await.unwrap();
     let f_seid = FSeid { v4: true, seid: Some(seid), ipv4: Some(Ipv4Addr::LOCALHOST), ..Default::default() };
-    let pdr = CreatePdr::new(PdrId::new(1), Precedence::new(1), Pdi::new(SourceInterface::new(SourceInterfaceValue::Access)));
+    let pdr = CreatePdr::new_n4(PdrId::new(1), Precedence::new(1), Pdi::new(SourceInterface::new(SourceInterfaceValue::Access)));
     let far = CreateFar::new(FarId::new(1), ApplyAction { forw: true, ..Default::default() });
-    let request = SessionEstablishmentRequest::new(NodeId::Ipv4(Ipv4Addr::LOCALHOST), f_seid, pdr, far);
+    let request = SessionEstablishmentRequest::new_n4(NodeId::Ipv4(Ipv4Addr::LOCALHOST), f_seid, pdr, far);
     let response = smf.request(upf_address, Message { header: Header::session(0, 0), body: request.into() }).await.unwrap();
     assert_eq!(response.header.seid, Some(seid), "to the SMF's SEID");
     let upf = answering.await.unwrap();

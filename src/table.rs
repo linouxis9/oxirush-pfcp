@@ -61,10 +61,29 @@ impl Interfaces {
     pub const N4: Self = Self(8);
     /// N4mb, between the MB-SMF and the MB-UPF.
     pub const N4MB: Self = Self(16);
+    /// The combined Sxa/Sxb of a combined SGW/PGW (§5.2.6): a message may have the IEs
+    /// of either, and needs those that both need.
+    pub const SXA_SXB: Self = Self(1 | 2);
+    /// Every interface: a message may have the IEs of any, and needs those that all need.
+    pub const ALL: Self = Self(31);
 
-    /// Whether the row has `interface`.
+    /// Whether the row has `interface`, or one of a set of them.
     pub const fn has(self, interface: Self) -> bool {
         self.0 & interface.0 != 0
+    }
+
+    /// Whether the row has each of `interfaces`.
+    pub const fn has_all(self, interfaces: Self) -> bool {
+        interfaces.0 != 0 && self.0 & interfaces.0 == interfaces.0
+    }
+}
+
+impl core::ops::BitOr for Interfaces {
+    type Output = Self;
+
+    /// A set of interfaces, which a message of either may be on.
+    fn bitor(self, other: Self) -> Self {
+        Self(self.0 | other.0)
     }
 }
 
@@ -215,6 +234,10 @@ pub struct Table {
     pub code: u16,
     /// Its rows, in the order of the table.
     pub rows: &'static [Row],
+    /// The interfaces that have a constructor of their own, `new_sxa()` to `new_n4mb()`,
+    /// for a table whose mandatory IEs differ between them: none for a table of one
+    /// `new()`.
+    pub constructors: Interfaces,
 }
 
 impl Table {

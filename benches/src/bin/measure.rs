@@ -86,7 +86,7 @@ fn main() {
         let before = dhat::HeapStats::get();
         match workload.as_str() {
             "encode" => drop(black_box(message.encode().unwrap())),
-            "check" => drop(black_box(message.check())),
+            "check" => drop(black_box(message.check(Interfaces::N4))),
             #[cfg(feature = "tree")]
             "to_tree" => drop(black_box(message.to_tree())),
             #[cfg(feature = "tree")]
@@ -121,7 +121,7 @@ fn main() {
         } else if workload == "check" {
             let message = Message::decode(octets).unwrap();
             for _ in 0..rounds {
-                sum += black_box(black_box(&message).check()).len() as u64;
+                sum += black_box(black_box(&message).check(oxirush_pfcp::Interfaces::N4)).len() as u64;
             }
         } else if workload == "to_tree" || workload == "from_tree" {
             #[cfg(feature = "tree")]

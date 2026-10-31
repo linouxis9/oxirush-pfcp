@@ -117,9 +117,9 @@ fn associated_as(smf: NodeConfig, now: Duration) -> (Node, Node) {
 fn established(smf: &mut Node, upf: &mut Node, now: Duration) -> (u64, u64) {
     let cp_seid = smf.new_session(UPF);
     let f_seid = FSeid { v4: true, seid: Some(cp_seid), ipv4: Some(Ipv4Addr::new(10, 0, 0, 1)), ..Default::default() };
-    let pdr = CreatePdr::new(PdrId::new(1), Precedence::new(1), Pdi::new(SourceInterface::new(SourceInterfaceValue::Access)));
+    let pdr = CreatePdr::new_n4(PdrId::new(1), Precedence::new(1), Pdi::new(SourceInterface::new(SourceInterfaceValue::Access)));
     let far = CreateFar::new(FarId::new(1), ApplyAction { forw: true, ..Default::default() });
-    let establishment = SessionEstablishmentRequest::new(node_id(SMF), f_seid, pdr, far);
+    let establishment = SessionEstablishmentRequest::new_n4(node_id(SMF), f_seid, pdr, far);
     smf.request(now, UPF, Message { header: Header::session(0, 0), body: establishment.into() }).unwrap();
     pass(smf, upf, UPF, now);
     let (inbound, _) = request(upf);
@@ -665,15 +665,15 @@ fn session_needs_association() {
     assert_eq!(smf.session_request(at(0), seid, SessionDeletionRequest::default()), Err(NodeError::NoAssociation));
     // A UPF answers a session from a peer without an association
     let f_seid = FSeid { v4: true, seid: Some(0x55), ipv4: Some(Ipv4Addr::new(10, 0, 0, 1)), ..Default::default() };
-    let pdr = CreatePdr::new(PdrId::new(1), Precedence::new(1), Pdi::new(SourceInterface::new(SourceInterfaceValue::Access)));
+    let pdr = CreatePdr::new_n4(PdrId::new(1), Precedence::new(1), Pdi::new(SourceInterface::new(SourceInterfaceValue::Access)));
     let far = CreateFar::new(FarId::new(1), ApplyAction { forw: true, ..Default::default() });
-    let establishment = Message { header: Header::session(0, 6), body: SessionEstablishmentRequest::new(node_id(SMF), f_seid, pdr, far).into() };
+    let establishment = Message { header: Header::session(0, 6), body: SessionEstablishmentRequest::new_n4(node_id(SMF), f_seid, pdr, far).into() };
     upf.handle_datagram(at(0), SMF, &establishment.encode().unwrap());
     assert_eq!(violations(&mut upf), [ViolationKind::SessionWithoutAssociation]);
     let answer = decoded(&sent(&mut upf)[0]);
     assert_eq!(answer.body.cause(), Some(CauseValue::NoEstablishedPfcpAssociation));
     assert_eq!(answer.header.seid, Some(0x55), "to the SMF's SEID");
-    assert!(answer.check().is_empty(), "{:?}", answer.check());
+    assert!(answer.check(Interfaces::N4).is_empty(), "{:?}", answer.check(Interfaces::N4));
 }
 
 #[test]
@@ -748,7 +748,7 @@ fn unknown_seid_answered() {
     let answer = decoded(&sent(&mut upf)[0]);
     assert_eq!(answer.body.cause(), Some(CauseValue::SessionContextNotFound));
     assert_eq!((answer.header.seid, answer.header.sequence), (Some(0), 12));
-    assert!(answer.check().is_empty(), "{:?}", answer.check());
+    assert!(answer.check(Interfaces::N4).is_empty(), "{:?}", answer.check(Interfaces::N4));
 }
 
 #[test]
@@ -874,7 +874,7 @@ fn a_request_of_a_false_length_is_answered_invalid_length() {
     assert!(matches!(&got[..], [Event::Malformed { error: Error::MessageLength { .. }, .. }]), "{got:?}");
     let answer = decoded(&sent(&mut upf)[0]);
     assert_eq!((answer.header.sequence, answer.body.cause()), (9, Some(CauseValue::InvalidLength)));
-    assert!(answer.check().is_empty(), "{:?}", answer.check());
+    assert!(answer.check(Interfaces::N4).is_empty(), "{:?}", answer.check(Interfaces::N4));
     // An IE that runs past its message is named in the answer (§7.6.7)
     let modification = SessionModificationRequest::default().with_cp_f_seid(FSeid { v4: true, seid: Some(1), ipv4: Some(Ipv4Addr::new(10, 0, 0, 1)), ..Default::default() });
     let mut octets = Message { header: Header::session(7, 10), body: modification.into() }.encode().unwrap();
@@ -993,7 +993,7 @@ fn a_rejection_has_a_header_of_its_own() {
     upf.handle_datagram(at(0), SMF, &update.encode().unwrap());
     let answer = decoded(&sent(&mut upf)[0]);
     assert_eq!(answer.header, Header::node(3));
-    assert!(answer.check().is_empty(), "{:?}", answer.check());
+    assert!(answer.check(Interfaces::N4).is_empty(), "{:?}", answer.check(Interfaces::N4));
 }
 
 // ── §6.4: what a request may repeat ─────────────────────────────────────────
@@ -1228,9 +1228,9 @@ fn a_session_follows_its_f_seids() {
     let (mut smf, mut upf) = associated(at(0));
     let cp_seid = smf.new_session(UPF);
     let f_seid = FSeid { v4: true, seid: Some(cp_seid), ipv4: Some(Ipv4Addr::new(10, 0, 0, 1)), ..Default::default() };
-    let pdr = CreatePdr::new(PdrId::new(1), Precedence::new(1), Pdi::new(SourceInterface::new(SourceInterfaceValue::Access)));
+    let pdr = CreatePdr::new_n4(PdrId::new(1), Precedence::new(1), Pdi::new(SourceInterface::new(SourceInterfaceValue::Access)));
     let far = CreateFar::new(FarId::new(1), ApplyAction { drop: true, ..Default::default() });
-    let establishment = SessionEstablishmentRequest::new(node_id(SMF), f_seid, pdr, far);
+    let establishment = SessionEstablishmentRequest::new_n4(node_id(SMF), f_seid, pdr, far);
     smf.request(at(0), UPF, Message { header: Header::session(0, 0), body: establishment.into() }).unwrap();
     pass(&mut smf, &mut upf, UPF, at(0));
     let (inbound, _) = request(&mut upf);
@@ -1275,9 +1275,9 @@ fn sessions_that_end_without_a_procedure() {
     let (mut smf, mut upf) = associated(at(0));
     let pending = smf.new_session(UPF);
     let f_seid = FSeid { v4: true, seid: Some(pending), ipv4: Some(Ipv4Addr::new(10, 0, 0, 1)), ..Default::default() };
-    let pdr = CreatePdr::new(PdrId::new(1), Precedence::new(1), Pdi::new(SourceInterface::new(SourceInterfaceValue::Access)));
+    let pdr = CreatePdr::new_n4(PdrId::new(1), Precedence::new(1), Pdi::new(SourceInterface::new(SourceInterfaceValue::Access)));
     let far = CreateFar::new(FarId::new(1), ApplyAction { drop: true, ..Default::default() });
-    smf.request(at(0), UPF, Message { header: Header::session(0, 0), body: SessionEstablishmentRequest::new(node_id(SMF), f_seid, pdr, far).into() }).unwrap();
+    smf.request(at(0), UPF, Message { header: Header::session(0, 0), body: SessionEstablishmentRequest::new_n4(node_id(SMF), f_seid, pdr, far).into() }).unwrap();
     for attempt in 1..=4 {
         smf.handle_timeout(T1 * attempt);
     }
