@@ -735,8 +735,6 @@ pfcp_octets! {
     NotificationCorrelationId "Notification Correlation ID" "8.2.203";
     /// Predefined Rules Name (§8.2.205).
     PredefinedRulesName "Predefined Rules Name" "8.2.205";
-    /// Tunnel Password (§8.2.212).
-    TunnelPassword "Tunnel Password value" "8.2.212";
     /// Metadata (§8.2.219).
     Metadata "Metadata" "8.2.219";
     /// TL-Container (§8.2.230).

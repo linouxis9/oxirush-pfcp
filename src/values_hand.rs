@@ -489,52 +489,68 @@ pfcp_fields! {
     pub struct KeyIdAndSharedSecret "8.2.276" { key_id "Key ID": Lv8, shared_secret "Shared Secret": SecretLv8 }
 }
 
-/// HMAC Key (STAMP) (§8.2.274): a key, which `Debug` does not print.
-#[derive(Clone, Default, PartialEq, Eq)]
-pub struct HmacKeyStamp(pub Octets);
+/// Octets that are a key, which `Debug` does not print: their number only.
+macro_rules! pfcp_secret {
+    ($( $(#[$meta:meta])* $ty:ident $name:literal; )*) => {$(
+        $(#[$meta])*
+        #[derive(Clone, Default, PartialEq, Eq)]
+        pub struct $ty(pub Octets);
 
-impl fmt::Debug for HmacKeyStamp {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "HmacKeyStamp({} octets)", self.0.len())
-    }
+        impl fmt::Debug for $ty {
+            fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                write!(f, concat!(stringify!($ty), "({} octets)"), self.0.len())
+            }
+        }
+
+        impl $ty {
+            /// The name of its field.
+            pub const FIELDS: &'static [&'static str] = &[$name];
+        }
+
+        impl Codec for $ty {
+            fn decode(octets: &[u8]) -> Option<Self> {
+                Some(Self(Octets::wire(octets)))
+            }
+            fn encode(&self, out: &mut Vec<u8>) -> Result<(), Error> {
+                out.extend_from_slice(&self.0);
+                Ok(())
+            }
+            fn encoded_len(&self) -> usize {
+                self.0.len()
+            }
+        }
+
+        impl Check for $ty {}
+
+        #[cfg(feature = "serde")]
+        oxirush_utils::impl_serde!($ty);
+
+        #[cfg(feature = "tree")]
+        impl oxirush_utils::tree::Tree for $ty {
+            const NAME: &'static str = <$ty as crate::ie::IeType>::TYPE_NAME;
+            fn to_tree(&self) -> oxirush_utils::tree::Value {
+                oxirush_utils::tree::octets(&self.0)
+            }
+            fn from_tree(
+                value: &oxirush_utils::tree::Value,
+                reading: &mut oxirush_utils::tree::Reading,
+            ) -> Result<Self, oxirush_utils::tree::Refused> {
+                reading.secret(|reading| reading.octets(value)).map(|octets| Self(octets.into()))
+            }
+        }
+    )*};
 }
 
-impl HmacKeyStamp {
-    /// The name of its field.
-    pub const FIELDS: &'static [&'static str] = &["HMAC Key"];
+pfcp_secret! {
+    /// HMAC Key (STAMP) (§8.2.274): a key.
+    HmacKeyStamp "HMAC Key";
+    /// Tunnel Password (§8.2.212): a password.
+    TunnelPassword "Tunnel Password value";
 }
 
-impl Codec for HmacKeyStamp {
-    fn decode(octets: &[u8]) -> Option<Self> {
-        Some(Self(Octets::wire(octets)))
-    }
-    fn encode(&self, out: &mut Vec<u8>) -> Result<(), Error> {
-        out.extend_from_slice(&self.0);
-        Ok(())
-    }
-    fn encoded_len(&self) -> usize {
-        self.0.len()
-    }
-}
-
-impl Check for HmacKeyStamp {}
-
-#[cfg(feature = "serde")]
-oxirush_utils::impl_serde!(HmacKeyStamp);
-
-#[cfg(feature = "tree")]
-impl oxirush_utils::tree::Tree for HmacKeyStamp {
-    const NAME: &'static str = "HMAC Key (STAMP)";
-    fn to_tree(&self) -> oxirush_utils::tree::Value {
-        oxirush_utils::tree::octets(&self.0)
-    }
-    fn from_tree(
-        value: &oxirush_utils::tree::Value,
-        reading: &mut oxirush_utils::tree::Reading,
-    ) -> Result<Self, oxirush_utils::tree::Refused> {
-        reading.secret(|reading| reading.octets(value)).map(|octets| Self(octets.into()))
-    }
-}
+/// The IE types whose content is a key, which the `Debug` of an IE kept as octets does not
+/// print: Tunnel Password, HMAC Key (STAMP), Key ID and Shared Secret.
+pub(crate) const SECRETS: [u16; 3] = [313, 391, 393];
 
 listed_value!(
     SdfFilter, RedirectInformation, DownlinkDataServiceInformation, PfdContents, FlowInformation,
@@ -548,7 +564,7 @@ listed_value!(
     OffendingIeInformation, DnsQueryResponseFilter, MulticastTransportInformation,
     VendorSpecificNodeReportType, UeLevelMeasurementsConfiguration, L2tpUserAuthentication,
     RatType, AdditionalUsageReportsInformation, CTag, STag, UpFunctionFeatures,
-    CpFunctionFeatures, KeyIdAndSharedSecret, HmacKeyStamp,
+    CpFunctionFeatures, KeyIdAndSharedSecret, HmacKeyStamp, TunnelPassword,
 );
 
 pfcp_fields! {

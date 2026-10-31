@@ -608,3 +608,18 @@ fn a_header_value_that_its_bits_cannot_hold() {
     let written = tree!({"message": "PFCP Session Deletion Request", "SEID": 1, "Sequence Number": 1, "Message Priority": 3, "Spare octet": 0x35, "ies": {}});
     assert!(Message::from_tree(&written).is_err());
 }
+
+/// A key is never printed: the Tunnel Password, the HMAC Key (STAMP) and the Shared
+/// Secret, as values and as the octets that a scope keeps of them.
+#[test]
+fn keys_are_not_printed() {
+    let password = TunnelPassword(b"secret".to_vec().into());
+    assert!(!format!("{password:?}").contains("secret") && !format!("{password:?}").contains("736563726574"), "{password:?}");
+    let mut parameters = ProtocolSpecificConfigurationParameters { hmac_key_stamp: Some(HmacKeyStamp(vec![1, 2, 3].into())), ..Default::default() };
+    for ie_type in [313, 391, 393] {
+        parameters.raw.push(RawIe::new(ie_type, vec![0xaa, 0xbb, 0xcc]));
+    }
+    parameters.raw.push(RawIe::new(22, vec![0xaa, 0xbb, 0xcc]));
+    let printed = format!("{parameters:?}");
+    assert_eq!(printed.matches("aabbcc").count() + printed.matches("170, 187, 204").count(), 1, "{printed}");
+}

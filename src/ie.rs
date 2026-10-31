@@ -108,8 +108,8 @@ pub(crate) use listed_value;
 /// An IE that a scope keeps as its octets, in its place: one whose type the table of the
 /// scope does not have (§7.6.9) or that no release has, a vendor IE, one of a null
 /// length, one whose value does not decode as its type, and one that repeats an IE that
-/// the table has once (§7.6.10).
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// the table has once (§7.6.10). `Debug` does not print the octets of a key.
+#[derive(Clone, PartialEq, Eq)]
 pub struct RawIe {
     /// The IE type.
     pub ie_type: u16,
@@ -120,6 +120,18 @@ pub struct RawIe {
     pub length: Option<u16>,
     /// The content after the Length, or after the Enterprise ID of a vendor IE.
     pub octets: Octets,
+}
+
+impl core::fmt::Debug for RawIe {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        let mut debug = f.debug_struct("RawIe");
+        debug.field("ie_type", &self.ie_type).field("enterprise_id", &self.enterprise_id).field("length", &self.length);
+        match self.enterprise_id.is_none() && crate::values_hand::SECRETS.contains(&self.ie_type) {
+            true => debug.field("octets", &format_args!("{} octets", self.octets.len())),
+            false => debug.field("octets", &self.octets),
+        };
+        debug.finish()
+    }
 }
 
 impl RawIe {
