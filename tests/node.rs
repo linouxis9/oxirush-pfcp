@@ -1476,6 +1476,34 @@ fn bundled_datagram_each_message() {
     assert_eq!(requests, [20, 21]);
 }
 
+/// §7.6.2: a bundled message of another version is answered, and what follows it, whose
+/// framing the node does not know, is discarded.
+#[test]
+fn bundled_message_of_another_version() {
+    let (mut smf, mut upf) = associated(at(0));
+    let (_, up_seid) = established(&mut smf, &mut upf, at(0));
+    let modification = |sequence| Message {
+        header: Header::session(up_seid, sequence),
+        body: SessionModificationRequest::default().into(),
+    };
+    let mut octets = bundle(&[modification(20), modification(21), modification(22)]);
+    let second = octets.len() / 3;
+    octets[second] = (octets[second] & 0x1f) | 2 << 5;
+    upf.handle_datagram(at(1), SMF, &octets);
+    assert_eq!(requests_of(&events(&mut upf)), 1);
+    let answers: Vec<Message> = sent(&mut upf).iter().map(decoded).collect();
+    assert!(
+        matches!(
+            &answers[..],
+            [Message {
+                body: Body::VersionNotSupportedResponse(_),
+                ..
+            }]
+        ),
+        "{answers:?}"
+    );
+}
+
 #[test]
 fn bundled_messages_of_one_peer() {
     let (mut smf, mut upf) = associated(at(0));
