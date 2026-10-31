@@ -99,6 +99,23 @@ fn check_on_takes_the_rows_of_the_interface() {
     );
 }
 
+/// The check of a grouped IE on its own is on the interfaces of its table: the IEs that
+/// each of them needs are missing from an empty one.
+#[test]
+fn a_grouped_ie_on_its_own_needs_what_its_interfaces_need() {
+    let mut found = Vec::new();
+    Check::check(&CreateMar::default(), &Path::Root("/mar"), &mut found);
+    let missing: Vec<DeviationKind> = found.into_iter().map(|deviation| deviation.kind).collect();
+    assert_eq!(
+        missing,
+        [
+            DeviationKind::MandatoryMissing { ie_type: 170 },
+            DeviationKind::MandatoryMissing { ie_type: 171 },
+            DeviationKind::MandatoryMissing { ie_type: 172 },
+        ]
+    );
+}
+
 fn request_with(message: &mut Message, change: impl FnOnce(&mut SessionEstablishmentRequest)) {
     let Body::SessionEstablishmentRequest(request) = &mut message.body else {
         panic!()

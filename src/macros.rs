@@ -1139,10 +1139,11 @@ macro_rules! pfcp_table {
         }
 
         impl crate::check::Check for $ty {
-            /// Its table on any interface, as the receiver of a response: the IEs of any,
-            /// and those that all need.
+            /// Its table on the interfaces that it has, as the receiver of a response: the
+            /// IEs of any, and those that all need.
             fn check(&self, path: &crate::check::Path, found: &mut alloc::vec::Vec<crate::check::Deviation>) {
-                crate::check::check_scope(self, path, crate::check::Context::on(crate::table::Interfaces::ALL), found);
+                let interfaces = <Self as crate::table::Scope>::table().interfaces();
+                crate::check::check_scope(self, path, crate::check::Context::on(interfaces), found);
             }
 
             fn check_in(&self, path: &crate::check::Path, context: crate::check::Context, found: &mut alloc::vec::Vec<crate::check::Deviation>) {
