@@ -14,7 +14,8 @@ script:
     layouts.tsv         the figures of clause 8.2: their clause, the type that they say, and
                         the names of their flags and fields, in order
     value-tables.tsv    the tables of clause 8.2 that name values, or bits as octet/bit
-    clause-6.tsv        the headings of clause 6
+    clause-6.tsv        the headings of clause 6, and how many sentences each has that say
+                        "shall" or "should": the requirements that requirements.tsv lists
 
 Only the standard library is used. The cells are written as the document has them, with
 their spaces made single: what the crate does differently is in errata.tsv.
@@ -110,9 +111,13 @@ def main():
             if style.startswith('Heading') or re.match(r'^8\.2\.\d+ [A-Z]', value) and style == '':
                 heading = value
                 if re.match(r'^6(\.\d+)* ', value):
-                    clause6.append(value.split(' ', 1))
+                    clause6.append(value.split(' ', 1) + [0])
+            elif clause6 and re.match(r'^6(\.\d+)* ', heading):
+                clause6[-1][2] += len(requirements(value))
             caption = value if style == 'TH' else None
             continue
+        if clause6 and re.match(r'^6(\.\d+)* ', heading):
+            clause6[-1][2] += sum(len(requirements(cell)) for row in block for cell, _ in row)
         rows = [[cell for cell, _ in row] for row in block]
         spans = [[span for _, span in row] for row in block]
         title, caption = caption, None
@@ -150,7 +155,13 @@ def main():
     write('tables.tsv', ['table|row|same', 'table', 'name, or the name of the row', 'heading, or presence', 'IE type, or interfaces', 'IE type'], tables)
     write('layouts.tsv', ['clause', 'type in the figure', 'fields'], layouts)
     write('value-tables.tsv', ['table', 'title', 'value', 'name'], values)
-    write('clause-6.tsv', ['clause', 'title'], clause6)
+    write('clause-6.tsv', ['clause', 'title', 'requirements'], [[c, t, str(n)] for c, t, n in clause6])
+
+
+def requirements(paragraph):
+    """The sentences of a paragraph that say "shall" or "should", in order."""
+    sentences = re.split(r'(?<!i\.e\.)(?<!e\.g\.)(?<=[.;:])\s+(?=[A-Z(-])', paragraph)
+    return [sentence for sentence in sentences if re.search(r'\b(shall|should)\b', sentence)]
 
 
 def members(rows, spans):

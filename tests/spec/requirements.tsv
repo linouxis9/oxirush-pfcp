@@ -1,0 +1,215 @@
+# The requirements of clause 6 of TS 29.244 V19.6.0, the procedures: one row for each
+# sentence that says "shall" or "should", in the order of clause-6.tsv, and one row
+# numbered 0 for a heading that has none. Each says what checks it:
+#
+#   test NAME          a test of the crate, which the test `spec` finds
+#   planned NAME       a test that the node layer or check() is to have in 0.1.0
+#   application: ...   what the CP or UP function above the crate does, not the crate
+#   informative: ...   a heading or a statement that requires nothing
+#
+# The test `spec` fails on a heading without its rows, a row that the document does not
+# have, and a test that does not exist.
+#
+# clause	n	requirement	checked by
+6	0	The title of the clause.	informative: a title
+6.1	0	The procedures are those of Sxa, Sxb and Sxc.	informative: no requirement
+6.2	0	The title of the node related procedures.	informative: a title
+6.2.1	0	The clauses describe the node level and PFCP entity level procedures.	informative: no requirement
+6.2.2	0	The title of the heartbeat procedure.	informative: a title
+6.2.2.1	0	Heartbeat is a procedure of a PFCP entity, of two messages.	informative: no requirement
+6.2.2.2	1	An entity takes a Heartbeat Request at any time, even from an unknown peer, and answers it with a Heartbeat Response.	planned heartbeat_answered_from_unknown_peer
+6.2.2.3	1	A Heartbeat Response answers a received Heartbeat Request.	planned heartbeat_answered_from_unknown_peer
+6.2.3	0	The title of the load control procedure.	informative: a title
+6.2.3.1	0	What load control is for.	informative: no requirement
+6.2.3.2	1	Computing and sending the Load Control Information adds no significant load.	application: how the UP function computes its load
+6.2.3.3	0	The title of the Load Control Information.	informative: a title
+6.2.3.3.1	1	The UP function sends the full set of its load control information each time.	application: what the UP function sends
+6.2.3.3.1	2	The Load Control Sequence Number grows whenever the information changes.	planned load_control_sequence_violation
+6.2.3.3.1	3	Load control information is that of the Node ID of the UP function.	planned load_control_per_node_id
+6.2.3.3.1	4	The receiver replaces what it keeps of a peer with newer information, by the sequence number.	planned load_control_kept_by_sequence
+6.2.3.3.1	5	The receiver uses the parameters of one LCI together to select a UP function.	application: the selection of a UP function
+6.2.3.3.1	6	A sender includes a critical optional parameter only to a receiver that supports it.	application: what the UP function sends
+6.2.3.3.2	1	The sequence number tells two LCIs of one UP function apart.	planned load_control_kept_by_sequence
+6.2.3.3.2	2	The Load Control Sequence Number is supported and always in the LCI.	test tables
+6.2.3.3.2	3	The UP function increments the sequence number when it changes the information.	planned load_control_sequence_violation
+6.2.3.3.2	4	The sequence number does not change otherwise.	planned load_control_sequence_violation
+6.2.3.3.2	5	The receiver orders LCIs that arrive out of order by their sequence numbers.	planned load_control_kept_by_sequence
+6.2.3.3.2	6	The receiver tells by the sequence number whether the information changed.	planned load_control_kept_by_sequence
+6.2.3.3.2	7	The receiver keeps new information only if its sequence number is higher.	planned load_control_kept_by_sequence
+6.2.3.3.2	8	The receiver takes a lower sequence number after a roll-over or a restart of the peer.	planned load_control_reset_on_peer_restart
+6.2.3.3.2	9	The Load Metric is the load of the node that sends it.	application: how the UP function computes its load
+6.2.3.3.2	10	The Load Metric is supported.	test tables
+6.2.3.3.2	11	The Load Metric is always in the LCI.	test tables
+6.2.3.3.2	12	A sender does not advertise every small change of the Load Metric.	application: when the UP function sends its load
+6.2.3.3.2	13	A change of 5 or more is worth advertising.	application: when the UP function sends its load
+6.2.3.3.3	1	New load control information reaches the CP functions within an acceptable delay.	application: when the UP function sends its load
+6.2.3.3.3	2	The receiver takes the LCI in any message that can have it, and acts on it.	planned load_control_from_any_message
+6.2.4	0	The title of the overload control procedure.	informative: a title
+6.2.4.1	0	What overload control is for.	informative: no requirement
+6.2.4.2	1	Computing and sending the Overload Control Information adds no significant load.	application: how the UP function computes its overload
+6.2.4.2	2	Computing it does not severely impact the resources of the UP function.	application: how the UP function computes its overload
+6.2.4.2	3	Overload control keeps a preferential treatment of priority users and emergency services.	planned throttling_spares_priority
+6.2.4.3	0	The title of the Overload Control Information.	informative: a title
+6.2.4.3.1	1	The UP function sends the full set of its overload control information each time.	application: what the UP function sends
+6.2.4.3.1	2	The Overload Control Sequence Number grows whenever the information changes.	planned overload_control_sequence_violation
+6.2.4.3.1	3	The receiver replaces what it keeps of a peer with newer information, by the sequence number.	planned overload_control_kept_by_sequence
+6.2.4.3.1	4	The receiver applies the parameters of one OCI together.	planned throttling_loss_algorithm
+6.2.4.3.1	5	A sender includes a critical optional parameter only to a receiver that supports it.	application: what the UP function sends
+6.2.4.3.1	6	An OCI is by default that of the peer's address in the UP F-SEID of the session.	planned overload_control_scope
+6.2.4.3.1	7	An OCI of the Node ID says so explicitly.	planned overload_control_scope
+6.2.4.3.2	1	The sequence number tells two OCIs of one UP function apart.	planned overload_control_kept_by_sequence
+6.2.4.3.2	2	The Overload Control Sequence Number is supported and always in the OCI.	test tables
+6.2.4.3.2	3	The UP function increments the sequence number when it changes the information.	planned overload_control_sequence_violation
+6.2.4.3.2	4	The sequence number does not change otherwise.	planned overload_control_sequence_violation
+6.2.4.3.2	5	The receiver orders OCIs that arrive out of order by their sequence numbers.	planned overload_control_kept_by_sequence
+6.2.4.3.2	6	The receiver tells by the sequence number whether the information changed.	planned overload_control_kept_by_sequence
+6.2.4.3.2	7	The receiver keeps new valid information only if its sequence number is larger.	planned overload_control_kept_by_sequence
+6.2.4.3.2	8	The receiver takes a lower sequence number after a roll-over or a restart of the peer.	planned overload_control_reset_on_peer_restart
+6.2.4.3.2	9	An overload holds from its OCI until its period of validity ends or a new OCI comes.	planned overload_control_validity_expires
+6.2.4.3.2	10	The timer of the period of validity restarts with each new OCI.	planned overload_control_validity_expires
+6.2.4.3.2	11	When the timer expires, the overload has ceased.	planned overload_control_validity_expires
+6.2.4.3.2	12	The Period of Validity is supported.	test tables
+6.2.4.3.2	13	The Overload Reduction Metric is a percentage from 0 to 100.	planned check_overload_reduction_metric
+6.2.4.3.2	14	A sender does not advertise every small change of the metric.	application: when the UP function sends its overload
+6.2.4.3.2	15	A change of 5 or more is worth advertising.	application: when the UP function sends its overload
+6.2.4.3.2	16	The Overload Reduction Metric is supported and always in the OCI.	test tables
+6.2.4.3.3	1	New overload control information reaches the receivers within an acceptable delay.	application: when the UP function sends its overload
+6.2.4.3.3	2	The receiver takes the OCI in any message that can have it, and acts on it.	planned overload_control_from_any_message
+6.2.4.4	0	The title of message throttling.	informative: a title
+6.2.4.4.1	1	A CP function sends fewer messages to an overloaded peer, as its OCI asks.	planned throttling_loss_algorithm
+6.2.4.4.1	2	It discards a fraction of them in proportion to the overload.	planned throttling_loss_algorithm
+6.2.4.4.1	3	Throttling applies to requests only.	planned throttling_never_responses
+6.2.4.4.1	4	Responses are not throttled.	planned throttling_never_responses
+6.2.4.4.1	5	A CP function that supports overload control throttles with the "Loss" algorithm.	planned throttling_loss_algorithm
+6.2.4.4.2	1	An overloaded UP function asks its peers for a reduction, as a percentage.	application: what the UP function sends
+6.2.4.4.2	2	The receivers send that percentage fewer requests: redirected elsewhere, or failed.	planned throttling_loss_algorithm
+6.2.4.4.2	3	A reduction of 10% throttles 10% of the traffic to that UP function.	planned throttling_loss_algorithm
+6.2.4.4.2	4	The UP function adjusts the reduction that it asks for over time.	application: what the UP function sends
+6.2.4.5	0	The title of message prioritization.	informative: a title
+6.2.4.5.1	1	Priority requests are throttled last, and exempt as long as the reduction can be met otherwise.	planned throttling_spares_priority
+6.2.4.5.1	2	For other sessions, low priority messages are throttled first.	planned throttling_spares_priority
+6.2.4.5.2	1	Whether to use the message priority is the operator's policy.	application: the configuration of the node
+6.2.4.5.2	2	The rules of the clause apply when the message priority is used.	planned message_priority_default
+6.2.4.5.2	3	A sender chooses the relative priority of a message by the principles of 6.2.4.5.1.	application: the priority that the caller gives a request
+6.2.4.5.2	4	A message of several bearers has the priority of their highest ARP.	application: the priority that the caller gives a request
+6.2.4.5.2	5	A response has the priority of its request.	planned response_copies_priority
+6.2.4.5.2	6	A received request without a priority gets a default one.	planned message_priority_default
+6.2.4.5.2	7	A received response is handled with the priority of its request.	planned response_copies_priority
+6.2.4.5.2	8	All the CP and UP functions of a network support the priority alike.	application: the deployment
+6.2.5	0	The title of PFD management.	informative: a title
+6.2.5.1	1	A UP function that supports PFD management sets the PFDM feature.	application: the features of the UP function
+6.2.5.1	2	The UP function keeps the PFDs of each Application Identifier.	application: the PFDs of the UP function
+6.2.5.1	3	The PFDs apply to every session, of every CP function.	application: the PFDs of the UP function
+6.2.5.2	1	The CP function sends the full set of the PFDs of each Application Identifier.	application: what the CP function sends
+6.2.5.2	2	On "Request accepted (success)", the CP function takes the PFDs as provisioned.	application: the PFDs of the CP function
+6.2.5.2	3	On "Request partially accepted", the CP function does as clause 5.42 says.	application: the PFDs of the CP function
+6.2.5.3	1	On a PFD Management Request, the UP function does the following.	application: the PFDs of the UP function
+6.2.5.3	2	A removed or changed PFD that detected an application ends its reported start.	application: the PFDs of the UP function
+6.2.5.3	3	Without PAPFD on both sides, an error rejects the whole request with the Offending IE.	application: the PFDs of the UP function
+6.2.5.3	4	With PAPFD on both sides, the UP function may accept the request partially.	application: the PFDs of the UP function
+6.2.6	0	The title of association setup.	informative: a title
+6.2.6.1	1	Association setup sets up an association, for the sessions that follow.	planned association_setup_by_cp
+6.2.6.1	2	Both functions support association setup initiated by the CP function.	planned association_setup_by_cp
+6.2.6.2	0	The title of association setup by the CP function.	informative: a title
+6.2.6.2.1	1	The CP function sets up an association before the first session on a UP function.	planned session_needs_association
+6.2.6.2.1	2	The CP function finds the address of the UP function, and sends it the request.	planned association_setup_by_cp
+6.2.6.2.1	3	The CP function sends session requests only after a successful setup response.	planned session_needs_association
+6.2.6.2.1	4	The CP function knows from its configuration or DNS which interfaces the UP function has.	application: the configuration of the CP function
+6.2.6.2.2	1	The UP function keeps the Node ID of the CP function as the association's.	planned association_setup_by_cp
+6.2.6.2.2	2	The UP function answers with an Association Setup Response.	planned association_setup_by_cp
+6.2.6.2.2	3	A request of an unsupported version gets a Version Not Supported Response.	planned version_not_supported
+6.2.6.2.2	4	A rejected request gets a response with its error cause.	application: whether the UP function accepts
+6.2.6.2.2	5	A setup for a Node ID already associated replaces the association.	planned association_setup_again
+6.2.6.2.2	6	A UPF configured for IPUPS sets the UUPSI flag.	application: what the UP function answers
+6.2.6.3	0	The title of association setup by the UP function.	informative: a title
+6.2.6.3.1	1	The UP function knows the CP functions to associate with.	application: the configuration of the UP function
+6.2.6.3.1	2	The UP function finds the address of the CP function.	application: the configuration of the UP function
+6.2.6.3.1	3	The UP function sends the Association Setup Request.	planned association_setup_by_up
+6.2.6.3.2	1	The CP function keeps the Node ID of the UP function as the association's.	planned association_setup_by_up
+6.2.6.3.2	2	The CP function answers with a success, its Node ID and its features.	planned association_setup_by_up
+6.2.6.3.2	3	A request of an unsupported version gets a Version Not Supported Response.	planned version_not_supported
+6.2.6.3.2	4	A rejected request gets a response with its error cause.	application: whether the CP function accepts
+6.2.6.3.2	5	The CP function sends session requests only after its successful setup response.	planned session_needs_association
+6.2.6.3.2	6	The CP function knows from its configuration or DNS which interfaces the UP function has.	application: the configuration of the CP function
+6.2.7	0	The title of association update.	informative: a title
+6.2.7.1	1	Association update changes an association.	planned association_update
+6.2.7.2	0	The title of association update by the CP function.	informative: a title
+6.2.7.2.1	0	The CP function sends an update to report changes, such as its features.	planned association_update
+6.2.7.2.2	1	The UP function keeps the new features of the CP function.	planned association_update
+6.2.7.2.2	2	An update of an unknown Node ID gets an error cause.	planned association_update_unknown_node
+6.2.7.2.2	3	A handled update gets a success.	planned association_update
+6.2.7.2.2	4	With EPFAR, a release preparation is answered, then its sessions reported.	application: the release of the UP function's sessions
+6.2.7.3	0	The title of association update by the UP function.	informative: a title
+6.2.7.3.1	1	The UP function sets URSS once all usage reports are sent.	application: the usage reports of the UP function
+6.2.7.3.1	2	After the response, the association stays until a release request.	planned association_update
+6.2.7.3.2	1	The CP function keeps the new features of the UP function.	planned association_update
+6.2.7.3.2	2	The CP function replaces the Packet Inspection functionalities it keeps.	application: what the CP function keeps of the UP function
+6.2.7.3.2	3	The CP function replaces the Operator Configurable UPF Capabilities it keeps.	application: what the CP function keeps of the UP function
+6.2.7.3.2	4	An update of an unknown Node ID gets an error cause.	planned association_update_unknown_node
+6.2.7.3.2	5	A handled update gets a success.	planned association_update
+6.2.7.3.2	6	A release that the UP function asks for is done soon, or within the Graceful Release Period.	application: when the CP function releases
+6.2.7.3.2	7	No new session is created during the Graceful Release Period.	application: when the CP function creates sessions
+6.2.7.3.2	8	Final usage reports are collected by deleting the sessions before the period ends.	application: the sessions of the CP function
+6.2.7.3.2	9	With EPFAR and URSS, the CP function answers with a success.	application: whether the CP function accepts
+6.2.7.3.2	10	A new UE IP address Pool Identity replaces the previous one.	application: what the CP function keeps of the UP function
+6.2.8	0	The title of association release.	informative: a title
+6.2.8.1	1	Association release ends an association.	planned association_release
+6.2.8.1	2	Final usage reports are collected by deleting the sessions first.	application: the sessions of the CP function
+6.2.8.1	3	With MPAS, sessions are kept while another association of the SMF set remains.	application: the sessions of an SMF set
+6.2.8.2	1	On a successful release, the CP function deletes the sessions of the association.	planned association_release_ends_sessions
+6.2.8.3	1	On a release request, the UP function deletes the sessions of the association.	planned association_release_ends_sessions
+6.2.8.3	2	The UP function deletes the association and what it knows of it.	planned association_release
+6.2.8.3	3	The UP function answers with a success.	planned association_release
+6.2.9	0	The title of node report.	informative: a title
+6.2.9.1	1	Node report carries what the UP function reports outside a session.	application: what the UP function reports
+6.2.9.2	1	The UP function starts a node report to report.	application: what the UP function reports
+6.2.9.2	2	The request carries what is reported.	application: what the UP function reports
+6.2.9.2	3	A success means that the report was delivered.	application: what the UP function reports
+6.2.9.3	1	On a node report, the CP function handles it and answers.	application: what the CP function does with a report
+6.3	0	The title of the session related procedures.	informative: a title
+6.3.1	0	The clauses describe the session related procedures.	informative: no requirement
+6.3.2	0	The title of session establishment.	informative: a title
+6.3.2.1	1	Session establishment sets up a session and its rules.	planned session_establishment_seids
+6.3.2.2	1	The CP function sends the establishment with a new F-SEID and the rules.	planned session_establishment_seids
+6.3.2.2	2	On a success, the CP function goes on with what started the establishment.	application: the procedure of the CP function
+6.3.2.2	3	With PSUCC, a partial acceptance is handled as clause 5.2.9 says.	application: the procedure of the CP function
+6.3.2.3	1	The UP function keeps and applies the rules, and answers with a success.	application: the rules of the UP function
+6.3.2.3	2	Without PSUCC, an error rejects all the rules with the Rule ID of the first.	application: the rules of the UP function
+6.3.2.3	3	With PSUCC on both sides, the UP function may accept the request partially.	application: the rules of the UP function
+6.3.3	0	The title of session modification.	informative: a title
+6.3.3.1	1	Session modification changes a session and its rules.	application: the rules of the session
+6.3.3.2	1	The CP function sends the modification to the SEID of the UP function.	planned session_messages_carry_peer_seid
+6.3.3.2	2	The updated rules have only what changes.	application: the rules of the CP function
+6.3.3.2	3	One message does not create, update or remove one rule twice.	planned check_one_change_per_rule
+6.3.3.2	4	On a success, the CP function goes on with what started the modification.	application: the procedure of the CP function
+6.3.3.2	5	With PSUCC, a partial acceptance is handled as clause 5.2.9 says.	application: the procedure of the CP function
+6.3.3.3	1	The UP function finds the session by its SEID, or answers that it is not found.	planned unknown_seid_answered
+6.3.3.3	2	A rejected modification leaves the session as it was.	application: the rules of the UP function
+6.3.4	0	The title of session deletion.	informative: a title
+6.3.4.1	1	Session deletion deletes a session.	planned session_deletion_ends_session
+6.3.4.2	1	The CP function sends the deletion to the SEID of the UP function.	planned session_messages_carry_peer_seid
+6.3.4.2	2	On a success, the CP function goes on with what started the deletion.	application: the procedure of the CP function
+6.3.4.3	1	The UP function deletes the session, or answers that it is not found.	planned session_deletion_ends_session
+6.3.5	0	The title of session report.	informative: a title
+6.3.5.1	1	Session report carries what the UP function reports of a session.	application: what the UP function reports
+6.3.5.2	1	The UP function starts a session report to report.	application: what the UP function reports
+6.3.5.2	2	The request is sent to the SEID of the CP function, with what is reported.	planned session_messages_carry_peer_seid
+6.3.5.2	3	A success means that the report was delivered.	application: what the UP function reports
+6.3.5.3	1	The CP function finds the session by its SEID, or answers that it is not found.	planned unknown_seid_answered
+6.3.5.3	2	With EPFAR, a report with PSDBU means the session is deleted in the UP function.	application: the sessions of the CP function
+6.4	1	An entity keeps a queue of requests for each local address, local port and peer address.	planned queue_per_peer
+6.4	2	A request has a sequence number, and is kept until its response or its last retransmission.	planned retransmit_until_response
+6.4	3	A sequence number is unique among the outstanding requests of an endpoint.	planned sequence_unique
+6.4	4	Sending a request starts T1.	planned retransmit_until_response
+6.4	5	A request without a response before T1 expires is lost.	planned retransmit_until_response
+6.4	6	A lost request is sent again, at most N1 times.	planned timeout_after_n1
+6.4	7	A retransmission has the same octets, header, ports and addresses.	planned retransmission_identical
+6.4	8	A response has the sequence number of its request.	planned response_copies_sequence
+6.4	9	A request is answered once: a retransmission gets the same response.	planned retransmitted_request_answered_from_cache
+6.4	10	A duplicated response is discarded.	planned duplicate_response_discarded
+6.4	11	A response to no outstanding request is discarded.	planned unknown_response_discarded
+6.4	12	The application learns of a request that got no response.	planned timeout_after_n1
+6.5	1	The rules of bundling apply when messages are bundled.	planned bundled_datagram_each_message
+6.5	2	Session messages of different peers are not bundled together.	planned bundled_messages_of_one_peer
+6.5	3	Node related messages are not bundled.	planned bundled_node_message_reported
+6.5	4	Each bundled message follows the procedures as if it were alone.	planned bundled_datagram_each_message

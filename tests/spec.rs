@@ -500,3 +500,63 @@ fn layouts() {
     problems.extend(errata.unused(&["figure-type", "figure-field"]));
     report(problems);
 }
+
+/// The requirements of clause 6: each heading of the clause has its rows in
+/// `requirements.tsv`, one for each sentence that says "shall" or "should", and each row
+/// says what checks it; a test that it names exists.
+#[test]
+fn requirements() {
+    let headings: Vec<(&str, usize)> = records(include_str!("spec/clause-6.tsv"))
+        .into_iter()
+        .map(|cells| (cells[0], cells[2].parse().unwrap()))
+        .collect();
+    let mut rows: BTreeMap<&str, Vec<usize>> = BTreeMap::new();
+    let mut problems = Vec::new();
+    let sources = test_sources();
+    for cells in records(include_str!("spec/requirements.tsv")) {
+        let [clause, n, requirement, by] = cells[..] else {
+            problems.push(format!("requirements.tsv: {cells:?} has not four cells"));
+            continue;
+        };
+        rows.entry(clause).or_default().push(n.parse().unwrap());
+        if requirement.is_empty() {
+            problems.push(format!("requirement {clause}/{n}: no text"));
+        }
+        match by.split_once(' ') {
+            Some(("test", name)) if sources.iter().any(|source| source.contains(&format!("fn {name}("))) => {}
+            Some(("test", name)) => problems.push(format!("requirement {clause}/{n}: no test {name}")),
+            Some(("planned", name)) if name.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_') => {}
+            Some(("application:" | "informative:", reason)) if !reason.is_empty() => {}
+            _ => problems.push(format!("requirement {clause}/{n}: {by:?} says nothing that checks it")),
+        }
+    }
+    for (clause, count) in &headings {
+        let expected: Vec<usize> = if *count == 0 { vec![0] } else { (1..=*count).collect() };
+        match rows.remove(clause) {
+            Some(found) if found == expected => {}
+            found => problems.push(format!("clause {clause}: rows {found:?}, and the document has {count} requirements")),
+        }
+    }
+    for clause in rows.keys() {
+        problems.push(format!("requirements.tsv: clause {clause} is no heading of clause 6"));
+    }
+    report(problems);
+}
+
+/// The sources of the tests of the crate: its tests and its modules.
+fn test_sources() -> Vec<String> {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let mut sources = Vec::new();
+    let mut directories = vec![root.join("tests"), root.join("src")];
+    while let Some(directory) = directories.pop() {
+        for entry in std::fs::read_dir(directory).unwrap() {
+            let path = entry.unwrap().path();
+            if path.is_dir() {
+                directories.push(path);
+            } else if path.extension().is_some_and(|extension| extension == "rs") {
+                sources.push(std::fs::read_to_string(path).unwrap());
+            }
+        }
+    }
+    sources
+}

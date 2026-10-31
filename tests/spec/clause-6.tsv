@@ -1,77 +1,77 @@
-# clause	title
-6	Procedures
-6.1	Introduction
-6.2	PFCP Node Related Procedures
-6.2.1	General
-6.2.2	Heartbeat Procedure
-6.2.2.1	General
-6.2.2.2	Heartbeat Request
-6.2.2.3	Heartbeat Response
-6.2.3	Load Control Procedure
-6.2.3.1	General
-6.2.3.2	Principles
-6.2.3.3	Load Control Information
-6.2.3.3.1	General Description
-6.2.3.3.2	Parameters
-6.2.3.3.3	Frequency of Inclusion
-6.2.4	Overload Control Procedure
-6.2.4.1	General
-6.2.4.2	Principles
-6.2.4.3	Overload Control Information
-6.2.4.3.1	General Description
-6.2.4.3.2	Parameters
-6.2.4.3.3	Frequency of Inclusion
-6.2.4.4	Message Throttling
-6.2.4.4.1	General
-6.2.4.4.2	Throttling algorithm – "Loss"
-6.2.4.5	Message Prioritization
-6.2.4.5.1	Description
-6.2.4.5.2	Based on the Message Priority Signalled in the PFCP Message
-6.2.5	PFCP PFD Management Procedure
-6.2.5.1	General
-6.2.5.2	CP Function Behaviour
-6.2.5.3	UP Function Behaviour
-6.2.6	PFCP Association Setup Procedure
-6.2.6.1	General
-6.2.6.2	PFCP Association Setup Initiated by the CP Function
-6.2.6.2.1	CP Function Behaviour
-6.2.6.2.2	UP Function behaviour
-6.2.6.3	PFCP Association Setup Initiated by the UP Function
-6.2.6.3.1	UP Function Behaviour
-6.2.6.3.2	CP Function Behaviour
-6.2.7	PFCP Association Update Procedure
-6.2.7.1	General
-6.2.7.2	PFCP Association Update Procedure Initiated by the CP Function
-6.2.7.2.1	CP Function Behaviour
-6.2.7.2.2	UP Function Behaviour
-6.2.7.3	PFCP Association Update Procedure Initiated by UP Function
-6.2.7.3.1	UP Function Behaviour
-6.2.7.3.2	CP Function Behaviour
-6.2.8	PFCP Association Release Procedure
-6.2.8.1	General
-6.2.8.2	CP Function Behaviour
-6.2.8.3	UP Function behaviour
-6.2.9	PFCP Node Report Procedure
-6.2.9.1	General
-6.2.9.2	UP Function Behaviour
-6.2.9.3	CP Function behaviour
-6.3	PFCP Session Related Procedures
-6.3.1	General
-6.3.2	PFCP Session Establishment Procedure
-6.3.2.1	General
-6.3.2.2	CP Function Behaviour
-6.3.2.3	UP Function Behaviour
-6.3.3	PFCP Session Modification Procedure
-6.3.3.1	General
-6.3.3.2	CP Function behaviour
-6.3.3.3	UP Function Behaviour
-6.3.4	PFCP Session Deletion Procedure
-6.3.4.1	General
-6.3.4.2	CP Function Behaviour
-6.3.4.3	UP Function Behaviour
-6.3.5	PFCP Session Report Procedure
-6.3.5.1	General
-6.3.5.2	UP Function Behaviour
-6.3.5.3	CP Function Behaviour
-6.4	Reliable Delivery of PFCP Messages
-6.5	PFCP messages bundling
+# clause	title	requirements
+6	Procedures	0
+6.1	Introduction	0
+6.2	PFCP Node Related Procedures	0
+6.2.1	General	0
+6.2.2	Heartbeat Procedure	0
+6.2.2.1	General	0
+6.2.2.2	Heartbeat Request	1
+6.2.2.3	Heartbeat Response	1
+6.2.3	Load Control Procedure	0
+6.2.3.1	General	0
+6.2.3.2	Principles	1
+6.2.3.3	Load Control Information	0
+6.2.3.3.1	General Description	6
+6.2.3.3.2	Parameters	13
+6.2.3.3.3	Frequency of Inclusion	2
+6.2.4	Overload Control Procedure	0
+6.2.4.1	General	0
+6.2.4.2	Principles	3
+6.2.4.3	Overload Control Information	0
+6.2.4.3.1	General Description	7
+6.2.4.3.2	Parameters	16
+6.2.4.3.3	Frequency of Inclusion	2
+6.2.4.4	Message Throttling	0
+6.2.4.4.1	General	5
+6.2.4.4.2	Throttling algorithm – "Loss"	4
+6.2.4.5	Message Prioritization	0
+6.2.4.5.1	Description	2
+6.2.4.5.2	Based on the Message Priority Signalled in the PFCP Message	8
+6.2.5	PFCP PFD Management Procedure	0
+6.2.5.1	General	3
+6.2.5.2	CP Function Behaviour	3
+6.2.5.3	UP Function Behaviour	4
+6.2.6	PFCP Association Setup Procedure	0
+6.2.6.1	General	2
+6.2.6.2	PFCP Association Setup Initiated by the CP Function	0
+6.2.6.2.1	CP Function Behaviour	4
+6.2.6.2.2	UP Function behaviour	6
+6.2.6.3	PFCP Association Setup Initiated by the UP Function	0
+6.2.6.3.1	UP Function Behaviour	3
+6.2.6.3.2	CP Function Behaviour	6
+6.2.7	PFCP Association Update Procedure	0
+6.2.7.1	General	1
+6.2.7.2	PFCP Association Update Procedure Initiated by the CP Function	0
+6.2.7.2.1	CP Function Behaviour	0
+6.2.7.2.2	UP Function Behaviour	4
+6.2.7.3	PFCP Association Update Procedure Initiated by UP Function	0
+6.2.7.3.1	UP Function Behaviour	2
+6.2.7.3.2	CP Function Behaviour	10
+6.2.8	PFCP Association Release Procedure	0
+6.2.8.1	General	3
+6.2.8.2	CP Function Behaviour	1
+6.2.8.3	UP Function behaviour	3
+6.2.9	PFCP Node Report Procedure	0
+6.2.9.1	General	1
+6.2.9.2	UP Function Behaviour	3
+6.2.9.3	CP Function behaviour	1
+6.3	PFCP Session Related Procedures	0
+6.3.1	General	0
+6.3.2	PFCP Session Establishment Procedure	0
+6.3.2.1	General	1
+6.3.2.2	CP Function Behaviour	3
+6.3.2.3	UP Function Behaviour	3
+6.3.3	PFCP Session Modification Procedure	0
+6.3.3.1	General	1
+6.3.3.2	CP Function behaviour	5
+6.3.3.3	UP Function Behaviour	2
+6.3.4	PFCP Session Deletion Procedure	0
+6.3.4.1	General	1
+6.3.4.2	CP Function Behaviour	2
+6.3.4.3	UP Function Behaviour	1
+6.3.5	PFCP Session Report Procedure	0
+6.3.5.1	General	1
+6.3.5.2	UP Function Behaviour	3
+6.3.5.3	CP Function Behaviour	2
+6.4	Reliable Delivery of PFCP Messages	12
+6.5	PFCP messages bundling	4
