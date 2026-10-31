@@ -348,3 +348,22 @@ fn a_tree_is_in_the_order_of_the_tables() {
     assert_eq!(decoded.to_tree(), message.to_tree(), "the tree has the order of the table");
     assert_eq!(Message::from_tree(&decoded.to_tree()).unwrap().encode().unwrap(), octets);
 }
+
+/// A row that is there once, whose first IE does not decode and the second does: its
+/// tree has the octets of the first, then the value, and reads back (found by the fuzz
+/// target `tree`).
+#[test]
+fn a_value_after_the_octets_of_its_row() {
+    let message = establishment();
+    let mut octets = message.encode().unwrap();
+    // A Node ID of a type of no release, before the Node ID of the message
+    let extra: &[u8] = &[0x00, 0x3c, 0x00, 0x02, 0x0f, 0x00];
+    octets.splice(16..16, extra.iter().copied());
+    let length = (octets.len() - 4) as u16;
+    octets[2..4].copy_from_slice(&length.to_be_bytes());
+    let decoded = Message::decode(&octets).unwrap();
+    let tree = decoded.to_tree();
+    assert!(tree["ies"]["Node ID"].is_array(), "{tree}");
+    let back = Message::from_tree(&tree).unwrap();
+    assert_eq!(back.to_tree(), tree);
+}

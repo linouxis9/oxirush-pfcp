@@ -195,7 +195,10 @@ pub(crate) fn scope_from_tree<'a, S: Scope<'a> + TreeScope>(value: &Value, readi
         let label: &'static str = row.map_or("IE", |row| row.name);
         let list = row.is_some_and(|row| row.repeat != Repeat::Once);
         reading.within(label, held, |held, reading| {
-            let mut entry = |value: &Value, reading: &mut Reading, first: bool| -> Result<(), Refused> {
+            // A row that is there once has one value; the IEs of its type that the scope
+            // keeps as octets come before or after it.
+            let mut valued = false;
+            let mut entry = |value: &Value, reading: &mut Reading| -> Result<(), Refused> {
                 if is_octets(value) {
                     scope.raw_mut().push(read_raw(ie_type, value, reading)?);
                     order.push(Placed::Raw);
@@ -207,28 +210,24 @@ pub(crate) fn scope_from_tree<'a, S: Scope<'a> + TreeScope>(value: &Value, readi
                         "an IE that its table does not have is written by its octets: {\"octets\": ...}",
                     ));
                 }
-                if !list && !first {
+                if !list && valued {
                     return Err(reading.refuse(
                         ErrorKind::Value,
                         "its table has it once: a repetition is written by its octets",
                     ));
                 }
+                valued = true;
                 scope.read_field(ie_type, value, reading)?;
                 order.push(Placed::Field(ie_type));
                 Ok(())
             };
             match held {
                 Value::Array(_) => {
-                    let mut first = true;
-                    reading.list(held, |value, reading| {
-                        let done = entry(value, reading, first);
-                        first = false;
-                        done
-                    })?;
+                    reading.list(held, &mut entry)?;
                     Ok(())
                 }
                 _ if list => Err(reading.mismatch("a list", held)),
-                single => entry(single, reading, true),
+                single => entry(single, reading),
             }
         })?;
     }

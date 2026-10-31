@@ -1,0 +1,42 @@
+# The fuzz targets of oxirush-pfcp, for cargo-fuzz: `cargo +nightly fuzz run decode`.
+# A package of its own, which is not published.
+[package]
+name = "oxirush-pfcp-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+
+[dependencies.oxirush-pfcp]
+path = ".."
+features = ["tree", "node"]
+
+# Not part of any parent workspace.
+[workspace]
+members = ["."]
+
+[[bin]]
+name = "decode"
+path = "fuzz_targets/decode.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "tree"
+path = "fuzz_targets/tree.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "node"
+path = "fuzz_targets/node.rs"
+test = false
+doc = false
+bench = false
