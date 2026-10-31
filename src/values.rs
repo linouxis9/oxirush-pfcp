@@ -1034,27 +1034,38 @@ impl Codec for NodeId {
 impl Check for NodeId {
     fn check(&self, path: &crate::check::Path, found: &mut Vec<Deviation>) {
         let rule = |rule| Deviation::new(path, "8.2.38", DeviationKind::Rule(rule));
-        if let Self::Other(first, _) = self
-            && first & 0xf0 != 0
-        {
-            found.push(Deviation::new(path, "8.1.2", DeviationKind::SpareBits));
-        }
-        let labels = match (self, self.effective()) {
-            (_, None) => {
-                found.push(rule(match self.node_id_type() {
-                    NodeIdType::Ipv4Address | NodeIdType::Ipv6Address => "a Node ID value shorter than its type",
-                    NodeIdType::Fqdn => "an FQDN without a label",
-                    _ => "a Node ID Type that Table 8.2.38-2 has as spare: the Node ID cannot be read",
-                }));
-                return;
+        let (kind, value) = match self {
+            Self::Fqdn(labels) => (2, &labels[..]),
+            Self::Other(first, rest) => {
+                if first & 0xf0 != 0 {
+                    found.push(Deviation::new(path, "8.1.2", DeviationKind::SpareBits));
+                }
+                (first & 0x0f, &rest[..])
             }
-            (_, Some(Self::Fqdn(labels))) => labels,
             _ => return,
         };
-        if fqdn_labels(&labels).is_none() {
-            found.push(rule("labels that are no FQDN of RFC 1035: each of 1 to 63 octets, after its length"));
+        let broken = match (kind, value.len()) {
+            (0, 0..4) | (1, 0..16) => Some("a Node ID value shorter than its type"),
+            (0 | 1, _) => None,
+            (2, 0) => Some("an FQDN without a label"),
+            (2, _) if !fqdn_valid(value) => Some("labels that are no FQDN of RFC 1035: each of 1 to 63 octets, after its length"),
+            (2, _) => None,
+            _ => Some("a Node ID Type that Table 8.2.38-2 has as spare: the Node ID cannot be read"),
+        };
+        if let Some(broken) = broken {
+            found.push(rule(broken));
         }
     }
+}
+
+/// Whether octets are labels of an FQDN as RFC 1035 writes them, without the last zero
+/// octet: each of 1 to 63 octets, after its length.
+fn fqdn_valid(mut octets: &[u8]) -> bool {
+    while let [length @ 1..=63, rest @ ..] = octets {
+        let Some(tail) = rest.get(usize::from(*length)..) else { return false };
+        octets = tail;
+    }
+    octets.is_empty()
 }
 
 /// The labels of an FQDN as RFC 1035 writes them, without the last zero octet: `None`
