@@ -2,7 +2,7 @@
 name = "oxirush-pfcp"
 version = "0.1.0"
 edition = "2024"
-description = "PFCP (3GPP TS 29.244, Release 19) in Rust: decode, build, check and encode every message and IE of N4, Sxa, Sxb and Sxc, and edit them as JSON. no_std."
+description = "PFCP (3GPP TS 29.244, Release 19) in Rust: decode, build, check and encode every message and IE of N4, N4mb, Sxa, Sxb and Sxc, and edit them as JSON. no_std."
 license = "Apache-2.0"
 repository = "https://github.com/linouxis9/oxirush-pfcp"
 authors = ["Valentin D'Emmanuele"]
@@ -67,6 +67,10 @@ required-features = ["endpoint"]
 name = "readme"
 required-features = ["serde", "endpoint"]
 
-# cargo-fuzz sets `fuzzing`, and docs.rs `docsrs`.
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
+# docs.rs sets `docsrs`.
 [lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(fuzzing)', 'cfg(docsrs)'] }
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(docsrs)'] }
