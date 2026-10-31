@@ -1717,8 +1717,8 @@ pfcp_table! {
         precedence: "Precedence" C Precedence [SXB SXC N4 N4MB],
         pdi: "PDI" C Pdi [SXA SXB SXC N4 N4MB],
         far_id: "FAR ID" C FarId [SXA SXB SXC N4 N4MB],
-        urr_id: "URR ID" C UrrId [SXA SXB SXC N4],
-        qer_id: "QER ID" C QerId [SXB SXC N4 N4MB],
+        urr_id: "URR ID" C* UrrId [SXA SXB SXC N4],
+        qer_id: "QER ID" C* QerId [SXB SXC N4 N4MB],
         activate_predefined_rules: "Activate Predefined Rules" C* ActivatePredefinedRules [SXB SXC N4],
         deactivate_predefined_rules: "Deactivate Predefined Rules" C* DeactivatePredefinedRules [SXB SXC N4],
         activation_time: "Activation Time" O ActivationTime [SXB SXC N4],
@@ -1949,7 +1949,7 @@ pfcp_table! {
         far_id: "FAR ID" C FarId [N4],
         weight: "Weight" C Weight [N4],
         priority: "Priority" C Priority [N4],
-        urr_id: "URR ID" C UrrId [N4],
+        urr_id: "URR ID" C* UrrId [N4],
         rat_type: "RAT Type" O raw 275 [N4],
     }
 }
@@ -1960,7 +1960,7 @@ pfcp_table! {
         far_id: "FAR ID" C FarId [N4],
         weight: "Weight" C Weight [N4],
         priority: "Priority" C Priority [N4],
-        urr_id: "URR ID" C UrrId [N4],
+        urr_id: "URR ID" C* UrrId [N4],
         rat_type: "RAT Type" O raw 275 [N4],
     }
 }
