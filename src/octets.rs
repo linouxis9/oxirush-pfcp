@@ -35,7 +35,10 @@ pub struct Octets(Repr);
 enum Repr {
     /// No octets: what most values' later octets are, built and dropped for nothing.
     Empty,
-    Inline { length: u8, octets: [u8; INLINE] },
+    Inline {
+        length: u8,
+        octets: [u8; INLINE],
+    },
     Heap(Box<[u8]>),
 }
 
@@ -52,7 +55,10 @@ impl Octets {
             length @ 1..=INLINE => {
                 let mut inline = [0; INLINE];
                 inline[..length].copy_from_slice(octets);
-                Self(Repr::Inline { length: length as u8, octets: inline })
+                Self(Repr::Inline {
+                    length: length as u8,
+                    octets: inline,
+                })
             }
             _ => Self(Repr::Heap(octets.into())),
         }

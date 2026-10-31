@@ -26,24 +26,52 @@ use oxirush_pfcp::*;
 const EXPECTED: &[(&str, &str, &str)] = &[
     // Open5GS 157f611a: the SMF as PGW-C sends Create BAR on Sxb, which Table 7.5.2.1-1
     // has on Sxa and N4 only (src/smf/n4-build.c).
-    ("open5gs-eps-handover", "17", "Create BAR is not on this interface (TS 29.244 7.5.2.1-1), at /pfcp/Create BAR"),
-    ("open5gs-eps-handover", "17", "BAR ID is not on this interface (TS 29.244 7.5.2.6-1), at /pfcp/Create BAR/BAR ID"),
-    ("open5gs-eps-lifecycle", "17", "Create BAR is not on this interface (TS 29.244 7.5.2.1-1), at /pfcp/Create BAR"),
-    ("open5gs-eps-lifecycle", "17", "BAR ID is not on this interface (TS 29.244 7.5.2.6-1), at /pfcp/Create BAR/BAR ID"),
+    (
+        "open5gs-eps-handover",
+        "17",
+        "Create BAR is not on this interface (TS 29.244 7.5.2.1-1), at /pfcp/Create BAR",
+    ),
+    (
+        "open5gs-eps-handover",
+        "17",
+        "BAR ID is not on this interface (TS 29.244 7.5.2.6-1), at /pfcp/Create BAR/BAR ID",
+    ),
+    (
+        "open5gs-eps-lifecycle",
+        "17",
+        "Create BAR is not on this interface (TS 29.244 7.5.2.1-1), at /pfcp/Create BAR",
+    ),
+    (
+        "open5gs-eps-lifecycle",
+        "17",
+        "BAR ID is not on this interface (TS 29.244 7.5.2.6-1), at /pfcp/Create BAR/BAR ID",
+    ),
 ];
 
 #[test]
 fn each_captured_message_is_read_written_and_checked() {
     let mut found = Vec::new();
     let mut count = 0;
-    for line in include_str!("captures/messages.tsv").lines().filter(|line| !line.starts_with('#')) {
+    for line in include_str!("captures/messages.tsv")
+        .lines()
+        .filter(|line| !line.starts_with('#'))
+    {
         let cells: Vec<&str> = line.split('\t').collect();
-        let (run, number, interface, octets) = (cells[0], cells[1], cells[4], hex::decode(cells[5]).unwrap());
-        let message = Message::decode(&octets).unwrap_or_else(|error| panic!("{run} {number}: {error}"));
+        let (run, number, interface, octets) =
+            (cells[0], cells[1], cells[4], hex::decode(cells[5]).unwrap());
+        let message =
+            Message::decode(&octets).unwrap_or_else(|error| panic!("{run} {number}: {error}"));
         assert_eq!(message.encode().unwrap(), octets, "{run} {number}");
-        assert!(!matches!(message.body, Body::Other { .. }), "{run} {number}");
+        assert!(
+            !matches!(message.body, Body::Other { .. }),
+            "{run} {number}"
+        );
         let tree = message.to_tree();
-        assert_eq!(Message::from_tree(&tree).unwrap().encode().unwrap(), octets, "{run} {number}: its tree");
+        assert_eq!(
+            Message::from_tree(&tree).unwrap().encode().unwrap(),
+            octets,
+            "{run} {number}: its tree"
+        );
         let interface = match interface {
             "Sxa" => Interfaces::SXA,
             "Sxb" => Interfaces::SXB,
@@ -55,6 +83,9 @@ fn each_captured_message_is_read_written_and_checked() {
         count += 1;
     }
     assert_eq!(count, 213);
-    let expected: Vec<(String, String, String)> = EXPECTED.iter().map(|(run, number, said)| (run.to_string(), number.to_string(), said.to_string())).collect();
+    let expected: Vec<(String, String, String)> = EXPECTED
+        .iter()
+        .map(|(run, number, said)| (run.to_string(), number.to_string(), said.to_string()))
+        .collect();
     assert_eq!(found, expected);
 }

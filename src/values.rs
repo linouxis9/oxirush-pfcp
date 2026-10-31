@@ -40,7 +40,13 @@ pub trait Field: Sized {
     /// Its length.
     fn size(&self) -> usize;
     /// What it breaks of the clause of its layout: a value that its table does not name.
-    fn check(&self, _path: &crate::check::Path, _clause: &'static str, _found: &mut Vec<Deviation>) {}
+    fn check(
+        &self,
+        _path: &crate::check::Path,
+        _clause: &'static str,
+        _found: &mut Vec<Deviation>,
+    ) {
+    }
     /// Whether its length, its number or its type fit the bits that say them: a value
     /// that does not is refused by `encode()` and reported by `check()`.
     fn fits(&self) -> bool {
@@ -202,7 +208,10 @@ impl<E: Narrowable> Field for Narrow<E> {
     const OCTETS: Option<usize> = Some(1);
     fn read(octets: &mut &[u8]) -> Option<Self> {
         let octet = u8::read(octets)?;
-        Some(Self { value: E::from_value(octet & Self::MASK), spare: octet & !Self::MASK })
+        Some(Self {
+            value: E::from_value(octet & Self::MASK),
+            spare: octet & !Self::MASK,
+        })
     }
     fn write(&self, out: &mut Vec<u8>) {
         out.push(self.spare & !Self::MASK | self.value.value() & Self::MASK);
@@ -215,7 +224,11 @@ impl<E: Narrowable> Field for Narrow<E> {
     }
     fn check(&self, path: &crate::check::Path, clause: &'static str, found: &mut Vec<Deviation>) {
         if !self.fits() {
-            found.push(Deviation::new(path, clause, DeviationKind::Rule("a value wider than its bits")));
+            found.push(Deviation::new(
+                path,
+                clause,
+                DeviationKind::Rule("a value wider than its bits"),
+            ));
         }
         if self.spare != 0 {
             found.push(Deviation::new(path, "8.1.2", DeviationKind::SpareBits));
@@ -241,12 +254,19 @@ impl<E: Narrowable> Field for Narrow<E> {
             false => Self::new(E::from_tree(value, reading)?),
             true => {
                 let read = reading.members(value, &["value", "Spare"])?;
-                let spare = reading.optional(&read, 1, |value, reading| reading.unsigned(value, 0, 255))?.unwrap_or(0) as u8;
-                Self { value: reading.member(&read, 0, E::from_tree)?, spare }
+                let spare = reading
+                    .optional(&read, 1, |value, reading| reading.unsigned(value, 0, 255))?
+                    .unwrap_or(0) as u8;
+                Self {
+                    value: reading.member(&read, 0, E::from_tree)?,
+                    spare,
+                }
             }
         };
         if !narrow.fits() {
-            return Err(reading.mismatch("a value of its bits, and spare bits of the others", value));
+            return Err(
+                reading.mismatch("a value of its bits, and spare bits of the others", value)
+            );
         }
         Ok(narrow)
     }
@@ -416,7 +436,14 @@ impl Field for Percent {
     }
     fn check(&self, path: &crate::check::Path, clause: &'static str, found: &mut Vec<Deviation>) {
         if self.0 > 100 {
-            found.push(Deviation::new(path, clause, DeviationKind::ReadAs { value: self.0.into(), read: 0 }));
+            found.push(Deviation::new(
+                path,
+                clause,
+                DeviationKind::ReadAs {
+                    value: self.0.into(),
+                    read: 0,
+                },
+            ));
         }
     }
     #[cfg(feature = "tree")]
@@ -494,7 +521,11 @@ impl<T: Field> Field for Counted<T> {
     }
     fn check(&self, path: &crate::check::Path, clause: &'static str, found: &mut Vec<Deviation>) {
         if self.0.len() > usize::from(u8::MAX) {
-            found.push(Deviation::new(path, clause, DeviationKind::Rule("more values than their number can say")));
+            found.push(Deviation::new(
+                path,
+                clause,
+                DeviationKind::Rule("more values than their number can say"),
+            ));
         }
         for value in &self.0 {
             value.check(path, clause, found);
@@ -590,7 +621,9 @@ impl Field for PlmnId {
     #[cfg(feature = "tree")]
     fn to_tree(&self) -> oxirush_utils::tree::Value {
         match self.plmn() {
-            Some(plmn) if plmn.to_nas_octets() == self.0 => oxirush_utils::tree::Value::String(alloc::format!("{plmn}")),
+            Some(plmn) if plmn.to_nas_octets() == self.0 => {
+                oxirush_utils::tree::Value::String(alloc::format!("{plmn}"))
+            }
             _ => oxirush_utils::tree::octets(&self.0),
         }
     }
@@ -599,7 +632,10 @@ impl Field for PlmnId {
         value: &oxirush_utils::tree::Value,
         reading: &mut oxirush_utils::tree::Reading,
     ) -> Result<Self, oxirush_utils::tree::Refused> {
-        if let Some(plmn) = value.as_str().and_then(|text| text.parse::<oxirush_utils::identity::Plmn>().ok()) {
+        if let Some(plmn) = value
+            .as_str()
+            .and_then(|text| text.parse::<oxirush_utils::identity::Plmn>().ok())
+        {
             return Ok(plmn.into());
         }
         reading.octet_array::<3>(value).map(Self)
@@ -631,8 +667,14 @@ impl TypedAddress {
 impl From<core::net::IpAddr> for TypedAddress {
     fn from(address: core::net::IpAddr) -> Self {
         match address {
-            core::net::IpAddr::V4(address) => Self { address_type: 0, address: address.octets().to_vec() },
-            core::net::IpAddr::V6(address) => Self { address_type: 1, address: address.octets().to_vec() },
+            core::net::IpAddr::V4(address) => Self {
+                address_type: 0,
+                address: address.octets().to_vec(),
+            },
+            core::net::IpAddr::V6(address) => Self {
+                address_type: 1,
+                address: address.octets().to_vec(),
+            },
         }
     }
 }
@@ -642,7 +684,10 @@ impl Field for TypedAddress {
         let (&first, rest) = octets.split_first()?;
         let (address, rest) = rest.split_at_checked(usize::from(first & 0x3f))?;
         *octets = rest;
-        Some(Self { address_type: first >> 6, address: address.to_vec() })
+        Some(Self {
+            address_type: first >> 6,
+            address: address.to_vec(),
+        })
     }
     fn write(&self, out: &mut Vec<u8>) {
         // encode() refuses a type or an address longer than their bits can say.
@@ -657,9 +702,17 @@ impl Field for TypedAddress {
     }
     fn check(&self, path: &crate::check::Path, clause: &'static str, found: &mut Vec<Deviation>) {
         if !self.fits() {
-            found.push(Deviation::new(path, clause, DeviationKind::Rule("an Address Type or an Address longer than their bits can say")));
+            found.push(Deviation::new(
+                path,
+                clause,
+                DeviationKind::Rule("an Address Type or an Address longer than their bits can say"),
+            ));
         } else if self.ip().is_none() {
-            found.push(Deviation::new(path, clause, DeviationKind::Rule("an address that is neither IPv4 of type 0 nor IPv6 of type 1")));
+            found.push(Deviation::new(
+                path,
+                clause,
+                DeviationKind::Rule("an address that is neither IPv4 of type 0 nor IPv6 of type 1"),
+            ));
         }
     }
     #[cfg(feature = "tree")]
@@ -668,7 +721,10 @@ impl Field for TypedAddress {
             return oxirush_utils::tree::Value::String(alloc::format!("{address}"));
         }
         let mut members = oxirush_utils::tree::Members::new();
-        members.put("Address Type", oxirush_utils::tree::unsigned(self.address_type.into()));
+        members.put(
+            "Address Type",
+            oxirush_utils::tree::unsigned(self.address_type.into()),
+        );
         members.put("Address", oxirush_utils::tree::octets(&self.address));
         members.finish()
     }
@@ -678,15 +734,22 @@ impl Field for TypedAddress {
         reading: &mut oxirush_utils::tree::Reading,
     ) -> Result<Self, oxirush_utils::tree::Refused> {
         if let Some(text) = value.as_str() {
-            return text.parse::<core::net::IpAddr>().map(Self::from).map_err(|_| reading.mismatch("an IP address", value));
+            return text
+                .parse::<core::net::IpAddr>()
+                .map(Self::from)
+                .map_err(|_| reading.mismatch("an IP address", value));
         }
         let read = reading.members(value, &["Address Type", "Address"])?;
-        let address_type = reading.member(&read, 0, |value, reading| reading.unsigned(value, 0, 3))? as u8;
+        let address_type =
+            reading.member(&read, 0, |value, reading| reading.unsigned(value, 0, 3))? as u8;
         let address = reading.member(&read, 1, |value, reading| reading.octets(value))?;
         if address.len() > 0x3f {
             return Err(reading.mismatch("at most 63 octets", value));
         }
-        Ok(Self { address_type, address })
+        Ok(Self {
+            address_type,
+            address,
+        })
     }
 }
 
@@ -893,14 +956,20 @@ pfcp_bits! {
 impl SourceInterface {
     /// The interface.
     pub fn new(interface_value: SourceInterfaceValue) -> Self {
-        Self { interface_value, ..Self::default() }
+        Self {
+            interface_value,
+            ..Self::default()
+        }
     }
 }
 
 impl DestinationInterface {
     /// The interface.
     pub fn new(interface_value: DestinationInterfaceValue) -> Self {
-        Self { interface_value, ..Self::default() }
+        Self {
+            interface_value,
+            ..Self::default()
+        }
     }
 }
 
@@ -965,12 +1034,21 @@ pfcp_layout! {
 impl FTeid {
     /// An F-TEID of an IPv4 address.
     pub fn ipv4(teid: u32, address: Ipv4Addr) -> Self {
-        Self { v4: true, teid: Some(teid), ipv4: Some(address), ..Self::default() }
+        Self {
+            v4: true,
+            teid: Some(teid),
+            ipv4: Some(address),
+            ..Self::default()
+        }
     }
 
     /// A request that the UP function choose an F-TEID with an IPv4 address.
     pub fn choose_ipv4() -> Self {
-        Self { v4: true, ch: true, ..Self::default() }
+        Self {
+            v4: true,
+            ch: true,
+            ..Self::default()
+        }
     }
 }
 
@@ -1048,9 +1126,13 @@ impl Check for NodeId {
             (0, 0..4) | (1, 0..16) => Some("a Node ID value shorter than its type"),
             (0 | 1, _) => None,
             (2, 0) => Some("an FQDN without a label"),
-            (2, _) if !fqdn_valid(value) => Some("labels that are no FQDN of RFC 1035: each of 1 to 63 octets, after its length"),
+            (2, _) if !fqdn_valid(value) => Some(
+                "labels that are no FQDN of RFC 1035: each of 1 to 63 octets, after its length",
+            ),
             (2, _) => None,
-            _ => Some("a Node ID Type that Table 8.2.38-2 has as spare: the Node ID cannot be read"),
+            _ => {
+                Some("a Node ID Type that Table 8.2.38-2 has as spare: the Node ID cannot be read")
+            }
         };
         if let Some(broken) = broken {
             found.push(rule(broken));
@@ -1062,7 +1144,9 @@ impl Check for NodeId {
 /// octet: each of 1 to 63 octets, after its length.
 fn fqdn_valid(mut octets: &[u8]) -> bool {
     while let [length @ 1..=63, rest @ ..] = octets {
-        let Some(tail) = rest.get(usize::from(*length)..) else { return false };
+        let Some(tail) = rest.get(usize::from(*length)..) else {
+            return false;
+        };
         octets = tail;
     }
     octets.is_empty()
@@ -1100,10 +1184,14 @@ impl NodeId {
     /// after its value ignored (§8.1.2, an Extendable IE); `None` for a spare Node ID
     /// Type, a value shorter than its type, and an empty FQDN.
     pub fn effective(&self) -> Option<Self> {
-        let Self::Other(first, rest) = self else { return Some(self.clone()) };
+        let Self::Other(first, rest) = self else {
+            return Some(self.clone());
+        };
         match (first & 0x0f, &rest[..]) {
             (0, [a, b, c, d, ..]) => Some(Self::Ipv4(Ipv4Addr::new(*a, *b, *c, *d))),
-            (1, rest) if rest.len() >= 16 => Some(Self::Ipv6(Ipv6Addr::from(<[u8; 16]>::try_from(&rest[..16]).ok()?))),
+            (1, rest) if rest.len() >= 16 => Some(Self::Ipv6(Ipv6Addr::from(
+                <[u8; 16]>::try_from(&rest[..16]).ok()?,
+            ))),
             (2, rest) if !rest.is_empty() => Some(Self::Fqdn(Octets::copied(rest))),
             _ => None,
         }
@@ -1112,10 +1200,14 @@ impl NodeId {
     /// The FQDN as text, its labels with dots: `None` for labels that are not each of 1
     /// to 63 octets of UTF-8 without a dot, which the text could not give back.
     pub fn fqdn(&self) -> Option<String> {
-        let Self::Fqdn(octets) = self else { return None };
+        let Self::Fqdn(octets) = self else {
+            return None;
+        };
         let mut text = String::new();
         for label in fqdn_labels(octets)? {
-            let label = core::str::from_utf8(label).ok().filter(|label| !label.contains('.'))?;
+            let label = core::str::from_utf8(label)
+                .ok()
+                .filter(|label| !label.contains('.'))?;
             if !text.is_empty() {
                 text.push('.');
             }
@@ -1169,9 +1261,14 @@ impl oxirush_utils::tree::Tree for NodeId {
                 let name = reading.text(content)?;
                 let mut labels = Vec::new();
                 for label in name.split('.') {
-                    let length = u8::try_from(label.len()).ok().filter(|length| (1..=63).contains(length));
+                    let length = u8::try_from(label.len())
+                        .ok()
+                        .filter(|length| (1..=63).contains(length));
                     let Some(length) = length else {
-                        return Err(reading.mismatch("a name of labels of 1 to 63 octets, with dots between them", content));
+                        return Err(reading.mismatch(
+                            "a name of labels of 1 to 63 octets, with dots between them",
+                            content,
+                        ));
                     };
                     labels.push(length);
                     labels.extend_from_slice(label.as_bytes());
@@ -1223,7 +1320,15 @@ impl NetworkInstance {
     /// The name of its field.
     pub const FIELDS: &'static [&'static str] = &["Network Instance"];
     /// Its layout.
-    pub const LAYOUT: Option<&'static Layout> = Some(&Layout { head: &[], bits: &[], fields: &[Member { name: "Network Instance", octets: None, condition: "true" }] });
+    pub const LAYOUT: Option<&'static Layout> = Some(&Layout {
+        head: &[],
+        bits: &[],
+        fields: &[Member {
+            name: "Network Instance",
+            octets: None,
+            condition: "true",
+        }],
+    });
 }
 
 impl Codec for NetworkInstance {
@@ -1482,13 +1587,45 @@ pfcp_bits! {
 }
 
 listed_value!(
-    PdrId, Precedence, FarId, UrrId, QerId, SourceInterface, FTeid, FSeid, UeIpAddress, NodeId,
-    BarId, TransportLevelMarking, TimeThreshold, MonitoringTime, SubsequentTimeThreshold,
-    InactivityDetectionTime, MeasurementPeriod, QuotaHoldingTime, TimeQuota, LinkedUrrId,
-    QerCorrelationId, AveragingWindow, NetworkInstance, Mbr, Gbr, VolumeThreshold, VolumeQuota,
-    SubsequentVolumeThreshold, OuterHeaderCreation, ApplyAction, DestinationInterface,
-    OuterHeaderRemoval, MeasurementMethod, ReportingTriggers, GateStatus, Qfi, Rqi,
-    PagingPolicyIndicator, InterfaceType3gpp,
+    PdrId,
+    Precedence,
+    FarId,
+    UrrId,
+    QerId,
+    SourceInterface,
+    FTeid,
+    FSeid,
+    UeIpAddress,
+    NodeId,
+    BarId,
+    TransportLevelMarking,
+    TimeThreshold,
+    MonitoringTime,
+    SubsequentTimeThreshold,
+    InactivityDetectionTime,
+    MeasurementPeriod,
+    QuotaHoldingTime,
+    TimeQuota,
+    LinkedUrrId,
+    QerCorrelationId,
+    AveragingWindow,
+    NetworkInstance,
+    Mbr,
+    Gbr,
+    VolumeThreshold,
+    VolumeQuota,
+    SubsequentVolumeThreshold,
+    OuterHeaderCreation,
+    ApplyAction,
+    DestinationInterface,
+    OuterHeaderRemoval,
+    MeasurementMethod,
+    ReportingTriggers,
+    GateStatus,
+    Qfi,
+    Rqi,
+    PagingPolicyIndicator,
+    InterfaceType3gpp,
 );
 
 impl<const N: u16> crate::ie::Listed for Raw<N> {

@@ -161,7 +161,13 @@ pub enum DeviationKind {
 impl Deviation {
     /// A deviation at `path`, that the receiver ignores.
     pub fn new(path: impl fmt::Display, clause: &'static str, kind: DeviationKind) -> Self {
-        Self { path: format!("{path}"), clause, kind, cause: None, ie_type: None }
+        Self {
+            path: format!("{path}"),
+            clause,
+            kind,
+            cause: None,
+            ie_type: None,
+        }
     }
 
     /// The Cause with which the receiver of a request answers it: `None` for a deviation
@@ -188,29 +194,66 @@ impl fmt::Display for Deviation {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let name = |ie_type: u16| type_name(ie_type).unwrap_or("an IE of no release");
         match &self.kind {
-            DeviationKind::MandatoryMissing { ie_type } => write!(f, "the mandatory {} is missing", name(*ie_type)),
-            DeviationKind::MandatoryIncorrect { ie_type } => write!(f, "the mandatory {} does not decode", name(*ie_type)),
-            DeviationKind::ConditionalMissing { ie_type } => write!(f, "{} is missing where its condition holds", name(*ie_type)),
-            DeviationKind::Incorrect { ie_type } => write!(f, "{} does not decode, and is taken as absent", name(*ie_type)),
-            DeviationKind::Repeated { ie_type } => write!(f, "{} is there more times than its table allows", name(*ie_type)),
-            DeviationKind::Unexpected { ie_type } => write!(f, "{} is no IE of this table", name(*ie_type)),
-            DeviationKind::NotOnInterface { ie_type } => write!(f, "{} is not on this interface", name(*ie_type)),
-            DeviationKind::WithRejection { ie_type } => write!(f, "{} accompanies a rejection", name(*ie_type)),
-            DeviationKind::FixedLength { ie_type, length } => {
-                write!(f, "{} has {length} octets, and its length is fixed", name(*ie_type))
+            DeviationKind::MandatoryMissing { ie_type } => {
+                write!(f, "the mandatory {} is missing", name(*ie_type))
             }
-            DeviationKind::UnknownType { ie_type } => write!(f, "IE type {ie_type} is in no table of Release 19"),
-            DeviationKind::UnknownMessage { message_type } => write!(f, "message type {message_type} is in no table of Release 19"),
+            DeviationKind::MandatoryIncorrect { ie_type } => {
+                write!(f, "the mandatory {} does not decode", name(*ie_type))
+            }
+            DeviationKind::ConditionalMissing { ie_type } => {
+                write!(f, "{} is missing where its condition holds", name(*ie_type))
+            }
+            DeviationKind::Incorrect { ie_type } => write!(
+                f,
+                "{} does not decode, and is taken as absent",
+                name(*ie_type)
+            ),
+            DeviationKind::Repeated { ie_type } => write!(
+                f,
+                "{} is there more times than its table allows",
+                name(*ie_type)
+            ),
+            DeviationKind::Unexpected { ie_type } => {
+                write!(f, "{} is no IE of this table", name(*ie_type))
+            }
+            DeviationKind::NotOnInterface { ie_type } => {
+                write!(f, "{} is not on this interface", name(*ie_type))
+            }
+            DeviationKind::WithRejection { ie_type } => {
+                write!(f, "{} accompanies a rejection", name(*ie_type))
+            }
+            DeviationKind::FixedLength { ie_type, length } => {
+                write!(
+                    f,
+                    "{} has {length} octets, and its length is fixed",
+                    name(*ie_type)
+                )
+            }
+            DeviationKind::UnknownType { ie_type } => {
+                write!(f, "IE type {ie_type} is in no table of Release 19")
+            }
+            DeviationKind::UnknownMessage { message_type } => write!(
+                f,
+                "message type {message_type} is in no table of Release 19"
+            ),
             DeviationKind::MessageNotOnInterface { message_type } => {
                 write!(f, "message type {message_type} is not on this interface")
             }
-            DeviationKind::RuleChangedTwice { rule, id } => write!(f, "the message changes {rule} {id} more than once"),
-            DeviationKind::VendorId => write!(f, "a vendor IE without an Enterprise ID of a vendor"),
+            DeviationKind::RuleChangedTwice { rule, id } => {
+                write!(f, "the message changes {rule} {id} more than once")
+            }
+            DeviationKind::VendorId => {
+                write!(f, "a vendor IE without an Enterprise ID of a vendor")
+            }
             DeviationKind::SpareBits => write!(f, "spare bits are not zero"),
             DeviationKind::SpareValue { value } => write!(f, "{value} is a spare value"),
             DeviationKind::ReservedValue { value } => write!(f, "{value} is a reserved value"),
-            DeviationKind::ReadAs { value, read } => write!(f, "{value} is no value to send, and is read as {read}"),
-            DeviationKind::Inconsistent { field } => write!(f, "{field} disagrees with the flags of its IE"),
+            DeviationKind::ReadAs { value, read } => {
+                write!(f, "{value} is no value to send, and is read as {read}")
+            }
+            DeviationKind::Inconsistent { field } => {
+                write!(f, "{field} disagrees with the flags of its IE")
+            }
             DeviationKind::Rule(rule) => write!(f, "{rule}"),
         }?;
         write!(f, " (TS 29.244 {}), at {}", self.clause, self.path)?;
@@ -253,7 +296,12 @@ pub struct Context {
 impl Context {
     /// The message level of a message on `interface`, which no receiver answers.
     pub(crate) fn on(interface: Interfaces) -> Self {
-        Self { interface, view: Presence::Mandatory, request: false, rejected: false }
+        Self {
+            interface,
+            view: Presence::Mandatory,
+            request: false,
+            rejected: false,
+        }
     }
 
     /// The context of the IEs of a grouped IE of the row of presence `presence`.
@@ -263,7 +311,11 @@ impl Context {
             (Presence::Mandatory, Presence::Mandatory) => Presence::Mandatory,
             _ => Presence::Conditional,
         };
-        Self { view, rejected: false, ..self }
+        Self {
+            view,
+            rejected: false,
+            ..self
+        }
     }
 
     /// The Cause of an answer to a mandatory IE of the scope that is missing, or that is
@@ -281,7 +333,9 @@ impl Context {
     /// condition holds (§7.6.6).
     fn conditional_cause(self) -> Option<CauseValue> {
         match (self.request, self.view) {
-            (true, Presence::Mandatory | Presence::Conditional) => Some(CauseValue::ConditionalIeMissing),
+            (true, Presence::Mandatory | Presence::Conditional) => {
+                Some(CauseValue::ConditionalIeMissing)
+            }
             _ => None,
         }
     }
@@ -312,8 +366,16 @@ impl fmt::Display for Path<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Root(path) => f.write_str(path),
-            Self::Row { parent, row, nth: Some(nth) } => write!(f, "{parent}/{row}/{nth}"),
-            Self::Row { parent, row, nth: None } => write!(f, "{parent}/{row}"),
+            Self::Row {
+                parent,
+                row,
+                nth: Some(nth),
+            } => write!(f, "{parent}/{row}/{nth}"),
+            Self::Row {
+                parent,
+                row,
+                nth: None,
+            } => write!(f, "{parent}/{row}"),
         }
     }
 }
@@ -331,7 +393,14 @@ pub(crate) fn check_field<T: Check + crate::ie::Codec + crate::ie::IeType>(
     if let Some(fixed) = T::FIXED {
         let length = value.encoded_len();
         if length != usize::from(fixed) {
-            found.push(Deviation::new(path, "8.1.2", DeviationKind::FixedLength { ie_type: T::IE_TYPE, length }));
+            found.push(Deviation::new(
+                path,
+                "8.1.2",
+                DeviationKind::FixedLength {
+                    ie_type: T::IE_TYPE,
+                    length,
+                },
+            ));
         }
     }
     if found.len() > from {
@@ -346,13 +415,22 @@ pub(crate) fn check_field<T: Check + crate::ie::Codec + crate::ie::IeType>(
 /// value or spare bits are ignored.
 #[cold]
 #[inline(never)]
-fn value_deviations(found: &mut [Deviation], path: &Path<'_>, ie_type: u16, presence: Presence, context: Context) {
+fn value_deviations(
+    found: &mut [Deviation],
+    path: &Path<'_>,
+    ie_type: u16,
+    presence: Presence,
+    context: Context,
+) {
     let here = format!("{path}");
     for deviation in found.iter_mut().filter(|deviation| deviation.path == here) {
         deviation.ie_type = Some(ie_type);
         let invalid = matches!(
             deviation.kind,
-            DeviationKind::ReservedValue { .. } | DeviationKind::FixedLength { .. } | DeviationKind::Inconsistent { .. } | DeviationKind::Rule(_)
+            DeviationKind::ReservedValue { .. }
+                | DeviationKind::FixedLength { .. }
+                | DeviationKind::Inconsistent { .. }
+                | DeviationKind::Rule(_)
         );
         if invalid && presence != Presence::Optional {
             deviation.cause = context.cause(false);
@@ -362,7 +440,10 @@ fn value_deviations(found: &mut [Deviation], path: &Path<'_>, ie_type: u16, pres
 
 /// Check the values of a row: the row, then each value.
 #[inline(always)]
-pub(crate) fn check_field_values<T: Check + crate::ie::Codec + crate::ie::IeType, F: crate::table::FieldValues<T>>(
+pub(crate) fn check_field_values<
+    T: Check + crate::ie::Codec + crate::ie::IeType,
+    F: crate::table::FieldValues<T>,
+>(
     table: &'static Table,
     at: usize,
     field: &F,
@@ -378,7 +459,11 @@ pub(crate) fn check_field_values<T: Check + crate::ie::Codec + crate::ie::IeType
     let row = &table.rows[at];
     check_row(table.id, row, values.len(), path, context, found);
     for (nth, value) in values.iter().enumerate() {
-        let here = Path::Row { parent: path, row: row.name, nth: list.then_some(nth) };
+        let here = Path::Row {
+            parent: path,
+            row: row.name,
+            nth: list.then_some(nth),
+        };
         check_field(value, &here, row.presence, context, found);
     }
 }
@@ -393,10 +478,19 @@ const WITH_REJECTION: [u16; 6] = [19, 60, 40, 51, 54, 114];
 fn on(row: &Row, interface: Interfaces) -> (bool, usize) {
     if row.roles.is_empty() {
         let here = row.interfaces.has(interface);
-        return (here, usize::from(row.interfaces.has_all(interface) && row.presence == Presence::Mandatory));
+        return (
+            here,
+            usize::from(row.interfaces.has_all(interface) && row.presence == Presence::Mandatory),
+        );
     }
-    let roles = row.roles.iter().filter(|role| role.interfaces.has(interface));
-    let mandatory = roles.clone().filter(|role| role.presence == Presence::Mandatory && role.interfaces.has_all(interface)).count();
+    let roles = row
+        .roles
+        .iter()
+        .filter(|role| role.interfaces.has(interface));
+    let mandatory = roles
+        .clone()
+        .filter(|role| role.presence == Presence::Mandatory && role.interfaces.has_all(interface))
+        .count();
     (roles.count() > 0, mandatory)
 }
 
@@ -429,7 +523,13 @@ pub(crate) fn check_row(
     let rejected = context.rejected && !WITH_REJECTION.contains(&row.ie_type);
     let off = !row.interfaces.has(context.interface) && !on(row, context.interface).0;
     // A field that rows share has at most one IE for each of them on the interface.
-    let shared = !row.roles.is_empty() && count > row.roles.iter().filter(|role| role.interfaces.has(context.interface)).count();
+    let shared = !row.roles.is_empty()
+        && count
+            > row
+                .roles
+                .iter()
+                .filter(|role| role.interfaces.has(context.interface))
+                .count();
     let over = shared || matches!(row.repeat, Repeat::AtMost(most) if count > usize::from(most));
     if rejected || off || over {
         row_deviations(table, row, [rejected, off, over], path, found);
@@ -438,23 +538,56 @@ pub(crate) fn check_row(
 
 #[cold]
 #[inline(never)]
-fn row_deviations(table: &'static str, row: &Row, [rejected, off, over]: [bool; 3], path: &Path<'_>, found: &mut Vec<Deviation>) {
-    let here = || Path::Row { parent: path, row: row.name, nth: None };
+fn row_deviations(
+    table: &'static str,
+    row: &Row,
+    [rejected, off, over]: [bool; 3],
+    path: &Path<'_>,
+    found: &mut Vec<Deviation>,
+) {
+    let here = || Path::Row {
+        parent: path,
+        row: row.name,
+        nth: None,
+    };
     if rejected {
-        found.push(Deviation::new(here(), "7.2.3.2", DeviationKind::WithRejection { ie_type: row.ie_type }));
+        found.push(Deviation::new(
+            here(),
+            "7.2.3.2",
+            DeviationKind::WithRejection {
+                ie_type: row.ie_type,
+            },
+        ));
     }
     if off {
-        found.push(Deviation::new(here(), table, DeviationKind::NotOnInterface { ie_type: row.ie_type }));
+        found.push(Deviation::new(
+            here(),
+            table,
+            DeviationKind::NotOnInterface {
+                ie_type: row.ie_type,
+            },
+        ));
     }
     if over {
-        found.push(Deviation::new(here(), "7.6.10", DeviationKind::Repeated { ie_type: row.ie_type }));
+        found.push(Deviation::new(
+            here(),
+            "7.6.10",
+            DeviationKind::Repeated {
+                ie_type: row.ie_type,
+            },
+        ));
     }
 }
 
 /// Check a scope against its table: its mandatory IEs on the interface, the IEs that it
 /// keeps as octets (repeated, incorrect, of no row of the table, of no release), then
 /// each row that has values, and each value.
-pub(crate) fn check_scope<S: Scope + Checked>(scope: &S, path: &Path<'_>, context: Context, found: &mut Vec<Deviation>) {
+pub(crate) fn check_scope<S: Scope + Checked>(
+    scope: &S,
+    path: &Path<'_>,
+    context: Context,
+    found: &mut Vec<Deviation>,
+) {
     let table = S::table();
     for row in table.rows {
         let needed = mandatory(row, context);
@@ -473,7 +606,14 @@ pub(crate) fn check_scope<S: Scope + Checked>(scope: &S, path: &Path<'_>, contex
 /// handled (§7.6.10).
 #[cold]
 #[inline(never)]
-fn mandatory_missing<S: Scope>(scope: &S, row: &Row, needed: usize, path: &Path<'_>, context: Context, found: &mut Vec<Deviation>) {
+fn mandatory_missing<S: Scope>(
+    scope: &S,
+    row: &Row,
+    needed: usize,
+    path: &Path<'_>,
+    context: Context,
+    found: &mut Vec<Deviation>,
+) {
     let mut kept = scope.raw().iter().filter(|ie| ie.ie_type == row.ie_type);
     let (nulls, incorrect) = match row.repeat {
         Repeat::Once => match kept.next() {
@@ -481,19 +621,39 @@ fn mandatory_missing<S: Scope>(scope: &S, row: &Row, needed: usize, path: &Path<
             Some(_) => (0, true),
             None => (0, false),
         },
-        _ => kept.fold((0, false), |(nulls, incorrect), ie| match ie.octets.is_empty() {
-            true => (nulls + 1, incorrect),
-            false => (nulls, incorrect || !scope.decodes(ie.ie_type, &ie.octets)),
+        _ => kept.fold((0, false), |(nulls, incorrect), ie| {
+            match ie.octets.is_empty() {
+                true => (nulls + 1, incorrect),
+                false => (nulls, incorrect || !scope.decodes(ie.ie_type, &ie.octets)),
+            }
         }),
     };
     if scope.count(row.ie_type) + nulls >= needed {
         return;
     }
     let (kind, missing) = match incorrect {
-        false => (DeviationKind::MandatoryMissing { ie_type: row.ie_type }, true),
-        true => (DeviationKind::MandatoryIncorrect { ie_type: row.ie_type }, false),
+        false => (
+            DeviationKind::MandatoryMissing {
+                ie_type: row.ie_type,
+            },
+            true,
+        ),
+        true => (
+            DeviationKind::MandatoryIncorrect {
+                ie_type: row.ie_type,
+            },
+            false,
+        ),
     };
-    let mut deviation = Deviation::new(Path::Row { parent: path, row: row.name, nth: None }, S::table().id, kind);
+    let mut deviation = Deviation::new(
+        Path::Row {
+            parent: path,
+            row: row.name,
+            nth: None,
+        },
+        S::table().id,
+        kind,
+    );
     deviation.cause = context.cause(missing);
     found.push(deviation);
 }
@@ -503,16 +663,25 @@ fn mandatory_missing<S: Scope>(scope: &S, row: &Row, needed: usize, path: &Path<
 /// the others are repetitions; an IE of a null length is no error (§8.1.2).
 #[cold]
 #[inline(never)]
-fn raw_deviations<S: Scope>(scope: &S, path: &Path<'_>, context: Context, found: &mut Vec<Deviation>) {
+fn raw_deviations<S: Scope>(
+    scope: &S,
+    path: &Path<'_>,
+    context: Context,
+    found: &mut Vec<Deviation>,
+) {
     let table = S::table();
     let mut handled: Vec<u16> = Vec::new();
     for ie in scope.raw() {
         let Some(row) = table.row_of(ie.ie_type) else {
             let name = crate::tree_name(ie.ie_type, None);
             let (clause, kind) = match ie.ie_type {
-                VENDOR.. if ie.enterprise_id.is_none_or(|id| id == 10415) => ("8.1.1", DeviationKind::VendorId),
+                VENDOR.. if ie.enterprise_id.is_none_or(|id| id == 10415) => {
+                    ("8.1.1", DeviationKind::VendorId)
+                }
                 VENDOR.. => continue,
-                known if type_name(known).is_some() => ("7.6.9", DeviationKind::Unexpected { ie_type: known }),
+                known if type_name(known).is_some() => {
+                    ("7.6.9", DeviationKind::Unexpected { ie_type: known })
+                }
                 unknown => ("8.1.2", DeviationKind::UnknownType { ie_type: unknown }),
             };
             found.push(Deviation::new(format!("{path}/{name}"), clause, kind));
@@ -525,15 +694,31 @@ fn raw_deviations<S: Scope>(scope: &S, path: &Path<'_>, context: Context, found:
         if row.repeat == Repeat::Once {
             handled.push(row.ie_type);
         }
-        let here = || Path::Row { parent: path, row: row.name, nth: None };
+        let here = || Path::Row {
+            parent: path,
+            row: row.name,
+            nth: None,
+        };
         let deviation = match (first, ie.octets.is_empty()) {
             // A null length says what its row allows it to (§5.6.3).
             (true, true) => continue,
             // An incorrect mandatory IE is reported as such.
             (true, false) if mandatory(row, context) > scope.count(row.ie_type) => continue,
-            (true, false) => Deviation::new(here(), "7.6.8", DeviationKind::Incorrect { ie_type: row.ie_type }),
+            (true, false) => Deviation::new(
+                here(),
+                "7.6.8",
+                DeviationKind::Incorrect {
+                    ie_type: row.ie_type,
+                },
+            ),
             (false, true) if row.repeat != Repeat::Once => continue,
-            (false, _) => Deviation::new(here(), "7.6.10", DeviationKind::Repeated { ie_type: row.ie_type }),
+            (false, _) => Deviation::new(
+                here(),
+                "7.6.10",
+                DeviationKind::Repeated {
+                    ie_type: row.ie_type,
+                },
+            ),
         };
         if !found.contains(&deviation) {
             found.push(deviation);
@@ -544,14 +729,33 @@ fn raw_deviations<S: Scope>(scope: &S, path: &Path<'_>, context: Context, found:
 /// A C row that is not there where the condition that its table writes beside it holds
 /// (§7.6.6): on the interface, and without an IE of the row that the scope keeps as
 /// octets, of a null length or incorrect.
-pub(crate) fn condition_missing<S: Scope>(scope: &S, at: usize, path: &Path<'_>, context: Context, found: &mut Vec<Deviation>) {
+pub(crate) fn condition_missing<S: Scope>(
+    scope: &S,
+    at: usize,
+    path: &Path<'_>,
+    context: Context,
+    found: &mut Vec<Deviation>,
+) {
     let table = S::table();
     let row = &table.rows[at];
-    if scope.count(row.ie_type) > 0 || !on(row, context.interface).0 || scope.raw().iter().any(|ie| ie.ie_type == row.ie_type) {
+    if scope.count(row.ie_type) > 0
+        || !on(row, context.interface).0
+        || scope.raw().iter().any(|ie| ie.ie_type == row.ie_type)
+    {
         return;
     }
-    let kind = DeviationKind::ConditionalMissing { ie_type: row.ie_type };
-    let mut deviation = Deviation::new(Path::Row { parent: path, row: row.name, nth: None }, table.id, kind);
+    let kind = DeviationKind::ConditionalMissing {
+        ie_type: row.ie_type,
+    };
+    let mut deviation = Deviation::new(
+        Path::Row {
+            parent: path,
+            row: row.name,
+            nth: None,
+        },
+        table.id,
+        kind,
+    );
     deviation.cause = context.conditional_cause();
     found.push(deviation);
 }

@@ -55,13 +55,15 @@ use core::time::Duration;
 
 use crate::enums::{CauseValue, TimerUnit};
 use crate::header::Header;
-use crate::message::{Body, Message, datagram_parts, is_node_related, is_request, message_type_info};
+use crate::message::{
+    Body, Message, datagram_parts, is_node_related, is_request, message_type_info,
+};
 use crate::registry::*;
 use crate::values::*;
 use crate::values_gen::*;
 
-pub use state::{Association, LoadControl, OverloadControl, Session};
 use state::{Answered, Change, Effect, Outstanding, Scope};
+pub use state::{Association, LoadControl, OverloadControl, Session};
 
 /// The function of the node: it sets up sessions, or it has them set up.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -187,7 +189,10 @@ pub enum Failure {
 impl core::fmt::Display for Failure {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         match self {
-            Self::VersionNotSupported => write!(f, "the peer does not support version 1 of PFCP (TS 29.244 7.6.2)"),
+            Self::VersionNotSupported => write!(
+                f,
+                "the peer does not support version 1 of PFCP (TS 29.244 7.6.2)"
+            ),
             Self::Malformed(error) => write!(f, "the response does not decode: {error}"),
         }
     }
@@ -363,11 +368,23 @@ pub enum NodeError {
 impl core::fmt::Display for NodeError {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         match self {
-            Self::NoAssociation => write!(f, "a session request to a peer without an association (TS 29.244 6.2.6.2.1)"),
-            Self::NoSession => write!(f, "a session request to a session that the node does not have"),
-            Self::Throttled => write!(f, "throttled for the overload of the peer (TS 29.244 6.2.4.4)"),
+            Self::NoAssociation => write!(
+                f,
+                "a session request to a peer without an association (TS 29.244 6.2.6.2.1)"
+            ),
+            Self::NoSession => write!(
+                f,
+                "a session request to a session that the node does not have"
+            ),
+            Self::Throttled => write!(
+                f,
+                "throttled for the overload of the peer (TS 29.244 6.2.4.4)"
+            ),
             Self::NotARequest => write!(f, "the message is no request"),
-            Self::WrongDirection => write!(f, "a request that the function of the node does not send (TS 29.244 7.6.5)"),
+            Self::WrongDirection => write!(
+                f,
+                "a request that the function of the node does not send (TS 29.244 7.6.5)"
+            ),
             Self::NoSequence => write!(f, "no sequence number is free"),
             Self::Answered => write!(f, "the request has its answer (TS 29.244 6.4)"),
             Self::WrongResponse => write!(f, "the answer is not the response of the request"),
@@ -408,7 +425,9 @@ fn fseid_peer(from: SocketAddr, fseid: &FSeid) -> SocketAddr {
 /// Whether two requests are the same message: a retransmission need not be bundled as
 /// the first one was (§6.5 NOTE 3), so the FO flag does not count.
 fn same_request(first: &[u8], again: &[u8]) -> bool {
-    first.len() == again.len() && first.first().map(|flags| flags & !4) == again.first().map(|flags| flags & !4) && first[1..] == again[1..]
+    first.len() == again.len()
+        && first.first().map(|flags| flags & !4) == again.first().map(|flags| flags & !4)
+        && first[1..] == again[1..]
 }
 
 /// A PFCP entity on one local endpoint.
@@ -485,8 +504,15 @@ impl Node {
     pub fn poll_timeout(&self) -> Option<Duration> {
         let retransmission = self.deadlines.first().map(|(deadline, _)| *deadline);
         let heartbeat = self.heartbeats.values().copied().min();
-        let overload = self.overload.values().filter_map(|overload| overload.until).min();
-        [retransmission, heartbeat, overload].into_iter().flatten().min()
+        let overload = self
+            .overload
+            .values()
+            .filter_map(|overload| overload.until)
+            .min();
+        [retransmission, heartbeat, overload]
+            .into_iter()
+            .flatten()
+            .min()
     }
 
     /// Do what is due at `now`.
@@ -496,12 +522,18 @@ impl Node {
             && deadline <= now
         {
             self.deadlines.pop_first();
-            let Some(request) = self.outstanding.get_mut(&sequence) else { continue };
+            let Some(request) = self.outstanding.get_mut(&sequence) else {
+                continue;
+            };
             if request.attempts < self.config.n1 {
                 request.attempts += 1;
                 request.deadline = now.saturating_add(self.config.t1);
                 self.deadlines.insert((request.deadline, sequence));
-                let transmit = Transmit { to: request.to, priority: request.priority, octets: request.octets.clone() };
+                let transmit = Transmit {
+                    to: request.to,
+                    priority: request.priority,
+                    octets: request.octets.clone(),
+                };
                 self.queue(transmit);
                 continue;
             }
@@ -513,28 +545,54 @@ impl Node {
                     // An establishment that times out leaves no session.
                     if request.message_type == 50
                         && let Some(local) = request.local_seid
-                        && self.sessions.get(&local).is_some_and(|session| session.peer_seid.is_none())
+                        && self
+                            .sessions
+                            .get(&local)
+                            .is_some_and(|session| session.peer_seid.is_none())
                     {
                         self.sessions.remove(&local);
                     }
-                    self.events.push_back(Event::Timeout { request: request.id, to: request.to });
+                    self.events.push_back(Event::Timeout {
+                        request: request.id,
+                        to: request.to,
+                    });
                 }
             }
         }
-        let beats: Vec<SocketAddr> = self.heartbeats.iter().filter(|(_, at)| **at <= now).map(|(peer, _)| *peer).collect();
+        let beats: Vec<SocketAddr> = self
+            .heartbeats
+            .iter()
+            .filter(|(_, at)| **at <= now)
+            .map(|(peer, _)| *peer)
+            .collect();
         for peer in beats {
             let interval = self.config.heartbeat.unwrap_or(Duration::MAX);
             self.heartbeats.insert(peer, now.saturating_add(interval));
-            if !self.outstanding.values().any(|request| request.heartbeat && request.to == peer) {
-                let request = HeartbeatRequest::new(RecoveryTimeStamp::new(self.config.recovery_time_stamp));
-                let message = Message { header: Header::node(0), body: request.into() };
+            if !self
+                .outstanding
+                .values()
+                .any(|request| request.heartbeat && request.to == peer)
+            {
+                let request =
+                    HeartbeatRequest::new(RecoveryTimeStamp::new(self.config.recovery_time_stamp));
+                let message = Message {
+                    header: Header::node(0),
+                    body: request.into(),
+                };
                 let _ = self.send(now, peer, message, true, None, Change::Nothing);
             }
         }
-        let ended: Vec<Scope> = self.overload.iter().filter(|(_, overload)| overload.until.is_some_and(|until| until <= now)).map(|(scope, _)| scope.clone()).collect();
+        let ended: Vec<Scope> = self
+            .overload
+            .iter()
+            .filter(|(_, overload)| overload.until.is_some_and(|until| until <= now))
+            .map(|(scope, _)| scope.clone())
+            .collect();
         for scope in ended {
             if let Some(overload) = self.overload.remove(&scope) {
-                self.events.push_back(Event::OverloadEnded { peer: overload.peer });
+                self.events.push_back(Event::OverloadEnded {
+                    peer: overload.peer,
+                });
             }
         }
     }
@@ -547,15 +605,31 @@ impl Node {
     /// A session request without an association or throttled, a message that is no
     /// request or that the function of the node does not send, no free sequence number,
     /// and a message that does not encode.
-    pub fn request(&mut self, now: Duration, to: SocketAddr, message: Message) -> Result<RequestId, NodeError> {
+    pub fn request(
+        &mut self,
+        now: Duration,
+        to: SocketAddr,
+        message: Message,
+    ) -> Result<RequestId, NodeError> {
         let local_seid = match &message.body {
-            Body::SessionEstablishmentRequest(request) => request.cp_f_seid.as_ref().and_then(|f_seid| f_seid.seid),
-            _ => message.header.seid.and_then(|peer_seid| self.local_seid_of(to, peer_seid)),
+            Body::SessionEstablishmentRequest(request) => {
+                request.cp_f_seid.as_ref().and_then(|f_seid| f_seid.seid)
+            }
+            _ => message
+                .header
+                .seid
+                .and_then(|peer_seid| self.local_seid_of(to, peer_seid)),
         };
         self.request_of(now, to, message, local_seid)
     }
 
-    fn request_of(&mut self, now: Duration, to: SocketAddr, message: Message, local_seid: Option<u64>) -> Result<RequestId, NodeError> {
+    fn request_of(
+        &mut self,
+        now: Duration,
+        to: SocketAddr,
+        message: Message,
+        local_seid: Option<u64>,
+    ) -> Result<RequestId, NodeError> {
         let message_type = message.body.message_type();
         if !is_request(message_type) {
             return Err(NodeError::NotARequest);
@@ -566,21 +640,35 @@ impl Node {
         let mut change = Change::Nothing;
         if !is_node_related(message_type) {
             // The association of the session, whose F-SEID may have another address.
-            let of_session = local_seid.and_then(|seid| self.sessions.get(&seid)).is_some_and(|session| self.associations.contains_key(&session.node));
+            let of_session = local_seid
+                .and_then(|seid| self.sessions.get(&seid))
+                .is_some_and(|session| self.associations.contains_key(&session.node));
             if !of_session && self.association_of(to).is_none() {
                 return Err(NodeError::NoAssociation);
             }
-            let priority = message.header.priority.unwrap_or(self.config.default_priority);
+            let priority = message
+                .header
+                .priority
+                .unwrap_or(self.config.default_priority);
             if self.throttle(to, priority) {
                 return Err(NodeError::Throttled);
             }
             change = match &message.body {
                 Body::SessionDeletionRequest(_) => Change::Ends,
-                Body::SessionReportRequest(request) if request.pfcpsrreq_flags.as_ref().is_some_and(|flags| flags.psdbu) => Change::Ends,
-                Body::SessionModificationRequest(request) => match request.cp_f_seid.as_ref().and_then(|f_seid| f_seid.seid) {
-                    Some(seid) if Some(seid) != local_seid => Change::Moves(seid),
-                    _ => Change::Nothing,
-                },
+                Body::SessionReportRequest(request)
+                    if request
+                        .pfcpsrreq_flags
+                        .as_ref()
+                        .is_some_and(|flags| flags.psdbu) =>
+                {
+                    Change::Ends
+                }
+                Body::SessionModificationRequest(request) => {
+                    match request.cp_f_seid.as_ref().and_then(|f_seid| f_seid.seid) {
+                        Some(seid) if Some(seid) != local_seid => Change::Moves(seid),
+                        _ => Change::Nothing,
+                    }
+                }
                 _ => Change::Nothing,
             };
         }
@@ -592,16 +680,35 @@ impl Node {
     /// # Errors
     ///
     /// As [`request`](Self::request), and a session that the node does not have.
-    pub fn session_request(&mut self, now: Duration, local_seid: u64, body: impl Into<Body>) -> Result<RequestId, NodeError> {
+    pub fn session_request(
+        &mut self,
+        now: Duration,
+        local_seid: u64,
+        body: impl Into<Body>,
+    ) -> Result<RequestId, NodeError> {
         let session = self.sessions.get(&local_seid).ok_or(NodeError::NoSession)?;
         let (peer, peer_seid) = (session.peer, session.peer_seid.unwrap_or(0));
-        self.request_of(now, peer, Message { header: Header::session(peer_seid, 0), body: body.into() }, Some(local_seid))
+        self.request_of(
+            now,
+            peer,
+            Message {
+                header: Header::session(peer_seid, 0),
+                body: body.into(),
+            },
+            Some(local_seid),
+        )
     }
 
     /// Stop sending a request again, and forget it: a response that comes after is late.
     /// `false` for a request that is not outstanding.
     pub fn cancel(&mut self, now: Duration, request: RequestId) -> bool {
-        let Some((&sequence, _)) = self.outstanding.iter().find(|(_, outstanding)| outstanding.id == request) else { return false };
+        let Some((&sequence, _)) = self
+            .outstanding
+            .iter()
+            .find(|(_, outstanding)| outstanding.id == request)
+        else {
+            return false;
+        };
         let outstanding = self.outstanding.remove(&sequence).expect("outstanding");
         self.deadlines.remove(&(outstanding.deadline, sequence));
         self.finish(now, sequence, outstanding.to, true);
@@ -616,8 +723,18 @@ impl Node {
         }
         let seid = self.next_seid;
         self.next_seid = self.next_seid.wrapping_add(1);
-        let node = self.association_of(peer).map(|association| association.key.clone()).unwrap_or_default();
-        self.sessions.insert(seid, Session { peer, peer_seid: None, node });
+        let node = self
+            .association_of(peer)
+            .map(|association| association.key.clone())
+            .unwrap_or_default();
+        self.sessions.insert(
+            seid,
+            Session {
+                peer,
+                peer_seid: None,
+                node,
+            },
+        );
         seid
     }
 
@@ -629,7 +746,12 @@ impl Node {
 
     /// End every session with `peer`, as after its restart: their local SEIDs.
     pub fn end_sessions_of(&mut self, peer: SocketAddr) -> Vec<u64> {
-        let ended: Vec<u64> = self.sessions.iter().filter(|(_, session)| session.peer.ip() == peer.ip()).map(|(seid, _)| *seid).collect();
+        let ended: Vec<u64> = self
+            .sessions
+            .iter()
+            .filter(|(_, session)| session.peer.ip() == peer.ip())
+            .map(|(seid, _)| *seid)
+            .collect();
         for seid in &ended {
             self.sessions.remove(seid);
         }
@@ -640,7 +762,12 @@ impl Node {
     /// [`Event::PeerDown`]: an [`Event::Released`] says what ended. `false` for a peer
     /// without an association.
     pub fn end_association(&mut self, peer: SocketAddr) -> bool {
-        let Some(key) = self.association_of(peer).map(|association| association.key.clone()) else { return false };
+        let Some(key) = self
+            .association_of(peer)
+            .map(|association| association.key.clone())
+        else {
+            return false;
+        };
         self.release(&key);
         true
     }
@@ -652,15 +779,30 @@ impl Node {
     ///
     /// A body of another type than the response of the request, a request answered
     /// already, and a body that does not encode.
-    pub fn respond(&mut self, now: Duration, request: &Inbound, body: impl Into<Body>) -> Result<(), NodeError> {
+    pub fn respond(
+        &mut self,
+        now: Duration,
+        request: &Inbound,
+        body: impl Into<Body>,
+    ) -> Result<(), NodeError> {
         let body = body.into();
         if body.message_type() != request.message_type + 1 {
             return Err(NodeError::WrongResponse);
         }
-        if self.answered.get(&(request.from, request.sequence)).is_some_and(|answered| answered.response.is_some()) {
+        if self
+            .answered
+            .get(&(request.from, request.sequence))
+            .is_some_and(|answered| answered.response.is_some())
+        {
             return Err(NodeError::Answered);
         }
-        self.respond_with(now, request, self.response_header(request), body, Delivery::Send)
+        self.respond_with(
+            now,
+            request,
+            self.response_header(request),
+            body,
+            Delivery::Send,
+        )
     }
 
     /// The header of the response to `request`: its sequence number, the peer's SEID of
@@ -671,7 +813,10 @@ impl Node {
         }
         let seid = match request.message_type {
             50 => request.peer_seid,
-            _ => request.seid.and_then(|seid| self.sessions.get(&seid)).and_then(|session| session.peer_seid),
+            _ => request
+                .seid
+                .and_then(|seid| self.sessions.get(&seid))
+                .and_then(|session| session.peer_seid),
         };
         let mut header = Header::session(seid.unwrap_or(0), request.sequence);
         if request.prioritized {
@@ -686,11 +831,24 @@ impl Node {
     /// # Errors
     ///
     /// A message that does not encode.
-    pub fn respond_message(&mut self, now: Duration, request: &Inbound, message: Message, delivery: Delivery) -> Result<(), NodeError> {
+    pub fn respond_message(
+        &mut self,
+        now: Duration,
+        request: &Inbound,
+        message: Message,
+        delivery: Delivery,
+    ) -> Result<(), NodeError> {
         self.respond_with(now, request, message.header, message.body, delivery)
     }
 
-    fn respond_with(&mut self, now: Duration, request: &Inbound, header: Header, body: Body, delivery: Delivery) -> Result<(), NodeError> {
+    fn respond_with(
+        &mut self,
+        now: Duration,
+        request: &Inbound,
+        header: Header,
+        body: Body,
+        delivery: Delivery,
+    ) -> Result<(), NodeError> {
         let message = Message { header, body };
         let octets = message.encode()?;
         let key = (request.from, request.sequence);
@@ -699,15 +857,27 @@ impl Node {
             self.answered.remove(&key);
             return Ok(());
         }
-        let effect = self.answered.get(&key).map_or(Effect::Nothing, |answered| answered.effect.clone());
+        let effect = self
+            .answered
+            .get(&key)
+            .map_or(Effect::Nothing, |answered| answered.effect.clone());
         self.answered_effects(now, request, &message, effect);
         let expires = now.saturating_add(self.config.keep);
-        let entry = self.answered.entry(key).or_insert_with(|| Answered { request: Vec::new(), response: None, expires, effect: Effect::Nothing });
+        let entry = self.answered.entry(key).or_insert_with(|| Answered {
+            request: Vec::new(),
+            response: None,
+            expires,
+            effect: Effect::Nothing,
+        });
         entry.response = Some(octets.clone());
         entry.expires = expires;
         self.answering.insert((expires, key.0, key.1));
         if delivery == Delivery::Send {
-            self.queue(Transmit { to: request.from, priority: request.priority, octets });
+            self.queue(Transmit {
+                to: request.from,
+                priority: request.priority,
+                octets,
+            });
         }
         Ok(())
     }
@@ -716,7 +886,11 @@ impl Node {
     /// retransmission of it comes again as a request.
     pub fn forget(&mut self, request: &Inbound) {
         let key = (request.from, request.sequence);
-        if self.answered.get(&key).is_some_and(|answered| answered.response.is_none()) {
+        if self
+            .answered
+            .get(&key)
+            .is_some_and(|answered| answered.response.is_none())
+        {
             self.answered.remove(&key);
         }
     }
@@ -735,7 +909,11 @@ impl Node {
     /// Send octets as they are: no sequence number, no retransmission, no matching. A
     /// response to a reserved sequence number is then a violation, as any unknown one.
     pub fn send_raw(&mut self, to: SocketAddr, priority: u8, octets: Vec<u8>) {
-        self.queue(Transmit { to, priority, octets });
+        self.queue(Transmit {
+            to,
+            priority,
+            octets,
+        });
     }
 
     /// The association with a peer.
@@ -750,15 +928,24 @@ impl Node {
 
     /// The latest load control information of a peer, by its Node ID (§6.2.3.3.1).
     pub fn load_control(&self, peer: SocketAddr) -> Option<LoadControl> {
-        let node = self.association_of(peer).map(|association| Scope::Node(association.key.clone()));
-        node.and_then(|scope| self.load.get(&scope)).or_else(|| self.load.get(&Scope::Address(peer.ip()))).copied()
+        let node = self
+            .association_of(peer)
+            .map(|association| Scope::Node(association.key.clone()));
+        node.and_then(|scope| self.load.get(&scope))
+            .or_else(|| self.load.get(&Scope::Address(peer.ip())))
+            .copied()
     }
 
     /// The overload control information of a peer that still holds: of its address, or
     /// of its Node ID (§6.2.4.3.1).
     pub fn overload_control(&self, peer: SocketAddr) -> Option<OverloadControl> {
-        let node = self.association_of(peer).map(|association| Scope::Node(association.key.clone()));
-        self.overload.get(&Scope::Address(peer.ip())).or_else(|| node.and_then(|scope| self.overload.get(&scope))).copied()
+        let node = self
+            .association_of(peer)
+            .map(|association| Scope::Node(association.key.clone()));
+        self.overload
+            .get(&Scope::Address(peer.ip()))
+            .or_else(|| node.and_then(|scope| self.overload.get(&scope)))
+            .copied()
     }
 
     /// Take a datagram that `from` sent: each of its messages, bundled with the FO flag,
@@ -767,7 +954,12 @@ impl Node {
         self.prune(now);
         let Some((header, message_type, _)) = Header::decode(octets) else {
             // Too short for a header: discarded (§7.6.3).
-            self.events.push_back(Event::Malformed { from, error: crate::Error::TooShort { octets: octets.len() } });
+            self.events.push_back(Event::Malformed {
+                from,
+                error: crate::Error::TooShort {
+                    octets: octets.len(),
+                },
+            });
             return;
         };
         if header.version != 1 {
@@ -796,7 +988,12 @@ impl Node {
                 self.violation(from, ViolationKind::BundledNodeMessage, this);
                 continue;
             }
-            if bundled && let Some(session) = message.header.seid.and_then(|seid| self.sessions.get(&seid)) {
+            if bundled
+                && let Some(session) = message
+                    .header
+                    .seid
+                    .and_then(|seid| self.sessions.get(&seid))
+            {
                 peers.insert(session.peer.ip());
                 if peers.len() > 1 {
                     self.violation(from, ViolationKind::BundledPeers, this);
@@ -810,14 +1007,28 @@ impl Node {
     /// A message of another version than 1 (§7.6.2): a request is answered with a
     /// Version Not Supported Response, and a response ends its request.
     fn other_version(&mut self, now: Duration, from: SocketAddr, header: Header, message_type: u8) {
-        let error = crate::Error::Version { version: header.version };
+        let error = crate::Error::Version {
+            version: header.version,
+        };
         if is_request(message_type) {
-            let message = Message { header: Header::node(header.sequence), body: VersionNotSupportedResponse::default().into() };
+            let message = Message {
+                header: Header::node(header.sequence),
+                body: VersionNotSupportedResponse::default().into(),
+            };
             if let Ok(octets) = message.encode() {
-                self.queue(Transmit { to: from, priority: 0, octets });
+                self.queue(Transmit {
+                    to: from,
+                    priority: 0,
+                    octets,
+                });
             }
         } else {
-            self.fail(now, from, header.sequence, Failure::Malformed(error.clone()));
+            self.fail(
+                now,
+                from,
+                header.sequence,
+                Failure::Malformed(error.clone()),
+            );
         }
         self.events.push_back(Event::Malformed { from, error });
     }
@@ -827,8 +1038,16 @@ impl Node {
     /// (§7.6.1).
     fn malformed(&mut self, now: Duration, from: SocketAddr, error: crate::Error) {
         let (header, message_type, offending) = match &error {
-            crate::Error::MessageLength { header, message_type, .. } => (Some(*header), *message_type, None),
-            crate::Error::Ies { header, message_type, fault } => {
+            crate::Error::MessageLength {
+                header,
+                message_type,
+                ..
+            } => (Some(*header), *message_type, None),
+            crate::Error::Ies {
+                header,
+                message_type,
+                fault,
+            } => {
                 let offending = match fault {
                     crate::IeFault::Length { ie_type, .. } => Some(*ie_type),
                     crate::IeFault::HeaderCut { .. } => None,
@@ -840,7 +1059,12 @@ impl Node {
         if let Some(header) = header {
             match is_request(message_type) {
                 true => self.reject_malformed(from, &header, message_type, offending),
-                false => self.fail(now, from, header.sequence, Failure::Malformed(error.clone())),
+                false => self.fail(
+                    now,
+                    from,
+                    header.sequence,
+                    Failure::Malformed(error.clone()),
+                ),
             }
         }
         self.events.push_back(Event::Malformed { from, error });
@@ -848,13 +1072,23 @@ impl Node {
 
     /// End the request of `sequence` to `from` without its response.
     fn fail(&mut self, now: Duration, from: SocketAddr, sequence: u32, failure: Failure) {
-        let Some(request) = self.outstanding.get(&sequence).filter(|request| request.to == from) else { return };
+        let Some(request) = self
+            .outstanding
+            .get(&sequence)
+            .filter(|request| request.to == from)
+        else {
+            return;
+        };
         let (id, deadline, heartbeat) = (request.id, request.deadline, request.heartbeat);
         self.outstanding.remove(&sequence);
         self.deadlines.remove(&(deadline, sequence));
         self.finish(now, sequence, from, false);
         if !heartbeat {
-            self.events.push_back(Event::Failed { request: id, to: from, failure });
+            self.events.push_back(Event::Failed {
+                request: id,
+                to: from,
+                failure,
+            });
         }
     }
 
@@ -884,7 +1118,14 @@ impl Node {
         if let Some(answered) = self.answered.get(&(from, sequence)) {
             match (same_request(&answered.request, octets), &answered.response) {
                 (true, Some(response)) => {
-                    let transmit = Transmit { to: from, priority: message.header.priority.unwrap_or(self.config.default_priority), octets: response.clone() };
+                    let transmit = Transmit {
+                        to: from,
+                        priority: message
+                            .header
+                            .priority
+                            .unwrap_or(self.config.default_priority),
+                        octets: response.clone(),
+                    };
                     self.queue(transmit);
                     return;
                 }
@@ -905,39 +1146,80 @@ impl Node {
             from,
             message_type,
             sequence,
-            priority: message.header.priority.unwrap_or(self.config.default_priority),
+            priority: message
+                .header
+                .priority
+                .unwrap_or(self.config.default_priority),
             prioritized: message.header.priority.is_some(),
             seid: message.header.seid,
             peer_seid: match &message.body {
-                Body::SessionEstablishmentRequest(request) => request.cp_f_seid.as_ref().and_then(|f_seid| f_seid.seid),
+                Body::SessionEstablishmentRequest(request) => {
+                    request.cp_f_seid.as_ref().and_then(|f_seid| f_seid.seid)
+                }
                 _ => None,
             },
             node_id: node_id_of(&message.body),
         };
         let effect = match &message.body {
             // A PFCP Session Retention Information of a null length keeps every session.
-            Body::AssociationSetupRequest(request) if request.pfcp_session_retention_information.is_none() && request.raw.iter().any(|ie| ie.ie_type == 183 && ie.is_null()) => {
+            Body::AssociationSetupRequest(request)
+                if request.pfcp_session_retention_information.is_none()
+                    && request
+                        .raw
+                        .iter()
+                        .any(|ie| ie.ie_type == 183 && ie.is_null()) =>
+            {
                 Effect::Setup(Some(Vec::new()))
             }
-            Body::AssociationSetupRequest(request) => Effect::Setup(
-                request.pfcp_session_retention_information.as_ref().map(|retention| {
-                    let addresses = retention.cp_pfcp_entity_ip_address.iter();
-                    addresses.flat_map(|address| [address.ipv4_address.map(IpAddr::V4), address.ipv6_address.map(IpAddr::V6)].into_iter().flatten()).collect()
-                }),
-            ),
+            Body::AssociationSetupRequest(request) => {
+                Effect::Setup(request.pfcp_session_retention_information.as_ref().map(
+                    |retention| {
+                        let addresses = retention.cp_pfcp_entity_ip_address.iter();
+                        addresses
+                            .flat_map(|address| {
+                                [
+                                    address.ipv4_address.map(IpAddr::V4),
+                                    address.ipv6_address.map(IpAddr::V6),
+                                ]
+                                .into_iter()
+                                .flatten()
+                            })
+                            .collect()
+                    },
+                ))
+            }
             Body::SessionEstablishmentRequest(request) => match request.cp_f_seid.as_ref() {
-                Some(f_seid) => Effect::PeerFSeid(f_seid.seid.unwrap_or(0), fseid_peer(from, f_seid).ip()),
+                Some(f_seid) => {
+                    Effect::PeerFSeid(f_seid.seid.unwrap_or(0), fseid_peer(from, f_seid).ip())
+                }
                 None => Effect::Nothing,
             },
             Body::SessionModificationRequest(request) => match request.cp_f_seid.as_ref() {
-                Some(f_seid) => Effect::PeerFSeid(f_seid.seid.unwrap_or(0), fseid_peer(from, f_seid).ip()),
+                Some(f_seid) => {
+                    Effect::PeerFSeid(f_seid.seid.unwrap_or(0), fseid_peer(from, f_seid).ip())
+                }
                 None => Effect::Nothing,
             },
-            Body::SessionReportRequest(request) if request.pfcpsrreq_flags.as_ref().is_some_and(|flags| flags.psdbu) => Effect::Deleted,
+            Body::SessionReportRequest(request)
+                if request
+                    .pfcpsrreq_flags
+                    .as_ref()
+                    .is_some_and(|flags| flags.psdbu) =>
+            {
+                Effect::Deleted
+            }
             _ => Effect::Nothing,
         };
         let expires = now.saturating_add(self.config.keep);
-        self.keep_answered((from, sequence), Answered { request: octets.to_vec(), response: None, expires, effect });
+        self.keep_answered(
+            (from, sequence),
+            Answered {
+                request: octets.to_vec(),
+                response: None,
+                expires,
+                effect,
+            },
+        );
         // What the node answers itself.
         let known_node = |node: &Self| match &inbound.node_id {
             Some(node_id) => node.associations.contains_key(&key_of(node_id)),
@@ -945,14 +1227,28 @@ impl Node {
         };
         let rejection = match message_type {
             1 => {
-                let response = HeartbeatResponse::new(RecoveryTimeStamp::new(self.config.recovery_time_stamp));
+                let response =
+                    HeartbeatResponse::new(RecoveryTimeStamp::new(self.config.recovery_time_stamp));
                 let _ = self.respond(now, &inbound, response);
                 return;
             }
-            7 | 9 if !known_node(self) => Some((CauseValue::NoEstablishedPfcpAssociation, ViolationKind::UnknownNode)),
-            3 | 12 | 14 | 16 | 50 if !known_node(self) => Some((CauseValue::NoEstablishedPfcpAssociation, ViolationKind::SessionWithoutAssociation)),
-            52 | 54 | 56 if inbound.seid.is_none_or(|seid| !self.sessions.contains_key(&seid)) => {
-                Some((CauseValue::SessionContextNotFound, ViolationKind::UnknownSeid))
+            7 | 9 if !known_node(self) => Some((
+                CauseValue::NoEstablishedPfcpAssociation,
+                ViolationKind::UnknownNode,
+            )),
+            3 | 12 | 14 | 16 | 50 if !known_node(self) => Some((
+                CauseValue::NoEstablishedPfcpAssociation,
+                ViolationKind::SessionWithoutAssociation,
+            )),
+            52 | 54 | 56
+                if inbound
+                    .seid
+                    .is_none_or(|seid| !self.sessions.contains_key(&seid)) =>
+            {
+                Some((
+                    CauseValue::SessionContextNotFound,
+                    ViolationKind::UnknownSeid,
+                ))
             }
             _ => None,
         };
@@ -963,22 +1259,40 @@ impl Node {
                 // The peer's SEID is not known: SEID 0 (§7.2.2.4.2), but that of the
                 // F-SEID of an establishment without an association.
                 if header.seid.is_some() {
-                    header.seid = Some(if kind == ViolationKind::SessionWithoutAssociation { inbound.peer_seid.unwrap_or(0) } else { 0 });
+                    header.seid = Some(if kind == ViolationKind::SessionWithoutAssociation {
+                        inbound.peer_seid.unwrap_or(0)
+                    } else {
+                        0
+                    });
                 }
                 let _ = self.respond_with(now, &inbound, header, body, Delivery::Send);
             }
             return;
         }
         self.note_controls(now, from, octets, &message.body);
-        self.events.push_back(Event::Request { request: inbound, message });
+        self.events.push_back(Event::Request {
+            request: inbound,
+            message,
+        });
     }
 
-    fn handle_response(&mut self, now: Duration, from: SocketAddr, octets: &[u8], message: Message) {
+    fn handle_response(
+        &mut self,
+        now: Duration,
+        from: SocketAddr,
+        octets: &[u8],
+        message: Message,
+    ) {
         let sequence = message.header.sequence;
         let message_type = message.body.message_type();
         if message_type == 11 {
             // Its sequence number says nothing (§7.2.2.2): every request to the peer fails.
-            let to_peer: Vec<u32> = self.outstanding.iter().filter(|(_, request)| request.to == from).map(|(sequence, _)| *sequence).collect();
+            let to_peer: Vec<u32> = self
+                .outstanding
+                .iter()
+                .filter(|(_, request)| request.to == from)
+                .map(|(sequence, _)| *sequence)
+                .collect();
             if to_peer.is_empty() {
                 self.violation(from, ViolationKind::UnknownSequence, octets);
             }
@@ -1011,25 +1325,54 @@ impl Node {
         self.note_controls(now, from, octets, &message.body);
         self.response_effects(now, from, &request, &message);
         if !request.heartbeat {
-            self.events.push_back(Event::Response { request: request.id, message });
+            self.events.push_back(Event::Response {
+                request: request.id,
+                message,
+            });
         }
     }
 
-    fn send(&mut self, now: Duration, to: SocketAddr, mut message: Message, heartbeat: bool, local_seid: Option<u64>, change: Change) -> Result<RequestId, NodeError> {
+    fn send(
+        &mut self,
+        now: Duration,
+        to: SocketAddr,
+        mut message: Message,
+        heartbeat: bool,
+        local_seid: Option<u64>,
+        change: Change,
+    ) -> Result<RequestId, NodeError> {
         let sequence = self.next_free_sequence()?;
         message.header.sequence = sequence;
         let octets = message.encode()?;
         let id = RequestId(self.next_request);
         self.next_request += 1;
-        let priority = message.header.priority.unwrap_or(self.config.default_priority);
+        let priority = message
+            .header
+            .priority
+            .unwrap_or(self.config.default_priority);
         let message_type = message.body.message_type();
         let deadline = now.saturating_add(self.config.t1);
         self.deadlines.insert((deadline, sequence));
         self.outstanding.insert(
             sequence,
-            Outstanding { id, to, message_type, octets: octets.clone(), deadline, attempts: 0, priority, heartbeat, local_seid, change },
+            Outstanding {
+                id,
+                to,
+                message_type,
+                octets: octets.clone(),
+                deadline,
+                attempts: 0,
+                priority,
+                heartbeat,
+                local_seid,
+                change,
+            },
         );
-        self.queue(Transmit { to, priority, octets });
+        self.queue(Transmit {
+            to,
+            priority,
+            octets,
+        });
         Ok(id)
     }
 
@@ -1039,8 +1382,15 @@ impl Node {
             let sequence = self.next_sequence;
             self.next_sequence = (self.next_sequence + 1) & 0x00ff_ffff;
             let lowest = SocketAddr::new(IpAddr::V4(core::net::Ipv4Addr::UNSPECIFIED), 0);
-            let recent = self.finished.range((sequence, lowest)..).next().is_some_and(|((finished, _), _)| *finished == sequence);
-            if !self.outstanding.contains_key(&sequence) && !self.reserved.contains(&sequence) && !recent {
+            let recent = self
+                .finished
+                .range((sequence, lowest)..)
+                .next()
+                .is_some_and(|((finished, _), _)| *finished == sequence);
+            if !self.outstanding.contains_key(&sequence)
+                && !self.reserved.contains(&sequence)
+                && !recent
+            {
                 return Ok(sequence);
             }
         }
@@ -1049,7 +1399,10 @@ impl Node {
 
     /// The local SEID of the session with `peer` whose peer's SEID is `peer_seid`.
     fn local_seid_of(&self, peer: SocketAddr, peer_seid: u64) -> Option<u64> {
-        self.sessions.iter().find(|(_, session)| session.peer == peer && session.peer_seid == Some(peer_seid)).map(|(seid, _)| *seid)
+        self.sessions
+            .iter()
+            .find(|(_, session)| session.peer == peer && session.peer_seid == Some(peer_seid))
+            .map(|(seid, _)| *seid)
     }
 
     fn queue(&mut self, transmit: Transmit) {
@@ -1058,7 +1411,11 @@ impl Node {
     }
 
     fn violation(&mut self, from: SocketAddr, kind: ViolationKind, octets: &[u8]) {
-        self.events.push_back(Event::Violation { from, kind, octets: octets.to_vec() });
+        self.events.push_back(Event::Violation {
+            from,
+            kind,
+            octets: octets.to_vec(),
+        });
     }
 
     /// Keep a request of a peer for its retransmissions: the oldest go beyond the
@@ -1094,30 +1451,56 @@ impl Node {
             && until <= now
         {
             self.answering.pop_first();
-            if self.answered.get(&(peer, sequence)).is_some_and(|answered| answered.expires <= now) {
+            if self
+                .answered
+                .get(&(peer, sequence))
+                .is_some_and(|answered| answered.expires <= now)
+            {
                 self.answered.remove(&(peer, sequence));
             }
         }
     }
 
     fn association_of(&self, peer: SocketAddr) -> Option<&Association> {
-        self.associations.values().find(|association| association.peer == peer)
+        self.associations
+            .values()
+            .find(|association| association.peer == peer)
     }
 
     /// Answer a request that does not decode, when its header says that it is one:
     /// "Invalid length" (§7.6.3, §7.6.7), with the IE when the node knows it. A header
     /// of the node's own, which copies none of the faults of the request's.
-    fn reject_malformed(&mut self, from: SocketAddr, header: &Header, message_type: u8, offending: Option<u16>) {
+    fn reject_malformed(
+        &mut self,
+        from: SocketAddr,
+        header: &Header,
+        message_type: u8,
+        offending: Option<u16>,
+    ) {
         if !is_request(message_type) || message_type == 1 {
             return;
         }
-        let Some(body) = rejection_body(message_type, CauseValue::InvalidLength, offending, &self.config.node_id) else { return };
+        let Some(body) = rejection_body(
+            message_type,
+            CauseValue::InvalidLength,
+            offending,
+            &self.config.node_id,
+        ) else {
+            return;
+        };
         let header = match is_node_related(message_type) {
             true => Header::node(header.sequence),
-            false => Header { priority: header.priority.map(|priority| priority & 0x0f), ..Header::session(0, header.sequence) },
+            false => Header {
+                priority: header.priority.map(|priority| priority & 0x0f),
+                ..Header::session(0, header.sequence)
+            },
         };
         if let Ok(octets) = (Message { header, body }).encode() {
-            self.queue(Transmit { to: from, priority: header.priority.unwrap_or(self.config.default_priority), octets });
+            self.queue(Transmit {
+                to: from,
+                priority: header.priority.unwrap_or(self.config.default_priority),
+                octets,
+            });
         }
     }
 
@@ -1130,11 +1513,23 @@ impl Node {
             Body::AssociationSetupResponse(message) => message.recovery_time_stamp.as_ref(),
             _ => None,
         };
-        let Some(stamp) = stamp.map(|stamp| stamp.value) else { return };
+        let Some(stamp) = stamp.map(|stamp| stamp.value) else {
+            return;
+        };
         // The stamps of peers without an association are bounded, the oldest first.
-        if !self.recovery.contains_key(&from) && self.recovery.len() >= self.config.capacity.max(1) {
-            let associated: BTreeSet<SocketAddr> = self.associations.values().map(|association| association.peer).collect();
-            let oldest = self.recovery.iter().filter(|(peer, _)| !associated.contains(peer)).min_by_key(|(_, (_, seen))| *seen).map(|(peer, _)| *peer);
+        if !self.recovery.contains_key(&from) && self.recovery.len() >= self.config.capacity.max(1)
+        {
+            let associated: BTreeSet<SocketAddr> = self
+                .associations
+                .values()
+                .map(|association| association.peer)
+                .collect();
+            let oldest = self
+                .recovery
+                .iter()
+                .filter(|(peer, _)| !associated.contains(peer))
+                .min_by_key(|(_, (_, seen))| *seen)
+                .map(|(peer, _)| *peer);
             if let Some(oldest) = oldest {
                 self.recovery.remove(&oldest);
             }
@@ -1143,10 +1538,19 @@ impl Node {
             && known != stamp
         {
             // Load and overload of the peer start again (§6.2.3.3.2, §6.2.4.3.2).
-            let node = self.association_of(from).map(|association| Scope::Node(association.key.clone()));
-            self.load.retain(|scope, _| *scope != Scope::Address(from.ip()) && Some(scope) != node.as_ref());
-            self.overload.retain(|scope, _| *scope != Scope::Address(from.ip()) && Some(scope) != node.as_ref());
-            self.events.push_back(Event::PeerRestarted { peer: from, recovery_time_stamp: stamp });
+            let node = self
+                .association_of(from)
+                .map(|association| Scope::Node(association.key.clone()));
+            self.load.retain(|scope, _| {
+                *scope != Scope::Address(from.ip()) && Some(scope) != node.as_ref()
+            });
+            self.overload.retain(|scope, _| {
+                *scope != Scope::Address(from.ip()) && Some(scope) != node.as_ref()
+            });
+            self.events.push_back(Event::PeerRestarted {
+                peer: from,
+                recovery_time_stamp: stamp,
+            });
         }
     }
 
@@ -1154,22 +1558,46 @@ impl Node {
     /// §6.2.4.3.3).
     fn note_controls(&mut self, now: Duration, from: SocketAddr, octets: &[u8], body: &Body) {
         let (load, overload) = match body {
-            Body::SessionEstablishmentResponse(message) => (message.load_control_information.as_deref(), message.overload_control_information.as_deref()),
-            Body::SessionModificationResponse(message) => (message.load_control_information.as_deref(), message.overload_control_information.as_deref()),
-            Body::SessionDeletionResponse(message) => (message.load_control_information.as_deref(), message.overload_control_information.as_deref()),
-            Body::SessionReportRequest(message) => (message.load_control_information.as_deref(), message.overload_control_information.as_deref()),
+            Body::SessionEstablishmentResponse(message) => (
+                message.load_control_information.as_deref(),
+                message.overload_control_information.as_deref(),
+            ),
+            Body::SessionModificationResponse(message) => (
+                message.load_control_information.as_deref(),
+                message.overload_control_information.as_deref(),
+            ),
+            Body::SessionDeletionResponse(message) => (
+                message.load_control_information.as_deref(),
+                message.overload_control_information.as_deref(),
+            ),
+            Body::SessionReportRequest(message) => (
+                message.load_control_information.as_deref(),
+                message.overload_control_information.as_deref(),
+            ),
             _ => (None, None),
         };
-        let node = self.association_of(from).map(|association| Scope::Node(association.key.clone()));
+        let node = self
+            .association_of(from)
+            .map(|association| Scope::Node(association.key.clone()));
         if let Some(load) = load
-            && let (Some(sequence), Some(metric)) = (&load.load_control_sequence_number, &load.load_metric)
+            && let (Some(sequence), Some(metric)) =
+                (&load.load_control_sequence_number, &load.load_metric)
         {
             let scope = node.clone().unwrap_or(Scope::Address(from.ip()));
-            let new = LoadControl { sequence: sequence.value, metric: metric.value.0 };
+            let new = LoadControl {
+                sequence: sequence.value,
+                metric: metric.value.0,
+            };
             match self.load.get(&scope).copied() {
-                Some(known) if known.sequence == new.sequence && known.metric != new.metric => self.violation(from, ViolationKind::LoadControlSequence, octets),
+                Some(known) if known.sequence == new.sequence && known.metric != new.metric => {
+                    self.violation(from, ViolationKind::LoadControlSequence, octets)
+                }
                 // The number goes up only with a change (§6.2.3.3.2.1).
-                Some(known) if known.sequence != new.sequence && known.metric == new.metric && newer(new.sequence, known.sequence) => {
+                Some(known)
+                    if known.sequence != new.sequence
+                        && known.metric == new.metric
+                        && newer(new.sequence, known.sequence) =>
+                {
                     self.violation(from, ViolationKind::LoadControlSequence, octets);
                     self.load.insert(scope, new);
                 }
@@ -1180,19 +1608,35 @@ impl Node {
             }
         }
         if let Some(overload) = overload
-            && let (Some(sequence), Some(metric), Some(validity)) =
-                (&overload.overload_control_sequence_number, &overload.overload_reduction_metric, &overload.period_of_validity)
+            && let (Some(sequence), Some(metric), Some(validity)) = (
+                &overload.overload_control_sequence_number,
+                &overload.overload_reduction_metric,
+                &overload.period_of_validity,
+            )
         {
-            let of_node = overload.overload_control_information_flags.as_ref().is_some_and(|flags| flags.aoci);
+            let of_node = overload
+                .overload_control_information_flags
+                .as_ref()
+                .is_some_and(|flags| flags.aoci);
             let scope = match (of_node, node) {
                 (true, Some(node)) => node,
                 _ => Scope::Address(from.ip()),
             };
             let validity = timer(validity);
             let until = validity.map(|period| now.saturating_add(period));
-            let new = OverloadControl { peer: from, sequence: sequence.value, metric: metric.value.0.min(100), validity, until, credit: 0 };
+            let new = OverloadControl {
+                peer: from,
+                sequence: sequence.value,
+                metric: metric.value.0.min(100),
+                validity,
+                until,
+                credit: 0,
+            };
             match self.overload.get(&scope).copied() {
-                Some(known) if known.sequence == new.sequence && (known.metric, known.validity) != (new.metric, new.validity) => {
+                Some(known)
+                    if known.sequence == new.sequence
+                        && (known.metric, known.validity) != (new.metric, new.validity) =>
+                {
                     self.violation(from, ViolationKind::OverloadControlSequence, octets)
                 }
                 Some(known) if !newer(new.sequence, known.sequence) => {}
@@ -1201,7 +1645,13 @@ impl Node {
                     if (known.metric, known.validity) == (new.metric, new.validity) {
                         self.violation(from, ViolationKind::OverloadControlSequence, octets);
                     }
-                    self.overload.insert(scope, OverloadControl { credit: known.credit, ..new });
+                    self.overload.insert(
+                        scope,
+                        OverloadControl {
+                            credit: known.credit,
+                            ..new
+                        },
+                    );
                 }
                 None => {
                     self.overload.insert(scope, new);
@@ -1217,7 +1667,9 @@ impl Node {
         if !self.config.throttling {
             return false;
         }
-        let node = self.association_of(to).map(|association| Scope::Node(association.key.clone()));
+        let node = self
+            .association_of(to)
+            .map(|association| Scope::Node(association.key.clone()));
         let scope = match self.overload.contains_key(&Scope::Address(to.ip())) {
             true => Scope::Address(to.ip()),
             false => match node {
@@ -1225,7 +1677,10 @@ impl Node {
                 _ => return false,
             },
         };
-        let spared = self.config.priority_up_to.is_some_and(|up_to| priority <= up_to);
+        let spared = self
+            .config
+            .priority_up_to
+            .is_some_and(|up_to| priority <= up_to);
         let overload = self.overload.get_mut(&scope).expect("overload");
         overload.credit += u32::from(overload.metric);
         // A spared request is dropped only when the others could not make the reduction.
@@ -1238,8 +1693,17 @@ impl Node {
     }
 
     /// What a response to a request of the node changes: the association, the session.
-    fn response_effects(&mut self, now: Duration, from: SocketAddr, request: &Outstanding, message: &Message) {
-        let accepted = message.body.cause().is_some_and(|cause| cause.effective().value() < 64);
+    fn response_effects(
+        &mut self,
+        now: Duration,
+        from: SocketAddr,
+        request: &Outstanding,
+        message: &Message,
+    ) {
+        let accepted = message
+            .body
+            .cause()
+            .is_some_and(|cause| cause.effective().value() < 64);
         match &message.body {
             Body::AssociationSetupResponse(response) if accepted => {
                 if let Some(node_id) = &response.node_id {
@@ -1247,7 +1711,10 @@ impl Node {
                 }
             }
             Body::AssociationReleaseResponse(_) if accepted => {
-                if let Some(key) = self.association_of(from).map(|association| association.key.clone()) {
+                if let Some(key) = self
+                    .association_of(from)
+                    .map(|association| association.key.clone())
+                {
                     self.release(&key);
                 }
             }
@@ -1255,8 +1722,18 @@ impl Node {
                 if let Some(local) = request.local_seid {
                     match (accepted, response.up_f_seid.as_ref()) {
                         (true, Some(f_seid)) if f_seid.seid.is_some() => {
-                            let node = self.association_of(from).map(|association| association.key.clone()).unwrap_or_default();
-                            self.sessions.insert(local, Session { peer: fseid_peer(from, f_seid), peer_seid: f_seid.seid, node });
+                            let node = self
+                                .association_of(from)
+                                .map(|association| association.key.clone())
+                                .unwrap_or_default();
+                            self.sessions.insert(
+                                local,
+                                Session {
+                                    peer: fseid_peer(from, f_seid),
+                                    peer_seid: f_seid.seid,
+                                    node,
+                                },
+                            );
                         }
                         _ => {
                             self.sessions.remove(&local);
@@ -1279,7 +1756,8 @@ impl Node {
             }
             // A new CP F-SEID for the session, of another SMF (§5.22).
             Body::SessionReportResponse(response) if accepted => {
-                if let (Some(f_seid), Some(local)) = (response.cp_f_seid.as_ref(), request.local_seid)
+                if let (Some(f_seid), Some(local)) =
+                    (response.cp_f_seid.as_ref(), request.local_seid)
                     && let Some(session) = self.sessions.get_mut(&local)
                 {
                     session.peer = fseid_peer(from, f_seid);
@@ -1291,8 +1769,17 @@ impl Node {
     }
 
     /// What an answer of the caller changes: the association, the session.
-    fn answered_effects(&mut self, now: Duration, request: &Inbound, message: &Message, effect: Effect) {
-        let accepted = message.body.cause().is_some_and(|cause| cause.effective().value() < 64);
+    fn answered_effects(
+        &mut self,
+        now: Duration,
+        request: &Inbound,
+        message: &Message,
+        effect: Effect,
+    ) {
+        let accepted = message
+            .body
+            .cause()
+            .is_some_and(|cause| cause.effective().value() < 64);
         if !accepted {
             return;
         }
@@ -1310,12 +1797,24 @@ impl Node {
             }
             (Body::SessionEstablishmentResponse(response), effect) => {
                 if let Some(local) = response.up_f_seid.as_ref().and_then(|f_seid| f_seid.seid) {
-                    let node = self.association_of(request.from).map(|association| association.key.clone()).unwrap_or_default();
+                    let node = self
+                        .association_of(request.from)
+                        .map(|association| association.key.clone())
+                        .unwrap_or_default();
                     let peer = match effect {
-                        Effect::PeerFSeid(_, address) => SocketAddr::new(address, request.from.port()),
+                        Effect::PeerFSeid(_, address) => {
+                            SocketAddr::new(address, request.from.port())
+                        }
                         _ => request.from,
                     };
-                    self.sessions.insert(local, Session { peer, peer_seid: request.peer_seid, node });
+                    self.sessions.insert(
+                        local,
+                        Session {
+                            peer,
+                            peer_seid: request.peer_seid,
+                            node,
+                        },
+                    );
                 }
             }
             (Body::SessionModificationResponse(_), Effect::PeerFSeid(seid, address)) => {
@@ -1324,7 +1823,8 @@ impl Node {
                     session.peer_seid = Some(seid);
                 }
             }
-            (Body::SessionDeletionResponse(_), _) | (Body::SessionReportResponse(_), Effect::Deleted) => {
+            (Body::SessionDeletionResponse(_), _)
+            | (Body::SessionReportResponse(_), Effect::Deleted) => {
                 if let Some(seid) = request.seid {
                     self.sessions.remove(&seid);
                 }
@@ -1336,20 +1836,45 @@ impl Node {
     /// An association with `peer` of `node_id`. As a UP function, `retained` says which
     /// sessions of an association of the same Node ID stay (§6.2.6.2.2): `Some(None)` for
     /// none, `Some(Some([]))` for all, and those of the addresses listed.
-    fn associate(&mut self, now: Duration, peer: SocketAddr, node_id: NodeId, retained: Option<Option<Vec<IpAddr>>>) {
+    fn associate(
+        &mut self,
+        now: Duration,
+        peer: SocketAddr,
+        node_id: NodeId,
+        retained: Option<Option<Vec<IpAddr>>>,
+    ) {
         let key = key_of(&node_id);
-        let replaced = self.associations.insert(key.clone(), Association { node_id: node_id.clone(), peer, key: key.clone() });
+        let replaced = self.associations.insert(
+            key.clone(),
+            Association {
+                node_id: node_id.clone(),
+                peer,
+                key: key.clone(),
+            },
+        );
         let mut ended = Vec::new();
         if let Some(old) = &replaced {
-            if old.peer != peer && !self.associations.values().any(|association| association.peer == old.peer) {
+            if old.peer != peer
+                && !self
+                    .associations
+                    .values()
+                    .any(|association| association.peer == old.peer)
+            {
                 self.heartbeats.remove(&old.peer);
             }
             if let Some(retained) = retained {
                 let keeps = |session: &Session| match &retained {
                     None => false,
-                    Some(addresses) => addresses.is_empty() || addresses.contains(&session.peer.ip()),
+                    Some(addresses) => {
+                        addresses.is_empty() || addresses.contains(&session.peer.ip())
+                    }
                 };
-                ended = self.sessions.iter().filter(|(_, session)| session.node == key && !keeps(session)).map(|(seid, _)| *seid).collect();
+                ended = self
+                    .sessions
+                    .iter()
+                    .filter(|(_, session)| session.node == key && !keeps(session))
+                    .map(|(seid, _)| *seid)
+                    .collect();
                 for seid in &ended {
                     self.sessions.remove(seid);
                 }
@@ -1358,20 +1883,39 @@ impl Node {
         if let Some(interval) = self.config.heartbeat {
             self.heartbeats.insert(peer, now.saturating_add(interval));
         }
-        self.events.push_back(Event::Associated { peer, node_id, replaced: replaced.is_some(), sessions: ended });
+        self.events.push_back(Event::Associated {
+            peer,
+            node_id,
+            replaced: replaced.is_some(),
+            sessions: ended,
+        });
     }
 
     fn release(&mut self, key: &[u8]) {
-        let Some(association) = self.associations.remove(key) else { return };
+        let Some(association) = self.associations.remove(key) else {
+            return;
+        };
         let peer = association.peer;
-        let ended: Vec<u64> = self.sessions.iter().filter(|(_, session)| session.node == key || session.peer == peer).map(|(seid, _)| *seid).collect();
+        let ended: Vec<u64> = self
+            .sessions
+            .iter()
+            .filter(|(_, session)| session.node == key || session.peer == peer)
+            .map(|(seid, _)| *seid)
+            .collect();
         for seid in &ended {
             self.sessions.remove(seid);
         }
-        if !self.associations.values().any(|association| association.peer == peer) {
+        if !self
+            .associations
+            .values()
+            .any(|association| association.peer == peer)
+        {
             self.heartbeats.remove(&peer);
         }
-        self.events.push_back(Event::Released { node_id: association.node_id, sessions: ended });
+        self.events.push_back(Event::Released {
+            node_id: association.node_id,
+            sessions: ended,
+        });
     }
 }
 
@@ -1384,7 +1928,10 @@ fn newer(new: u32, known: u32) -> bool {
 /// spare bits and the octets after its value.
 fn key_of(node_id: &NodeId) -> Vec<u8> {
     let mut octets = Vec::new();
-    let _ = crate::ie::Codec::encode(&node_id.effective().unwrap_or_else(|| node_id.clone()), &mut octets);
+    let _ = crate::ie::Codec::encode(
+        &node_id.effective().unwrap_or_else(|| node_id.clone()),
+        &mut octets,
+    );
     octets
 }
 
@@ -1421,22 +1968,86 @@ fn timer(timer: &Timer) -> Option<Duration> {
 
 /// The response that rejects a request of `message_type` with `cause`, with the node's
 /// Node ID where the response has one, and the Offending IE.
-fn rejection_body(message_type: u8, cause: CauseValue, offending: Option<u16>, node_id: &NodeId) -> Option<Body> {
+fn rejection_body(
+    message_type: u8,
+    cause: CauseValue,
+    offending: Option<u16>,
+    node_id: &NodeId,
+) -> Option<Body> {
     let cause = Some(Cause::new(cause));
     let node_id = Some(node_id.clone());
     let offending_ie = offending.map(OffendingIe::new);
     Some(match message_type {
-        3 => PfdManagementResponse { cause, offending_ie, ..Default::default() }.into(),
-        5 => AssociationSetupResponse { node_id, cause, ..Default::default() }.into(),
-        7 => AssociationUpdateResponse { node_id, cause, ..Default::default() }.into(),
-        9 => AssociationReleaseResponse { node_id, cause, ..Default::default() }.into(),
-        12 => NodeReportResponse { node_id, cause, offending_ie, ..Default::default() }.into(),
-        14 => SessionSetDeletionResponse { node_id, cause, offending_ie, ..Default::default() }.into(),
-        16 => SessionSetModificationResponse { node_id, cause, offending_ie, ..Default::default() }.into(),
-        50 => SessionEstablishmentResponse { node_id, cause, offending_ie, ..Default::default() }.into(),
-        52 => SessionModificationResponse { cause, offending_ie, ..Default::default() }.into(),
-        54 => SessionDeletionResponse { cause, offending_ie, ..Default::default() }.into(),
-        56 => SessionReportResponse { cause, offending_ie, ..Default::default() }.into(),
+        3 => PfdManagementResponse {
+            cause,
+            offending_ie,
+            ..Default::default()
+        }
+        .into(),
+        5 => AssociationSetupResponse {
+            node_id,
+            cause,
+            ..Default::default()
+        }
+        .into(),
+        7 => AssociationUpdateResponse {
+            node_id,
+            cause,
+            ..Default::default()
+        }
+        .into(),
+        9 => AssociationReleaseResponse {
+            node_id,
+            cause,
+            ..Default::default()
+        }
+        .into(),
+        12 => NodeReportResponse {
+            node_id,
+            cause,
+            offending_ie,
+            ..Default::default()
+        }
+        .into(),
+        14 => SessionSetDeletionResponse {
+            node_id,
+            cause,
+            offending_ie,
+            ..Default::default()
+        }
+        .into(),
+        16 => SessionSetModificationResponse {
+            node_id,
+            cause,
+            offending_ie,
+            ..Default::default()
+        }
+        .into(),
+        50 => SessionEstablishmentResponse {
+            node_id,
+            cause,
+            offending_ie,
+            ..Default::default()
+        }
+        .into(),
+        52 => SessionModificationResponse {
+            cause,
+            offending_ie,
+            ..Default::default()
+        }
+        .into(),
+        54 => SessionDeletionResponse {
+            cause,
+            offending_ie,
+            ..Default::default()
+        }
+        .into(),
+        56 => SessionReportResponse {
+            cause,
+            offending_ie,
+            ..Default::default()
+        }
+        .into(),
         _ => return None,
     })
 }

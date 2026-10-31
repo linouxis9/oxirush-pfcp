@@ -24,10 +24,10 @@ use core::net::{Ipv4Addr, Ipv6Addr};
 
 use crate::Error;
 use crate::check::{Check, Deviation};
+use crate::enums::*;
 use crate::ie::{Codec, listed_value};
 use crate::macros::{pfcp_bits, pfcp_layout};
 use crate::octets::Octets;
-use crate::enums::*;
 use crate::values::*;
 
 // ── Flags, then the fields that they announce ──────────────────────────────
@@ -271,7 +271,10 @@ pub struct SsmAddress {
 
 impl Field for SsmAddress {
     fn read(octets: &mut &[u8]) -> Option<Self> {
-        Some(Self { distribution: TypedAddress::read(octets)?, source: TypedAddress::read(octets)? })
+        Some(Self {
+            distribution: TypedAddress::read(octets)?,
+            source: TypedAddress::read(octets)?,
+        })
     }
     fn write(&self, out: &mut Vec<u8>) {
         self.distribution.write(out);
@@ -287,7 +290,10 @@ impl Field for SsmAddress {
     #[cfg(feature = "tree")]
     fn to_tree(&self) -> oxirush_utils::tree::Value {
         let mut members = oxirush_utils::tree::Members::new();
-        members.put("IP Multicast Distribution Address", self.distribution.to_tree());
+        members.put(
+            "IP Multicast Distribution Address",
+            self.distribution.to_tree(),
+        );
         members.put("IP Source Address", self.source.to_tree());
         members.finish()
     }
@@ -296,7 +302,10 @@ impl Field for SsmAddress {
         value: &oxirush_utils::tree::Value,
         reading: &mut oxirush_utils::tree::Reading,
     ) -> Result<Self, oxirush_utils::tree::Refused> {
-        let read = reading.members(value, &["IP Multicast Distribution Address", "IP Source Address"])?;
+        let read = reading.members(
+            value,
+            &["IP Multicast Distribution Address", "IP Source Address"],
+        )?;
         Ok(Self {
             distribution: reading.member(&read, 0, TypedAddress::from_tree)?,
             source: reading.member(&read, 1, TypedAddress::from_tree)?,
@@ -526,7 +535,11 @@ impl Field for SecretLv8 {
     }
     fn check(&self, path: &crate::check::Path, clause: &'static str, found: &mut Vec<Deviation>) {
         if !self.fits() {
-            found.push(Deviation::new(path, clause, crate::check::DeviationKind::Rule("more octets than their length can say")));
+            found.push(Deviation::new(
+                path,
+                clause,
+                crate::check::DeviationKind::Rule("more octets than their length can say"),
+            ));
         }
     }
     #[cfg(feature = "tree")]
@@ -538,7 +551,9 @@ impl Field for SecretLv8 {
         value: &oxirush_utils::tree::Value,
         reading: &mut oxirush_utils::tree::Reading,
     ) -> Result<Self, oxirush_utils::tree::Refused> {
-        reading.secret(|reading| Lv8::from_tree(value, reading)).map(|value| Self(value.0))
+        reading
+            .secret(|reading| Lv8::from_tree(value, reading))
+            .map(|value| Self(value.0))
     }
 }
 
@@ -727,18 +742,51 @@ pfcp_secret! {
 pub(crate) const SECRETS: [u16; 3] = [313, 391, 393];
 
 listed_value!(
-    SdfFilter, RedirectInformation, DownlinkDataServiceInformation, PfdContents, FlowInformation,
-    PacketRate, HeaderEnrichment, FailedRuleId, TimeQuotaMechanism, MacAddress,
-    CpPfcpEntityIpAddress, SourceIpAddress, PacketRateStatus, PmfControlInformation,
-    MptcpAddressInformation, LinkSpecificMultipathIpAddress, PmfAddressInformation,
-    IpAddressAndPortNumberReplacement, MbsSessionIdentifier, LocalIngressTunnel,
-    DscpToPpiMappingInformation, TrafficParameterThreshold, N6JitterMeasurement,
-    MpquicAddressInformation, ReportingSuggestionInfo, ReportingThresholds,
-    OnPathN6ConnectionInformation, ForwardingPolicy, UeIpAddressPoolIdentity, SmfSetId,
-    OffendingIeInformation, DnsQueryResponseFilter, MulticastTransportInformation,
-    VendorSpecificNodeReportType, UeLevelMeasurementsConfiguration, L2tpUserAuthentication,
-    RatType, AdditionalUsageReportsInformation, CTag, STag, UpFunctionFeatures,
-    CpFunctionFeatures, KeyIdAndSharedSecret, HmacKeyStamp, TunnelPassword,
+    SdfFilter,
+    RedirectInformation,
+    DownlinkDataServiceInformation,
+    PfdContents,
+    FlowInformation,
+    PacketRate,
+    HeaderEnrichment,
+    FailedRuleId,
+    TimeQuotaMechanism,
+    MacAddress,
+    CpPfcpEntityIpAddress,
+    SourceIpAddress,
+    PacketRateStatus,
+    PmfControlInformation,
+    MptcpAddressInformation,
+    LinkSpecificMultipathIpAddress,
+    PmfAddressInformation,
+    IpAddressAndPortNumberReplacement,
+    MbsSessionIdentifier,
+    LocalIngressTunnel,
+    DscpToPpiMappingInformation,
+    TrafficParameterThreshold,
+    N6JitterMeasurement,
+    MpquicAddressInformation,
+    ReportingSuggestionInfo,
+    ReportingThresholds,
+    OnPathN6ConnectionInformation,
+    ForwardingPolicy,
+    UeIpAddressPoolIdentity,
+    SmfSetId,
+    OffendingIeInformation,
+    DnsQueryResponseFilter,
+    MulticastTransportInformation,
+    VendorSpecificNodeReportType,
+    UeLevelMeasurementsConfiguration,
+    L2tpUserAuthentication,
+    RatType,
+    AdditionalUsageReportsInformation,
+    CTag,
+    STag,
+    UpFunctionFeatures,
+    CpFunctionFeatures,
+    KeyIdAndSharedSecret,
+    HmacKeyStamp,
+    TunnelPassword,
 );
 
 pfcp_fields! {
@@ -772,7 +820,12 @@ pub struct FqCsid {
 
 impl FqCsid {
     /// The names of its fields.
-    pub const FIELDS: &'static [&'static str] = &["FQ-CSID Node-ID Type", "Node-Address", "PDN Connection Set Identifiers", "Node Type"];
+    pub const FIELDS: &'static [&'static str] = &[
+        "FQ-CSID Node-ID Type",
+        "Node-Address",
+        "PDN Connection Set Identifiers",
+        "Node Type",
+    ];
     /// Read by hand: its layout depends on its type.
     pub const LAYOUT: Option<&'static Layout> = None;
 
@@ -796,11 +849,23 @@ impl Codec for FqCsid {
             csids.push(u16::read(&mut rest)?);
         }
         let node_type = Narrow::read(&mut rest);
-        Some(Self { node_id_type, node_address: address.to_vec(), csids, node_type, extra: Octets::wire(rest) })
+        Some(Self {
+            node_id_type,
+            node_address: address.to_vec(),
+            csids,
+            node_type,
+            extra: Octets::wire(rest),
+        })
     }
     fn encode(&self, out: &mut Vec<u8>) -> Result<(), Error> {
-        if self.csids.len() > 15 || Self::address_length(self.node_id_type) != Some(self.node_address.len()) {
-            return Err(Error::Inconsistent { ie: "FQ-CSID", field: "Node-Address or PDN Connection Set Identifiers", clause: "8.2.43" });
+        if self.csids.len() > 15
+            || Self::address_length(self.node_id_type) != Some(self.node_address.len())
+        {
+            return Err(Error::Inconsistent {
+                ie: "FQ-CSID",
+                field: "Node-Address or PDN Connection Set Identifiers",
+                clause: "8.2.43",
+            });
         }
         out.push(self.node_id_type << 4 | self.csids.len() as u8);
         out.extend_from_slice(&self.node_address);
@@ -808,11 +873,18 @@ impl Codec for FqCsid {
             out.extend_from_slice(&csid.to_be_bytes());
         }
         if self.node_type.is_none() && !self.extra.is_empty() {
-            return Err(Error::Inconsistent { ie: "FQ-CSID", field: "Node Type", clause: "8.2.43" });
+            return Err(Error::Inconsistent {
+                ie: "FQ-CSID",
+                field: "Node Type",
+                clause: "8.2.43",
+            });
         }
         if let Some(node_type) = self.node_type {
             if !node_type.fits() {
-                return Err(Error::FieldLength { ie: "FQ-CSID", field: "Node Type" });
+                return Err(Error::FieldLength {
+                    ie: "FQ-CSID",
+                    field: "Node Type",
+                });
             }
             node_type.write(out);
         }
@@ -820,14 +892,23 @@ impl Codec for FqCsid {
         Ok(())
     }
     fn encoded_len(&self) -> usize {
-        1 + self.node_address.len() + 2 * self.csids.len() + usize::from(self.node_type.is_some()) + self.extra.len()
+        1 + self.node_address.len()
+            + 2 * self.csids.len()
+            + usize::from(self.node_type.is_some())
+            + self.extra.len()
     }
 }
 
 impl Check for FqCsid {
     fn check(&self, path: &crate::check::Path, found: &mut Vec<Deviation>) {
         if Self::address_length(self.node_id_type).is_none() {
-            found.push(Deviation::new(path, "8.2.43", crate::check::DeviationKind::SpareValue { value: self.node_id_type.into() }));
+            found.push(Deviation::new(
+                path,
+                "8.2.43",
+                crate::check::DeviationKind::SpareValue {
+                    value: self.node_id_type.into(),
+                },
+            ));
         }
         if let Some(node_type) = self.node_type {
             Field::check(&node_type, path, "8.2.43", found);
@@ -846,14 +927,31 @@ impl oxirush_utils::tree::Tree for FqCsid {
     fn to_tree(&self) -> oxirush_utils::tree::Value {
         use oxirush_utils::tree;
         let mut members = tree::Members::new();
-        members.put("FQ-CSID Node-ID Type", tree::unsigned(self.node_id_type.into()));
+        members.put(
+            "FQ-CSID Node-ID Type",
+            tree::unsigned(self.node_id_type.into()),
+        );
         let address = match (self.node_id_type, self.node_address.len()) {
-            (0, 4) => tree::Value::String(alloc::format!("{}", Ipv4Addr::from(<[u8; 4]>::try_from(&self.node_address[..]).unwrap_or_default()))),
-            (1, 16) => tree::Value::String(alloc::format!("{}", Ipv6Addr::from(<[u8; 16]>::try_from(&self.node_address[..]).unwrap_or_default()))),
+            (0, 4) => tree::Value::String(alloc::format!(
+                "{}",
+                Ipv4Addr::from(<[u8; 4]>::try_from(&self.node_address[..]).unwrap_or_default())
+            )),
+            (1, 16) => tree::Value::String(alloc::format!(
+                "{}",
+                Ipv6Addr::from(<[u8; 16]>::try_from(&self.node_address[..]).unwrap_or_default())
+            )),
             _ => tree::octets(&self.node_address),
         };
         members.put("Node-Address", address);
-        members.put("PDN Connection Set Identifiers", tree::Value::Array(self.csids.iter().map(|csid| tree::unsigned((*csid).into())).collect()));
+        members.put(
+            "PDN Connection Set Identifiers",
+            tree::Value::Array(
+                self.csids
+                    .iter()
+                    .map(|csid| tree::unsigned((*csid).into()))
+                    .collect(),
+            ),
+        );
         if let Some(node_type) = self.node_type {
             members.put("Node Type", Field::to_tree(&node_type));
         }
@@ -866,24 +964,55 @@ impl oxirush_utils::tree::Tree for FqCsid {
         value: &oxirush_utils::tree::Value,
         reading: &mut oxirush_utils::tree::Reading,
     ) -> Result<Self, oxirush_utils::tree::Refused> {
-        let read = reading.members(value, &["FQ-CSID Node-ID Type", "Node-Address", "PDN Connection Set Identifiers", "Node Type", "extra"])?;
-        let node_id_type = reading.member(&read, 0, |value, reading| reading.unsigned(value, 0, 15))? as u8;
+        let read = reading.members(
+            value,
+            &[
+                "FQ-CSID Node-ID Type",
+                "Node-Address",
+                "PDN Connection Set Identifiers",
+                "Node Type",
+                "extra",
+            ],
+        )?;
+        let node_id_type =
+            reading.member(&read, 0, |value, reading| reading.unsigned(value, 0, 15))? as u8;
         let node_address = reading.member(&read, 1, |value, reading| {
             let text = value.as_str().unwrap_or_default();
             match node_id_type {
-                0 => text.parse::<Ipv4Addr>().map(|address| address.octets().to_vec()).map_err(|_| reading.mismatch("an IPv4 address", value)),
-                1 => text.parse::<Ipv6Addr>().map(|address| address.octets().to_vec()).map_err(|_| reading.mismatch("an IPv6 address", value)),
+                0 => text
+                    .parse::<Ipv4Addr>()
+                    .map(|address| address.octets().to_vec())
+                    .map_err(|_| reading.mismatch("an IPv4 address", value)),
+                1 => text
+                    .parse::<Ipv6Addr>()
+                    .map(|address| address.octets().to_vec())
+                    .map_err(|_| reading.mismatch("an IPv6 address", value)),
                 _ => reading.octets(value),
             }
         })?;
-        let csids = reading.member(&read, 2, |value, reading| reading.list(value, |value, reading| Ok(reading.unsigned(value, 0, 0xffff)? as u16)))?;
+        let csids = reading.member(&read, 2, |value, reading| {
+            reading.list(value, |value, reading| {
+                Ok(reading.unsigned(value, 0, 0xffff)? as u16)
+            })
+        })?;
         let node_type = reading.optional(&read, 3, Narrow::from_tree)?;
         let extra = reading.optional(&read, 4, |value, reading| reading.octets(value))?;
-        let fq_csid = Self { node_id_type, node_address, csids, node_type, extra: extra.map(Octets::from).unwrap_or_default() };
+        let fq_csid = Self {
+            node_id_type,
+            node_address,
+            csids,
+            node_type,
+            extra: extra.map(Octets::from).unwrap_or_default(),
+        };
         if fq_csid.node_type.is_none() && !fq_csid.extra.is_empty() {
-            return Err(reading.refuse(oxirush_utils::tree::ErrorKind::Value, "extra octets after a Node Type only (8.2.43)"));
+            return Err(reading.refuse(
+                oxirush_utils::tree::ErrorKind::Value,
+                "extra octets after a Node Type only (8.2.43)",
+            ));
         }
-        if fq_csid.csids.len() > 15 || Self::address_length(node_id_type) != Some(fq_csid.node_address.len()) {
+        if fq_csid.csids.len() > 15
+            || Self::address_length(node_id_type) != Some(fq_csid.node_address.len())
+        {
             return Err(reading.refuse(oxirush_utils::tree::ErrorKind::Value, "a Node-Address of the length of its type, and at most fifteen identifiers (8.2.43)"));
         }
         Ok(fq_csid)
@@ -992,4 +1121,9 @@ mac_addresses! {
     MacAddressesRemoved "MAC Addresses Removed" "8.2.104";
 }
 
-listed_value!(TraceInformation, FqCsid, MacAddressesDetected, MacAddressesRemoved);
+listed_value!(
+    TraceInformation,
+    FqCsid,
+    MacAddressesDetected,
+    MacAddressesRemoved
+);

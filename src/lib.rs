@@ -39,20 +39,20 @@ extern crate alloc;
 extern crate std;
 
 mod check;
+#[cfg(feature = "endpoint")]
+#[cfg_attr(docsrs, doc(cfg(feature = "endpoint")))]
+pub mod endpoint;
 mod enums;
+pub mod framing;
 mod header;
 mod ie;
-mod macros;
 mod list;
+mod macros;
 mod message;
 #[cfg(feature = "node")]
 #[cfg_attr(docsrs, doc(cfg(feature = "node")))]
 pub mod node;
-#[cfg(feature = "endpoint")]
-#[cfg_attr(docsrs, doc(cfg(feature = "endpoint")))]
-pub mod endpoint;
 mod octets;
-pub mod framing;
 mod registry;
 mod table;
 #[cfg(feature = "tree")]
@@ -65,13 +65,15 @@ mod values_hand;
 use alloc::string::{String, ToString};
 use core::fmt;
 
+pub use check::Context;
 pub use check::{Check, Deviation, DeviationKind, Path};
 pub use enums::*;
 pub use header::Header;
 pub use ie::{Codec, IeFault, IeType, Listed, Placed, RawIe, VENDOR};
-pub use check::Context;
-pub use message::{Body, MESSAGE_TYPES, Message, MessageTypeInfo, is_node_related, is_request, message_type_info};
 pub use list::List;
+pub use message::{
+    Body, MESSAGE_TYPES, Message, MessageTypeInfo, is_node_related, is_request, message_type_info,
+};
 pub use octets::Octets;
 pub use registry::*;
 pub use table::{Interfaces, Presence, Repeat, Role, Row, Table};
@@ -155,16 +157,38 @@ impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Self::TooShort { octets } => write!(f, "{octets} octets are fewer than a PFCP header"),
-            Self::MessageLength { length, available, .. } => {
-                write!(f, "the Message Length is {length}, and {available} octets follow the first four (TS 29.244 7.6.3)")
+            Self::MessageLength {
+                length, available, ..
+            } => {
+                write!(
+                    f,
+                    "the Message Length is {length}, and {available} octets follow the first four (TS 29.244 7.6.3)"
+                )
             }
-            Self::Ies { fault, .. } => write!(f, "the IEs do not fit the message: {fault} (TS 29.244 7.6.7)"),
-            Self::Version { version } => write!(f, "version {version} of PFCP is not supported (TS 29.244 7.6.2)"),
-            Self::HeaderField { field, value } => write!(f, "{value} is more than the bits of the {field} of the header hold (TS 29.244 7.2.2)"),
-            Self::TooLong { ie_type, length } => write!(f, "{length} octets of IE type {ie_type} are more than a Length says"),
-            Self::FieldLength { ie, field } => write!(f, "{field} of {ie} is longer than its length can say"),
+            Self::Ies { fault, .. } => write!(
+                f,
+                "the IEs do not fit the message: {fault} (TS 29.244 7.6.7)"
+            ),
+            Self::Version { version } => write!(
+                f,
+                "version {version} of PFCP is not supported (TS 29.244 7.6.2)"
+            ),
+            Self::HeaderField { field, value } => write!(
+                f,
+                "{value} is more than the bits of the {field} of the header hold (TS 29.244 7.2.2)"
+            ),
+            Self::TooLong { ie_type, length } => write!(
+                f,
+                "{length} octets of IE type {ie_type} are more than a Length says"
+            ),
+            Self::FieldLength { ie, field } => {
+                write!(f, "{field} of {ie} is longer than its length can say")
+            }
             Self::Inconsistent { ie, field, clause } => {
-                write!(f, "{field} of {ie} disagrees with its flags (TS 29.244 {clause})")
+                write!(
+                    f,
+                    "{field} of {ie} disagrees with its flags (TS 29.244 {clause})"
+                )
             }
         }
     }
@@ -180,11 +204,25 @@ pub(crate) fn tree_name(ie_type: u16, table: Option<&Table>) -> String {
     }
     // A type whose name is that of a row of the table, for another type, goes by its
     // number: Packet Rate Status Report is the name of types 252 and of the row of 264.
-    let letters = |name: &str| name.chars().filter(char::is_ascii_alphanumeric).map(|c| c.to_ascii_lowercase()).collect::<String>();
+    let letters = |name: &str| {
+        name.chars()
+            .filter(char::is_ascii_alphanumeric)
+            .map(|c| c.to_ascii_lowercase())
+            .collect::<String>()
+    };
     match ie_type {
         VENDOR.. => ie_type.to_string(),
         known => match type_name(known) {
-            Some(name) if !table.is_some_and(|table| table.rows.iter().any(|row| letters(row.name) == letters(name))) => name.to_string(),
+            Some(name)
+                if !table.is_some_and(|table| {
+                    table
+                        .rows
+                        .iter()
+                        .any(|row| letters(row.name) == letters(name))
+                }) =>
+            {
+                name.to_string()
+            }
             _ => known.to_string(),
         },
     }
