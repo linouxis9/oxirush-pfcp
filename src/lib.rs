@@ -76,7 +76,7 @@ pub use values_gen::*;
 pub use values_hand::*;
 
 /// The examples of the README, which the documentation tests compile and run.
-#[cfg(all(doctest, feature = "serde"))]
+#[cfg(all(doctest, feature = "serde", feature = "endpoint"))]
 #[doc = include_str!("../README.md")]
 struct Readme;
 

@@ -64,9 +64,11 @@ hex = "0.4" # for the examples of this page
 | `std` (default) | The standard library | |
 | `tree` | A message and its IEs as trees, read and edited by path | `oxirush-utils` with `tree` |
 | `serde` | `Serialize` and `Deserialize` for a message and each IE, through its tree. Turns on `tree` | `oxirush-utils` with `serde` |
+| `node` | `Node`, a PFCP entity without I/O: delivery, heartbeat, associations, sessions, load and overload control | |
+| `endpoint` | `Endpoint`, a `Node` on a Tokio UDP socket. Turns on `node` and `std` | `tokio` |
 
-Without its default features the crate is `no_std` and needs an allocator.
-The minimum supported Rust version is 1.88.
+Without its default features the crate is `no_std` and needs an allocator;
+`node` too. The minimum supported Rust version is 1.88.
 
 ## Read a message
 
@@ -245,6 +247,112 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 2133002b000000000000100100000700003c0005000a000002001300014b0039000d0200000000000020010a000002
 ```
 
+## Run a PFCP entity
+
+With `node`, a `Node` is a PFCP entity on one local endpoint, without I/O:
+datagrams and time go in, and datagrams to send, events and the next timer
+come out. It numbers each request and sends it again after T1, up to N1
+times; matches each response by its sequence number, its peer and its type;
+answers a retransmitted request with the answer that it gave; answers
+heartbeats; keeps the associations, the sessions and their SEIDs, the load
+and overload of each peer; and throttles the requests to an overloaded peer.
+Each decision is the caller's: a request of a peer is an event, which the
+caller answers with `respond()`. What a peer does wrong is an event too.
+
+```rust
+use std::net::{Ipv4Addr, SocketAddr};
+use std::time::Duration;
+
+use oxirush_pfcp::node::{Event, Function, Node, NodeConfig};
+use oxirush_pfcp::*;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let smf_id = NodeId::Ipv4(Ipv4Addr::new(10, 0, 0, 1));
+    let upf_id = NodeId::Ipv4(Ipv4Addr::new(10, 0, 0, 2));
+    let (smf_address, upf_address): (SocketAddr, SocketAddr) = ("10.0.0.1:8805".parse()?, "10.0.0.2:8805".parse()?);
+    let mut smf = Node::new(NodeConfig::new(smf_id.clone(), Function::Cp, 3_900_000_000));
+    let mut upf = Node::new(NodeConfig::new(upf_id.clone(), Function::Up, 3_900_000_000));
+    let now = Duration::ZERO;
+
+    // The SMF sets up an association: the node numbers the request, and arms T1
+    let setup = AssociationSetupRequest::new(smf_id, RecoveryTimeStamp::new(3_900_000_000));
+    smf.request(now, upf_address, Message { header: Header::node(0), body: setup.into() })?;
+    let datagram = smf.poll_transmit().ok_or("nothing to send")?;
+    println!("to {}: {} octets, again at {:?}", datagram.to, datagram.octets.len(), smf.poll_timeout());
+
+    // The UPF takes the datagram, and its caller answers the request
+    upf.handle_datagram(now, smf_address, &datagram.octets);
+    while let Some(event) = upf.poll_event() {
+        if let Event::Request { request, message } = event {
+            println!("the UPF: {message}");
+            let accepted = Cause::new(CauseValue::RequestAccepted);
+            upf.respond(now, &request, AssociationSetupResponse::new(upf_id.clone(), accepted, RecoveryTimeStamp::new(3_900_000_000)))?;
+        }
+    }
+
+    // The SMF takes the answer: the request is done, and the association is there
+    let answer = upf.poll_transmit().ok_or("no answer")?;
+    smf.handle_datagram(now, upf_address, &answer.octets);
+    while let Some(event) = smf.poll_event() {
+        match event {
+            Event::Associated { peer, .. } => println!("the SMF: associated with {peer}"),
+            Event::Response { message, .. } => println!("the SMF: {message}"),
+            other => println!("the SMF: {other:?}"),
+        }
+    }
+    println!("no more timer: {:?}", smf.poll_timeout());
+    Ok(())
+}
+```
+
+```text
+to 10.0.0.2:8805: 25 octets, again at Some(3s)
+the UPF: PFCP Association Setup Request (sequence 1)
+the SMF: associated with 10.0.0.2:8805
+the SMF: PFCP Association Setup Response (sequence 1)
+no more timer: Some(60s)
+```
+
+The next timer is the first heartbeat to the UPF. `tests/node.rs` has each
+procedure, and `tests/spec/requirements.tsv` says which requirement of clause
+6 each test checks.
+
+## On a Tokio socket
+
+With `endpoint`, an `Endpoint` runs a node on a UDP socket, in a task of its
+own: a request is a future of its response, and a request of a peer comes
+through `incoming()`, with what answers it. Its queues are bounded, and
+`statistics()` counts what they drop. A program that batches its datagrams
+(`recvmmsg`, `sendmmsg`) drives a `Node` itself.
+
+```rust
+use std::net::Ipv4Addr;
+
+use oxirush_pfcp::endpoint::Endpoint;
+use oxirush_pfcp::node::{Function, NodeConfig};
+use oxirush_pfcp::*;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build()?;
+    runtime.block_on(async {
+        let config = |function| NodeConfig::new(NodeId::Ipv4(Ipv4Addr::LOCALHOST), function, 3_900_000_000);
+        let smf = Endpoint::bind("127.0.0.1:0".parse()?, config(Function::Cp)).await?;
+        let upf = Endpoint::bind("127.0.0.1:0".parse()?, config(Function::Up)).await?;
+
+        // The UPF's node answers a heartbeat itself
+        let heartbeat = HeartbeatRequest::new(RecoveryTimeStamp::new(3_900_000_000));
+        let message = Message { header: Header::node(0), body: heartbeat.into() };
+        let response = smf.request(upf.local_addr(), message).await?;
+        println!("{response}");
+        Ok(())
+    })
+}
+```
+
+```text
+PFCP Heartbeat Response (sequence 1)
+```
+
 ## How the crate follows TS 29.244
 
 The crate is written from the tables of the document, and a test compares it
@@ -263,6 +371,25 @@ crate takes instead, and the test fails on an erratum that the document no
 longer has. `tests/spec/requirements.tsv` lists the 172 requirements of
 clause 6, the procedures, each with the test that checks it, or why none in
 the crate does.
+
+## Performance
+
+On one core of an AMD Ryzen 7 5700G, a Session Establishment Request of 16
+PDRs (2,824 octets) decodes in about 6 µs and encodes in about 4 µs, and
+`check()` takes about 3 µs without allocating. Against go-pfcp v0.0.24, in
+instructions on the same messages, go-pfcp takes 2.9 to 4.6 times as many to
+decode, 3 to 9.6 times as many to decode and read every value, and 5 to 9.4
+times as many to encode. [`benches/`](benches/README.md) has the figures and
+the method.
+
+## Tests and fuzzing
+
+The tests run the messages that Open5GS and free5GC sent in lab runs and
+go-pfcp's test vectors through the codec, the check and the trees, each byte
+for byte; the test `spec` compares the crate with the document, and
+`tests/node.rs` has the procedures of clause 6. `fuzz/` has three
+[cargo-fuzz](https://crates.io/crates/cargo-fuzz) targets: `decode`, `tree`
+and `node`.
 
 ## Limits
 

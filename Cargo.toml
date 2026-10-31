@@ -44,6 +44,10 @@ name = "spike"
 required-features = ["tree"]
 
 [[test]]
+name = "captures"
+required-features = ["tree"]
+
+[[test]]
 name = "spec"
 
 [[test]]
@@ -57,6 +61,11 @@ required-features = ["node"]
 [[test]]
 name = "endpoint"
 required-features = ["endpoint"]
+
+# The Rust blocks of README.md, which tests/readme.rs runs.
+[[test]]
+name = "readme"
+required-features = ["serde", "endpoint"]
 
 # `pfcp_borrowed`: decoded values borrow their octets, for the measurement of the two
 # forms. cargo-fuzz sets `fuzzing`, and docs.rs `docsrs`.

@@ -82,6 +82,14 @@ PFCP Heartbeat Request (sequence 9): 2001000c0000090000600004e8754700
     (block_5, r#"[String("10.0.0.2")]
 2133002b000000000000100100000700003c0005000a000002001300014b0039000d0200000000000020010a000002
 "#),
+    (block_6, r#"to 10.0.0.2:8805: 25 octets, again at Some(3s)
+the UPF: PFCP Association Setup Request (sequence 1)
+the SMF: associated with 10.0.0.2:8805
+the SMF: PFCP Association Setup Response (sequence 1)
+no more timer: Some(60s)
+"#),
+    (block_7, r#"PFCP Heartbeat Response (sequence 1)
+"#),
 ];
 
 /// The Rust block 1 of README.md.
@@ -215,6 +223,84 @@ fn block_5() {
         let edited = Message::from_tree(&tree)?;
         println!("{}", hex::encode(edited.encode()?));
         Ok(())
+    }
+
+    main().unwrap();
+}
+
+/// The Rust block 6 of README.md.
+#[rustfmt::skip]
+fn block_6() {
+    use std::net::{Ipv4Addr, SocketAddr};
+    use std::time::Duration;
+
+    use oxirush_pfcp::node::{Event, Function, Node, NodeConfig};
+    use oxirush_pfcp::*;
+
+    fn main() -> Result<(), Box<dyn std::error::Error>> {
+        let smf_id = NodeId::Ipv4(Ipv4Addr::new(10, 0, 0, 1));
+        let upf_id = NodeId::Ipv4(Ipv4Addr::new(10, 0, 0, 2));
+        let (smf_address, upf_address): (SocketAddr, SocketAddr) = ("10.0.0.1:8805".parse()?, "10.0.0.2:8805".parse()?);
+        let mut smf = Node::new(NodeConfig::new(smf_id.clone(), Function::Cp, 3_900_000_000));
+        let mut upf = Node::new(NodeConfig::new(upf_id.clone(), Function::Up, 3_900_000_000));
+        let now = Duration::ZERO;
+
+        // The SMF sets up an association: the node numbers the request, and arms T1
+        let setup = AssociationSetupRequest::new(smf_id, RecoveryTimeStamp::new(3_900_000_000));
+        smf.request(now, upf_address, Message { header: Header::node(0), body: setup.into() })?;
+        let datagram = smf.poll_transmit().ok_or("nothing to send")?;
+        println!("to {}: {} octets, again at {:?}", datagram.to, datagram.octets.len(), smf.poll_timeout());
+
+        // The UPF takes the datagram, and its caller answers the request
+        upf.handle_datagram(now, smf_address, &datagram.octets);
+        while let Some(event) = upf.poll_event() {
+            if let Event::Request { request, message } = event {
+                println!("the UPF: {message}");
+                let accepted = Cause::new(CauseValue::RequestAccepted);
+                upf.respond(now, &request, AssociationSetupResponse::new(upf_id.clone(), accepted, RecoveryTimeStamp::new(3_900_000_000)))?;
+            }
+        }
+
+        // The SMF takes the answer: the request is done, and the association is there
+        let answer = upf.poll_transmit().ok_or("no answer")?;
+        smf.handle_datagram(now, upf_address, &answer.octets);
+        while let Some(event) = smf.poll_event() {
+            match event {
+                Event::Associated { peer, .. } => println!("the SMF: associated with {peer}"),
+                Event::Response { message, .. } => println!("the SMF: {message}"),
+                other => println!("the SMF: {other:?}"),
+            }
+        }
+        println!("no more timer: {:?}", smf.poll_timeout());
+        Ok(())
+    }
+
+    main().unwrap();
+}
+
+/// The Rust block 7 of README.md.
+#[rustfmt::skip]
+fn block_7() {
+    use std::net::Ipv4Addr;
+
+    use oxirush_pfcp::endpoint::Endpoint;
+    use oxirush_pfcp::node::{Function, NodeConfig};
+    use oxirush_pfcp::*;
+
+    fn main() -> Result<(), Box<dyn std::error::Error>> {
+        let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build()?;
+        runtime.block_on(async {
+            let config = |function| NodeConfig::new(NodeId::Ipv4(Ipv4Addr::LOCALHOST), function, 3_900_000_000);
+            let smf = Endpoint::bind("127.0.0.1:0".parse()?, config(Function::Cp)).await?;
+            let upf = Endpoint::bind("127.0.0.1:0".parse()?, config(Function::Up)).await?;
+
+            // The UPF's node answers a heartbeat itself
+            let heartbeat = HeartbeatRequest::new(RecoveryTimeStamp::new(3_900_000_000));
+            let message = Message { header: Header::node(0), body: heartbeat.into() };
+            let response = smf.request(upf.local_addr(), message).await?;
+            println!("{response}");
+            Ok(())
+        })
     }
 
     main().unwrap();

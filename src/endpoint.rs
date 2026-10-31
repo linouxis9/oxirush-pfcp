@@ -91,7 +91,7 @@ impl core::fmt::Display for EndpointError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
             Self::Timeout => write!(f, "no response after N1 retransmissions"),
-            Self::Node(error) => write!(f, "not sent: {error:?}"),
+            Self::Node(error) => write!(f, "not sent: {error}"),
             Self::Closed => write!(f, "the endpoint has ended"),
         }
     }

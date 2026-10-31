@@ -297,6 +297,20 @@ pub enum NodeError {
     Encode(crate::Error),
 }
 
+impl core::fmt::Display for NodeError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::NoAssociation => write!(f, "a session request to a peer without an association (TS 29.244 6.2.6.2.1)"),
+            Self::NoSession => write!(f, "a session request to a session that the node does not have"),
+            Self::Throttled => write!(f, "throttled for the overload of the peer (TS 29.244 6.2.4.4)"),
+            Self::NotARequest => write!(f, "the message is no request"),
+            Self::Encode(error) => write!(f, "the message does not encode: {error}"),
+        }
+    }
+}
+
+impl core::error::Error for NodeError {}
+
 impl From<crate::Error> for NodeError {
     fn from(error: crate::Error) -> Self {
         Self::Encode(error)
