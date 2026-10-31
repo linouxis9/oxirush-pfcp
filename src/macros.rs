@@ -691,13 +691,15 @@ macro_rules! pfcp_messages {
 /// `*` for a list or `*N` for a list of at most N, and `TYPE` the type of its value, or
 /// `raw N` for an IE type that the crate keeps as octets. A field that several rows
 /// share, which the wire does not tell apart, lists them after `roles`, each with its
-/// presence and its interfaces.
+/// presence and its interfaces. A C row whose condition the scope alone shows ends with
+/// `if |scope| condition`: `check()` reports it missing where the condition holds.
 macro_rules! pfcp_table {
     (
         $(#[$meta:meta])*
         $kind:ident $ty:ident = $code:literal, $name:literal, $id:literal {
             $( $field:ident : $row:literal $p:ident $(* $($max:literal)?)? $vty:ident $($raw:literal)?
-                [$($interface:ident)*] $(roles [$($role:literal $rp:ident [$($ri:ident)*]),*])? , )*
+                [$($interface:ident)*] $(roles [$($role:literal $rp:ident [$($ri:ident)*]),*])?
+                $(if |$scope:ident| $condition:expr)? , )*
         }
     ) => { pastey::paste! {
         $(#[$meta])*
@@ -738,6 +740,7 @@ macro_rules! pfcp_table {
                         presence: pfcp_table!(@presence $rp),
                         interfaces: crate::table::Interfaces(0 $(| crate::table::Interfaces::$ri.0)*),
                     }),*)?],
+                    checked: pfcp_table!(@checked $($scope)?),
                 },
             )*],
         };
@@ -864,6 +867,12 @@ macro_rules! pfcp_table {
                     crate::check::check_field_values::<pfcp_table!(@type $vty $($raw)?), _>(
                         table, row, &self.$field, pfcp_table!(@list [$(* $($max)?)?]), path, context, found,
                     );
+                    $({
+                        let $scope: &Self = self;
+                        if $condition {
+                            crate::check::condition_missing(self, row, path, context, found);
+                        }
+                    })?
                     row += 1;
                 )*
             }
@@ -931,6 +940,8 @@ macro_rules! pfcp_table {
     (@each [* $($max:literal)?] ($t:ty) $f:expr, |$value:ident| $body:block) => {
         for $value in crate::table::FieldValues::<$t>::values(&$f) $body
     };
+    (@checked) => { false };
+    (@checked $scope:ident) => { true };
     (@list []) => { false };
     (@list [* $($max:literal)?]) => { true };
     (@place [] $p:ident ($t:ty) $f:expr, $body:expr) => {

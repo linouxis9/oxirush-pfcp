@@ -29,7 +29,8 @@ fn pdr(id: u16) -> CreatePdr {
 }
 
 fn far(id: u32) -> CreateFar {
-    CreateFar::new(FarId::new(id), ApplyAction { forw: true, ..Default::default() })
+    let forwarding = ForwardingParameters::new(DestinationInterface::new(DestinationInterfaceValue::Core));
+    CreateFar::new(FarId::new(id), ApplyAction { forw: true, ..Default::default() }).with_forwarding_parameters(forwarding)
 }
 
 fn establishment() -> Message {
@@ -211,4 +212,177 @@ fn a_request_by_the_name_of_its_type() {
     assert_eq!(causes, [Some(CauseValue::MandatoryIeMissing); 2]);
     let response = Message { header: Header::node(1), body: NodeReportResponse::default().into() };
     assert!(response.check().iter().all(|deviation| deviation.cause().is_none()));
+}
+
+/// An IE of `ie_type` and `content`.
+fn ie(ie_type: u16, content: &[u8]) -> Vec<u8> {
+    [&ie_type.to_be_bytes()[..], &(content.len() as u16).to_be_bytes(), content].concat()
+}
+
+/// A node related message of `message_type` and its IEs.
+fn node_message(message_type: u8, ies: &[Vec<u8>]) -> Vec<u8> {
+    let body = ies.concat();
+    [&[0x20, message_type][..], &((4 + body.len()) as u16).to_be_bytes(), &[0, 0, 1, 0], &body].concat()
+}
+
+/// A session related message of `message_type` and its IEs.
+fn session_message(message_type: u8, seid: u64, ies: &[Vec<u8>]) -> Vec<u8> {
+    let body = ies.concat();
+    [&[0x21, message_type][..], &((12 + body.len()) as u16).to_be_bytes(), &seid.to_be_bytes(), &[0, 0, 7, 0], &body].concat()
+}
+
+/// The deviations of `octets`, with their Causes and Offending IEs.
+fn found(octets: &[u8]) -> Vec<(DeviationKind, Option<CauseValue>, Option<u16>)> {
+    let message = Message::decode(octets).unwrap();
+    assert_eq!(message.encode().unwrap(), octets, "byte for byte");
+    message.check().into_iter().map(|deviation| (deviation.kind.clone(), deviation.cause(), deviation.offending_ie())).collect()
+}
+
+const RTS: [u8; 4] = [0xe8, 0x00, 0x00, 0x00];
+
+/// The IEs of an establishment after its Node ID and CP F-SEID: a Create PDR and a
+/// Create FAR.
+fn rules() -> [Vec<u8>; 2] {
+    let pdr = ie(1, &[ie(56, &[0, 1]), ie(29, &[0, 0, 0, 255]), ie(2, &ie(20, &[0])), ie(108, &[0, 0, 0, 1])].concat());
+    let far = ie(3, &[ie(108, &[0, 0, 0, 1]), ie(44, &[1, 0])].concat());
+    [pdr, far]
+}
+
+/// §7.6.10: of an IE that its table has once, the first is handled and the others are
+/// ignored; when the first does not decode, the second is not taken in its place.
+#[test]
+fn the_first_of_a_repeated_ie_is_the_one_handled() {
+    // A Node ID shorter than its type, then one that is not
+    let octets = node_message(5, &[ie(60, &[0, 10, 0]), ie(60, &[0, 10, 0, 0, 9]), ie(96, &RTS)]);
+    let Body::AssociationSetupRequest(request) = Message::decode(&octets).unwrap().body else { panic!() };
+    assert_eq!(request.node_id.and_then(|node_id| node_id.effective()), None);
+    assert_eq!(
+        found(&octets),
+        [
+            (DeviationKind::Repeated { ie_type: 60 }, None, None),
+            (DeviationKind::Rule("a Node ID value shorter than its type"), Some(CauseValue::MandatoryIeIncorrect), Some(60)),
+        ]
+    );
+    let cut = [2, 0, 0, 0, 0, 0, 0, 0x10, 0x01, 10];
+    let whole = [2, 0, 0, 0, 0, 0, 0, 0x10, 0x01, 10, 0, 0, 1];
+    let [pdr, far] = rules();
+    let octets = session_message(50, 0, &[ie(60, &[0, 10, 0, 0, 1]), ie(57, &cut), ie(57, &whole), pdr, far]);
+    assert_eq!(found(&octets)[0], (DeviationKind::MandatoryIncorrect { ie_type: 57 }, Some(CauseValue::MandatoryIeIncorrect), Some(57)));
+    // An optional IE: the first, which does not decode, is taken as absent
+    let octets = node_message(1, &[ie(96, &RTS), ie(96, &RTS[..2]), ie(96, &RTS)]);
+    assert_eq!(found(&octets), [(DeviationKind::Repeated { ie_type: 96 }, None, None); 1]);
+    let octets = node_message(5, &[ie(60, &[0, 10, 0, 0, 9]), ie(96, &RTS), ie(107, &[1]), ie(107, &[0, 0])]);
+    let Body::AssociationSetupRequest(request) = Message::decode(&octets).unwrap().body else { panic!() };
+    assert_eq!(request.up_function_features, None);
+}
+
+/// §7.6.8: a mandatory IE whose value is semantically invalid is answered "Mandatory IE
+/// incorrect", with its type: a Node ID of a length that its type does not have, an empty
+/// FQDN, a spare Node ID Type, an F-SEID with no address.
+#[test]
+fn a_semantically_invalid_mandatory_ie_is_incorrect() {
+    for node_id in [&[0, 10, 0][..], &[2], &[5, 1, 2, 3, 4], &[2, 3, b'u', b'p']] {
+        let octets = node_message(5, &[ie(60, node_id), ie(96, &RTS)]);
+        let found = found(&octets);
+        assert_eq!(found.len(), 1, "{node_id:?}: {found:?}");
+        assert_eq!((found[0].1, found[0].2), (Some(CauseValue::MandatoryIeIncorrect), Some(60)), "{node_id:?}: {found:?}");
+    }
+    let [pdr, far] = rules();
+    let octets = session_message(50, 0, &[ie(60, &[0, 10, 0, 0, 1]), ie(57, &[0, 0, 0, 0, 0, 0, 0, 0x10, 0x01]), pdr, far]);
+    let found = found(&octets);
+    assert_eq!(found.len(), 1, "{found:?}");
+    assert_eq!((found[0].1, found[0].2), (Some(CauseValue::MandatoryIeIncorrect), Some(57)), "{found:?}");
+    // In a response, no Cause
+    let octets = node_message(6, &[ie(60, &[2]), ie(19, &[1]), ie(96, &RTS)]);
+    assert!(Message::decode(&octets).unwrap().check().iter().all(|deviation| deviation.cause().is_none()));
+}
+
+/// §7.6.8: an optional IE of a mandatory grouped IE, whose value is reserved, is taken as
+/// absent, and the request is answered for what else it has; a conditional one, which the
+/// receiver verifies, is answered "Mandatory IE incorrect" with its type.
+#[test]
+fn a_reserved_value_follows_the_presence_of_its_own_row() {
+    let mut message = establishment();
+    request_with(&mut message, |request| request.create_pdr[0].rat_type = Some(RatType::new(RatTypeValue::from_value(0))));
+    let found = message.check();
+    assert_eq!(found.len(), 1, "{found:?}");
+    assert_eq!((found[0].kind.clone(), found[0].cause(), found[0].offending_ie()), (DeviationKind::ReservedValue { value: 0 }, None, None));
+    let mut message = establishment();
+    let forwarding = |request: &mut SessionEstablishmentRequest| request.create_far[0].forwarding_parameters.as_mut().unwrap().outer_header_creation = Some(OuterHeaderCreation::default());
+    request_with(&mut message, forwarding);
+    let found = message.check();
+    assert_eq!(found.len(), 1, "{found:?}");
+    assert_eq!(found[0].path, "/pfcp/Create FAR/0/Forwarding Parameters/Outer Header Creation");
+    assert_eq!((found[0].cause(), found[0].offending_ie()), (Some(CauseValue::MandatoryIeIncorrect), Some(84)), "{found:?}");
+    // An optional IE whose value breaks a rule of its clause is taken as absent too
+    let f_teid = FTeid { chid: true, choose_id: Some(1), ..FTeid::ipv4(1, SMF) };
+    let mut message = establishment();
+    request_with(&mut message, |request| request.create_pdr[0].pdi.as_mut().unwrap().local_f_teid = Some(f_teid));
+    assert_eq!(message.check().iter().map(Deviation::cause).collect::<Vec<_>>(), [None]);
+}
+
+/// §8.1.2: an IE of a null length is no error, and a mandatory one is there.
+#[test]
+fn a_mandatory_ie_of_a_null_length_is_there() {
+    assert_eq!(found(&node_message(5, &[ie(60, &[]), ie(96, &RTS)])), []);
+    // After a value, it is a repetition, ignored
+    assert_eq!(found(&node_message(5, &[ie(60, &[0, 10, 0, 0, 1]), ie(96, &RTS), ie(60, &[])])), [(DeviationKind::Repeated { ie_type: 60 }, None, None)]);
+}
+
+/// §7.6.6: the conditions of the C rows that the message alone shows: in a request,
+/// answered with "Conditional IE missing" and the type of the IE; in a response, without
+/// a Cause.
+#[test]
+fn the_conditions_that_a_message_shows() {
+    let node = NodeId::Ipv4(SMF);
+    let missing = |message: Message, ie_type: u16, cause: Option<CauseValue>| {
+        let found = message.check();
+        assert_eq!(found.len(), 1, "{message}: {found:?}");
+        assert_eq!(found[0].kind, DeviationKind::ConditionalMissing { ie_type }, "{message}: {found:?}");
+        assert_eq!((found[0].cause(), found[0].offending_ie()), (cause, cause.map(|_| ie_type)), "{message}: {found:?}");
+    };
+    // An accepted establishment has the UP F-SEID
+    let response = SessionEstablishmentResponse::new(node.clone(), Cause::new(CauseValue::RequestAccepted));
+    missing(Message { header: Header::session(0x1001, 7), body: response.into() }, 57, None);
+    // A rejection for a missing or incorrect IE names it
+    for cause in [CauseValue::MandatoryIeMissing, CauseValue::ConditionalIeMissing, CauseValue::MandatoryIeIncorrect] {
+        let response = SessionModificationResponse::new(Cause::new(cause));
+        missing(Message { header: Header::session(0x1001, 7), body: response.into() }, 40, None);
+    }
+    let response = SessionModificationResponse::new(Cause::new(CauseValue::RuleCreationModificationFailure));
+    missing(Message { header: Header::session(0x1001, 7), body: response.into() }, 114, None);
+    let response = SessionModificationResponse::new(Cause::new(CauseValue::RequestPartiallyAccepted));
+    missing(Message { header: Header::session(0x1001, 7), body: response.into() }, 272, None);
+    // A report has what its type says
+    let report = NodeReportRequest::new(node.clone(), NodeReportType { upfr: true, ..Default::default() });
+    missing(Message { header: Header::node(1), body: report.into() }, 102, Some(CauseValue::ConditionalIeMissing));
+    let report = SessionReportRequest::new(ReportType { dldr: true, ..Default::default() });
+    missing(Message { header: Header::session(0x1001, 7), body: report.into() }, 83, Some(CauseValue::ConditionalIeMissing));
+    // A FAR that forwards has its Forwarding Parameters, here in a mandatory Create FAR
+    let mut message = establishment();
+    request_with(&mut message, |request| request.create_far[0].forwarding_parameters = None);
+    missing(message, 4, Some(CauseValue::ConditionalIeMissing));
+    // A URR that reports on a volume threshold has its Volume Threshold
+    let urr = CreateUrr::new(UrrId::new(1), MeasurementMethod { volum: true, ..Default::default() }, ReportingTriggers { volth: true, ..Default::default() });
+    let mut message = establishment();
+    request_with(&mut message, |request| request.create_urr.push(urr));
+    missing(message, 31, Some(CauseValue::ConditionalIeMissing));
+}
+
+/// The rows whose condition `check()` checks are those that say so.
+#[test]
+fn the_rows_whose_condition_is_checked() {
+    let checked: Vec<(&str, &str)> = MESSAGE_TYPES
+        .iter()
+        .map(|info| info.table)
+        .chain(IE_TYPES.iter().flat_map(|info| info.tables.iter().copied()))
+        .flat_map(|table| table.rows.iter().filter(|row| row.checked).map(move |row| (table.id, row.name)))
+        .collect();
+    assert!(checked.contains(&("7.5.3.1-1", "UP F-SEID")), "{checked:?}");
+    assert!(checked.iter().all(|(_, name)| !name.is_empty()));
+    for info in MESSAGE_TYPES {
+        for row in info.table.rows.iter().filter(|row| row.checked) {
+            assert_eq!(row.presence, Presence::Conditional, "{} {}", info.name(), row.name);
+        }
+    }
 }

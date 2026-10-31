@@ -88,6 +88,9 @@ pub struct Row {
     pub mandatory: Interfaces,
     /// The rows that share the field, when several do.
     pub roles: &'static [Role],
+    /// Whether `check()` checks the condition of the row: a C row whose condition the
+    /// message alone shows (§7.6.6).
+    pub checked: bool,
 }
 
 /// The values of a field of a scope: one, in its place or boxed, or a list. The
@@ -284,13 +287,23 @@ pub(crate) fn decode_scope_sized<S: Scope>(scope: &mut S, octets: &[u8], presize
     // fields in that order gives back.
     let mut order: Option<Vec<Placed>> = None;
     let mut last = 0;
+    // The rows there once whose first IE the scope keeps as octets, of a null length or
+    // not decoding: §7.6.10 handles that first one, and ignores the others.
+    let mut kept_first: Vec<u16> = Vec::new();
     for ie in crate::framing::ies(octets) {
         let ie = ie?;
         let (ie_type, body) = (ie.ie_type, ie.content());
         let placing = match body.is_empty() || ie_type >= VENDOR {
             true => Placing::Unexpected,
+            false if kept_first.contains(&ie_type) => Placing::Repeated,
             false => scope.place(ie_type, body),
         };
+        if (placing == Placing::Malformed || (body.is_empty() && ie_type < VENDOR))
+            && !kept_first.contains(&ie_type)
+            && S::table().row_of(ie_type).is_some_and(|row| row.repeat == Repeat::Once)
+        {
+            kept_first.push(ie_type);
+        }
         let placed = match placing {
             Placing::Placed => Placed::Field(ie_type),
             _ => {

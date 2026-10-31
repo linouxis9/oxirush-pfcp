@@ -19,10 +19,31 @@
 //! clause 7, one row each, which the macros expand into the types of the crate.
 
 
+use crate::enums::CauseValue;
 use crate::macros::{pfcp_ies, pfcp_table};
 use crate::values::*;
 use crate::values_gen::*;
 use crate::values_hand::*;
+
+// The conditions of the C rows that a scope alone shows (§7.6.6), beside their rows.
+
+/// A Cause that rejects a request for an IE, which the Offending IE then names.
+const OF_AN_IE: [CauseValue; 3] = [CauseValue::MandatoryIeMissing, CauseValue::ConditionalIeMissing, CauseValue::MandatoryIeIncorrect];
+
+/// Whether the Cause is one of `values`.
+fn cause_is(cause: &Option<Cause>, values: &[CauseValue]) -> bool {
+    cause.as_ref().is_some_and(|cause| values.contains(&cause.value))
+}
+
+/// Whether the Measurement Method of a Create URR has a method.
+fn method(urr: &CreateUrr, has: impl Fn(&MeasurementMethod) -> bool) -> bool {
+    urr.measurement_method.as_ref().is_some_and(has)
+}
+
+/// Whether the Reporting Triggers of a Create URR have a trigger.
+fn triggers(urr: &CreateUrr, has: impl Fn(&ReportingTriggers) -> bool) -> bool {
+    urr.reporting_triggers.as_ref().is_some_and(has)
+}
 
 /// The form of an IE type in Table 8.1.2-1.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -507,9 +528,9 @@ pfcp_table! {
     /// PFCP PFD Management Response (Table 7.4.3.2-1).
     message PfdManagementResponse = 4, "PFCP PFD Management Response", "7.4.3.2-1" {
         cause: "Cause" M Cause [SXB SXC N4],
-        offending_ie: "Offending IE" C OffendingIe [SXB SXC N4],
+        offending_ie: "Offending IE" C OffendingIe [SXB SXC N4] if |s| cause_is(&s.cause, &OF_AN_IE),
         node_id: "Node ID" O NodeId [SXB SXC N4],
-        pfd_partial_failure_information: "PFD Partial Failure Information" C* PfdPartialFailureInformation [SXB SXC N4],
+        pfd_partial_failure_information: "PFD Partial Failure Information" C* PfdPartialFailureInformation [SXB SXC N4] if |s| cause_is(&s.cause, &[CauseValue::RequestPartiallyAccepted]),
     }
 }
 
@@ -613,13 +634,13 @@ pfcp_table! {
     message NodeReportRequest = 12, "PFCP Node Report Request", "7.4.5.1.1-1" {
         node_id: "Node ID" M NodeId [SXA SXB SXC N4 N4MB],
         node_report_type: "Node Report Type" M NodeReportType [SXA SXB SXC N4 N4MB],
-        vendor_specific_node_report_type: "Vendor-Specific Node Report Type" C VendorSpecificNodeReportType [SXA SXB SXC N4 N4MB],
-        user_plane_path_failure_report: "User Plane Path Failure Report" C UserPlanePathFailureReport [SXA SXB N4 N4MB],
-        user_plane_path_recovery_report: "User Plane Path Recovery Report" C UserPlanePathRecoveryReport [SXA SXB N4 N4MB],
-        clock_drift_report: "Clock Drift Report" C* ClockDriftReport [N4],
-        gtp_u_path_qos_report: "GTP-U Path QoS Report" C* GtpuPathQosReport [N4],
-        peer_up_restart_report: "Peer UP Restart Report" C PeerUpRestartReport [SXA SXB N4],
-        n6_delay_measurement_report: "N6 Delay Measurement Report" C* N6DelayMeasurementReport [N4],
+        vendor_specific_node_report_type: "Vendor-Specific Node Report Type" C VendorSpecificNodeReportType [SXA SXB SXC N4 N4MB] if |s| s.node_report_type.as_ref().is_some_and(|t| t.vsr),
+        user_plane_path_failure_report: "User Plane Path Failure Report" C UserPlanePathFailureReport [SXA SXB N4 N4MB] if |s| s.node_report_type.as_ref().is_some_and(|t| t.upfr),
+        user_plane_path_recovery_report: "User Plane Path Recovery Report" C UserPlanePathRecoveryReport [SXA SXB N4 N4MB] if |s| s.node_report_type.as_ref().is_some_and(|t| t.uprr),
+        clock_drift_report: "Clock Drift Report" C* ClockDriftReport [N4] if |s| s.node_report_type.as_ref().is_some_and(|t| t.ckdr),
+        gtp_u_path_qos_report: "GTP-U Path QoS Report" C* GtpuPathQosReport [N4] if |s| s.node_report_type.as_ref().is_some_and(|t| t.gpqr),
+        peer_up_restart_report: "Peer UP Restart Report" C PeerUpRestartReport [SXA SXB N4] if |s| s.node_report_type.as_ref().is_some_and(|t| t.purr),
+        n6_delay_measurement_report: "N6 Delay Measurement Report" C* N6DelayMeasurementReport [N4] if |s| s.node_report_type.as_ref().is_some_and(|t| t.n6dr),
     }
 }
 
@@ -628,7 +649,7 @@ pfcp_table! {
     message NodeReportResponse = 13, "PFCP Node Report Response", "7.4.5.2.1-1" {
         node_id: "Node ID" M NodeId [SXA SXB SXC N4 N4MB],
         cause: "Cause" M Cause [SXA SXB SXC N4 N4MB],
-        offending_ie: "Offending IE" C OffendingIe [SXA SXB SXC N4 N4MB],
+        offending_ie: "Offending IE" C OffendingIe [SXA SXB SXC N4 N4MB] if |s| cause_is(&s.cause, &OF_AN_IE),
     }
 }
 
@@ -646,7 +667,7 @@ pfcp_table! {
     message SessionSetDeletionResponse = 15, "PFCP Session Set Deletion Response", "7.4.6.2-1" {
         node_id: "Node ID" M NodeId [SXA SXB N4],
         cause: "Cause" M Cause [SXA SXB N4],
-        offending_ie: "Offending IE" C OffendingIe [SXA SXB N4],
+        offending_ie: "Offending IE" C OffendingIe [SXA SXB N4] if |s| cause_is(&s.cause, &OF_AN_IE),
     }
 }
 
@@ -664,7 +685,7 @@ pfcp_table! {
     message SessionSetModificationResponse = 17, "PFCP Session Set Modification Response", "7.4.7.2-1" {
         node_id: "Node ID" M NodeId [SXB N4],
         cause: "Cause" M Cause [SXB N4],
-        offending_ie: "Offending IE" C OffendingIe [SXB N4],
+        offending_ie: "Offending IE" C OffendingIe [SXB N4] if |s| cause_is(&s.cause, &OF_AN_IE),
     }
 }
 
@@ -715,18 +736,18 @@ pfcp_table! {
     message SessionEstablishmentResponse = 51, "PFCP Session Establishment Response", "7.5.3.1-1" {
         node_id: "Node ID" M NodeId [SXA SXB SXC N4 N4MB],
         cause: "Cause" M Cause [SXA SXB SXC N4 N4MB],
-        offending_ie: "Offending IE" C OffendingIe [SXA SXB SXC N4 N4MB],
-        up_f_seid: "UP F-SEID" C FSeid [SXA SXB SXC N4 N4MB],
+        offending_ie: "Offending IE" C OffendingIe [SXA SXB SXC N4 N4MB] if |s| cause_is(&s.cause, &OF_AN_IE),
+        up_f_seid: "UP F-SEID" C FSeid [SXA SXB SXC N4 N4MB] if |s| cause_is(&s.cause, &[CauseValue::RequestAccepted]),
         created_pdr: "Created PDR" C* CreatedPdr [SXA SXB N4 N4MB],
         load_control_information: "Load Control Information" O LoadControlInformation [SXA SXB SXC N4 N4MB],
         overload_control_information: "Overload Control Information" O OverloadControlInformation [SXA SXB SXC N4 N4MB],
         pgw_u_sgw_u_upf_fq_csid: "PGW-U/SGW-U /UPF FQ-CSID" C FqCsid [SXA SXB N4],
-        failed_rule_id: "Failed Rule ID" C FailedRuleId [SXA SXB SXC N4 N4MB],
+        failed_rule_id: "Failed Rule ID" C FailedRuleId [SXA SXB SXC N4 N4MB] if |s| cause_is(&s.cause, &[CauseValue::RuleCreationModificationFailure]),
         created_traffic_endpoint: "Created Traffic Endpoint" C* CreatedTrafficEndpoint [SXA SXB N4 N4MB],
         created_bridge_router_info: "Created Bridge/Router Info" C CreatedBridgeRouterInfo [N4],
         atsss_control_parameters: "ATSSS Control Parameters" C AtsssControlParameters [N4],
         rds_configuration_information: "RDS configuration information" O RdsConfigurationInformation [SXB N4],
-        partial_failure_information: "Partial Failure Information" C* PartialFailureInformation [SXB SXC N4 N4MB],
+        partial_failure_information: "Partial Failure Information" C* PartialFailureInformation [SXB SXC N4 N4MB] if |s| cause_is(&s.cause, &[CauseValue::RequestPartiallyAccepted]),
         created_l2tp_session: "Created L2TP Session" O CreatedL2tpSession [SXB N4],
         mbs_session_n4mb_information: "MBS Session N4mb Information" C MbsSessionN4mbInformation [N4MB],
         mbs_session_n4_information: "MBS Session N4 Information" C* MbsSessionN4Information [N4],
@@ -794,19 +815,19 @@ pfcp_table! {
     /// PFCP Session Modification Response (Table 7.5.5.1-1).
     message SessionModificationResponse = 53, "PFCP Session Modification Response", "7.5.5.1-1" {
         cause: "Cause" M Cause [SXA SXB SXC N4 N4MB],
-        offending_ie: "Offending IE" C OffendingIe [SXA SXB SXC N4 N4MB],
+        offending_ie: "Offending IE" C OffendingIe [SXA SXB SXC N4 N4MB] if |s| cause_is(&s.cause, &OF_AN_IE),
         created_pdr: "Created PDR" C* CreatedPdr [SXA SXB N4 N4MB],
         load_control_information: "Load Control Information" O LoadControlInformation [SXA SXB SXC N4 N4MB],
         overload_control_information: "Overload Control Information" O OverloadControlInformation [SXA SXB SXC N4 N4MB],
         usage_report: "Usage Report" C* UsageReportModification [SXA SXB SXC N4 N4MB],
-        failed_rule_id: "Failed Rule ID" C FailedRuleId [SXA SXB SXC N4 N4MB],
+        failed_rule_id: "Failed Rule ID" C FailedRuleId [SXA SXB SXC N4 N4MB] if |s| cause_is(&s.cause, &[CauseValue::RuleCreationModificationFailure]),
         additional_usage_reports_information: "Additional Usage Reports Information" C AdditionalUsageReportsInformation [SXA SXB SXC N4 N4MB],
         created_updated_traffic_endpoint: "Created/Updated Traffic Endpoint" C* CreatedTrafficEndpoint [SXA SXB N4 N4MB],
         tsc_management_information: "TSC Management Information" C* TscManagementInformationResponse [N4],
         atsss_control_parameters: "ATSSS Control Parameters" C AtsssControlParameters [N4],
         updated_pdr: "Updated PDR" C* UpdatedPdr [SXB N4],
         packet_rate_status_report: "Packet Rate Status Report" C* PacketRateStatusReportModification [SXB N4],
-        partial_failure_information: "Partial Failure Information" C* PartialFailureInformation [SXB SXC N4 N4MB],
+        partial_failure_information: "Partial Failure Information" C* PartialFailureInformation [SXB SXC N4 N4MB] if |s| cause_is(&s.cause, &[CauseValue::RequestPartiallyAccepted]),
         mbs_session_n4_information: "MBS Session N4 Information" C* MbsSessionN4Information [N4],
         tl_container: "TL-Container" C* TlContainer [N4],
         moq_information: "MoQ Information" C MoQInformation [N4],
@@ -826,7 +847,7 @@ pfcp_table! {
     /// PFCP Session Deletion Response (Table 7.5.7.1-1).
     message SessionDeletionResponse = 55, "PFCP Session Deletion Response", "7.5.7.1-1" {
         cause: "Cause" M Cause [SXA SXB SXC N4 N4MB],
-        offending_ie: "Offending IE" C OffendingIe [SXA SXB SXC N4 N4MB],
+        offending_ie: "Offending IE" C OffendingIe [SXA SXB SXC N4 N4MB] if |s| cause_is(&s.cause, &OF_AN_IE),
         load_control_information: "Load Control Information" O LoadControlInformation [SXA SXB SXC N4 N4MB],
         overload_control_information: "Overload Control Information" O OverloadControlInformation [SXA SXB SXC N4 N4MB],
         usage_report: "Usage Report" C* UsageReportDeletion [SXA SXB SXC N4 N4MB],
@@ -843,9 +864,9 @@ pfcp_table! {
     /// PFCP Session Report Request (Table 7.5.8.1-1).
     message SessionReportRequest = 56, "PFCP Session Report Request", "7.5.8.1-1" {
         report_type: "Report Type" M ReportType [SXA SXB SXC N4 N4MB],
-        downlink_data_report: "Downlink Data Report" C DownlinkDataReport [SXA N4 N4MB],
-        usage_report: "Usage Report" C* UsageReport [SXA SXB SXC N4 N4MB],
-        error_indication_report: "Error Indication Report" C ErrorIndicationReport [SXA SXB N4 N4MB],
+        downlink_data_report: "Downlink Data Report" C DownlinkDataReport [SXA N4 N4MB] if |s| s.report_type.as_ref().is_some_and(|t| t.dldr),
+        usage_report: "Usage Report" C* UsageReport [SXA SXB SXC N4 N4MB] if |s| s.report_type.as_ref().is_some_and(|t| t.usar),
+        error_indication_report: "Error Indication Report" C ErrorIndicationReport [SXA SXB N4 N4MB] if |s| s.report_type.as_ref().is_some_and(|t| t.erir),
         load_control_information: "Load Control Information" O LoadControlInformation [SXA SXB SXC N4 N4MB],
         overload_control_information: "Overload Control Information" O OverloadControlInformation [SXA SXB SXC N4 N4MB],
         additional_usage_reports_information: "Additional Usage Reports Information" C AdditionalUsageReportsInformation [SXA SXB SXC N4 N4MB],
@@ -853,8 +874,8 @@ pfcp_table! {
         old_cp_f_seid: "Old CP F-SEID" C FSeid [N4 N4MB],
         smf_change_reason: "SMF Change Reason" O SmfChangeReason [N4 N4MB],
         packet_rate_status_report: "Packet Rate Status Report" C PacketRateStatusReport [SXB N4],
-        tsc_management_information: "TSC Management Information" C* TscManagementInformationReport [N4],
-        session_report: "Session Report" C* SessionReport [N4],
+        tsc_management_information: "TSC Management Information" C* TscManagementInformationReport [N4] if |s| s.report_type.as_ref().is_some_and(|t| t.tmir),
+        session_report: "Session Report" C* SessionReport [N4] if |s| s.report_type.as_ref().is_some_and(|t| t.sesr),
         cause: "Cause" O Cause [SXB N4],
     }
 }
@@ -863,7 +884,7 @@ pfcp_table! {
     /// PFCP Session Report Response (Table 7.5.9.1-1).
     message SessionReportResponse = 57, "PFCP Session Report Response", "7.5.9.1-1" {
         cause: "Cause" M Cause [SXA SXB SXC N4 N4MB],
-        offending_ie: "Offending IE" C OffendingIe [SXA SXB SXC N4 N4MB],
+        offending_ie: "Offending IE" C OffendingIe [SXA SXB SXC N4 N4MB] if |s| cause_is(&s.cause, &OF_AN_IE),
         update_bar: "Update BAR" C UpdateBarReport [SXA N4],
         pfcpsrrsp_flags: "PFCPSRRsp-Flags" C PFCPSRRspFlags [SXA N4],
         cp_f_seid: "CP F-SEID" O FSeid [N4 N4MB],
@@ -1236,14 +1257,14 @@ pfcp_table! {
     group CreateFar = 3, "Create FAR", "7.5.2.3-1" {
         far_id: "FAR ID" M FarId [SXA SXB SXC N4 N4MB],
         apply_action: "Apply Action" M ApplyAction [SXA SXB SXC N4 N4MB],
-        forwarding_parameters: "Forwarding Parameters" Ci ForwardingParameters [SXA SXB SXC N4],
-        duplicating_parameters: "Duplicating Parameters" C* DuplicatingParameters [SXA SXB],
+        forwarding_parameters: "Forwarding Parameters" Ci ForwardingParameters [SXA SXB SXC N4] if |s| s.apply_action.as_ref().is_some_and(|a| a.forw),
+        duplicating_parameters: "Duplicating Parameters" C* DuplicatingParameters [SXA SXB] if |s| s.apply_action.as_ref().is_some_and(|a| a.dupl),
         bar_id: "BAR ID" O BarId [SXA N4],
         // V19.6.0 marks no interface for this row; its row in Update FAR (Table
         // 7.5.4.3-1) and clause 5.24 have it on N4.
         redundant_transmission_forwarding_parameters: "Redundant Transmission Forwarding Parameters" C RedundantTransmissionForwardingParameters [N4],
-        mbs_multicast_parameters: "MBS Multicast Parameters" C MbsMulticastParameters [N4MB],
-        add_mbs_unicast_parameters: "Add MBS Unicast Parameters" C* AddMbsUnicastParameters [N4MB],
+        mbs_multicast_parameters: "MBS Multicast Parameters" C MbsMulticastParameters [N4MB] if |s| s.apply_action.as_ref().is_some_and(|a| a.fssm),
+        add_mbs_unicast_parameters: "Add MBS Unicast Parameters" C* AddMbsUnicastParameters [N4MB] if |s| s.apply_action.as_ref().is_some_and(|a| a.mbsu),
     }
 }
 
@@ -1363,16 +1384,16 @@ pfcp_table! {
         urr_id: "URR ID" M UrrId [SXA SXB SXC N4 N4MB],
         measurement_method: "Measurement Method" M MeasurementMethod [SXA SXB SXC N4 N4MB],
         reporting_triggers: "Reporting Triggers" M ReportingTriggers [SXA SXB SXC N4 N4MB],
-        measurement_period: "Measurement Period" C MeasurementPeriod [SXA SXB SXC N4 N4MB],
-        volume_threshold: "Volume Threshold" C VolumeThreshold [SXA SXB SXC N4 N4MB],
-        volume_quota: "Volume Quota" C VolumeQuota [SXB SXC N4],
-        event_threshold: "Event Threshold" C EventThreshold [SXB SXC N4],
-        event_quota: "Event Quota" C EventQuota [SXB SXC N4],
-        time_threshold: "Time Threshold" C TimeThreshold [SXA SXB SXC N4],
-        time_quota: "Time Quota" C TimeQuota [SXB SXC N4],
-        quota_holding_time: "Quota Holding Time" C QuotaHoldingTime [SXB SXC N4],
-        dropped_dl_traffic_threshold: "Dropped DL Traffic Threshold" C DroppedDlTrafficThreshold [SXA N4],
-        quota_validity_time: "Quota Validity Time" C QuotaValidityTime [SXB N4],
+        measurement_period: "Measurement Period" C MeasurementPeriod [SXA SXB SXC N4 N4MB] if |s| triggers(s, |t| t.perio),
+        volume_threshold: "Volume Threshold" C VolumeThreshold [SXA SXB SXC N4 N4MB] if |s| method(s, |m| m.volum) && triggers(s, |t| t.volth),
+        volume_quota: "Volume Quota" C VolumeQuota [SXB SXC N4] if |s| method(s, |m| m.volum) && triggers(s, |t| t.volqu),
+        event_threshold: "Event Threshold" C EventThreshold [SXB SXC N4] if |s| method(s, |m| m.event) && triggers(s, |t| t.eveth),
+        event_quota: "Event Quota" C EventQuota [SXB SXC N4] if |s| method(s, |m| m.event) && triggers(s, |t| t.evequ),
+        time_threshold: "Time Threshold" C TimeThreshold [SXA SXB SXC N4] if |s| method(s, |m| m.durat) && triggers(s, |t| t.timth),
+        time_quota: "Time Quota" C TimeQuota [SXB SXC N4] if |s| method(s, |m| m.durat) && triggers(s, |t| t.timqu),
+        quota_holding_time: "Quota Holding Time" C QuotaHoldingTime [SXB SXC N4] if |s| triggers(s, |t| t.quhti),
+        dropped_dl_traffic_threshold: "Dropped DL Traffic Threshold" C DroppedDlTrafficThreshold [SXA N4] if |s| triggers(s, |t| t.droth),
+        quota_validity_time: "Quota Validity Time" C QuotaValidityTime [SXB N4] if |s| triggers(s, |t| t.quvti),
         monitoring_time: "Monitoring Time" O MonitoringTime [SXA SXB SXC N4],
         subsequent_volume_threshold: "Subsequent Volume Threshold" O SubsequentVolumeThreshold [SXA SXB SXC N4],
         subsequent_time_threshold: "Subsequent Time Threshold" O SubsequentTimeThreshold [SXA SXB SXC N4],
@@ -1381,7 +1402,7 @@ pfcp_table! {
         subsequent_event_threshold: "Subsequent Event Threshold" O SubsequentEventThreshold [SXB SXC N4],
         subsequent_event_quota: "Subsequent Event Quota" O SubsequentEventQuota [SXB SXC N4],
         inactivity_detection_time: "Inactivity Detection Time" C InactivityDetectionTime [SXB SXC N4],
-        linked_urr_id: "Linked URR ID" C* LinkedUrrId [SXB SXC N4 N4MB],
+        linked_urr_id: "Linked URR ID" C* LinkedUrrId [SXB SXC N4 N4MB] if |s| triggers(s, |t| t.liusa),
         measurement_information: "Measurement Information" C MeasurementInformation [SXA SXB SXC N4],
         time_quota_mechanism: "Time Quota Mechanism" C TimeQuotaMechanism [SXB],
         aggregated_urrs: "Aggregated URRs" C* AggregatedURRs [SXB],

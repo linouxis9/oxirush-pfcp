@@ -366,23 +366,30 @@ fn a_tree_is_in_the_order_of_the_tables() {
     assert_eq!(Message::from_tree(&decoded.to_tree()).unwrap().encode().unwrap(), octets);
 }
 
-/// A row that is there once, whose first IE does not decode and the second does: its
-/// tree has the octets of the first, then the value, and reads back (found by the fuzz
-/// target `tree`).
+/// A row that is there once, whose first IE does not decode and the second does: the
+/// first is the one handled (§7.6.10), and the second is kept as octets, after it; the
+/// tree has both, and reads back to the same octets (found by the fuzz target `tree`).
 #[test]
-fn a_value_after_the_octets_of_its_row() {
+fn the_first_ie_of_a_row_there_once_is_its_value() {
     let message = establishment();
     let mut octets = message.encode().unwrap();
-    // A Node ID of a type of no release, before the Node ID of the message
-    let extra: &[u8] = &[0x00, 0x3c, 0x00, 0x02, 0x0f, 0x00];
-    octets.splice(16..16, extra.iter().copied());
+    // A CP F-SEID cut after its SEID, before the CP F-SEID of the message
+    let cut: &[u8] = &[0x00, 0x39, 0x00, 0x09, 0x02, 0, 0, 0, 0, 0, 0, 0x10, 0x01];
+    let at = 16 + 9;
+    assert_eq!(&octets[at..at + 2], &[0x00, 0x39]);
+    octets.splice(at..at, cut.iter().copied());
     let length = (octets.len() - 4) as u16;
     octets[2..4].copy_from_slice(&length.to_be_bytes());
     let decoded = Message::decode(&octets).unwrap();
+    let Body::SessionEstablishmentRequest(request) = &decoded.body else { panic!() };
+    assert_eq!(request.cp_f_seid, None);
+    assert_eq!(request.raw.len(), 2);
+    assert_eq!(decoded.encode().unwrap(), octets);
     let tree = decoded.to_tree();
-    assert!(tree["ies"]["Node ID"].is_array(), "{tree}");
+    assert!(tree["ies"]["CP F-SEID"].is_array(), "{tree}");
     let back = Message::from_tree(&tree).unwrap();
     assert_eq!(back.to_tree(), tree);
+    assert_eq!(back.encode().unwrap(), octets);
 }
 
 /// An IE of no row whose type has the name of another row of the table: Packet Rate
@@ -485,4 +492,46 @@ fn kept_ies_in_every_row_read_back() {
         }
     }
     assert!(checked > 3600, "{checked}");
+}
+
+/// §8.2.38: a Node ID as its receiver takes it, the spare bits of its type and the octets
+/// after its value ignored (§8.1.2); and its tree, which reads back to its octets in each
+/// form (the FQDN forms found by a fuzz target that compares octets).
+#[test]
+fn node_id_forms() {
+    let read = |content: &[u8]| NodeId::decode(content).unwrap();
+    let address = NodeId::Ipv4(Ipv4Addr::new(10, 0, 0, 1));
+    assert_eq!(read(&[0x10, 10, 0, 0, 1]).effective(), Some(address.clone()));
+    assert_eq!(read(&[0, 10, 0, 0, 1, 0xff]).effective(), Some(address));
+    assert_eq!(read(&[5, 10, 0, 0, 1]).effective(), None);
+    assert_eq!(read(&[0, 10, 0, 0]).effective(), None);
+    let fqdn = |labels: &[u8]| read(&[&[2], labels].concat());
+    assert_eq!(fqdn(&[3, b'u', b'p', b'f', 2, b'e', b'x']).fqdn().as_deref(), Some("upf.ex"));
+    for labels in [&[3, b'a', b'.', b'b'][..], &[0, 0], &[1, b'a', 0, 0], &[2, 0xc3, 0x28], &[3, b'a']] {
+        assert_eq!(fqdn(labels).fqdn(), None, "{labels:?}");
+    }
+    let long = [&[64][..], &[b'a'; 64]].concat();
+    assert_eq!(fqdn(&long).fqdn(), None);
+    for content in [
+        &[0x10, 10, 0, 0, 1][..],
+        &[0, 10, 0, 0, 1, 0xff],
+        &[5, 1, 2],
+        &[2, 3, b'a', b'.', b'b'],
+        &[2, 0, 0],
+        &[2, 1, b'a', 0, 0],
+        &[2, 2, 0xc3, 0x28],
+        &[0x12, 1, b'a'],
+        &[[2].as_slice(), &long].concat(),
+    ] {
+        let node_id = read(content);
+        let tree = tree::Tree::to_tree(&node_id);
+        let back: NodeId = tree::from_value(&tree).unwrap_or_else(|error| panic!("{content:?}: {error}: {tree}"));
+        let mut octets = Vec::new();
+        Codec::encode(&back, &mut octets).unwrap();
+        assert_eq!(octets, content, "{tree}");
+    }
+    for name in ["a..b", "", ".a", "a.", &"a".repeat(64)] {
+        let written = tree!({"FQDN": name});
+        assert!(tree::from_value::<NodeId>(&written).is_err(), "{name}");
+    }
 }

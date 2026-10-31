@@ -50,7 +50,7 @@ fn each_block_prints_what_the_readme_shows() {
 /// Each Rust block of README.md, by its rank, and what the README shows under it.
 #[rustfmt::skip]
 const BLOCKS: &[(fn(), &str)] = &[
-    (block_1, r#"21320060000000000000000000000700003c0005000a0000010039000d0200000000000010010a00000100010024003800020001001d0004000000ff0002000a00140001000015000105006c0004000000010003000e006c000400000001002c00020200
+    (block_1, r#"21320069000000000000000000000700003c0005000a0000010039000d0200000000000010010a00000100010024003800020001001d0004000000ff0002000a00140001000015000105006c00040000000100030017006c000400000001002c0002020000040005002a000101
 PFCP Session Establishment Request (SEID 0x0, sequence 7): 1 PDR, from Access
 0 deviations on N4
 on Sxa: Precedence is not on this interface (TS 29.244 7.5.2.2-1), at /pfcp/Create PDR/0/Precedence
@@ -105,7 +105,8 @@ fn block_1() {
         let smf = Ipv4Addr::new(10, 0, 0, 1);
         let pdi = Pdi::new(SourceInterface::new(SourceInterfaceValue::Access)).with_local_f_teid(FTeid::choose_ipv4());
         let pdr = CreatePdr::new(PdrId::new(1), Precedence::new(255), pdi).with_far_id(FarId::new(1));
-        let far = CreateFar::new(FarId::new(1), ApplyAction { forw: true, ..Default::default() });
+        let core = ForwardingParameters::new(DestinationInterface::new(DestinationInterfaceValue::Core));
+        let far = CreateFar::new(FarId::new(1), ApplyAction { forw: true, ..Default::default() }).with_forwarding_parameters(core);
         let cp_f_seid = FSeid { v4: true, seid: Some(0x1001), ipv4: Some(smf), ..Default::default() };
         let request = SessionEstablishmentRequest::new(NodeId::Ipv4(smf), cp_f_seid, pdr, far);
         let octets = Message { header: Header::session(0, 7), body: request.into() }.encode()?;

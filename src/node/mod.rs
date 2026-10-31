@@ -1013,10 +1013,11 @@ fn newer(new: u32, known: u32) -> bool {
     new != known && new.wrapping_sub(known) < 0x8000_0000
 }
 
-/// The Node ID as the key of its association.
+/// The Node ID as the key of its association: as its receiver takes it, without the
+/// spare bits and the octets after its value.
 fn key_of(node_id: &NodeId) -> Vec<u8> {
     let mut octets = Vec::new();
-    let _ = crate::ie::Codec::encode(node_id, &mut octets);
+    let _ = crate::ie::Codec::encode(&node_id.effective().unwrap_or_else(|| node_id.clone()), &mut octets);
     octets
 }
 

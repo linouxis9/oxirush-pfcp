@@ -733,6 +733,11 @@ pfcp_layout! {
         ipv4 "IPv4 address": Ipv4Addr if v4,
         ipv6 "IPv6 address": Ipv6Addr if v6,
     }
+    check(fseid, path, found) {
+        if !fseid.v4 && !fseid.v6 {
+            found.push(Deviation::new(path, "8.2.37", DeviationKind::Rule("neither V4 nor V6 is set")));
+        }
+    }
 }
 
 pfcp_layout! {
@@ -780,8 +785,9 @@ pub enum NodeId {
     /// Node ID Type 2: the labels of the FQDN, as RFC 1035 writes them without the last
     /// zero octet.
     Fqdn(Octets),
-    /// A Node ID Type that Table 8.2.38-2 has as spare, or a value of a length that its
-    /// type does not have: the first octet, then the others.
+    /// Any other octets, kept as they are: a Node ID Type that Table 8.2.38-2 has as
+    /// spare, spare bits that are set, a value shorter than its type, octets after the
+    /// value, an empty FQDN. [`effective`](Self::effective) reads it as a receiver does.
     Other(u8, Octets),
 }
 
@@ -791,7 +797,7 @@ impl Codec for NodeId {
         Some(match (first, rest.len()) {
             (0, 4) => Self::Ipv4(Ipv4Addr::from(<[u8; 4]>::try_from(rest).ok()?)),
             (1, 16) => Self::Ipv6(Ipv6Addr::from(<[u8; 16]>::try_from(rest).ok()?)),
-            (2, _) if !rest.is_empty() => Self::Fqdn(Octets::wire(rest)),
+            (2, 1..) => Self::Fqdn(Octets::wire(rest)),
             _ => Self::Other(first, Octets::wire(rest)),
         })
     }
@@ -828,14 +834,40 @@ impl Codec for NodeId {
 
 impl Check for NodeId {
     fn check(&self, path: &crate::check::Path, found: &mut Vec<Deviation>) {
-        if let Self::Other(first, _) = self {
-            let kind = match first & 0x0f {
-                0..=2 => DeviationKind::Rule("the Node ID value has a length that its type does not have"),
-                value => DeviationKind::SpareValue { value: value.into() },
-            };
-            found.push(Deviation::new(path, "8.2.38", kind));
+        let rule = |rule| Deviation::new(path, "8.2.38", DeviationKind::Rule(rule));
+        if let Self::Other(first, _) = self
+            && first & 0xf0 != 0
+        {
+            found.push(Deviation::new(path, "8.1.2", DeviationKind::SpareBits));
+        }
+        let labels = match (self, self.effective()) {
+            (_, None) => {
+                found.push(rule(match self.node_id_type() {
+                    NodeIdType::Ipv4Address | NodeIdType::Ipv6Address => "a Node ID value shorter than its type",
+                    NodeIdType::Fqdn => "an FQDN without a label",
+                    _ => "a Node ID Type that Table 8.2.38-2 has as spare: the Node ID cannot be read",
+                }));
+                return;
+            }
+            (_, Some(Self::Fqdn(labels))) => labels,
+            _ => return,
+        };
+        if fqdn_labels(&labels).is_none() {
+            found.push(rule("labels that are no FQDN of RFC 1035: each of 1 to 63 octets, after its length"));
         }
     }
+}
+
+/// The labels of an FQDN as RFC 1035 writes them, without the last zero octet: `None`
+/// for octets that are not labels of 1 to 63 octets, each after its length.
+fn fqdn_labels(mut octets: &[u8]) -> Option<Vec<&[u8]>> {
+    let mut labels = Vec::new();
+    while let [length @ 1..=63, rest @ ..] = octets {
+        let (label, tail) = rest.split_at_checked(usize::from(*length))?;
+        labels.push(label);
+        octets = tail;
+    }
+    (octets.is_empty() && !labels.is_empty()).then_some(labels)
 }
 
 impl NodeId {
@@ -852,18 +884,30 @@ impl NodeId {
         }
     }
 
-    /// The FQDN as text, its labels with dots: `None` for labels that are not.
+    /// The Node ID as its receiver takes it: the spare bits of its type and the octets
+    /// after its value ignored (§8.1.2, an Extendable IE); `None` for a spare Node ID
+    /// Type, a value shorter than its type, and an empty FQDN.
+    pub fn effective(&self) -> Option<Self> {
+        let Self::Other(first, rest) = self else { return Some(self.clone()) };
+        match (first & 0x0f, &rest[..]) {
+            (0, [a, b, c, d, ..]) => Some(Self::Ipv4(Ipv4Addr::new(*a, *b, *c, *d))),
+            (1, rest) if rest.len() >= 16 => Some(Self::Ipv6(Ipv6Addr::from(<[u8; 16]>::try_from(&rest[..16]).ok()?))),
+            (2, rest) if !rest.is_empty() => Some(Self::Fqdn(Octets::copied(rest))),
+            _ => None,
+        }
+    }
+
+    /// The FQDN as text, its labels with dots: `None` for labels that are not each of 1
+    /// to 63 octets of UTF-8 without a dot, which the text could not give back.
     pub fn fqdn(&self) -> Option<String> {
-        let Self::Fqdn(labels) = self else { return None };
+        let Self::Fqdn(octets) = self else { return None };
         let mut text = String::new();
-        let mut rest: &[u8] = labels;
-        while let [length, tail @ ..] = rest {
-            let label = tail.get(..usize::from(*length))?;
+        for label in fqdn_labels(octets)? {
+            let label = core::str::from_utf8(label).ok().filter(|label| !label.contains('.'))?;
             if !text.is_empty() {
                 text.push('.');
             }
-            text.push_str(core::str::from_utf8(label).ok()?);
-            rest = &tail[usize::from(*length)..];
+            text.push_str(label);
         }
         Some(text)
     }
@@ -888,11 +932,10 @@ impl oxirush_utils::tree::Tree for NodeId {
         match self {
             Self::Ipv4(address) => tree::Value::String(alloc::format!("{address}")),
             Self::Ipv6(address) => tree::Value::String(alloc::format!("{address}")),
-            Self::Fqdn(_) => match self.fqdn() {
+            Self::Fqdn(_) | Self::Other(..) => match self.fqdn() {
                 Some(text) => tree::alternative("FQDN", tree::text(&text)),
-                None => tree::alternative("FQDN", tree::octets(self.encoded().get(1..).unwrap_or_default())),
+                None => tree::alternative("Node ID value", tree::octets(&self.encoded())),
             },
-            Self::Other(..) => tree::alternative("Node ID value", tree::octets(&self.encoded())),
         }
     }
     fn from_tree(
@@ -914,18 +957,19 @@ impl oxirush_utils::tree::Tree for NodeId {
                 let name = reading.text(content)?;
                 let mut labels = Vec::new();
                 for label in name.split('.') {
-                    let Ok(length) = u8::try_from(label.len()) else {
-                        return Err(reading.mismatch("labels of at most 63 octets", content));
+                    let length = u8::try_from(label.len()).ok().filter(|length| (1..=63).contains(length));
+                    let Some(length) = length else {
+                        return Err(reading.mismatch("a name of labels of 1 to 63 octets, with dots between them", content));
                     };
                     labels.push(length);
                     labels.extend_from_slice(label.as_bytes());
                 }
                 Ok(Self::Fqdn(labels.into()))
             }),
+            // The octets of a Node ID that the text does not give: read as they decode.
             _ => reading.within("Node ID value", content, |content, reading| {
                 let octets = reading.octets(content)?;
-                let (first, rest) = octets.split_first().ok_or_else(|| reading.mismatch("one octet at least", content))?;
-                Ok(Self::Other(*first, Octets::copied(rest)))
+                Self::decode(&octets).ok_or_else(|| reading.mismatch("one octet at least", content))
             }),
         }
     }
