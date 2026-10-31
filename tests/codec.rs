@@ -239,6 +239,7 @@ fn other_vectors_round_trip() {
         assert_eq!(again, octets, "{} {}", fields[0], fields[1]);
     }
     println!("{read} messages read by their tables, {reordered} of them not in the order of their tables");
+    assert!(read > 0, "no vector in the file");
 }
 
 /// The IE types of a scope, depth first, by the forms of the registry: what a dissector
