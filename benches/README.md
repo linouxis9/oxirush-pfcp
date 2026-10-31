@@ -48,6 +48,15 @@ optional grouped IE, and each octet string longer than 22 octets: once for the h
 9 times for ser-4 and 15 times for ser-16. `encode` allocates once, as it computes the
 length first, and `check` allocates nothing for a message without a deviation.
 
+## Owned or borrowed
+
+`captures`, with `PFCP_CAPTURES` naming `tests/captures/messages.tsv`, decodes the 213
+messages of the lab runs in a round. Built with `--cfg pfcp_borrowed`, a decoded octet
+string borrows the datagram in place of being copied: that took 5.3% fewer instructions on
+the captures (660,493 against 625,602 a round, both 425 allocations), 8.4% on go-pfcp's
+Session Establishment Request and 7.0% on ser-16, at 96bc6ad. The crate is owned: its
+values have no lifetime.
+
 ## Against go-pfcp
 
 `compare/go-pfcp/` runs the same workloads with go-pfcp v0.0.24: `decode` is

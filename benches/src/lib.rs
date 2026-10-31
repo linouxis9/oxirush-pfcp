@@ -118,6 +118,14 @@ pub fn messages() -> Vec<(&'static str, Vec<u8>)> {
         ("ser-4", establishment(4)),
         ("ser-16", establishment(16)),
     ];
+    // The messages of the lab runs, by their run and number: `captures` measures them all.
+    if let Ok(file) = std::env::var("PFCP_CAPTURES") {
+        for line in std::fs::read_to_string(file).unwrap().lines().filter(|line| !line.starts_with('#')) {
+            let fields: Vec<&str> = line.split('\t').collect();
+            let name: &'static str = format!("capture:{}:{}", fields[0], fields[1]).leak();
+            messages.push((name, hex::decode(fields[5]).unwrap()));
+        }
+    }
     if let Ok(file) = std::env::var("PFCP_VECTORS") {
         for line in std::fs::read_to_string(file).unwrap().lines() {
             let fields: Vec<&str> = line.split('\t').collect();

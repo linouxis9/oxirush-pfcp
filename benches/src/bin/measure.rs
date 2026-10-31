@@ -50,6 +50,38 @@ fn main() {
     let arguments: Vec<String> = std::env::args().collect();
     let (workload, name, rounds) = (&arguments[1], &arguments[2], arguments[3].parse::<u64>().unwrap());
     let messages = messages();
+    // `captures`: each message of PFCP_CAPTURES in a round.
+    if name == "captures" {
+        let captures: Vec<&Vec<u8>> = messages.iter().filter(|(known, _)| known.starts_with("capture:")).map(|(_, octets)| octets).collect();
+        assert!(!captures.is_empty(), "PFCP_CAPTURES names no capture");
+        #[cfg(feature = "heap")]
+        {
+            let _profiler = dhat::Profiler::builder().testing().build();
+            let before = dhat::HeapStats::get();
+            for octets in &captures {
+                black_box(run(workload, octets));
+            }
+            let after = dhat::HeapStats::get();
+            println!(
+                "{workload} {} captures: {} allocations, {} octets allocated",
+                captures.len(),
+                after.total_blocks - before.total_blocks,
+                after.total_bytes - before.total_bytes
+            );
+            return;
+        }
+        #[allow(unreachable_code)]
+        let start = Instant::now();
+        let mut sum = 0;
+        for _ in 0..rounds {
+            for octets in &captures {
+                sum += run(workload, octets);
+            }
+        }
+        black_box(sum);
+        eprintln!("{workload} {} captures: {:.0} ns a round (a note)", captures.len(), start.elapsed().as_nanos() as f64 / rounds.max(1) as f64);
+        return;
+    }
     let (_, octets) = messages.iter().find(|(known, _)| known == name).expect("no such message");
     #[cfg(feature = "heap")]
     let _profiler = dhat::Profiler::builder().testing().build();
