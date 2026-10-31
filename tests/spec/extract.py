@@ -262,7 +262,9 @@ def relations(paragraph, fields, labels):
             if re.search(r'(?i)octets?"?' + re.escape(label) + r'(?![a-z0-9(])', segment.replace(' ', '')) and name not in named:
                 named.append(name)
         rest = segment
-        for name in sorted(set(fields), key=len, reverse=True):
+        # The longest name first, and names of one length in the order of the figure: a set
+        # would order them by the hashes of the strings, which change from run to run.
+        for name in sorted(dict.fromkeys(fields), key=len, reverse=True):
             pattern = r'(?i)(?<![A-Za-z0-9])' + re.escape(name) + r'(?![A-Za-z0-9])'
             if re.search(pattern, rest):
                 named.append(name)
