@@ -1,5 +1,5 @@
 //! `measure WORKLOAD MESSAGE ROUNDS`: a workload on a message (frame, decode, read, owned,
-//! encode, check), ROUNDS times, for `perf
+//! encode, check, and with the feature `tree` to_tree and from_tree), ROUNDS times, for `perf
 //! stat`, which counts the instructions; with the feature `heap`, the allocations of one
 //! round, by dhat. It prints the time of a round, which is a note and no measurement.
 
@@ -27,7 +27,7 @@ fn run(workload: &str, octets: &[u8]) -> u64 {
             black_box(&message);
             0
         }
-        "encode" | "check" => unreachable!(),
+        "encode" | "check" | "to_tree" | "from_tree" => unreachable!(),
         "sizes" => {
             use oxirush_pfcp::*;
             use std::mem::size_of;
@@ -60,6 +60,17 @@ fn main() {
         match workload.as_str() {
             "encode" => drop(black_box(message.encode().unwrap())),
             "check" => drop(black_box(message.check())),
+            #[cfg(feature = "tree")]
+            "to_tree" => drop(black_box(message.to_tree())),
+            #[cfg(feature = "tree")]
+            "from_tree" => {
+                let tree = message.to_tree();
+                let before = dhat::HeapStats::get();
+                drop(black_box(Message::from_tree(&tree).unwrap()));
+                let after = dhat::HeapStats::get();
+                println!("from_tree {name}: {} allocations", after.total_blocks - before.total_blocks);
+                return;
+            }
             _ => drop(black_box(run(workload, octets))),
         }
         let after = dhat::HeapStats::get();
@@ -84,6 +95,18 @@ fn main() {
             let message = Message::decode(octets).unwrap();
             for _ in 0..rounds {
                 sum += black_box(black_box(&message).check()).len() as u64;
+            }
+        } else if workload == "to_tree" || workload == "from_tree" {
+            #[cfg(feature = "tree")]
+            {
+                let message = Message::decode(octets).unwrap();
+                let tree = message.to_tree();
+                for _ in 0..rounds {
+                    sum += match workload.as_str() {
+                        "to_tree" => black_box(black_box(&message).to_tree()).is_object() as u64,
+                        _ => black_box(Message::from_tree(black_box(&tree)).unwrap()).header.sequence as u64,
+                    };
+                }
             }
         } else {
             for _ in 0..rounds {

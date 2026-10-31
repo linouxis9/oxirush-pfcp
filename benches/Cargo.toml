@@ -12,6 +12,8 @@ license = "Apache-2.0"
 [features]
 # Count the allocations with dhat in place of measuring.
 heap = ["dep:dhat"]
+# The workloads of the trees.
+tree = ["oxirush-pfcp/tree"]
 
 [dependencies]
 oxirush-pfcp = { path = ".." }
