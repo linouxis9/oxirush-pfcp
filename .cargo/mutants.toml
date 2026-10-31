@@ -1,0 +1,7 @@
+# cargo-mutants 27.1.0: `cargo mutants` in the directory of the crate, or the Mutants
+# workflow, which runs it in shards.
+#
+# Every feature, so that the tree, serde, the node and the endpoint are mutated and the
+# tests of each of them run. The bodies of the macros of src/macros.rs, which write the
+# codec of each layout, are not mutated: cargo-mutants leaves `macro_rules!` alone.
+all_features = true
