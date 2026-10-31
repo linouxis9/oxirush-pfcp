@@ -19,11 +19,12 @@
 //! written from the figures by a script, then reviewed.
 
 use alloc::vec::Vec;
+use core::net::{Ipv4Addr, Ipv6Addr};
 
 use crate::Error;
 use crate::check::Check;
 use crate::ie::{Codec, IeType, listed_value};
-use crate::macros::pfcp_bits;
+use crate::macros::{pfcp_bits, pfcp_layout};
 use crate::octets::{IntoOwned, Octets};
 use crate::values::*;
 
@@ -901,4 +902,335 @@ listed_value!(
     SessionReflectorMode,
     TransportLevelMarkingIndications,
     PduSetImportanceForN6UnmarkedPDUs,
+);
+
+pfcp_layout! {
+    /// Volume Measurement (§8.2.44).
+    pub struct VolumeMeasurement "8.2.44" {
+        flags(u8) { dlnop "DLNOP": 6, ulnop "ULNOP": 5, tonop "TONOP": 4, dlvol "DLVOL": 3, ulvol "ULVOL": 2, tovol "TOVOL": 1 }
+        total_volume "Total Volume": u64 if tovol,
+        uplink_volume "Uplink Volume": u64 if ulvol,
+        downlink_volume "Downlink Volume": u64 if dlvol,
+        total_number_of_packets "Total Number of Packets": u64 if tonop,
+        uplink_number_of_packets "Uplink Number of Packets": u64 if ulnop,
+        downlink_number_of_packets "Downlink Number of Packets": u64 if dlnop,
+    }
+}
+
+pfcp_layout! {
+    /// Dropped DL Traffic Threshold (§8.2.49).
+    pub struct DroppedDlTrafficThreshold "8.2.49" {
+        flags(u8) { dlby "DLBY": 2, dlpa "DLPA": 1 }
+        downlink_packets "Downlink Packets": u64 if dlpa,
+        number_of_bytes_of_downlink_data "Number of Bytes of Downlink Data": u64 if dlby,
+    }
+}
+
+pfcp_layout! {
+    /// DL Flow Level Marking (§8.2.66).
+    pub struct DlFlowLevelMarking "8.2.66" {
+        flags(u8) { sci "SCI": 2, ttc "TTC": 1 }
+        tos_traffic_class "ToS/Traffic Class": u16 if ttc,
+        service_class_indicator "Service Class Indicator": u16 if sci,
+    }
+}
+
+pfcp_layout! {
+    /// Remote GTP-U Peer (§8.2.70).
+    pub struct RemoteGtpUPeer "8.2.70" {
+        flags(u8) { rts "RTS": 5, ni "NI": 4, di "DI": 3, v4 "V4": 2, v6 "V6": 1 }
+        ipv4_address "IPv4 address": Ipv4Addr if v4,
+        ipv6_address "IPv6 address": Ipv6Addr if v6,
+        destination_interface_field "Destination Interface field": Lv16 if di,
+        network_instance_field "Network Instance field": Lv16 if ni,
+        recovery_timestamp "Recovery Timestamp": u32 if rts,
+    }
+}
+
+pfcp_layout! {
+    /// Subsequent Volume Quota (§8.2.86).
+    pub struct SubsequentVolumeQuota "8.2.86" {
+        flags(u8) { dlvol "DLVOL": 3, ulvol "ULVOL": 2, tovol "TOVOL": 1 }
+        total_volume "Total Volume": u64 if tovol,
+        uplink_volume "Uplink Volume": u64 if ulvol,
+        downlink_volume "Downlink Volume": u64 if dlvol,
+    }
+}
+
+pfcp_layout! {
+    /// User ID (§8.2.101).
+    pub struct UserId "8.2.101" {
+        flags(u8) { peif "PEIF": 7, gpsif "GPSIF": 6, supif "SUPIF": 5, naif "NAIF": 4, msisdnf "MSISDNF": 3, imeif "IMEIF": 2, imsif "IMSIF": 1 }
+        imsi "IMSI": Lv8 if imsif,
+        imei "IMEI": Lv8 if imeif,
+        msisdn "MSISDN": Lv8 if msisdnf,
+        nai "NAI": Lv8 if naif,
+        supi "SUPI": Lv8 if supif,
+        gpsi "GPSI": Lv8 if gpsif,
+        pei "PEI": Lv8 if peif,
+    }
+}
+
+pfcp_layout! {
+    /// Alternative SMF IP Address (§8.2.129).
+    pub struct AlternativeSmfIpAddress "8.2.129" {
+        flags(u8) { ppe "PPE": 3, v4 "V4": 2, v6 "V6": 1 }
+        ipv4_address "IPv4 Address": Ipv4Addr if v4,
+        ipv6_address "IPv6 Address": Ipv6Addr if v6,
+    }
+}
+
+pfcp_layout! {
+    /// IP Multicast Address (§8.2.137).
+    pub struct IpMulticastAddress "8.2.137" {
+        flags(u8) { a "A": 4, r "R": 3, v4 "V4": 2, v6 "V6": 1 }
+        ipv4_address "(start) IPv4 address": Ipv4Addr if v4,
+        ipv6_address "(start) IPv6 address": Ipv6Addr if v6,
+        ipv4_address_2 "(end) IPv4 address": Ipv4Addr if v4,
+        ipv6_address_2 "(end) IPv6 address": Ipv6Addr if v6,
+    }
+}
+
+pfcp_layout! {
+    /// 5GS User Plane Node ID (§8.2.143).
+    pub struct FiveGsUserPlaneNodeId "8.2.143" {
+        flags(u8) { bid "BID": 1 }
+        user_plane_node_id_value "User Plane Node ID value": u64 if bid,
+    }
+}
+
+pfcp_layout! {
+    /// Packet Delay Thresholds (§8.2.169).
+    pub struct PacketDelayThresholds "8.2.169" {
+        flags(u8) { rp "RP": 3, ul "UL": 2, dl "DL": 1 }
+        downlink_packet_delay_threshold "Downlink packet delay threshold": u32 if dl,
+        uplink_packet_delay_threshold "Uplink packet delay threshold": u32 if ul,
+        round_trip_packet_delay_threshold "Round trip packet delay threshold": u32 if rp,
+    }
+}
+
+pfcp_layout! {
+    /// QoS Monitoring Measurement (§8.2.171).
+    pub struct QoSMonitoringMeasurement "8.2.171" {
+        flags(u8) { uldr "ULDR": 8, dldr "DLDR": 7, ulci "ULCI": 6, dlci "DLCI": 5, plmf "PLMF": 4, rppd "RPPD": 3, ulpd "ULPD": 2, dlpd "DLPD": 1 }
+        downlink_packet_delay "Downlink packet delay": u32 if dlpd,
+        uplink_packet_delay "Uplink packet delay": u32 if ulpd,
+        round_trip_packet_delay "Round trip packet delay": u32 if rppd,
+        downlink_congestion_information "Downlink Congestion information": u16 if dlci,
+        uplink_congestion_information "Uplink Congestion information": u16 if ulci,
+        average_downlink_data_rate "Average downlink data rate": U40 if dldr,
+        average_uplink_data_rate "Average uplink data rate": U40 if uldr,
+    }
+}
+
+pfcp_layout! {
+    /// Number of UE IP Addresses (§8.2.183).
+    pub struct NumberOfUeIpAddresses "8.2.183" {
+        flags(u8) { ipv6 "IPv6": 2, ipv4 "IPv4": 1 }
+        number_of_ue_ipv4_addresses "Number of UE IPv4 Addresses": Ipv4Addr if ipv4,
+        number_of_ue_ipv6_addresses "Number of UE IPv6 Addresses": u32 if ipv6,
+    }
+}
+
+pfcp_layout! {
+    /// Thresholds (§8.2.196).
+    pub struct Thresholds "8.2.196" {
+        flags(u8) { plr "PLR": 2, rtt "RTT": 1 }
+        rtt_value "RTT value": u16 if rtt,
+        packet_loss_rate_value "Packet Loss Rate value": u8 if plr,
+    }
+}
+
+pfcp_layout! {
+    /// CP IP Address (§8.2.199).
+    pub struct CpIpAddress "8.2.199" {
+        flags(u8) { v4 "V4": 2, v6 "V6": 1 }
+        ipv4_address "IPv4 Address": Ipv4Addr if v4,
+        ipv6_address "IPv6 Address": Ipv6Addr if v6,
+    }
+}
+
+pfcp_layout! {
+    /// Mapped N6 IP Address (§8.2.242).
+    pub struct MappedN6IpAddress "8.2.242" {
+        flags(u8) { v4 "V4": 2, chv4 "CHV4": 1 }
+        ipv4_address "IPv4 address": Ipv4Addr if v4,
+    }
+}
+
+pfcp_layout! {
+    /// N6 Routing Information (§8.2.243).
+    pub struct N6RoutingInformation "8.2.243" {
+        flags(u8) { dpo "DPO": 6, dipv6 "DIPV6": 5, dipv4 "DIPV4": 4, spo "SPO": 3, sipv6 "SIPV6": 2, sipv4 "SIPV4": 1 }
+        source_ipv4_address "Source IPv4 address": Ipv4Addr if sipv4,
+        source_ipv6_address "Source IPv6 address": Ipv6Addr if sipv6,
+        source_port_number "Source Port Number": u16 if spo,
+        destination_ipv4_address "Destination IPv4 address": Ipv4Addr if dipv4,
+        destination_ipv6_address "Destination IPv6 address": Ipv6Addr if dipv6,
+        destination_port_number "Destination Port Number": u16 if dpo,
+    }
+}
+
+pfcp_layout! {
+    /// N6 Delay Measurement Information (§8.2.247).
+    pub struct N6DelayMeasurementInformation "8.2.247" {
+        flags(u8) { maxd "MAXD": 2, mind "MIND": 1 }
+        average_packet_delay "Average Packet Delay": u32 if true,
+        minimum_packet_delay "Minimum Packet Delay": u32 if mind,
+        maximum_packet_delay "Maximum Packet Delay": u32 if maxd,
+    }
+}
+
+pfcp_layout! {
+    /// Measurement Endpoint Address (§8.2.248).
+    pub struct MeasurementEndpointAddress "8.2.248" {
+        flags(u8) { v6 "V6": 2, v4 "V4": 1 }
+        ipv4_address "IPv4 Address": Ipv4Addr if v4,
+        ipv6_address "IPv6 Address": Ipv6Addr if v6,
+    }
+}
+
+pfcp_layout! {
+    /// MoQ Relay IP Address (§8.2.270).
+    pub struct MoQRelayIpAddress "8.2.270" {
+        flags(u8) { v4 "V4": 2, v6 "V6": 1 }
+        ipv4_address "IPv4 Address": Ipv4Addr if v4,
+        ipv6_address "IPv6 Address": Ipv6Addr if v6,
+    }
+}
+
+impl Check for VolumeMeasurement<'_> {
+    fn check(&self, path: &str, found: &mut Vec<crate::check::Deviation>) {
+        layout_checks(self.inconsistent(), self.spare, path, Self::CLAUSE, found);
+    }
+}
+
+impl Check for DroppedDlTrafficThreshold<'_> {
+    fn check(&self, path: &str, found: &mut Vec<crate::check::Deviation>) {
+        layout_checks(self.inconsistent(), self.spare, path, Self::CLAUSE, found);
+    }
+}
+
+impl Check for DlFlowLevelMarking<'_> {
+    fn check(&self, path: &str, found: &mut Vec<crate::check::Deviation>) {
+        layout_checks(self.inconsistent(), self.spare, path, Self::CLAUSE, found);
+    }
+}
+
+impl Check for RemoteGtpUPeer<'_> {
+    fn check(&self, path: &str, found: &mut Vec<crate::check::Deviation>) {
+        layout_checks(self.inconsistent(), self.spare, path, Self::CLAUSE, found);
+    }
+}
+
+impl Check for SubsequentVolumeQuota<'_> {
+    fn check(&self, path: &str, found: &mut Vec<crate::check::Deviation>) {
+        layout_checks(self.inconsistent(), self.spare, path, Self::CLAUSE, found);
+    }
+}
+
+impl Check for UserId<'_> {
+    fn check(&self, path: &str, found: &mut Vec<crate::check::Deviation>) {
+        layout_checks(self.inconsistent(), self.spare, path, Self::CLAUSE, found);
+    }
+}
+
+impl Check for AlternativeSmfIpAddress<'_> {
+    fn check(&self, path: &str, found: &mut Vec<crate::check::Deviation>) {
+        layout_checks(self.inconsistent(), self.spare, path, Self::CLAUSE, found);
+    }
+}
+
+impl Check for IpMulticastAddress<'_> {
+    fn check(&self, path: &str, found: &mut Vec<crate::check::Deviation>) {
+        layout_checks(self.inconsistent(), self.spare, path, Self::CLAUSE, found);
+    }
+}
+
+impl Check for FiveGsUserPlaneNodeId<'_> {
+    fn check(&self, path: &str, found: &mut Vec<crate::check::Deviation>) {
+        layout_checks(self.inconsistent(), self.spare, path, Self::CLAUSE, found);
+    }
+}
+
+impl Check for PacketDelayThresholds<'_> {
+    fn check(&self, path: &str, found: &mut Vec<crate::check::Deviation>) {
+        layout_checks(self.inconsistent(), self.spare, path, Self::CLAUSE, found);
+    }
+}
+
+impl Check for QoSMonitoringMeasurement<'_> {
+    fn check(&self, path: &str, found: &mut Vec<crate::check::Deviation>) {
+        layout_checks(self.inconsistent(), self.spare, path, Self::CLAUSE, found);
+    }
+}
+
+impl Check for NumberOfUeIpAddresses<'_> {
+    fn check(&self, path: &str, found: &mut Vec<crate::check::Deviation>) {
+        layout_checks(self.inconsistent(), self.spare, path, Self::CLAUSE, found);
+    }
+}
+
+impl Check for Thresholds<'_> {
+    fn check(&self, path: &str, found: &mut Vec<crate::check::Deviation>) {
+        layout_checks(self.inconsistent(), self.spare, path, Self::CLAUSE, found);
+    }
+}
+
+impl Check for CpIpAddress<'_> {
+    fn check(&self, path: &str, found: &mut Vec<crate::check::Deviation>) {
+        layout_checks(self.inconsistent(), self.spare, path, Self::CLAUSE, found);
+    }
+}
+
+impl Check for MappedN6IpAddress<'_> {
+    fn check(&self, path: &str, found: &mut Vec<crate::check::Deviation>) {
+        layout_checks(self.inconsistent(), self.spare, path, Self::CLAUSE, found);
+    }
+}
+
+impl Check for N6RoutingInformation<'_> {
+    fn check(&self, path: &str, found: &mut Vec<crate::check::Deviation>) {
+        layout_checks(self.inconsistent(), self.spare, path, Self::CLAUSE, found);
+    }
+}
+
+impl Check for N6DelayMeasurementInformation<'_> {
+    fn check(&self, path: &str, found: &mut Vec<crate::check::Deviation>) {
+        layout_checks(self.inconsistent(), self.spare, path, Self::CLAUSE, found);
+    }
+}
+
+impl Check for MeasurementEndpointAddress<'_> {
+    fn check(&self, path: &str, found: &mut Vec<crate::check::Deviation>) {
+        layout_checks(self.inconsistent(), self.spare, path, Self::CLAUSE, found);
+    }
+}
+
+impl Check for MoQRelayIpAddress<'_> {
+    fn check(&self, path: &str, found: &mut Vec<crate::check::Deviation>) {
+        layout_checks(self.inconsistent(), self.spare, path, Self::CLAUSE, found);
+    }
+}
+
+listed_value!(
+    VolumeMeasurement,
+    DroppedDlTrafficThreshold,
+    DlFlowLevelMarking,
+    RemoteGtpUPeer,
+    SubsequentVolumeQuota,
+    UserId,
+    AlternativeSmfIpAddress,
+    IpMulticastAddress,
+    FiveGsUserPlaneNodeId,
+    PacketDelayThresholds,
+    QoSMonitoringMeasurement,
+    NumberOfUeIpAddresses,
+    Thresholds,
+    CpIpAddress,
+    MappedN6IpAddress,
+    N6RoutingInformation,
+    N6DelayMeasurementInformation,
+    MeasurementEndpointAddress,
+    MoQRelayIpAddress,
 );

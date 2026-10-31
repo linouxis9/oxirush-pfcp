@@ -130,13 +130,13 @@ pfcp_ies! {
     63 "Usage Report Trigger" extendable(2) "8.2.41" => UsageReportTrigger;
     64 "Measurement Period" extendable(4) "8.2.42" => MeasurementPeriod;
     65 "FQ-CSID" extendable(1) "8.2.43";
-    66 "Volume Measurement" extendable(1) "8.2.44";
+    66 "Volume Measurement" extendable(1) "8.2.44" => VolumeMeasurement;
     67 "Duration Measurement" extendable(4) "8.2.45" => DurationMeasurement;
     68 "Application Detection Information" grouped "7.5.8.3-2" => ApplicationDetectionInformation;
     69 "Time of First Packet" extendable(4) "8.2.46" => TimeOfFirstPacket;
     70 "Time of Last Packet" extendable(4) "8.2.47" => TimeOfLastPacket;
     71 "Quota Holding Time" extendable(4) "8.2.48" => QuotaHoldingTime;
-    72 "Dropped DL Traffic Threshold" extendable(1) "8.2.49";
+    72 "Dropped DL Traffic Threshold" extendable(1) "8.2.49" => DroppedDlTrafficThreshold;
     73 "Volume Quota" extendable(1) "8.2.50" => VolumeQuota;
     74 "Time Quota" extendable(4) "8.2.51" => TimeQuota;
     75 "Start Time" extendable(4) "8.2.52" => StartTime;
@@ -161,13 +161,13 @@ pfcp_ies! {
     94 "Packet Rate" extendable(1) "8.2.63";
     95 "Outer Header Removal" extendable(1) "8.2.64" => OuterHeaderRemoval;
     96 "Recovery Time Stamp" extendable(4) "8.2.65" => RecoveryTimeStamp;
-    97 "DL Flow Level Marking" extendable(1) "8.2.66";
+    97 "DL Flow Level Marking" extendable(1) "8.2.66" => DlFlowLevelMarking;
     98 "Header Enrichment" extendable(1) "8.2.67";
     99 "Error Indication Report" grouped "7.5.8.4-1" => ErrorIndicationReport;
     100 "Measurement Information" extendable(1) "8.2.68" => MeasurementInformation;
     101 "Node Report Type" extendable(1) "8.2.69" => NodeReportType;
     102 "User Plane Path Failure Report" grouped "7.4.5.1.2-1" => UserPlanePathFailureReport;
-    103 "Remote GTP-U Peer" extendable(1) "8.2.70";
+    103 "Remote GTP-U Peer" extendable(1) "8.2.70" => RemoteGtpUPeer;
     104 "UR-SEQN" fixed(4) "8.2.71" => UrSeqn;
     105 "Update Duplicating Parameters" grouped "7.5.4.3-3" => UpdateDuplicatingParameters;
     106 "Activate Predefined Rules" variable "8.2.72" => ActivatePredefinedRules;
@@ -184,7 +184,7 @@ pfcp_ies! {
     118 "Aggregated URRs" grouped "7.5.2.4-2" => AggregatedURRs;
     119 "Multiplier" fixed(12) "8.2.84" => Multiplier;
     120 "Aggregated URR ID" fixed(4) "8.2.85" => AggregatedUrrId;
-    121 "Subsequent Volume Quota" extendable(1) "8.2.86";
+    121 "Subsequent Volume Quota" extendable(1) "8.2.86" => SubsequentVolumeQuota;
     122 "Subsequent Time Quota" extendable(4) "8.2.87" => SubsequentTimeQuota;
     123 "RQI" extendable(1) "8.2.88" => Rqi;
     124 "QFI" extendable(1) "8.2.89" => Qfi;
@@ -204,7 +204,7 @@ pfcp_ies! {
     138 "Ethernet Filter ID" extendable(4) "8.2.98" => EthernetFilterId;
     139 "Ethernet Filter Properties" extendable(1) "8.2.99" => EthernetFilterProperties;
     140 "Suggested Buffering Packets Count" extendable(1) "8.2.100" => SuggestedBufferingPacketsCount;
-    141 "User ID" extendable(1) "8.2.101";
+    141 "User ID" extendable(1) "8.2.101" => UserId;
     142 "Ethernet PDU Session Information" extendable(1) "8.2.102" => EthernetPduSessionInformation;
     143 "Ethernet Traffic Information" grouped "7.5.8.3-3" => EthernetTrafficInformation;
     144 "MAC Addresses Detected" extendable(7) "8.2.103";
@@ -241,7 +241,7 @@ pfcp_ies! {
     175 "Update 3GPP Access Forwarding Action Information" grouped "7.5.4.16-2" => UpdateThreeGppAccessForwardingActionInformation;
     176 "Update Non 3GPP Access Forwarding Action Information" grouped "7.5.4.16-3" => UpdateNonThreeGppAccessForwardingActionInformation;
     177 "UE IP address Pool Identity" extendable(2) "8.2.128";
-    178 "Alternative SMF IP Address" extendable(1) "8.2.129";
+    178 "Alternative SMF IP Address" extendable(1) "8.2.129" => AlternativeSmfIpAddress;
     179 "Packet Replication and Detection Carry-On Information" extendable(1) "8.2.130" => PacketReplicationAndDetectionCarryOnInformation;
     180 "SMF Set ID" extendable(1) "8.2.131";
     181 "Quota Validity Time" extendable(4) "8.2.132" => QuotaValidityTime;
@@ -254,14 +254,14 @@ pfcp_ies! {
     188 "IP Multicast Addressing Info within PFCP Session Establishment Request" grouped "7.5.2.2-4" => IpMulticastAddressingInfo;
     189 "Join IP Multicast Information IE within Usage Report" grouped "7.5.8.3-4" => JoinIpMulticastInformation;
     190 "Leave IP Multicast Information IE within Usage Report" grouped "7.5.8.3-5" => LeaveIpMulticastInformation;
-    191 "IP Multicast Address" extendable(1) "8.2.137";
+    191 "IP Multicast Address" extendable(1) "8.2.137" => IpMulticastAddress;
     192 "Source IP Address" extendable(1) "8.2.138";
     193 "Packet Rate Status" extendable(1) "8.2.139";
     194 "Create Bridge/Router Info" extendable(1) "8.2.140" => CreateBridgeRouterInfo;
     195 "Created Bridge/Router Info" grouped "7.5.3.6-1" => CreatedBridgeRouterInfo;
     196 "Port Number" fixed(4) "8.2.141" => PortNumber;
     197 "NW-TT Port Number" fixed(4) "8.2.142" => NwTtPortNumber;
-    198 "5GS User Plane Node ID" extendable "8.2.143";
+    198 "5GS User Plane Node ID" extendable "8.2.143" => FiveGsUserPlaneNodeId;
     199 "TSC Management Information IE within PFCP Session Modification Request" grouped "7.5.4.18-1" => TscManagementInformation;
     200 "TSC Management Information IE within PFCP Session Modification Response" grouped "7.5.5.3-1" => TscManagementInformationResponse;
     201 "TSC Management Information IE within PFCP Session Report Request" grouped "7.5.8.5-1" => TscManagementInformationReport;
@@ -308,10 +308,10 @@ pfcp_ies! {
     242 "QoS Monitoring per QoS flow Control Information" grouped "7.5.2.9-3" => QoSMonitoringPerQoSFlowControlInformation;
     243 "Requested QoS Monitoring" extendable(1) "8.2.167" => RequestedQoSMonitoring;
     244 "Reporting Frequency" extendable(1) "8.2.168" => ReportingFrequency;
-    245 "Packet Delay Thresholds" extendable(1) "8.2.169";
+    245 "Packet Delay Thresholds" extendable(1) "8.2.169" => PacketDelayThresholds;
     246 "Minimum Wait Time" extendable(4) "8.2.170" => MinimumWaitTime;
     247 "QoS Monitoring Report" grouped "7.5.8.6-3" => QoSMonitoringReport;
-    248 "QoS Monitoring Measurement" extendable(1) "8.2.171";
+    248 "QoS Monitoring Measurement" extendable(1) "8.2.171" => QoSMonitoringMeasurement;
     249 "MT-EDT Control Information" extendable(1) "8.2.172" => MtEdtControlInformation;
     250 "DL Data Packets Size" extendable(2) "8.2.173" => DlDataPacketsSize;
     251 "QER Control Indications" extendable(1) "8.2.174" => QerControlIndications;
@@ -331,7 +331,7 @@ pfcp_ies! {
     265 "Multipath Applicable Indication" extendable(1) "8.2.181" => MultipathApplicableIndication;
     266 "User Plane Node Management Information Container" variable "8.2.182" => UserPlaneNodeManagementInformationContainer;
     267 "UE IP Address Usage Information" grouped "7.4.4.3.1-1" => UeIpAddressUsageInformation;
-    268 "Number of UE IP Addresses" extendable(1) "8.2.183";
+    268 "Number of UE IP Addresses" extendable(1) "8.2.183" => NumberOfUeIpAddresses;
     269 "Validity Timer" extendable(2) "8.2.184" => ValidityTimer;
     270 "Redundant Transmission Forwarding Parameters" grouped "7.5.2.3-4" => RedundantTransmissionForwardingParameters;
     271 "Transport Delay Reporting" grouped "7.5.2.2-6" => TransportDelayReporting;
@@ -350,11 +350,11 @@ pfcp_ies! {
     285 "DNS Server Address" extendable(4) "8.2.193" => DnsServerAddress;
     286 "NBNS Server Address" extendable(4) "8.2.194" => NbnsServerAddress;
     287 "Maximum Receive Unit" fixed(2) "8.2.195" => MaximumReceiveUnit;
-    288 "Thresholds" extendable(1) "8.2.196";
+    288 "Thresholds" extendable(1) "8.2.196" => Thresholds;
     289 "Steering Mode Indicator" extendable(1) "8.2.197" => SteeringModeIndicator;
     290 "PFCP Session Change Info" grouped "7.4.7.1-2" => PfcpSessionChangeInfo;
     291 "Group ID" variable "8.2.198" => GroupId;
-    292 "CP IP Address" variable "8.2.199";
+    292 "CP IP Address" variable "8.2.199" => CpIpAddress;
     293 "IP Address and Port number Replacement" extendable(2) "8.2.200";
     294 "DNS Query/Response Filter" extendable(2) "8.2.201";
     295 "Direct Reporting Information" grouped "7.5.2.9-4" => DirectReportingInformation, DirectReportingInformationTsc;
@@ -412,15 +412,15 @@ pfcp_ies! {
     347 "MT-SDT Control Information" extendable(1) "8.2.239" => MtSdtControlInformation;
     348 "Reporting Thresholds" extendable(1) "8.2.240";
     349 "RTP Header Extension Additional Information" extendable(2) "8.2.241" => RtpHeaderExtensionAdditionalInformation;
-    350 "Mapped N6 IP Address" extendable(1) "8.2.242";
-    351 "N6 Routing Information" extendable(1) "8.2.243";
+    350 "Mapped N6 IP Address" extendable(1) "8.2.242" => MappedN6IpAddress;
+    351 "N6 Routing Information" extendable(1) "8.2.243" => N6RoutingInformation;
     352 "URI" variable "8.2.244" => Uri;
     353 "UE Level Measurements Configuration" extendable(2) "8.2.245";
     354 "N6 Delay Measurement Protocols" extendable(1) "8.2.246" => N6DelayMeasurementProtocols;
     355 "N6 Delay Measurement Control Information" grouped "7.4.4.1.4-1" => N6DelayMeasurementControlInformation;
     356 "N6 Delay Measurement Report (PFCP Node Report Request)" grouped "7.4.5.1.8-1" => N6DelayMeasurementReport;
-    357 "N6 Delay Measurement Information" extendable(1) "8.2.247";
-    358 "Measurement Endpoint Address" extendable(1) "8.2.248";
+    357 "N6 Delay Measurement Information" extendable(1) "8.2.247" => N6DelayMeasurementInformation;
+    358 "Measurement Endpoint Address" extendable(1) "8.2.248" => MeasurementEndpointAddress;
     359 "Operator Configurable UPF Capability" variable "8.2.249" => OperatorConfigurableUpfCapability;
     360 "Packet Inspection functionality" extendable(1) "8.2.250" => PacketInspectionFunctionality;
     361 "Header Handling Control Rule" grouped "7.5.2.3-7" => HeaderHandlingControlRule;
@@ -448,7 +448,7 @@ pfcp_ies! {
     384 "PDU Set Importance" fixed(2) "8.2.268" => PduSetImportance;
     385 "MoQ Control Information" extendable(1) "8.2.269" => MoQControlInformation;
     386 "MoQ Information" grouped "7.5.3.1-6" => MoQInformation;
-    387 "MoQ Relay IP Address" extendable(1) "8.2.270";
+    387 "MoQ Relay IP Address" extendable(1) "8.2.270" => MoQRelayIpAddress;
     388 "Media Related Information Transfer Info" extendable(1) "8.2.271" => MediaRelatedInformationTransferInfo;
     389 "Reporting Control Information" extendable(1) "8.2.272" => ReportingControlInformation;
     390 "Security Mode (STAMP)" fixed(1) "8.2.273" => SecurityMode;
@@ -513,7 +513,7 @@ pfcp_table! {
         recovery_time_stamp: "Recovery Time Stamp" M RecoveryTimeStamp [SXA SXB SXC N4 N4MB],
         up_function_features: "UP Function Features" C raw 43 [SXA SXB SXC N4 N4MB],
         cp_function_features: "CP Function Features" C raw 89 [SXA SXB SXC N4 N4MB],
-        alternative_smf_ip_address: "Alternative SMF IP Address" O* raw 178 [N4 N4MB],
+        alternative_smf_ip_address: "Alternative SMF IP Address" O* AlternativeSmfIpAddress [N4 N4MB],
         smf_set_id: "SMF Set ID" C raw 180 [N4 N4MB],
         pfcp_session_retention_information: "PFCP Session Retention Information" O PfcpSessionRetentionInformation [SXA SXB SXC N4 N4MB],
         ue_ip_address_pool_information: "UE IP address Pool Information" O* UeIpAddressPoolInformation [SXB N4],
@@ -536,7 +536,7 @@ pfcp_table! {
         recovery_time_stamp: "Recovery Time Stamp" M RecoveryTimeStamp [SXA SXB SXC N4 N4MB],
         up_function_features: "UP Function Features" C raw 43 [SXA SXB SXC N4 N4MB],
         cp_function_features: "CP Function Features" C raw 89 [SXA SXB SXC N4 N4MB],
-        alternative_smf_ip_address: "Alternative SMF IP Address" O* raw 178 [N4 N4MB],
+        alternative_smf_ip_address: "Alternative SMF IP Address" O* AlternativeSmfIpAddress [N4 N4MB],
         smf_set_id: "SMF Set ID" C raw 180 [N4 N4MB],
         pfcpasrsp_flags: "PFCPASRsp-Flags" O PFCPASRspFlags [SXA SXB SXC N4 N4MB],
         clock_drift_control_information: "Clock Drift Control Information" C* ClockDriftControlInformation [N4],
@@ -559,7 +559,7 @@ pfcp_table! {
         pfcp_association_release_request: "PFCP Association Release Request" C PfcpAssociationReleaseRequest [SXA SXB SXC N4 N4MB],
         graceful_release_period: "Graceful Release Period" C GracefulReleasePeriod [SXA SXB SXC N4 N4MB],
         pfcpaureq_flags: "PFCPAUReq-Flags" O PFCPAUReqFlags [SXA SXB SXC N4],
-        alternative_smf_ip_address: "Alternative SMF IP Address" O* raw 178 [N4 N4MB],
+        alternative_smf_ip_address: "Alternative SMF IP Address" O* AlternativeSmfIpAddress [N4 N4MB],
         smf_set_id: "SMF Set ID" O raw 180 [N4 N4MB],
         clock_drift_control_information: "Clock Drift Control Information" C* ClockDriftControlInformation [N4],
         ue_ip_address_pool_information: "UE IP address Pool Information" O* UeIpAddressPoolInformation [SXB N4],
@@ -676,7 +676,7 @@ pfcp_table! {
         fq_csid: "FQ-CSID" C*5 raw 65 [SXA SXB N4]
             roles ["SGW-C FQ-CSID" C [SXA SXB], "MME FQ-CSID" C [SXA SXB], "PGW-C/SMF FQ-CSID" C [SXA SXB N4], "ePDG FQ-CSID" C [SXB], "TWAN FQ-CSID" C [SXB]],
         user_plane_inactivity_timer: "User Plane Inactivity Timer" O UserPlaneInactivityTimer [SXB SXC N4 N4MB],
-        user_id: "User ID" O raw 141 [SXA SXB SXC N4],
+        user_id: "User ID" O UserId [SXA SXB SXC N4],
         trace_information: "Trace Information" O raw 152 [SXA SXB SXC N4],
         apn_dnn: "APN/DNN" O ApnDnn [SXA SXB N4 N4MB],
         create_mar: "Create MAR" C* CreateMar [N4],
@@ -698,7 +698,7 @@ pfcp_table! {
         tl_container: "TL-Container" C TlContainer [N4],
         trace_collection_entity_uri: "Trace Collection Entity URI" O Uri [SXA SXB SXC N4],
         ue_level_measurements_configuration: "UE Level Measurements Configuration" O raw 353 [N4],
-        alternative_smf_ip_address: "Alternative SMF IP Address" O raw 178 [N4],
+        alternative_smf_ip_address: "Alternative SMF IP Address" O AlternativeSmfIpAddress [N4],
         moq_control_information: "MoQ Control Information" C MoQControlInformation [N4],
     }
 }
@@ -778,7 +778,7 @@ pfcp_table! {
         tl_container: "TL-Container" C* TlContainer [N4],
         trace_collection_entity_uri: "Trace Collection Entity URI" O Uri [SXA SXB SXC N4],
         ue_level_measurements_configuration: "UE Level Measurements Configuration" O raw 353 [N4],
-        alternative_smf_ip_address: "Alternative SMF IP Address" O raw 178 [N4],
+        alternative_smf_ip_address: "Alternative SMF IP Address" O AlternativeSmfIpAddress [N4],
         moq_control_information: "MoQ Control Information" C MoQControlInformation [N4],
     }
 }
@@ -861,7 +861,7 @@ pfcp_table! {
         pfcpsrrsp_flags: "PFCPSRRsp-Flags" C PFCPSRRspFlags [SXA N4],
         cp_f_seid: "CP F-SEID" O FSeid [N4 N4MB],
         n4_u_f_teid: "N4-u F-TEID" O FTeid [N4],
-        alternative_smf_ip_address: "Alternative SMF IP Address" O*2 raw 178 [N4 N4MB]
+        alternative_smf_ip_address: "Alternative SMF IP Address" O*2 AlternativeSmfIpAddress [N4 N4MB]
             roles ["Alternative SMF IP Address" O [N4 N4MB], "Alternative SMF IP Address" O [N4]],
         pgw_c_smf_fq_csid: "PGW-C/SMF FQ-CSID" O raw 65 [SXB N4],
         group_id: "Group Id" C GroupId [SXB N4],
@@ -923,7 +923,7 @@ pfcp_table! {
 pfcp_table! {
     /// GTP-U Path QoS Control Information within PFCP Association Setup Request (Table 7.4.4.1.3-1).
     group GtpUPathQoSControlInformation = 238, "GTP-U Path QoS Control Information", "7.4.4.1.3-1" {
-        remote_gtp_u_peer: "Remote GTP-U Peer" C* raw 103 [N4],
+        remote_gtp_u_peer: "Remote GTP-U Peer" C* RemoteGtpUPeer [N4],
         gtp_u_path_interface_type: "GTP-U Path Interface Type" C GtpUPathInterfaceType [N4],
         qos_report_trigger: "QoS Report Trigger" M QoSReportTrigger [N4],
         dscp: "DSCP" C* TransportLevelMarking [N4],
@@ -939,7 +939,7 @@ pfcp_table! {
     /// N6 Delay Measurement Control Information within PFCP Association Setup Request (Table 7.4.4.1.4-1).
     group N6DelayMeasurementControlInformation = 355, "N6 Delay Measurement Control Information", "7.4.4.1.4-1" {
         n6_delay_measurement_control_information_id: "N6 Delay Measurement Control Information ID" M N6DelayMeasurementControlInformationId [N4],
-        measurement_endpoint_address: "Measurement Endpoint Address" M* raw 358 [N4],
+        measurement_endpoint_address: "Measurement Endpoint Address" M* MeasurementEndpointAddress [N4],
         network_instance: "Network Instance" M NetworkInstance [N4],
         measurement_protocols: "Measurement Protocols" M* N6DelayMeasurementProtocols [N4],
         protocol_specific_configuration_parameters: "Protocol Specific Configuration Parameters" O ProtocolSpecificConfigurationParameters [N4],
@@ -971,7 +971,7 @@ pfcp_table! {
         ue_ip_address_usage_sequence_number: "UE IP Address Usage Sequence Number" M SequenceNumber [SXB N4],
         ue_ip_address_usage_metric: "UE IP Address Usage Metric" M Metric [SXB N4],
         validity_timer: "Validity Timer" M ValidityTimer [SXB N4],
-        number_of_ue_ip_addresses: "Number of UE IP Addresses" M raw 268 [SXB N4],
+        number_of_ue_ip_addresses: "Number of UE IP Addresses" M NumberOfUeIpAddresses [SXB N4],
         network_instance: "Network Instance" M NetworkInstance [SXB N4],
         ue_ip_address_pool_id: "UE IP Address Pool Id" O raw 177 [SXB N4],
         s_nssai: "S-NSSAI" O SNssai [SXB N4],
@@ -981,14 +981,14 @@ pfcp_table! {
 pfcp_table! {
     /// User Plane Path Failure Report IE within PFCP Node Report Request (Table 7.4.5.1.2-1).
     group UserPlanePathFailureReport = 102, "User Plane Path Failure Report", "7.4.5.1.2-1" {
-        remote_gtp_u_peer: "Remote GTP-U Peer" M* raw 103 [SXA SXB N4 N4MB],
+        remote_gtp_u_peer: "Remote GTP-U Peer" M* RemoteGtpUPeer [SXA SXB N4 N4MB],
     }
 }
 
 pfcp_table! {
     /// User Plane Path Recovery Report IE within PFCP Node Report Request (Table 7.4.5.1.3-1).
     group UserPlanePathRecoveryReport = 187, "User Plane Path Recovery Report", "7.4.5.1.3-1" {
-        remote_gtp_u_peer: "Remote GTP-U Peer" M* raw 103 [SXA SXB N4 N4MB],
+        remote_gtp_u_peer: "Remote GTP-U Peer" M* RemoteGtpUPeer [SXA SXB N4 N4MB],
     }
 }
 
@@ -1008,7 +1008,7 @@ pfcp_table! {
 pfcp_table! {
     /// GTP-U Path QoS Report IE within PFCP Node Report Request (Table 7.4.5.1.5-1).
     group GtpuPathQosReport = 239, "GTP-U Path QoS Report", "7.4.5.1.5-1" {
-        remote_gtp_u_peer: "Remote GTP-U Peer" M raw 103 [N4],
+        remote_gtp_u_peer: "Remote GTP-U Peer" M RemoteGtpUPeer [N4],
         gtp_u_path_interface_type: "GTP-U Path Interface Type" C GtpUPathInterfaceType [N4],
         qos_report_trigger: "QoS Report Trigger" M QoSReportTrigger [N4],
         time_stamp: "Time Stamp" M TimeStamp [N4],
@@ -1030,19 +1030,19 @@ pfcp_table! {
 pfcp_table! {
     /// Peer UP Restart Report IE within PFCP Node Report Request (Table 7.4.5.1.7-1).
     group PeerUpRestartReport = 315, "Peer UP Restart Report", "7.4.5.1.7-1" {
-        remote_gtp_u_peer: "Remote GTP-U Peer" M* raw 103 [SXA SXB N4 N4MB],
+        remote_gtp_u_peer: "Remote GTP-U Peer" M* RemoteGtpUPeer [SXA SXB N4 N4MB],
     }
 }
 
 pfcp_table! {
     /// N6 Delay Measurement Report IE within PFCP Node Report Request (Table 7.4.5.1.8-1).
     group N6DelayMeasurementReport = 356, "N6 Delay Measurement Report", "7.4.5.1.8-1" {
-        measurement_endpoint_address: "Measurement EndPoint Address" M raw 358 [N4],
+        measurement_endpoint_address: "Measurement EndPoint Address" M MeasurementEndpointAddress [N4],
         network_instance: "Network Instance" M NetworkInstance [N4],
         measurement_reporting_type: "Measurement Reporting Type" M MeasurementReportingType [N4],
         time_stamp: "Time Stamp" M TimeStamp [N4],
         start_time: "Start Time" C StartTime [N4],
-        n6_delay_measurement_information: "N6 Delay Measurement Information" C raw 357 [N4],
+        n6_delay_measurement_information: "N6 Delay Measurement Information" C N6DelayMeasurementInformation [N4],
         n6_delay_measurement_failure_information: "N6 Delay Measurement Failure Information" C N6DelayMeasurementFailureInformation [N4],
         measurement_endpoint_port_number: "Measurement EndPoint Port Number" O MeasurementEndpointPortNumber [N4],
     }
@@ -1053,8 +1053,8 @@ pfcp_table! {
     group PfcpSessionChangeInfo = 290, "PFCP Session Change Info", "7.4.7.1-2" {
         pgw_c_smf_fq_csid: "PGW-C/SMF FQ-CSID" C* raw 65 [SXB N4],
         group_id: "Group Id" C* GroupId [SXB N4],
-        cp_ip_address: "CP IP Address" C* raw 292 [SXB N4],
-        alternative_smf_pgw_c_ip_address: "Alternative SMF/PGW-C IP Address" M raw 178 [SXB N4],
+        cp_ip_address: "CP IP Address" C* CpIpAddress [SXB N4],
+        alternative_smf_pgw_c_ip_address: "Alternative SMF/PGW-C IP Address" M AlternativeSmfIpAddress [SXB N4],
     }
 }
 
@@ -1137,8 +1137,8 @@ pfcp_table! {
         network_instance: "Network Instance" O NetworkInstance [SXA SXB SXC N4 N4MB],
         redundant_transmission_detection_parameters: "Redundant Transmission Detection Parameters" O RedundantTransmissionParameters [N4],
         ue_ip_address: "UE IP address" O* UeIpAddress [SXB SXC N4],
-        mapped_n6_ip_address: "Mapped N6 IP Address" O raw 350 [N4],
-        n6_routing_information: "N6 Routing Information" O raw 351 [N4],
+        mapped_n6_ip_address: "Mapped N6 IP Address" O MappedN6IpAddress [N4],
+        n6_routing_information: "N6 Routing Information" O N6RoutingInformation [N4],
         traffic_endpoint_id: "Traffic Endpoint ID" C* TrafficEndpointId [SXA SXB SXC N4 N4MB],
         sdf_filter: "SDF Filter" O* raw 23 [SXB SXC N4 N4MB],
         application_id: "Application ID" O ApplicationId [SXB SXC N4 N4MB],
@@ -1175,7 +1175,7 @@ pfcp_table! {
 pfcp_table! {
     /// IP Multicast Addressing Info IE within PFCP Session Establishment Request (Table 7.5.2.2-4).
     group IpMulticastAddressingInfo = 188, "IP Multicast Addressing Info", "7.5.2.2-4" {
-        ip_multicast_address: "IP Multicast Address" M raw 191 [N4 N4MB],
+        ip_multicast_address: "IP Multicast Address" M IpMulticastAddress [N4 N4MB],
         source_ip_address: "Source IP Address" C* raw 192 [N4 N4MB]
             roles ["Source IP Address" O [N4], "Source IP Address" M [N4MB]],
     }
@@ -1192,7 +1192,7 @@ pfcp_table! {
 pfcp_table! {
     /// Transport Delay Reporting IE in Create PDR IE (Table 7.5.2.2-6).
     group TransportDelayReporting = 271, "Transport Delay Reporting", "7.5.2.2-6" {
-        preceding_ul_gtp_u_peer: "Preceding UL GTP-U Peer" M raw 103 [N4],
+        preceding_ul_gtp_u_peer: "Preceding UL GTP-U Peer" M RemoteGtpUPeer [N4],
         dscp: "DSCP" O TransportLevelMarking [N4],
     }
 }
@@ -1258,7 +1258,7 @@ pfcp_table! {
         destination_interface_type: "Destination Interface Type" C InterfaceType3gpp [SXA SXB N4],
         data_network_access_identifier: "Data Network Access Identifier" C DataNetworkAccessIdentifier [],
         ip_address_and_port_number_replacement: "IP Address and Port Number Replacement" C raw 293 [N4],
-        n6_routing_information: "N6 Routing Information" O raw 351 [N4],
+        n6_routing_information: "N6 Routing Information" O N6RoutingInformation [N4],
         header_handling_control_rule: "Header Handling Control Rule" C* HeaderHandlingControlRule [N4],
         on_path_n6_connection_information: "On-path N6 Connection Information" O raw 374 [N4],
     }
@@ -1364,12 +1364,12 @@ pfcp_table! {
         time_threshold: "Time Threshold" C TimeThreshold [SXA SXB SXC N4],
         time_quota: "Time Quota" C TimeQuota [SXB SXC N4],
         quota_holding_time: "Quota Holding Time" C QuotaHoldingTime [SXB SXC N4],
-        dropped_dl_traffic_threshold: "Dropped DL Traffic Threshold" C raw 72 [SXA N4],
+        dropped_dl_traffic_threshold: "Dropped DL Traffic Threshold" C DroppedDlTrafficThreshold [SXA N4],
         quota_validity_time: "Quota Validity Time" C QuotaValidityTime [SXB N4],
         monitoring_time: "Monitoring Time" O MonitoringTime [SXA SXB SXC N4],
         subsequent_volume_threshold: "Subsequent Volume Threshold" O SubsequentVolumeThreshold [SXA SXB SXC N4],
         subsequent_time_threshold: "Subsequent Time Threshold" O SubsequentTimeThreshold [SXA SXB SXC N4],
-        subsequent_volume_quota: "Subsequent Volume Quota" O raw 121 [SXB SXC N4],
+        subsequent_volume_quota: "Subsequent Volume Quota" O SubsequentVolumeQuota [SXB SXC N4],
         subsequent_time_quota: "Subsequent Time Quota" O SubsequentTimeQuota [SXB SXC N4],
         subsequent_event_threshold: "Subsequent Event Threshold" O SubsequentEventThreshold [SXB SXC N4],
         subsequent_event_quota: "Subsequent Event Quota" O SubsequentEventQuota [SXB SXC N4],
@@ -1402,7 +1402,7 @@ pfcp_table! {
         monitoring_time: "Monitoring Time" M MonitoringTime [SXA SXB SXC N4],
         subsequent_volume_threshold: "Subsequent Volume Threshold" O SubsequentVolumeThreshold [SXA SXB SXC N4],
         subsequent_time_threshold: "Subsequent Time Threshold" O SubsequentTimeThreshold [SXA SXB SXC N4],
-        subsequent_volume_quota: "Subsequent Volume Quota" O raw 121 [SXB SXC N4],
+        subsequent_volume_quota: "Subsequent Volume Quota" O SubsequentVolumeQuota [SXB SXC N4],
         subsequent_time_quota: "Subsequent Time Quota" O SubsequentTimeQuota [SXB SXC N4],
         subsequent_event_threshold: "Subsequent Event Threshold" O EventThreshold [SXB SXC N4],
         subsequent_event_quota: "Subsequent Event Quota" O EventQuota [SXB SXC N4],
@@ -1419,7 +1419,7 @@ pfcp_table! {
         guaranteed_bitrate: "Guaranteed Bitrate" C Gbr [SXB SXC N4 N4MB],
         packet_rate: "Packet Rate" C raw 94 [SXB N4],
         packet_rate_status: "Packet Rate Status" C raw 193 [SXB N4],
-        dl_flow_level_marking: "DL Flow Level Marking" C raw 97 [SXB SXC],
+        dl_flow_level_marking: "DL Flow Level Marking" C DlFlowLevelMarking [SXB SXC],
         qos_flow_identifier: "QoS flow identifier" C Qfi [N4 N4MB],
         reflective_qos: "Reflective QoS" C Rqi [N4],
         paging_policy_indicator: "Paging Policy Indicator" C PagingPolicyIndicator [N4],
@@ -1451,8 +1451,8 @@ pfcp_table! {
         network_instance: "Network Instance" O NetworkInstance [SXA SXB SXC N4 N4MB],
         redundant_transmission_detection_parameters: "Redundant Transmission Detection Parameters" O RedundantTransmissionParameters [N4],
         ue_ip_address: "UE IP address" O* UeIpAddress [SXB SXC N4],
-        mapped_n6_ip_address: "Mapped N6 IP Address" O raw 350 [N4],
-        n6_routing_information: "N6 Routing Information" O raw 351 [N4],
+        mapped_n6_ip_address: "Mapped N6 IP Address" O MappedN6IpAddress [N4],
+        n6_routing_information: "N6 Routing Information" O N6RoutingInformation [N4],
         ethernet_pdu_session_information: "Ethernet PDU Session Information" O EthernetPduSessionInformation [N4],
         framed_route: "Framed-Route" O* FramedRoute [SXB N4],
         framed_routing: "Framed-Routing" O FramedRouting [SXB N4],
@@ -1475,7 +1475,7 @@ pfcp_table! {
         steering_mode: "Steering Mode" M SteeringMode [N4],
         n3gpp_access_forwarding_action_information: "3GPP Access Forwarding Action Information" C ThreeGppAccessForwardingActionInformation [N4],
         non_3gpp_access_forwarding_action_information: "Non-3GPP Access Forwarding Action Information" C NonThreeGppAccessForwardingActionInformation [N4],
-        threshold_values: "Threshold Values" C raw 288 [N4],
+        threshold_values: "Threshold Values" C Thresholds [N4],
         steering_mode_indicator: "Steering Mode Indicator" C SteeringModeIndicator [N4],
         transport_mode: "Transport Mode" C TransportMode [N4],
     }
@@ -1528,7 +1528,7 @@ pfcp_table! {
         qfi: "QFI" M* Qfi [N4],
         requested_qos_monitoring: "Requested QoS Monitoring" M RequestedQoSMonitoring [N4],
         reporting_frequency: "Reporting Frequency" M ReportingFrequency [N4],
-        packet_delay_thresholds: "Packet Delay Thresholds" C raw 245 [N4],
+        packet_delay_thresholds: "Packet Delay Thresholds" C PacketDelayThresholds [N4],
         minimum_wait_time: "Minimum Wait Time" C MinimumWaitTime [N4],
         measurement_period: "Measurement Period" C MeasurementPeriod [N4],
         reporting_suggestion_info: "Reporting Suggestion Info" C raw 335 [N4],
@@ -1614,7 +1614,7 @@ pfcp_table! {
 pfcp_table! {
     /// MoQ Information IE within PFCP Session Establishment Response (Table 7.5.3.1-6).
     group MoQInformation = 386, "MoQ Information", "7.5.3.1-6" {
-        moq_relay_address: "MoQ Relay Address" C raw 387 [N4],
+        moq_relay_address: "MoQ Relay Address" C MoQRelayIpAddress [N4],
     }
 }
 
@@ -1625,7 +1625,7 @@ pfcp_table! {
         f_teid: "F-TEID" C*2 FTeid [SXA SXB N4]
             roles ["Local F-TEID" C [SXA SXB N4], "Local F-TEID for Redundant Transmission" C [N4]],
         ue_ip_address: "UE IP Address" C* UeIpAddress [SXB N4],
-        mapped_n6_ip_address: "Mapped N6 IP Address" C raw 350 [N4],
+        mapped_n6_ip_address: "Mapped N6 IP Address" C MappedN6IpAddress [N4],
         local_ingress_tunnel: "Local Ingress Tunnel" C raw 308 [N4MB],
     }
 }
@@ -1655,7 +1655,7 @@ pfcp_table! {
         f_teid: "F-TEID" C*2 FTeid [SXA SXB N4]
             roles ["Local F-TEID" C [SXA SXB N4], "Local F-TEID for Redundant Transmission" C [N4]],
         ue_ip_address: "UE IP Address" C* UeIpAddress [SXB N4],
-        mapped_n6_ip_address: "Mapped N6 IP Address" C raw 350 [N4],
+        mapped_n6_ip_address: "Mapped N6 IP Address" C MappedN6IpAddress [N4],
         local_ingress_tunnel: "Local Ingress Tunnel" C raw 308 [N4MB],
     }
 }
@@ -1664,7 +1664,7 @@ pfcp_table! {
     /// Created Bridge/Router Info IE within PFCP Session Establishment Response (Table 7.5.3.6-1).
     group CreatedBridgeRouterInfo = 195, "Created Bridge/Router Info", "7.5.3.6-1" {
         port_number: "Port Number" C PortNumber [N4],
-        n5gs_user_plane_node_id: "5GS User Plane Node ID" C raw 198 [N4],
+        n5gs_user_plane_node_id: "5GS User Plane Node ID" C FiveGsUserPlaneNodeId [N4],
     }
 }
 
@@ -1796,12 +1796,12 @@ pfcp_table! {
         event_threshold: "Event Threshold" C EventThreshold [SXB SXC N4],
         event_quota: "Event Quota" C EventQuota [SXB SXC N4],
         quota_holding_time: "Quota Holding Time" C QuotaHoldingTime [SXB SXC N4],
-        dropped_dl_traffic_threshold: "Dropped DL Traffic Threshold" C raw 72 [SXA N4],
+        dropped_dl_traffic_threshold: "Dropped DL Traffic Threshold" C DroppedDlTrafficThreshold [SXA N4],
         quota_validity_time: "Quota Validity Time" C QuotaValidityTime [SXB N4],
         monitoring_time: "Monitoring Time" C MonitoringTime [SXA SXB SXC N4],
         subsequent_volume_threshold: "Subsequent Volume Threshold" C SubsequentVolumeThreshold [SXA SXB SXC N4],
         subsequent_time_threshold: "Subsequent Time Threshold" C SubsequentTimeThreshold [SXA SXB SXC N4],
-        subsequent_volume_quota: "Subsequent Volume Quota" C raw 121 [SXB SXC N4],
+        subsequent_volume_quota: "Subsequent Volume Quota" C SubsequentVolumeQuota [SXB SXC N4],
         subsequent_time_quota: "Subsequent Time Quota" C SubsequentTimeQuota [SXB SXC N4],
         subsequent_event_threshold: "Subsequent Event Threshold" O SubsequentEventThreshold [SXB SXC N4],
         subsequent_event_quota: "Subsequent Event Quota" O SubsequentEventQuota [SXB SXC N4],
@@ -1829,7 +1829,7 @@ pfcp_table! {
         maximum_bitrate: "Maximum Bitrate" C Mbr [SXB SXC N4 N4MB],
         guaranteed_bitrate: "Guaranteed Bitrate" C Gbr [SXB SXC N4 N4MB],
         packet_rate: "Packet Rate" C raw 94 [SXB N4],
-        dl_flow_level_marking: "DL Flow Level Marking" C raw 97 [SXB SXC],
+        dl_flow_level_marking: "DL Flow Level Marking" C DlFlowLevelMarking [SXB SXC],
         qos_flow_identifier: "QoS flow identifier" C Qfi [N4 N4MB],
         reflective_qos: "Reflective QoS" C Rqi [N4],
         paging_policy_indicator: "Paging Policy Indicator" C PagingPolicyIndicator [N4],
@@ -1937,7 +1937,7 @@ pfcp_table! {
         update_non_3gpp_access_forwarding_action_information: "Update Non-3GPP Access Forwarding Action Information" C UpdateNonThreeGppAccessForwardingActionInformation [N4],
         n3gpp_access_forwarding_action_information: "3GPP Access Forwarding Action Information" C ThreeGppAccessForwardingActionInformation [N4],
         non_3gpp_access_forwarding_action_information: "Non-3GPP Access Forwarding Action Information" C NonThreeGppAccessForwardingActionInformation [N4],
-        threshold_values: "Threshold values" C raw 288 [N4],
+        threshold_values: "Threshold values" C Thresholds [N4],
         steering_mode_indicator: "Steering Mode Indicator" C SteeringModeIndicator [N4],
         transport_mode: "Transport Mode" C TransportMode [N4],
     }
@@ -2024,7 +2024,7 @@ pfcp_table! {
         usage_report_trigger: "Usage Report Trigger" M UsageReportTrigger [SXA SXB SXC N4 N4MB],
         start_time: "Start Time" C StartTime [SXA SXB SXC N4 N4MB],
         end_time: "End Time" C EndTime [SXA SXB SXC N4 N4MB],
-        volume_measurement: "Volume Measurement" C raw 66 [SXA SXB SXC N4 N4MB],
+        volume_measurement: "Volume Measurement" C VolumeMeasurement [SXA SXB SXC N4 N4MB],
         duration_measurement: "Duration Measurement" C DurationMeasurement [SXA SXB SXC N4],
         time_of_first_packet: "Time of First Packet" C TimeOfFirstPacket [SXB SXC N4 N4MB],
         time_of_last_packet: "Time of Last Packet" C TimeOfLastPacket [SXB SXC N4 N4MB],
@@ -2077,7 +2077,7 @@ pfcp_table! {
         usage_report_trigger: "Usage Report Trigger" M UsageReportTrigger [SXA SXB SXC N4 N4MB],
         start_time: "Start Time" C StartTime [SXA SXB SXC N4 N4MB],
         end_time: "End Time" C EndTime [SXA SXB SXC N4 N4MB],
-        volume_measurement: "Volume Measurement" C raw 66 [SXA SXB SXC N4 N4MB],
+        volume_measurement: "Volume Measurement" C VolumeMeasurement [SXA SXB SXC N4 N4MB],
         duration_measurement: "Duration Measurement" C DurationMeasurement [SXA SXB SXC N4],
         time_of_first_packet: "Time of First Packet" C TimeOfFirstPacket [SXB SXC N4 N4MB],
         time_of_last_packet: "Time of Last Packet" C TimeOfLastPacket [SXB SXC N4 N4MB],
@@ -2112,7 +2112,7 @@ pfcp_table! {
         usage_report_trigger: "Usage Report Trigger" M UsageReportTrigger [SXA SXB SXC N4 N4MB],
         start_time: "Start Time" C StartTime [SXA SXB SXC N4 N4MB],
         end_time: "End Time" C EndTime [SXA SXB SXC N4 N4MB],
-        volume_measurement: "Volume Measurement" C raw 66 [SXA SXB SXC N4 N4MB],
+        volume_measurement: "Volume Measurement" C VolumeMeasurement [SXA SXB SXC N4 N4MB],
         duration_measurement: "Duration Measurement" C DurationMeasurement [SXA SXB SXC N4],
         application_detection_information: "Application Detection Information" C ApplicationDetectionInformation [SXB SXC N4],
         ue_ip_address: "UE IP address" C UeIpAddress [SXC N4],
@@ -2150,7 +2150,7 @@ pfcp_table! {
 pfcp_table! {
     /// Join IP Multicast Information IE within Usage Report IE (Table 7.5.8.3-4).
     group JoinIpMulticastInformation = 189, "Join IP Multicast Information", "7.5.8.3-4" {
-        ip_multicast_address: "IP Multicast Address" M raw 191 [N4],
+        ip_multicast_address: "IP Multicast Address" M IpMulticastAddress [N4],
         source_ip_address: "Source IP Address" C* raw 192 [N4],
     }
 }
@@ -2158,7 +2158,7 @@ pfcp_table! {
 pfcp_table! {
     /// Leave IP Multicast Information IE within Usage Report IE (Table 7.5.8.3-5).
     group LeaveIpMulticastInformation = 190, "Leave IP Multicast Information", "7.5.8.3-5" {
-        ip_multicast_address: "IP Multicast Address" M raw 191 [N4],
+        ip_multicast_address: "IP Multicast Address" M IpMulticastAddress [N4],
         source_ip_address: "Source IP Address" C* raw 192 [N4],
     }
 }
@@ -2200,7 +2200,7 @@ pfcp_table! {
     /// QoS Monitoring Report IE (Table 7.5.8.6-3).
     group QoSMonitoringReport = 247, "QoS Monitoring Report", "7.5.8.6-3" {
         qfi: "QFI" M Qfi [N4],
-        qos_monitoring_measurement: "QoS Monitoring Measurement" M raw 248 [N4],
+        qos_monitoring_measurement: "QoS Monitoring Measurement" M QoSMonitoringMeasurement [N4],
         redundant_n3_n9_transmission_information: "Redundant N3/N9 Transmission Information" C RedundantN3n9TransmissionInformation [N4],
         time_stamp: "Time Stamp" M TimeStamp [N4],
         start_time: "Start Time" O StartTime [N4],

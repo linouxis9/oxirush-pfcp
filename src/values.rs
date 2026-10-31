@@ -139,6 +139,56 @@ impl<const N: usize> Field for [u8; N] {
     }
 }
 
+/// A MAC address.
+pub type Mac = [u8; 6];
+
+/// Octets after a length of one octet.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Lv8(pub Vec<u8>);
+
+/// Octets after a length of two octets.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Lv16(pub Vec<u8>);
+
+macro_rules! length_value {
+    ($($ty:ident $length:ty),*) => {$(
+        impl Field for $ty {
+            fn read(octets: &mut &[u8]) -> Option<Self> {
+                let length = usize::from(<$length as Field>::read(octets)?);
+                let (value, rest) = octets.split_at_checked(length)?;
+                *octets = rest;
+                Some(Self(value.to_vec()))
+            }
+            fn write(&self, out: &mut Vec<u8>) {
+                // A value longer than its length can say is written with the length cut:
+                // check() reports it.
+                let length = <$length>::try_from(self.0.len()).unwrap_or(<$length>::MAX);
+                out.extend_from_slice(&length.to_be_bytes());
+                out.extend_from_slice(&self.0);
+            }
+            fn size(&self) -> usize {
+                core::mem::size_of::<$length>() + self.0.len()
+            }
+            #[cfg(feature = "tree")]
+            fn to_tree(&self) -> oxirush_utils::tree::Value {
+                oxirush_utils::tree::octets(&self.0)
+            }
+            #[cfg(feature = "tree")]
+            fn from_tree(
+                value: &oxirush_utils::tree::Value,
+                reading: &mut oxirush_utils::tree::Reading,
+            ) -> Result<Self, oxirush_utils::tree::Refused> {
+                let octets = reading.octets(value)?;
+                if octets.len() > usize::from(<$length>::MAX) {
+                    return Err(reading.mismatch("octets that their length can say", value));
+                }
+                Ok(Self(octets))
+            }
+        }
+    )*};
+}
+length_value!(Lv8 u8, Lv16 u16);
+
 /// A number of three octets.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct U24(pub u32);
@@ -554,7 +604,7 @@ impl Check for UeIpAddress<'_> {
     }
 }
 
-fn layout_checks(
+pub(crate) fn layout_checks(
     inconsistent: Option<&'static str>,
     spare: u8,
     path: &str,
