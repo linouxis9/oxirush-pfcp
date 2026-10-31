@@ -4,14 +4,18 @@ A package of its own, which the published crate does not have. `measure` runs on
 workload on one message, many times, for `perf stat`; the figures are the
 instructions of one round, `(count of 2N rounds − count of N rounds) / N`, and the
 times are notes. They were taken on one core of an AMD Ryzen 7 5700G (Linux 7.0,
-Rust 1.88.0) on 2026-10-31, at 526bee4.
+Rust 1.88.0) on 2026-10-31, at ed70497, with N = 2,000.
 
 ```sh
 cargo build --release                       # measure
 cargo build --release --features heap      # measure, counting allocations with dhat
 cargo build --release --features tree      # with the workloads of the trees
-sudo perf stat -e instructions:u taskset -c 3 target/release/measure decode ser-16 1000
+perf stat -e instructions:u taskset -c 3 target/release/measure decode ser-16 2000
 ```
+
+`perf` counts the instructions of a user when `kernel.perf_event_paranoid` is at most
+2 (`sudo sysctl kernel.perf_event_paranoid=2`), or as root; without it, `measure` still
+prints the time of a round.
 
 ## The messages
 
@@ -37,15 +41,16 @@ Instructions of a round:
 
 | Message | decode | encode | check | to_tree | from_tree |
 |---|---|---|---|---|---|
-| heartbeat | 685 | 612 | 321 | 5,774 | 4,649 |
-| ser-4 | 25,663 | 16,647 | 11,291 | 159,669 | 105,591 |
-| ser-16 | 86,352 | 60,477 | 38,368 | 577,638 | 352,826 |
-| go-pfcp-ser | 55,641 | 36,755 | 65,449 | 486,175 | 277,095 |
+| heartbeat | 747 | 653 | 276 | 5,763 | 5,040 |
+| ser-4 | 28,897 | 16,443 | 11,020 | 161,707 | 124,122 |
+| ser-16 | 97,858 | 59,519 | 37,258 | 580,030 | 420,821 |
+| go-pfcp-ser | 61,858 | 36,251 | 89,646 | 514,449 | 322,547 |
 
 Decoding allocates the box of the message, each list of grouped IEs, each conditional or
 optional grouped IE, and each octet string longer than 22 octets: once for the heartbeat,
 9 times for ser-4 and 15 times for ser-16. `encode` allocates once, as it computes the
-length first, and `check` allocates nothing for a message without a deviation.
+length first, and `check` allocates nothing for a message without a deviation (go-pfcp's
+has some, whose paths it writes).
 
 ## Owned or borrowed
 
@@ -73,10 +78,12 @@ Instructions of a round, and go-pfcp's over this crate's:
 | Message | decode | | read | | encode | |
 |---|---|---|---|---|---|---|
 | | this crate | go-pfcp | this crate | go-pfcp | this crate | go-pfcp |
-| heartbeat | 685 | 1,988 (2.9x) | 695 | 2,080 (3.0x) | 612 | 3,055 (5.0x) |
-| ser-4 | 25,663 | 111,510 (4.3x) | 27,039 | 230,357 (8.5x) | 16,647 | 137,295 (8.2x) |
-| ser-16 | 86,352 | 399,189 (4.6x) | 91,293 | 876,326 (9.6x) | 60,477 | 498,044 (8.2x) |
-| go-pfcp-ser | 55,641 | 255,760 (4.6x) | 56,469 | 479,572 (8.5x) | 36,755 | 346,318 (9.4x) |
+| heartbeat | 747 | 2,545 (3.4x) | 761 | 2,197 (2.9x) | 653 | 3,180 (4.9x) |
+| ser-4 | 28,897 | 116,036 (4.0x) | 30,237 | 256,929 (8.5x) | 16,443 | 126,991 (7.7x) |
+| ser-16 | 97,858 | 452,032 (4.6x) | 102,666 | 953,608 (9.3x) | 59,519 | 558,791 (9.4x) |
+| go-pfcp-ser | 61,858 | 253,318 (4.1x) | 62,662 | 485,571 (7.7x) | 36,251 | 303,897 (8.4x) |
 
-The times of a round, as notes: `read` of ser-16 takes 6.5 µs here and 67 µs with
-go-pfcp, which allocates 1,043 times where this crate allocates 15 times.
+go-pfcp's instructions vary by some hundreds a round with its collector. Times were not
+taken at ed70497: the machine was shared, at a load of 10 to 15. At 526bee4, on an idle
+core, `read` of ser-16 took 6.5 µs here and 67 µs with go-pfcp, which allocates 1,043
+times where this crate allocates 15 times.
