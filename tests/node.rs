@@ -2702,6 +2702,16 @@ fn requests_to_the_port_of_the_peer() {
     assert_eq!(sent(&mut upf)[0].to, ephemeral);
 }
 
+/// The sessions of a peer that restarted end by its association, whatever address
+/// their UP F-SEIDs have.
+#[test]
+fn the_sessions_of_a_peer_end_by_its_association() {
+    let (mut smf, mut upf) = associated(at(0));
+    let (first, _) = established(&mut smf, &mut upf, at(0));
+    let (second, _) = established_on(&mut smf, &mut upf, at(0), Ipv4Addr::new(10, 0, 0, 22));
+    assert_eq!(smf.end_sessions_of(UPF), [first, second]);
+}
+
 // ── Local SEIDs, one session each ──────────────────────────────────────────
 
 /// An establishment of the SMF with `cp_seid` in its CP F-SEID.

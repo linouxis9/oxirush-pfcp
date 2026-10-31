@@ -824,12 +824,19 @@ impl Node {
         self.sessions.remove(&local_seid)
     }
 
-    /// End every session with `peer`, as after its restart: their local SEIDs.
+    /// End every session with `peer`, as after its restart: those of its association,
+    /// whatever the address of their F-SEIDs, and those of its address. Their local
+    /// SEIDs.
     pub fn end_sessions_of(&mut self, peer: SocketAddr) -> Vec<u64> {
+        let key = self
+            .association_of(peer)
+            .map(|association| association.key.clone());
         let ended: Vec<u64> = self
             .sessions
             .iter()
-            .filter(|(_, session)| session.peer.ip() == peer.ip())
+            .filter(|(_, session)| {
+                session.peer.ip() == peer.ip() || key.as_ref() == Some(&session.node)
+            })
             .map(|(seid, _)| *seid)
             .collect();
         for seid in &ended {
