@@ -1257,12 +1257,6 @@ impl<'a, const N: u16> crate::ie::Listed<'a> for Raw<'a, N> {
         *slot = Some(Self(Octets::wire(octets)));
         true
     }
-    fn slot_get(slot: &Self::Slot) -> Option<&Self> {
-        slot.as_ref()
-    }
-    fn slot_set(slot: &mut Self::Slot, value: Self) {
-        *slot = Some(value);
-    }
     #[inline]
     fn decode_push(list: &mut Self::List, octets: &'a [u8]) -> bool {
         list.push(Self(Octets::wire(octets)));

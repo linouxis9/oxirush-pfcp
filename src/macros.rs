@@ -769,7 +769,7 @@ macro_rules! pfcp_table {
             $(
                 #[doc = concat!("Builder: add the ", $row, " IE.")]
                 pub fn [<with_ $field>](mut self, value: pfcp_table!(@type $vty $($raw)?)) -> Self {
-                    pfcp_table!(@set [$(* $($max)?)?] $p (pfcp_table!(@type $vty $($raw)?)) self.$field, value);
+                    crate::table::FieldValues::<pfcp_table!(@type $vty $($raw)?)>::add(&mut self.$field, value);
                     self
                 }
             )*
@@ -824,11 +824,7 @@ macro_rules! pfcp_table {
             fn emit(&self, ie_type: u16, nth: usize, out: &mut alloc::vec::Vec<u8>) -> Result<bool, crate::Error> {
                 $(
                     if ie_type == <pfcp_table!(@type $vty $($raw)?) as crate::ie::IeType>::IE_TYPE {
-                        let Some(value) = pfcp_table!(@nth [$(* $($max)?)?] $p (pfcp_table!(@type $vty $($raw)?)) self.$field, nth) else {
-                            return Ok(false);
-                        };
-                        crate::ie::encode_value(value, out)?;
-                        return Ok(true);
+                        return crate::table::emit_field::<pfcp_table!(@type $vty $($raw)?), _>(&self.$field, nth, out);
                     }
                 )*
                 Ok(false)
@@ -836,8 +832,7 @@ macro_rules! pfcp_table {
 
             fn encoded_len(&self) -> usize {
                 let mut length = 0;
-                $( pfcp_table!(@each [$(* $($max)?)?] $p (pfcp_table!(@type $vty $($raw)?)) self.$field, |nth, value| {
-                    let _ = nth;
+                $( pfcp_table!(@each [$(* $($max)?)?] (pfcp_table!(@type $vty $($raw)?)) self.$field, |value| {
                     length += 4 + crate::ie::Codec::encoded_len(value);
                 }); )*
                 for ie in &self.raw {
@@ -847,8 +842,7 @@ macro_rules! pfcp_table {
             }
 
             fn encode_fields(&self, out: &mut alloc::vec::Vec<u8>) -> Result<(), crate::Error> {
-                $( pfcp_table!(@each [$(* $($max)?)?] $p (pfcp_table!(@type $vty $($raw)?)) self.$field, |nth, value| {
-                    let _ = nth;
+                $( pfcp_table!(@each [$(* $($max)?)?] (pfcp_table!(@type $vty $($raw)?)) self.$field, |value| {
                     crate::ie::encode_value(value, out)?;
                 }); )*
                 Ok(())
@@ -857,7 +851,7 @@ macro_rules! pfcp_table {
             fn count(&self, ie_type: u16) -> usize {
                 $(
                     if ie_type == <pfcp_table!(@type $vty $($raw)?) as crate::ie::IeType>::IE_TYPE {
-                        return pfcp_table!(@count [$(* $($max)?)?] self.$field);
+                        return crate::table::FieldValues::<pfcp_table!(@type $vty $($raw)?)>::values(&self.$field).len();
                     }
                 )*
                 0
@@ -885,14 +879,9 @@ macro_rules! pfcp_table {
                 let table = <Self as crate::table::Scope<'a>>::table();
                 let mut row = 0;
                 $(
-                    let count = pfcp_table!(@count [$(* $($max)?)?] self.$field);
-                    if count > 0 {
-                        crate::check::check_row(table.id, &table.rows[row], count, path, context, found);
-                        pfcp_table!(@each [$(* $($max)?)?] $p (pfcp_table!(@type $vty $($raw)?)) self.$field, |nth, value| {
-                            let at = crate::check::Path::Row { parent: path, row: $row, nth: pfcp_table!(@position [$(* $($max)?)?] nth) };
-                            crate::check::check_field(value, &at, pfcp_table!(@presence $p), context, found);
-                        });
-                    }
+                    crate::check::check_field_values::<pfcp_table!(@type $vty $($raw)?), _>(
+                        table, row, &self.$field, pfcp_table!(@list [$(* $($max)?)?]), path, context, found,
+                    );
                     row += 1;
                 )*
             }
@@ -918,7 +907,7 @@ macro_rules! pfcp_table {
             fn field_tree(&self, ie_type: u16, nth: usize) -> Option<oxirush_utils::tree::Value> {
                 $(
                     if ie_type == <pfcp_table!(@type $vty $($raw)?) as crate::ie::IeType>::IE_TYPE {
-                        return pfcp_table!(@nth [$(* $($max)?)?] $p (pfcp_table!(@type $vty $($raw)?)) self.$field, nth).map(oxirush_utils::tree::Tree::to_tree);
+                        return crate::tree::field_tree::<pfcp_table!(@type $vty $($raw)?), _>(&self.$field, nth);
                     }
                 )*
                 None
@@ -932,9 +921,7 @@ macro_rules! pfcp_table {
             ) -> Result<(), oxirush_utils::tree::Refused> {
                 $(
                     if ie_type == <pfcp_table!(@type $vty $($raw)?) as crate::ie::IeType>::IE_TYPE {
-                        let value = <pfcp_table!(@type $vty $($raw)?) as oxirush_utils::tree::Tree>::from_tree(value, reading)?;
-                        pfcp_table!(@set [$(* $($max)?)?] $p (pfcp_table!(@type $vty $($raw)?)) self.$field, value);
-                        return Ok(());
+                        return crate::tree::read_field::<pfcp_table!(@type $vty $($raw)?), _>(&mut self.$field, value, reading);
                     }
                 )*
                 Ok(())
@@ -966,38 +953,15 @@ macro_rules! pfcp_table {
     (@repeat) => { crate::table::Repeat::Once };
     (@repeat *) => { crate::table::Repeat::Any };
     (@repeat * $max:literal) => { crate::table::Repeat::AtMost($max) };
-    (@set [] M ($t:ty) $f:expr, $value:expr) => { $f = Some($value) };
-    (@set [] Ci ($t:ty) $f:expr, $value:expr) => { $f = Some($value) };
-    (@set [] Oi ($t:ty) $f:expr, $value:expr) => { $f = Some($value) };
-    (@set [] $p:ident ($t:ty) $f:expr, $value:expr) => { <$t as crate::ie::Listed>::slot_set(&mut $f, $value) };
-    (@set [* $($max:literal)?] $p:ident ($t:ty) $f:expr, $value:expr) => { $f.push($value) };
-    (@nth [] M ($t:ty) $f:expr, $nth:expr) => { $f.as_ref().filter(|_| $nth == 0) };
-    (@nth [] Ci ($t:ty) $f:expr, $nth:expr) => { $f.as_ref().filter(|_| $nth == 0) };
-    (@nth [] Oi ($t:ty) $f:expr, $nth:expr) => { $f.as_ref().filter(|_| $nth == 0) };
-    (@nth [] $p:ident ($t:ty) $f:expr, $nth:expr) => { <$t as crate::ie::Listed>::slot_get(&$f).filter(|_| $nth == 0) };
-    (@nth [* $($max:literal)?] $p:ident ($t:ty) $f:expr, $nth:expr) => { $f.get($nth) };
-    (@position [] $nth:ident) => {{ let _ = $nth; None }};
-    (@position [* $($max:literal)?] $nth:ident) => { Some($nth) };
-    (@count [] $f:expr) => { usize::from($f.is_some()) };
-    (@count [* $($max:literal)?] $f:expr) => { $f.len() };
-    (@each [] M ($t:ty) $f:expr, |$nth:ident, $value:ident| $body:block) => {
-        if let Some($value) = $f.as_ref() { let $nth = 0; $body }
+    // Each value of a field: that of a field there once, or those of a list.
+    (@each [] ($t:ty) $f:expr, |$value:ident| $body:block) => {
+        if let Some($value) = crate::table::FieldValues::<$t>::first(&$f) $body
     };
-    (@each [] Ci ($t:ty) $f:expr, |$nth:ident, $value:ident| $body:block) => {
-        if let Some($value) = $f.as_ref() { let $nth = 0; $body }
+    (@each [* $($max:literal)?] ($t:ty) $f:expr, |$value:ident| $body:block) => {
+        for $value in crate::table::FieldValues::<$t>::values(&$f) $body
     };
-    (@each [] Oi ($t:ty) $f:expr, |$nth:ident, $value:ident| $body:block) => {
-        if let Some($value) = $f.as_ref() { let $nth = 0; $body }
-    };
-    (@each [] $p:ident ($t:ty) $f:expr, |$nth:ident, $value:ident| $body:block) => {
-        if let Some($value) = <$t as crate::ie::Listed>::slot_get(&$f) { let $nth = 0; $body }
-    };
-    (@each_unused [] $f:expr, |$nth:ident, $value:ident| $body:block) => {
-        if let Some($value) = &$f { let $nth = 0; $body }
-    };
-    (@each [* $($max:literal)?] $p:ident ($t:ty) $f:expr, |$nth:ident, $value:ident| $body:block) => {
-        for ($nth, $value) in $f.iter().enumerate() $body
-    };
+    (@list []) => { false };
+    (@list [* $($max:literal)?]) => { true };
     (@place [] $p:ident ($t:ty) $f:expr, $body:expr) => {
         pfcp_table!(@place_once $p ($t) $f, $body)
     };
@@ -1074,14 +1038,6 @@ macro_rules! pfcp_table {
                 true
             }
 
-            fn slot_get(slot: &Self::Slot) -> Option<&Self> {
-                slot.as_deref()
-            }
-
-            fn slot_set(slot: &mut Self::Slot, value: Self) {
-                *slot = Some(alloc::boxed::Box::new(value));
-            }
-
             fn decode_push(list: &mut Self::List, octets: &'a [u8]) -> bool {
                 list.push(Self::default());
                 let last = list.len() - 1;
@@ -1130,7 +1086,7 @@ macro_rules! pfcp_table {
             pub fn new($($arg)*) -> Self {
                 #[allow(unused_mut)]
                 let mut scope = Self::default();
-                $( pfcp_table!(@set [$($m)*] M ($ft) scope.$f, $f); )*
+                $( crate::table::FieldValues::<$ft>::add(&mut scope.$f, $f); )*
                 scope
             }
         }

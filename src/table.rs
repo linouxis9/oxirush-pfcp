@@ -22,7 +22,7 @@
 use alloc::vec::Vec;
 
 use crate::Error;
-use crate::ie::{IeFault, Placed, Placing, RawIe, VENDOR, raw};
+use crate::ie::{Codec, IeFault, IeType, Placed, Placing, RawIe, VENDOR, raw};
 
 /// The presence of an IE in its table (§7.2.3.2).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -88,6 +88,86 @@ pub struct Row {
     pub mandatory: Interfaces,
     /// The rows that share the field, when several do.
     pub roles: &'static [Role],
+}
+
+/// The values of a field of a scope: one, in its place or boxed, or a list. The
+/// functions that each table writes for its rows call one generic function per kind of
+/// field and type of value, which all the tables share.
+pub(crate) trait FieldValues<T> {
+    /// The values, in their order.
+    fn values(&self) -> &[T];
+    /// The first value: that of a field that is there once.
+    fn first(&self) -> Option<&T>;
+    /// Set the value, or add it to the list.
+    fn add(&mut self, value: T);
+}
+
+impl<T> FieldValues<T> for Option<T> {
+    #[inline(always)]
+    fn values(&self) -> &[T] {
+        self.as_slice()
+    }
+    #[inline(always)]
+    fn first(&self) -> Option<&T> {
+        self.as_ref()
+    }
+    fn add(&mut self, value: T) {
+        *self = Some(value);
+    }
+}
+
+impl<T> FieldValues<T> for Option<alloc::boxed::Box<T>> {
+    #[inline(always)]
+    fn values(&self) -> &[T] {
+        match self {
+            Some(value) => core::slice::from_ref(&**value),
+            None => &[],
+        }
+    }
+    #[inline(always)]
+    fn first(&self) -> Option<&T> {
+        self.as_deref()
+    }
+    fn add(&mut self, value: T) {
+        *self = Some(alloc::boxed::Box::new(value));
+    }
+}
+
+impl<T> FieldValues<T> for crate::list::List<T> {
+    #[inline(always)]
+    fn values(&self) -> &[T] {
+        self.as_slice()
+    }
+    #[inline(always)]
+    fn first(&self) -> Option<&T> {
+        self.as_slice().first()
+    }
+    fn add(&mut self, value: T) {
+        self.push(value);
+    }
+}
+
+impl<T> FieldValues<T> for Vec<T> {
+    #[inline(always)]
+    fn values(&self) -> &[T] {
+        self
+    }
+    #[inline(always)]
+    fn first(&self) -> Option<&T> {
+        <[T]>::first(self)
+    }
+    fn add(&mut self, value: T) {
+        self.push(value);
+    }
+}
+
+/// Write the `nth` value of a field as its IE: `false` when it has no such value.
+#[inline]
+pub(crate) fn emit_field<'a, T: IeType + Codec<'a>, F: FieldValues<T>>(field: &F, nth: usize, out: &mut Vec<u8>) -> Result<bool, Error> {
+    match field.values().get(nth) {
+        Some(value) => crate::ie::encode_value(value, out).map(|()| true),
+        None => Ok(false),
+    }
 }
 
 /// The interfaces on which a row is mandatory, from its presence and interfaces, or from

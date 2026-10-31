@@ -27,7 +27,7 @@ use core::fmt;
 use crate::enums::CauseValue;
 use crate::ie::VENDOR;
 use crate::registry::type_name;
-use crate::table::{Interfaces, Presence, Repeat, Row, Scope};
+use crate::table::{Interfaces, Presence, Repeat, Row, Scope, Table};
 
 /// One deviation: where, which clause, what, and the Cause of the answer.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -309,6 +309,29 @@ pub(crate) fn check_field<'a, T: Check + crate::ie::Codec<'a> + crate::ie::IeTyp
                 deviation.cause = context.cause(false);
             }
         }
+    }
+}
+
+/// Check the values of a row: the row, then each value.
+#[inline(always)]
+pub(crate) fn check_field_values<'a, T: Check + crate::ie::Codec<'a> + crate::ie::IeType, F: crate::table::FieldValues<T>>(
+    table: &'static Table,
+    at: usize,
+    field: &F,
+    list: bool,
+    path: &Path<'_>,
+    context: Context,
+    found: &mut Vec<Deviation>,
+) {
+    let values = field.values();
+    if values.is_empty() {
+        return;
+    }
+    let row = &table.rows[at];
+    check_row(table.id, row, values.len(), path, context, found);
+    for (nth, value) in values.iter().enumerate() {
+        let here = Path::Row { parent: path, row: row.name, nth: list.then_some(nth) };
+        check_field(value, &here, row.presence, context, found);
     }
 }
 

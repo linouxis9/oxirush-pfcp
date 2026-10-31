@@ -32,7 +32,7 @@ use oxirush_utils::tree::{self, ErrorKind, Map, Members, Reading, Refused, Root,
 
 use crate::ie::{Placed, RawIe};
 use crate::registry::IE_TYPES;
-use crate::table::{Repeat, Scope, keep_order};
+use crate::table::{FieldValues, Repeat, Scope, keep_order};
 
 /// The tree hook of a scope, which the table macro writes.
 pub(crate) trait TreeScope {
@@ -40,6 +40,17 @@ pub(crate) trait TreeScope {
     fn field_tree(&self, ie_type: u16, nth: usize) -> Option<Value>;
     /// Read a value of the field of `ie_type` from its tree, and add it to the field.
     fn read_field(&mut self, ie_type: u16, value: &Value, reading: &mut Reading) -> Result<(), Refused>;
+}
+
+/// The tree of the `nth` value of a field.
+pub(crate) fn field_tree<T: tree::Tree, F: FieldValues<T>>(field: &F, nth: usize) -> Option<Value> {
+    field.values().get(nth).map(tree::Tree::to_tree)
+}
+
+/// Read a value of a field from its tree, and add it to the field.
+pub(crate) fn read_field<T: tree::Tree, F: FieldValues<T>>(field: &mut F, value: &Value, reading: &mut Reading) -> Result<(), Refused> {
+    field.add(T::from_tree(value, reading)?);
+    Ok(())
 }
 
 /// Put `value` under `name`: a list for a row that is a list, and for an IE that is
