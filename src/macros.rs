@@ -749,7 +749,22 @@ macro_rules! pfcp_messages {
 /// presence and its interfaces. A C row whose condition the scope alone shows ends with
 /// `if |scope| condition`: `check()` reports it missing where the condition holds.
 macro_rules! pfcp_table {
+    // A table whose mandatory IEs differ between its interfaces has a constructor for each
+    // interface that it lists, and no `new()`.
     (
+        $(#[$meta:meta])*
+        $kind:ident $ty:ident = $code:literal, $name:literal, $id:literal by [$($by:ident)*] { $($rows:tt)* }
+    ) => {
+        pfcp_table!(@table [$($by)*] $(#[$meta])* $kind $ty = $code, $name, $id { $($rows)* });
+    };
+    (
+        $(#[$meta:meta])*
+        $kind:ident $ty:ident = $code:literal, $name:literal, $id:literal { $($rows:tt)* }
+    ) => {
+        pfcp_table!(@table [] $(#[$meta])* $kind $ty = $code, $name, $id { $($rows)* });
+    };
+    (
+        @table [$($by:ident)*]
         $(#[$meta:meta])*
         $kind:ident $ty:ident = $code:literal, $name:literal, $id:literal {
             $( $field:ident : $row:literal $p:ident $(* $($max:literal)?)? $vty:ident $($raw:literal)?
@@ -774,6 +789,7 @@ macro_rules! pfcp_table {
             id: $id,
             name: $name,
             code: $code,
+            constructors: crate::table::Interfaces(0 $(| crate::table::Interfaces::$by.0)*),
             rows: &[$(
                 crate::table::Row {
                     name: $row,
@@ -815,7 +831,7 @@ macro_rules! pfcp_table {
             )*
         }
 
-        pfcp_table!(@new $ty [] [] $( $field : $row $p $(* $($max)?)? $vty $($raw)? [$($interface)*] , )*);
+        pfcp_table!(@ctors [$($by)*] $ty { $( $field : $row $p $(* $($max)?)? $vty $($raw)? [$($interface)*] , )* });
 
         // A table without rows leaves its arguments unused.
         #[allow(unused_variables, unused_mut, unused_assignments)]
@@ -1094,9 +1110,10 @@ macro_rules! pfcp_table {
         }
 
         impl crate::check::Check for $ty {
-            /// Its table on N4, as the receiver of a response.
+            /// Its table on any interface, as the receiver of a response: the IEs of any,
+            /// and those that all need.
             fn check(&self, path: &crate::check::Path, found: &mut alloc::vec::Vec<crate::check::Deviation>) {
-                crate::check::check_scope(self, path, crate::check::Context::on(crate::table::Interfaces::N4), found);
+                crate::check::check_scope(self, path, crate::check::Context::on(crate::table::Interfaces::ALL), found);
             }
 
             fn check_in(&self, path: &crate::check::Path, context: crate::check::Context, found: &mut alloc::vec::Vec<crate::check::Deviation>) {
@@ -1125,12 +1142,31 @@ macro_rules! pfcp_table {
     };
     (@kind message $ty:ident) => {};
 
-    // `new()`, with the fields of the mandatory rows, which a muncher collects.
-    (@new $ty:ident [$($arg:tt)*] [$( ($f:ident [$($m:tt)*] ($ft:ty)) )*]) => {
+    // The constructors: `new()` with the mandatory rows of every interface, or one for each
+    // interface that the table lists, with the mandatory rows of that interface.
+    (@ctors [] $ty:ident { $($rows:tt)* }) => {
+        pfcp_table!(@new new * $ty "The scope with its mandatory IEs, which each interface of its table has alike." [] [] $($rows)*);
+    };
+    (@ctors [$($by:ident)+] $ty:ident $rows:tt) => {
+        pfcp_table!(@each [$($by)+] $ty $rows);
+    };
+    (@each [] $ty:ident $rows:tt) => {};
+    (@each [$on:ident $($more:ident)*] $ty:ident $rows:tt) => {
+        pfcp_table!(@ctor $on $ty $rows);
+        pfcp_table!(@each [$($more)*] $ty $rows);
+    };
+    (@ctor SXA $ty:ident { $($rows:tt)* }) => { pfcp_table!(@new new_sxa SXA $ty "The scope with its mandatory IEs on Sxa." [] [] $($rows)*); };
+    (@ctor SXB $ty:ident { $($rows:tt)* }) => { pfcp_table!(@new new_sxb SXB $ty "The scope with its mandatory IEs on Sxb." [] [] $($rows)*); };
+    (@ctor SXC $ty:ident { $($rows:tt)* }) => { pfcp_table!(@new new_sxc SXC $ty "The scope with its mandatory IEs on Sxc." [] [] $($rows)*); };
+    (@ctor N4 $ty:ident { $($rows:tt)* }) => { pfcp_table!(@new new_n4 N4 $ty "The scope with its mandatory IEs on N4." [] [] $($rows)*); };
+    (@ctor N4MB $ty:ident { $($rows:tt)* }) => { pfcp_table!(@new new_n4mb N4MB $ty "The scope with its mandatory IEs on N4mb." [] [] $($rows)*); };
+    // A constructor, with the fields of the mandatory rows of `$on` (`*` for any interface),
+    // which a muncher collects.
+    (@new $name:ident $on:tt $ty:ident $doc:literal [$($arg:tt)*] [$( ($f:ident [$($m:tt)*] ($ft:ty)) )*]) => {
         impl $ty {
-            /// The scope with its mandatory IEs.
+            #[doc = $doc]
             #[allow(clippy::too_many_arguments)]
-            pub fn new($($arg)*) -> Self {
+            pub fn $name($($arg)*) -> Self {
                 #[allow(unused_mut)]
                 let mut scope = Self::default();
                 $( crate::table::FieldValues::<$ft>::add(&mut scope.$f, $f); )*
@@ -1138,21 +1174,36 @@ macro_rules! pfcp_table {
             }
         }
     };
-    // A mandatory row is an argument of `new()` where N4 has it.
-    (@new $ty:ident [$($arg:tt)*] [$($set:tt)*] $field:ident : $row:literal M $(* $($max:literal)?)? $vty:ident $($raw:literal)? [$($i:ident)*] , $($rest:tt)*) => {
-        pfcp_table!(@n4 [$($i)*] $ty [$($arg)*] [$($set)*] ($field [$(* $($max)?)?] (pfcp_table!(@type $vty $($raw)?))) $($rest)*);
+    (@new $name:ident $on:tt $ty:ident $doc:literal [$($arg:tt)*] [$($set:tt)*] $field:ident : $row:literal M $(* $($max:literal)?)? $vty:ident $($raw:literal)? [$($i:ident)*] , $($rest:tt)*) => {
+        pfcp_table!(@in $on [$($i)*] $name $ty $doc [$($arg)*] [$($set)*] ($field [$(* $($max)?)?] (pfcp_table!(@type $vty $($raw)?))) $($rest)*);
     };
-    (@new $ty:ident [$($arg:tt)*] [$($set:tt)*] $field:ident : $row:literal $p:ident $(* $($max:literal)?)? $vty:ident $($raw:literal)? [$($i:ident)*] , $($rest:tt)*) => {
-        pfcp_table!(@new $ty [$($arg)*] [$($set)*] $($rest)*);
+    (@new $name:ident $on:tt $ty:ident $doc:literal [$($arg:tt)*] [$($set:tt)*] $field:ident : $row:literal $p:ident $(* $($max:literal)?)? $vty:ident $($raw:literal)? [$($i:ident)*] , $($rest:tt)*) => {
+        pfcp_table!(@new $name $on $ty $doc [$($arg)*] [$($set)*] $($rest)*);
     };
-    (@n4 [N4 $($i:ident)*] $ty:ident [$($arg:tt)*] [$($set:tt)*] ($field:ident [$($m:tt)*] ($t:ty)) $($rest:tt)*) => {
-        pfcp_table!(@new $ty [$($arg)* $field: $t,] [$($set)* ($field [$($m)*] ($t))] $($rest)*);
+    // A mandatory row is an argument where its interfaces have `$on`.
+    (@in * [$($i:ident)*] $name:ident $ty:ident $doc:literal [$($arg:tt)*] [$($set:tt)*] ($field:ident [$($m:tt)*] ($t:ty)) $($rest:tt)*) => {
+        pfcp_table!(@new $name * $ty $doc [$($arg)* $field: $t,] [$($set)* ($field [$($m)*] ($t))] $($rest)*);
     };
-    (@n4 [$other:ident $($i:ident)*] $ty:ident [$($arg:tt)*] [$($set:tt)*] $row:tt $($rest:tt)*) => {
-        pfcp_table!(@n4 [$($i)*] $ty [$($arg)*] [$($set)*] $row $($rest)*);
+    (@in SXA [SXA $($i:ident)*] $name:ident $ty:ident $doc:literal [$($arg:tt)*] [$($set:tt)*] ($field:ident [$($m:tt)*] ($t:ty)) $($rest:tt)*) => {
+        pfcp_table!(@new $name SXA $ty $doc [$($arg)* $field: $t,] [$($set)* ($field [$($m)*] ($t))] $($rest)*);
     };
-    (@n4 [] $ty:ident [$($arg:tt)*] [$($set:tt)*] $row:tt $($rest:tt)*) => {
-        pfcp_table!(@new $ty [$($arg)*] [$($set)*] $($rest)*);
+    (@in SXB [SXB $($i:ident)*] $name:ident $ty:ident $doc:literal [$($arg:tt)*] [$($set:tt)*] ($field:ident [$($m:tt)*] ($t:ty)) $($rest:tt)*) => {
+        pfcp_table!(@new $name SXB $ty $doc [$($arg)* $field: $t,] [$($set)* ($field [$($m)*] ($t))] $($rest)*);
+    };
+    (@in SXC [SXC $($i:ident)*] $name:ident $ty:ident $doc:literal [$($arg:tt)*] [$($set:tt)*] ($field:ident [$($m:tt)*] ($t:ty)) $($rest:tt)*) => {
+        pfcp_table!(@new $name SXC $ty $doc [$($arg)* $field: $t,] [$($set)* ($field [$($m)*] ($t))] $($rest)*);
+    };
+    (@in N4 [N4 $($i:ident)*] $name:ident $ty:ident $doc:literal [$($arg:tt)*] [$($set:tt)*] ($field:ident [$($m:tt)*] ($t:ty)) $($rest:tt)*) => {
+        pfcp_table!(@new $name N4 $ty $doc [$($arg)* $field: $t,] [$($set)* ($field [$($m)*] ($t))] $($rest)*);
+    };
+    (@in N4MB [N4MB $($i:ident)*] $name:ident $ty:ident $doc:literal [$($arg:tt)*] [$($set:tt)*] ($field:ident [$($m:tt)*] ($t:ty)) $($rest:tt)*) => {
+        pfcp_table!(@new $name N4MB $ty $doc [$($arg)* $field: $t,] [$($set)* ($field [$($m)*] ($t))] $($rest)*);
+    };
+    (@in $on:tt [$other:ident $($i:ident)*] $name:ident $ty:ident $doc:literal [$($arg:tt)*] [$($set:tt)*] $row:tt $($rest:tt)*) => {
+        pfcp_table!(@in $on [$($i)*] $name $ty $doc [$($arg)*] [$($set)*] $row $($rest)*);
+    };
+    (@in $on:tt [] $name:ident $ty:ident $doc:literal [$($arg:tt)*] [$($set:tt)*] $row:tt $($rest:tt)*) => {
+        pfcp_table!(@new $name $on $ty $doc [$($arg)*] [$($set)*] $($rest)*);
     };
 }
 

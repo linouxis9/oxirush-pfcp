@@ -24,7 +24,7 @@ use oxirush_pfcp::*;
 const SMF: Ipv4Addr = Ipv4Addr::new(10, 0, 0, 1);
 
 fn pdr(id: u16) -> CreatePdr {
-    CreatePdr::new(PdrId::new(id), Precedence::new(255), Pdi::new(SourceInterface::new(SourceInterfaceValue::Access)))
+    CreatePdr::new_n4(PdrId::new(id), Precedence::new(255), Pdi::new(SourceInterface::new(SourceInterfaceValue::Access)))
         .with_far_id(FarId::new(1))
 }
 
@@ -35,17 +35,17 @@ fn far(id: u32) -> CreateFar {
 
 fn establishment() -> Message {
     let seid = FSeid { v4: true, seid: Some(0x1001), ipv4: Some(SMF), ..Default::default() };
-    let request = SessionEstablishmentRequest::new(NodeId::Ipv4(SMF), seid, pdr(1), far(1));
+    let request = SessionEstablishmentRequest::new_n4(NodeId::Ipv4(SMF), seid, pdr(1), far(1));
     Message { header: Header::session(0, 7), body: request.into() }
 }
 
 fn kinds(message: &Message, interface: Interfaces) -> Vec<DeviationKind> {
-    message.check_on(interface).into_iter().map(|deviation| deviation.kind).collect()
+    message.check(interface).into_iter().map(|deviation| deviation.kind).collect()
 }
 
 #[test]
 fn a_built_establishment_has_no_deviation() {
-    let found = establishment().check();
+    let found = establishment().check(Interfaces::N4);
     assert!(found.is_empty(), "{found:?}");
 }
 
@@ -55,7 +55,7 @@ fn check_on_takes_the_rows_of_the_interface() {
     let mut message = establishment();
     let Body::SessionEstablishmentRequest(request) = &mut message.body else { panic!() };
     request.create_pdr[0].precedence = None;
-    let on_n4 = message.check();
+    let on_n4 = message.check(Interfaces::N4);
     assert_eq!(on_n4.len(), 1, "{on_n4:?}");
     assert_eq!(on_n4[0].kind, DeviationKind::MandatoryMissing { ie_type: 29 });
     assert_eq!(on_n4[0].path, "/pfcp/Create PDR/0/Precedence");
@@ -77,14 +77,14 @@ fn request_with(message: &mut Message, change: impl FnOnce(&mut SessionEstablish
 fn the_cause_follows_the_presence_of_the_grouped_ie() {
     let mut message = establishment();
     request_with(&mut message, |request| request.create_pdr[0].pdi.as_mut().unwrap().source_interface = None);
-    let found = message.check();
+    let found = message.check(Interfaces::N4);
     assert_eq!(found[0].cause(), Some(CauseValue::MandatoryIeMissing), "{found:?}");
     assert_eq!(found[0].offending_ie(), Some(20));
 
     let mut modification = SessionModificationRequest::default().with_create_pdr(pdr(1));
     modification.create_pdr[0].pdr_id = None;
     let message = Message { header: Header::session(0x2002, 8), body: modification.into() };
-    let found = message.check();
+    let found = message.check(Interfaces::N4);
     assert_eq!(found[0].kind, DeviationKind::MandatoryMissing { ie_type: 56 }, "{found:?}");
     assert_eq!(found[0].cause(), Some(CauseValue::ConditionalIeMissing));
 
@@ -92,13 +92,13 @@ fn the_cause_follows_the_presence_of_the_grouped_ie() {
     request_with(&mut establishment, |request| {
         request.create_bar = Some(Box::default());
     });
-    let found = establishment.check();
+    let found = establishment.check(Interfaces::N4);
     assert_eq!(found[0].kind, DeviationKind::MandatoryMissing { ie_type: 88 }, "{found:?}");
     assert_eq!(found[0].cause(), None, "an optional grouped IE");
 
     let response = SessionEstablishmentResponse::default();
     let message = Message { header: Header::session(0x1001, 7), body: response.into() };
-    assert!(message.check().iter().all(|deviation| deviation.cause().is_none()));
+    assert!(message.check(Interfaces::N4).iter().all(|deviation| deviation.cause().is_none()));
 }
 
 /// §7.2.3.2: a rejection carries the Cause, the Node ID, the Offending IE, the Load and
@@ -112,7 +112,7 @@ fn a_rejection_carries_only_what_it_may() {
         ..Default::default()
     };
     let mut message = Message { header: Header::session(0x1001, 7), body: response.into() };
-    assert!(message.check().is_empty(), "{:?}", message.check());
+    assert!(message.check(Interfaces::N4).is_empty(), "{:?}", message.check(Interfaces::N4));
     let Body::SessionEstablishmentResponse(response) = &mut message.body else { panic!() };
     response.up_f_seid = Some(FSeid { v4: true, seid: Some(1), ipv4: Some(SMF), ..Default::default() });
     assert_eq!(kinds(&message, Interfaces::N4), [DeviationKind::WithRejection { ie_type: 57 }]);
@@ -123,15 +123,15 @@ fn a_rejection_carries_only_what_it_may() {
 #[test]
 fn seid_0_only_where_the_peer_seid_is_not_known() {
     let establishment = establishment();
-    assert!(establishment.check().is_empty());
+    assert!(establishment.check(Interfaces::N4).is_empty());
     let modification = Message { header: Header::session(0, 8), body: SessionModificationRequest::default().into() };
-    assert!(modification.check().iter().any(|deviation| deviation.clause == "7.2.2.4.2"));
+    assert!(modification.check(Interfaces::N4).iter().any(|deviation| deviation.clause == "7.2.2.4.2"));
     let response = SessionModificationResponse { cause: Some(Cause::new(CauseValue::SessionContextNotFound)), ..Default::default() };
     let mut message = Message { header: Header::session(0, 8), body: response.into() };
-    assert!(message.check().is_empty(), "{:?}", message.check());
+    assert!(message.check(Interfaces::N4).is_empty(), "{:?}", message.check(Interfaces::N4));
     let Body::SessionModificationResponse(response) = &mut message.body else { panic!() };
     response.cause = Some(Cause::new(CauseValue::RequestAccepted));
-    assert!(message.check().iter().any(|deviation| deviation.clause == "7.2.2.4.2"));
+    assert!(message.check(Interfaces::N4).iter().any(|deviation| deviation.clause == "7.2.2.4.2"));
 }
 
 /// Table 7.3-1: PFD management is not on Sxa; a message type of no table is reported.
@@ -157,7 +157,7 @@ fn check_one_change_per_rule() {
     assert_eq!(kinds(&message, Interfaces::N4), [DeviationKind::RuleChangedTwice { rule: "PDR", id: 3 }]);
     let mut establishment = establishment();
     request_with(&mut establishment, |request| request.create_far.push(far(1)));
-    let found = establishment.check();
+    let found = establishment.check(Interfaces::N4);
     assert_eq!(found.iter().map(|deviation| (deviation.kind.clone(), deviation.clause)).collect::<Vec<_>>(), [(DeviationKind::RuleChangedTwice { rule: "FAR", id: 1 }, "5.2.1")]);
 }
 
@@ -193,7 +193,7 @@ fn reserved_values_and_fixed_lengths() {
         request.rat_type = None;
         request.s_nssai = SNssai::decode(&[1, 0, 0, 1, 9]);
     });
-    let found = message.check();
+    let found = message.check(Interfaces::N4);
     assert_eq!(found[0].kind, DeviationKind::FixedLength { ie_type: 257, length: 5 }, "{found:?}");
     assert_eq!(found[0].cause(), None, "an optional IE");
 }
@@ -209,10 +209,10 @@ fn a_request_by_the_name_of_its_type() {
         assert!(!is_request(message_type), "{message_type}");
     }
     let request = Message { header: Header::node(1), body: NodeReportRequest::default().into() };
-    let causes: Vec<_> = request.check().iter().map(Deviation::cause).collect();
+    let causes: Vec<_> = request.check(Interfaces::N4).iter().map(Deviation::cause).collect();
     assert_eq!(causes, [Some(CauseValue::MandatoryIeMissing); 2]);
     let response = Message { header: Header::node(1), body: NodeReportResponse::default().into() };
-    assert!(response.check().iter().all(|deviation| deviation.cause().is_none()));
+    assert!(response.check(Interfaces::N4).iter().all(|deviation| deviation.cause().is_none()));
 }
 
 /// An IE of `ie_type` and `content`.
@@ -236,7 +236,7 @@ fn session_message(message_type: u8, seid: u64, ies: &[Vec<u8>]) -> Vec<u8> {
 fn found(octets: &[u8]) -> Vec<(DeviationKind, Option<CauseValue>, Option<u16>)> {
     let message = Message::decode(octets).unwrap();
     assert_eq!(message.encode().unwrap(), octets, "byte for byte");
-    message.check().into_iter().map(|deviation| (deviation.kind.clone(), deviation.cause(), deviation.offending_ie())).collect()
+    message.check(Interfaces::N4).into_iter().map(|deviation| (deviation.kind.clone(), deviation.cause(), deviation.offending_ie())).collect()
 }
 
 const RTS: [u8; 4] = [0xe8, 0x00, 0x00, 0x00];
@@ -295,7 +295,7 @@ fn a_semantically_invalid_mandatory_ie_is_incorrect() {
     assert_eq!((found[0].1, found[0].2), (Some(CauseValue::MandatoryIeIncorrect), Some(57)), "{found:?}");
     // In a response, no Cause
     let octets = node_message(6, &[ie(60, &[2]), ie(19, &[1]), ie(96, &RTS)]);
-    assert!(Message::decode(&octets).unwrap().check().iter().all(|deviation| deviation.cause().is_none()));
+    assert!(Message::decode(&octets).unwrap().check(Interfaces::N4).iter().all(|deviation| deviation.cause().is_none()));
 }
 
 /// §7.6.8: an optional IE of a mandatory grouped IE, whose value is reserved, is taken as
@@ -305,13 +305,13 @@ fn a_semantically_invalid_mandatory_ie_is_incorrect() {
 fn a_reserved_value_follows_the_presence_of_its_own_row() {
     let mut message = establishment();
     request_with(&mut message, |request| request.create_pdr[0].rat_type = Some(RatType::new(RatTypeValue::from_value(0))));
-    let found = message.check();
+    let found = message.check(Interfaces::N4);
     assert_eq!(found.len(), 1, "{found:?}");
     assert_eq!((found[0].kind.clone(), found[0].cause(), found[0].offending_ie()), (DeviationKind::ReservedValue { value: 0 }, None, None));
     let mut message = establishment();
     let forwarding = |request: &mut SessionEstablishmentRequest| request.create_far[0].forwarding_parameters.as_mut().unwrap().outer_header_creation = Some(OuterHeaderCreation::default());
     request_with(&mut message, forwarding);
-    let found = message.check();
+    let found = message.check(Interfaces::N4);
     assert_eq!(found.len(), 1, "{found:?}");
     assert_eq!(found[0].path, "/pfcp/Create FAR/0/Forwarding Parameters/Outer Header Creation");
     assert_eq!((found[0].cause(), found[0].offending_ie()), (Some(CauseValue::MandatoryIeIncorrect), Some(84)), "{found:?}");
@@ -319,7 +319,7 @@ fn a_reserved_value_follows_the_presence_of_its_own_row() {
     let f_teid = FTeid { chid: true, choose_id: Some(1), ..FTeid::ipv4(1, SMF) };
     let mut message = establishment();
     request_with(&mut message, |request| request.create_pdr[0].pdi.as_mut().unwrap().local_f_teid = Some(f_teid));
-    assert_eq!(message.check().iter().map(Deviation::cause).collect::<Vec<_>>(), [None]);
+    assert_eq!(message.check(Interfaces::N4).iter().map(Deviation::cause).collect::<Vec<_>>(), [None]);
 }
 
 /// §8.1.2: an IE of a null length is no error, and a mandatory one is there.
@@ -337,7 +337,7 @@ fn a_mandatory_ie_of_a_null_length_is_there() {
 fn the_conditions_that_a_message_shows() {
     let node = NodeId::Ipv4(SMF);
     let missing = |message: Message, ie_type: u16, cause: Option<CauseValue>| {
-        let found = message.check();
+        let found = message.check(Interfaces::N4);
         assert_eq!(found.len(), 1, "{message}: {found:?}");
         assert_eq!(found[0].kind, DeviationKind::ConditionalMissing { ie_type }, "{message}: {found:?}");
         assert_eq!((found[0].cause(), found[0].offending_ie()), (cause, cause.map(|_| ie_type)), "{message}: {found:?}");
@@ -386,4 +386,42 @@ fn the_rows_whose_condition_is_checked() {
             assert_eq!(row.presence, Presence::Conditional, "{} {}", info.name(), row.name);
         }
     }
+}
+
+/// EPS CUPS: an SGW-U checks an SGW-C's message on Sxa, a combined SGW/PGW-U on both
+/// Sxa and Sxb (§5.2.6), where a message may have the IEs of either and needs those that
+/// both need; each interface has its constructor where their mandatory IEs differ.
+#[test]
+fn eps_cups_on_its_interfaces() {
+    let smf = NodeId::Ipv4(SMF);
+    let seid = FSeid { v4: true, seid: Some(0x1001), ipv4: Some(SMF), ..Default::default() };
+    let pdi = || Pdi::new(SourceInterface::new(SourceInterfaceValue::Access));
+    let buffering = CreateFar::new(FarId::new(1), ApplyAction { buff: true, ..Default::default() }).with_bar_id(BarId::new(1));
+    // An SGW-C's establishment: no Precedence, a BAR
+    let sxa = SessionEstablishmentRequest::new_sxa(smf.clone(), seid.clone(), CreatePdr::new_sxa(PdrId::new(1), pdi()).with_far_id(FarId::new(1)), buffering.clone())
+        .with_create_bar(CreateBar::new(BarId::new(1)));
+    let sxa = Message { header: Header::session(0, 1), body: sxa.into() };
+    assert!(sxa.check(Interfaces::SXA).is_empty(), "{:?}", sxa.check(Interfaces::SXA));
+    assert!(sxa.check(Interfaces::SXA_SXB).is_empty(), "{:?}", sxa.check(Interfaces::SXA_SXB));
+    assert!(sxa.check(Interfaces::SXB).iter().any(|deviation| deviation.kind == DeviationKind::MandatoryMissing { ie_type: 29 }));
+    // A PGW-C's: Precedence, and Aggregated URRs, of Sxb only
+    let aggregated = AggregatedURRs::new(AggregatedUrrId::new(7), Multiplier { value_digits: 1, exponent: 0, extra: Octets::new() });
+    let urr = CreateUrr::new(UrrId::new(1), MeasurementMethod { volum: true, ..Default::default() }, ReportingTriggers::default()).with_aggregated_urrs(aggregated);
+    let forward = CreateFar::new(FarId::new(2), ApplyAction { forw: true, ..Default::default() })
+        .with_forwarding_parameters(ForwardingParameters::new(DestinationInterface::new(DestinationInterfaceValue::Core)));
+    let sxb = SessionEstablishmentRequest::new_sxb(smf.clone(), seid.clone(), CreatePdr::new_sxb(PdrId::new(2), Precedence::new(1), pdi()).with_far_id(FarId::new(2)), forward.clone())
+        .with_create_urr(urr);
+    let sxb = Message { header: Header::session(0, 2), body: sxb.into() };
+    assert!(sxb.check(Interfaces::SXB).is_empty(), "{:?}", sxb.check(Interfaces::SXB));
+    assert!(sxb.check(Interfaces::SXA_SXB).is_empty(), "{:?}", sxb.check(Interfaces::SXA_SXB));
+    assert!(sxb.check(Interfaces::SXA).iter().any(|deviation| matches!(deviation.kind, DeviationKind::NotOnInterface { .. })));
+    // A combined one: the PDRs and FARs of both, duplicated packets of Sxa and Sxb
+    let duplicating = DuplicatingParameters::new(DestinationInterface::new(DestinationInterfaceValue::LiFunction));
+    let both = SessionEstablishmentRequest::new_sxa(smf, seid, CreatePdr::new_sxa(PdrId::new(1), pdi()).with_far_id(FarId::new(1)), buffering)
+        .with_create_pdr(CreatePdr::new_sxb(PdrId::new(2), Precedence::new(1), pdi()).with_far_id(FarId::new(2)))
+        .with_create_far(forward.with_apply_action(ApplyAction { forw: true, dupl: true, ..Default::default() }).with_duplicating_parameters(duplicating))
+        .with_create_bar(CreateBar::new(BarId::new(1)));
+    let both = Message { header: Header::session(0, 3), body: both.into() };
+    assert!(both.check(Interfaces::SXA_SXB).is_empty(), "{:?}", both.check(Interfaces::SXA_SXB));
+    assert!(!both.check(Interfaces::N4).is_empty());
 }

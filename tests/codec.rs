@@ -28,7 +28,7 @@ use oxirush_utils::tree;
 /// A Session Establishment Request of an SMF: one uplink PDR whose F-TEID the UPF
 /// chooses, one downlink PDR to the UE's address.
 fn establishment() -> Message {
-    let uplink = CreatePdr::new(
+    let uplink = CreatePdr::new_n4(
         PdrId::new(1),
         Precedence::new(255),
         Pdi::new(SourceInterface::new(SourceInterfaceValue::Access)).with_local_f_teid(FTeid::choose_ipv4()),
@@ -36,7 +36,7 @@ fn establishment() -> Message {
     .with_far_id(FarId::new(1))
     .with_urr_id(UrrId::new(1));
     let ue = UeIpAddress { v4: true, sd: true, ipv4: Some(Ipv4Addr::new(10, 45, 0, 2)), ..Default::default() };
-    let downlink = CreatePdr::new(
+    let downlink = CreatePdr::new_n4(
         PdrId::new(2),
         Precedence::new(255),
         Pdi::new(SourceInterface::new(SourceInterfaceValue::Core)).with_ue_ip_address(ue),
@@ -44,7 +44,7 @@ fn establishment() -> Message {
     .with_far_id(FarId::new(2));
     let smf = Ipv4Addr::new(10, 0, 0, 1);
     let seid = FSeid { v4: true, seid: Some(0x1001), ipv4: Some(smf), ..Default::default() };
-    let request = SessionEstablishmentRequest::new(
+    let request = SessionEstablishmentRequest::new_n4(
         NodeId::Ipv4(smf),
         seid,
         uplink,
@@ -128,7 +128,7 @@ fn what_the_table_does_not_have_is_kept_in_its_place() {
     assert_eq!(again.to_tree(), tree);
     assert_eq!(read.encode().unwrap().len(), octets.len());
 
-    let found = decoded.check();
+    let found = decoded.check(Interfaces::N4);
     for deviation in &found {
         println!("{deviation}");
     }
@@ -148,7 +148,7 @@ fn check_names_the_clause() {
     f_teid.ch = false;
     f_teid.teid = Some(5);
     message.header.seid = None;
-    let found = message.check();
+    let found = message.check(Interfaces::N4);
     for deviation in &found {
         println!("{deviation}");
     }
@@ -229,7 +229,7 @@ fn other_vectors_round_trip() {
                 };
                 // A vector of no interface may have the IEs of any.
                 let any = fields.len() < 4;
-                for deviation in message.check_on(interface) {
+                for deviation in message.check(interface) {
                     if !(any && matches!(deviation.kind, DeviationKind::NotOnInterface { .. })) {
                         println!("  {deviation}");
                     }
@@ -327,7 +327,7 @@ fn rough_times() {
     println!("{} octets", octets.len());
     time("decode", &mut || drop(black_box(Message::decode(black_box(&octets)).unwrap())));
     time("encode", &mut || drop(black_box(black_box(&message).encode().unwrap())));
-    time("check", &mut || drop(black_box(black_box(&message).check())));
+    time("check", &mut || drop(black_box(black_box(&message).check(Interfaces::N4))));
     time("to_tree", &mut || drop(black_box(black_box(&message).to_tree())));
     time("from_tree", &mut || drop(black_box(Message::from_tree(black_box(&tree)).unwrap())));
     time("edit by path, from_tree and encode", &mut || {
@@ -599,13 +599,13 @@ fn a_header_value_that_its_bits_cannot_hold() {
     ] {
         let message = message(header);
         assert!(matches!(message.encode(), Err(Error::HeaderField { .. })), "{header:?}");
-        assert!(!message.check().is_empty(), "{header:?}");
+        assert!(!message.check(Interfaces::N4).is_empty(), "{header:?}");
     }
     // The spare bits after the priority are spare (§7.2.2.3)
     let mut octets = message(Header { priority: Some(3), ..Header::session(1, 5) }).encode().unwrap();
     octets[15] |= 0x05;
     let decoded = Message::decode(&octets).unwrap();
-    assert_eq!(decoded.check().iter().map(|deviation| deviation.kind.clone()).collect::<Vec<_>>(), [DeviationKind::SpareBits]);
+    assert_eq!(decoded.check(Interfaces::N4).iter().map(|deviation| deviation.kind.clone()).collect::<Vec<_>>(), [DeviationKind::SpareBits]);
     let written = tree!({"message": "PFCP Session Deletion Request", "SEID": 1, "Sequence Number": 1, "Message Priority": 3, "Spare octet": 0x35, "ies": {}});
     assert!(Message::from_tree(&written).is_err());
 }
@@ -632,7 +632,7 @@ fn values_as_their_clauses_have_them() {
     let service = DownlinkDataServiceInformation { ppi: true, paging_policy_indication: Some(3), ..Default::default() };
     let report = DownlinkDataReport::new(PdrId::new(1)).with_pdr_id(PdrId::new(2)).with_downlink_data_service_information(service.clone()).with_downlink_data_service_information(service);
     let message = Message { header: Header::session(1, 1), body: SessionReportRequest::new(ReportType { dldr: true, ..Default::default() }).with_downlink_data_report(report).into() };
-    assert!(message.check().is_empty(), "{:?}", message.check());
+    assert!(message.check(Interfaces::N4).is_empty(), "{:?}", message.check(Interfaces::N4));
     let decoded = Message::decode(&message.encode().unwrap()).unwrap();
     assert_eq!(decoded, message);
     // §8.2.183: the number of UE IPv4 addresses is a number

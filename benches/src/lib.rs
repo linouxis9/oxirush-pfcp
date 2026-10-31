@@ -71,7 +71,7 @@ fn pdr(id: u16, uplink: bool) -> CreatePdr {
             .with_ue_ip_address(ue)
             .with_sdf_filter(sdf_filter("permit out ip from any to assigned"))
     };
-    let mut created = CreatePdr::new(PdrId::new(id), Precedence::new(255 - u32::from(id)), pdi)
+    let mut created = CreatePdr::new_n4(PdrId::new(id), Precedence::new(255 - u32::from(id)), pdi)
         .with_far_id(FarId::new(u32::from(id)))
         .with_urr_id(UrrId::new(u32::from(id).div_ceil(2)))
         .with_qer_id(QerId::new(1));
@@ -91,7 +91,7 @@ pub fn establishment(pdrs: u16) -> Vec<u8> {
         labels.push(label.len() as u8);
         labels.extend_from_slice(label.as_bytes());
     }
-    let mut request = SessionEstablishmentRequest::new(NodeId::Fqdn(labels.into()), seid, pdr(1, true), far(1, true));
+    let mut request = SessionEstablishmentRequest::new_n4(NodeId::Fqdn(labels.into()), seid, pdr(1, true), far(1, true));
     for id in 2..=pdrs {
         request = request.with_create_pdr(pdr(id, id % 2 == 1));
     }

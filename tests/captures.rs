@@ -49,7 +49,7 @@ fn each_captured_message_is_read_written_and_checked() {
             "Sxb" => Interfaces::SXB,
             _ => Interfaces::N4,
         };
-        for deviation in message.check_on(interface) {
+        for deviation in message.check(interface) {
             found.push((run.to_string(), number.to_string(), deviation.to_string()));
         }
         count += 1;

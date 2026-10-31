@@ -691,7 +691,7 @@ pfcp_table! {
 
 pfcp_table! {
     /// PFCP Session Establishment Request (Table 7.5.2.1-1).
-    message SessionEstablishmentRequest = 50, "PFCP Session Establishment Request", "7.5.2.1-1" {
+    message SessionEstablishmentRequest = 50, "PFCP Session Establishment Request", "7.5.2.1-1" by [SXA SXB SXC N4 N4MB] {
         node_id: "Node ID" M NodeId [SXA SXB SXC N4 N4MB],
         cp_f_seid: "CP F-SEID" M FSeid [SXA SXB SXC N4 N4MB],
         create_pdr: "Create PDR" M* CreatePdr [SXA SXB SXC N4 N4MB],
@@ -1135,7 +1135,7 @@ pfcp_table! {
 
 pfcp_table! {
     /// Create PDR IE within PFCP Session Establishment Request (Table 7.5.2.2-1).
-    group CreatePdr = 1, "Create PDR", "7.5.2.2-1" {
+    group CreatePdr = 1, "Create PDR", "7.5.2.2-1" by [SXA SXB SXC N4 N4MB] {
         pdr_id: "PDR ID" M PdrId [SXA SXB SXC N4 N4MB],
         precedence: "Precedence" M Precedence [SXB SXC N4 N4MB],
         pdi: "PDI" M Pdi [SXA SXB SXC N4 N4MB],
@@ -1812,7 +1812,7 @@ pfcp_table! {
 
 pfcp_table! {
     /// Update URR IE within PFCP Session Modification Request (Table 7.5.4.4-1).
-    group UpdateUrr = 13, "Update URR", "7.5.4.4-1" {
+    group UpdateUrr = 13, "Update URR", "7.5.4.4-1" by [SXA SXB SXC N4 N4MB] {
         urr_id: "URR ID" M UrrId [SXA SXB SXC N4],
         measurement_method: "Measurement Method" C MeasurementMethod [SXA SXB SXC N4],
         reporting_triggers: "Reporting Triggers" C ReportingTriggers [SXA SXB SXC N4 N4MB],
@@ -2081,7 +2081,7 @@ pfcp_table! {
 
 pfcp_table! {
     /// Updated PDR IE in PFCP Session Modification Response (Table 7.5.5.5-1).
-    group UpdatedPdr = 256, "Updated PDR", "7.5.5.5-1" {
+    group UpdatedPdr = 256, "Updated PDR", "7.5.5.5-1" by [SXB N4] {
         pdr_id: "PDR ID" M PdrId [N4],
         f_teid: "F-TEID" C*2 FTeid [SXB N4]
             roles ["Local F-TEID for Redundant Transmission" C [N4], "Local F-TEID" C [SXB]],

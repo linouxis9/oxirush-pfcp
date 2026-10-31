@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """The fixtures of the test `spec`, from the document that the crate follows: TS 29.244
-V19.6.0 (2025-06), as the 3GPP archive has it.
+V19.6.0 (2026-06), as the 3GPP archive has it.
 
     python3 tests/spec/extract.py 29244-j60.zip     # the archive, fetched already
     python3 tests/spec/extract.py --fetch           # fetched from the 3GPP archive

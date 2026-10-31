@@ -101,14 +101,15 @@ fn block_1() {
 
     fn main() -> Result<(), Box<dyn std::error::Error>> {
         // An SMF's Session Establishment Request: one uplink PDR, whose F-TEID the UPF
-        // chooses, and its FAR. `new()` takes the mandatory IEs, `with_*()` adds the others
+        // chooses, and its FAR. `new()` takes the mandatory IEs, and `new_n4()` those of N4
+        // where an interface has others; `with_*()` adds the others
         let smf = Ipv4Addr::new(10, 0, 0, 1);
         let pdi = Pdi::new(SourceInterface::new(SourceInterfaceValue::Access)).with_local_f_teid(FTeid::choose_ipv4());
-        let pdr = CreatePdr::new(PdrId::new(1), Precedence::new(255), pdi).with_far_id(FarId::new(1));
+        let pdr = CreatePdr::new_n4(PdrId::new(1), Precedence::new(255), pdi).with_far_id(FarId::new(1));
         let core = ForwardingParameters::new(DestinationInterface::new(DestinationInterfaceValue::Core));
         let far = CreateFar::new(FarId::new(1), ApplyAction { forw: true, ..Default::default() }).with_forwarding_parameters(core);
         let cp_f_seid = FSeid { v4: true, seid: Some(0x1001), ipv4: Some(smf), ..Default::default() };
-        let request = SessionEstablishmentRequest::new(NodeId::Ipv4(smf), cp_f_seid, pdr, far);
+        let request = SessionEstablishmentRequest::new_n4(NodeId::Ipv4(smf), cp_f_seid, pdr, far);
         let octets = Message { header: Header::session(0, 7), body: request.into() }.encode()?;
         println!("{}", hex::encode(&octets));
 
@@ -121,8 +122,8 @@ fn block_1() {
         }
 
         // Nothing is wrong with it on N4; Sxa has no Precedence in a Create PDR
-        println!("{} deviations on N4", message.check().len());
-        for deviation in message.check_on(Interfaces::SXA) {
+        println!("{} deviations on N4", message.check(Interfaces::N4).len());
+        for deviation in message.check(Interfaces::SXA) {
             println!("on Sxa: {deviation}");
         }
         Ok(())
@@ -238,18 +239,18 @@ fn block_5() {
 
     fn main() -> Result<(), Box<dyn std::error::Error>> {
         // A modification that creates PDR 3 and removes it, and a Create PDR without its PDR ID
-        let mut pdr = CreatePdr::new(PdrId::new(3), Precedence::new(32), Pdi::new(SourceInterface::new(SourceInterfaceValue::Core)));
+        let mut pdr = CreatePdr::new_n4(PdrId::new(3), Precedence::new(32), Pdi::new(SourceInterface::new(SourceInterfaceValue::Core)));
         let modification = SessionModificationRequest::default()
             .with_create_pdr(pdr.clone())
             .with_remove_pdr(RemovePdr::new(PdrId::new(3)));
         pdr.pdr_id = None;
         let request = Message { header: Header::session(0x2001, 8), body: modification.with_create_pdr(pdr).into() };
-        for deviation in request.check() {
+        for deviation in request.check(Interfaces::N4) {
             println!("{deviation}");
         }
 
         // The answer to the first deviation that has a Cause
-        let deviation = request.check().into_iter().find(|deviation| deviation.cause().is_some()).ok_or("none")?;
+        let deviation = request.check(Interfaces::N4).into_iter().find(|deviation| deviation.cause().is_some()).ok_or("none")?;
         let response = SessionModificationResponse {
             cause: deviation.cause().map(Cause::new),
             offending_ie: deviation.offending_ie().map(OffendingIe::new),
@@ -257,7 +258,7 @@ fn block_5() {
         };
         let answer = Message { header: Header::session(0x1001, request.header.sequence), body: response.into() };
         println!("{answer}: {}", hex::encode(answer.encode()?));
-        println!("{} deviations in the answer", answer.check().len());
+        println!("{} deviations in the answer", answer.check(Interfaces::N4).len());
         Ok(())
     }
 

@@ -163,15 +163,12 @@ impl Message {
         Ok(out)
     }
 
-    /// Each way in which the message is not as TS 29.244 has a sender construct it on N4.
-    pub fn check(&self) -> Vec<Deviation> {
-        self.check_on(Interfaces::N4)
-    }
-
     /// Each way in which the message is not as TS 29.244 has a sender construct it on
     /// `interface`: its mandatory IEs, and the IEs that it may have, are those of the
-    /// Appl. column of the interface.
-    pub fn check_on(&self, interface: Interfaces) -> Vec<Deviation> {
+    /// Appl. column of the interface. On a set of interfaces, as [`Interfaces::SXA_SXB`]
+    /// of a combined SGW/PGW (§5.2.6), a message may have the IEs of any of them, and
+    /// needs those that each of them needs.
+    pub fn check(&self, interface: Interfaces) -> Vec<Deviation> {
         let mut found = Vec::new();
         let header = &self.header;
         let message_type = self.body.message_type();

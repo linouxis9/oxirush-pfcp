@@ -387,22 +387,24 @@ pub(crate) fn check_field_values<T: Check + crate::ie::Codec + crate::ie::IeType
 /// Offending IE, Load Control Information, Overload Control Information, Failed Rule ID.
 const WITH_REJECTION: [u16; 6] = [19, 60, 40, 51, 54, 114];
 
-/// Whether a row is on `interface`, and how many of its IEs are mandatory there: one, or
-/// one for each mandatory role of a shared field.
+/// Whether a row is on `interface`, of a set on any, and how many of its IEs are
+/// mandatory there, of a set on each: one, or one for each mandatory role of a shared
+/// field.
 fn on(row: &Row, interface: Interfaces) -> (bool, usize) {
     if row.roles.is_empty() {
         let here = row.interfaces.has(interface);
-        return (here, usize::from(here && row.presence == Presence::Mandatory));
+        return (here, usize::from(row.interfaces.has_all(interface) && row.presence == Presence::Mandatory));
     }
     let roles = row.roles.iter().filter(|role| role.interfaces.has(interface));
-    let mandatory = roles.clone().filter(|role| role.presence == Presence::Mandatory).count();
+    let mandatory = roles.clone().filter(|role| role.presence == Presence::Mandatory && role.interfaces.has_all(interface)).count();
     (roles.count() > 0, mandatory)
 }
 
-/// The IEs of a row that mandatory rows need on the interface, in the context.
+/// The IEs of a row that mandatory rows need on the interface, in the context: of a set
+/// of interfaces, those that each needs.
 #[inline]
 fn mandatory(row: &Row, context: Context) -> usize {
-    if !row.mandatory.has(context.interface) {
+    if !row.mandatory.has_all(context.interface) {
         return 0;
     }
     let (_, mandatory) = on(row, context.interface);
