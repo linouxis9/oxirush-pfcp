@@ -421,13 +421,14 @@ pfcp_fields! {
 pfcp_layout! {
     /// L2TP User Authentication (§8.2.187): the Proxy Authen Type, then the name, the
     /// challenge, the response and the ID that its flags announce, each as the Attribute
-    /// Value of its AVP (IETF RFC 2661).
+    /// Value of its AVP (IETF RFC 2661). The response is the password of PAP in clear, or
+    /// what CHAP makes of it: `Debug` does not print it.
     pub struct L2tpUserAuthentication "8.2.187" {
         head { proxy_authen_type_value "Proxy Authen Type Value": u16 }
         flags(u8) { pai "PAI": 4, par "PAR": 3, pac "PAC": 2, pan "PAN": 1 }
         proxy_authen_name_value "Proxy Authen Name Value": Lv8 if pan,
         proxy_authen_challenge_value "Proxy Authen Challenge Value": Lv8 if pac,
-        proxy_authen_response_value "Proxy Authen Response Value": Lv8 if par,
+        proxy_authen_response_value "Proxy Authen Response Value": SecretLv8 if par,
         proxy_authen_id "Proxy Authen ID": u8 if pai,
     }
 }
@@ -510,7 +511,7 @@ pfcp_bits! {
 
 // ── Secrets ────────────────────────────────────────────────────────────────
 
-/// Octets of a key, which `Debug` does not print: their length alone.
+/// Octets of a key or a password, which `Debug` does not print: their length alone.
 #[derive(Clone, Default, PartialEq, Eq)]
 pub struct SecretLv8(pub Vec<u8>);
 
@@ -737,9 +738,10 @@ pfcp_secret! {
     TunnelPassword "Tunnel Password value";
 }
 
-/// The IE types whose content is a key, which the `Debug` of an IE kept as octets does not
-/// print: Tunnel Password, HMAC Key (STAMP), Key ID and Shared Secret.
-pub(crate) const SECRETS: [u16; 3] = [313, 391, 393];
+/// The IE types whose content is a key or a password, which the `Debug` of an IE kept as
+/// octets does not print: L2TP User Authentication, Tunnel Password, HMAC Key (STAMP), Key
+/// ID and Shared Secret.
+pub(crate) const SECRETS: [u16; 4] = [278, 313, 391, 393];
 
 listed_value!(
     SdfFilter,

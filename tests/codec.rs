@@ -974,6 +974,29 @@ fn keys_are_not_printed() {
             && !format!("{password:?}").contains("736563726574"),
         "{password:?}"
     );
+    // The password of PAP, in clear (Table 7.5.2.1-3, RFC 2661)
+    let authentication = L2tpUserAuthentication {
+        pan: true,
+        par: true,
+        proxy_authen_type_value: 3,
+        proxy_authen_name_value: Some(Lv8(b"alice".to_vec())),
+        proxy_authen_response_value: Some(SecretLv8(b"secret".to_vec())),
+        ..Default::default()
+    };
+    let printed = format!("{authentication:?}");
+    assert!(
+        printed.contains("alice") || printed.contains("97, 108"),
+        "{printed}"
+    );
+    assert!(
+        !printed.contains("115, 101, 99") && !printed.contains("secret"),
+        "{printed}"
+    );
+    let printed = format!("{:?}", RawIe::new(278, b"secret".to_vec()));
+    assert!(
+        !printed.contains("115, 101, 99") && !printed.contains("736563"),
+        "{printed}"
+    );
     let mut parameters = ProtocolSpecificConfigurationParameters {
         hmac_key_stamp: Some(HmacKeyStamp(vec![1, 2, 3].into())),
         ..Default::default()
