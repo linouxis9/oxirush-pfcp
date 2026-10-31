@@ -23,6 +23,9 @@ std = []
 tree = ["oxirush-utils/tree"]
 # `Serialize` and `Deserialize` for a message and each of its IEs, through its tree.
 serde = ["tree", "oxirush-utils/serde"]
+# A PFCP entity without I/O: delivery, heartbeat, associations, sessions, load and
+# overload control.
+node = []
 
 [dependencies]
 pastey = "0.2"
@@ -42,6 +45,10 @@ name = "spec"
 [[test]]
 name = "serde"
 required-features = ["serde"]
+
+[[test]]
+name = "node"
+required-features = ["node"]
 
 # `pfcp_borrowed`: decoded values borrow their octets, for the measurement of the two
 # forms. cargo-fuzz sets `fuzzing`, and docs.rs `docsrs`.

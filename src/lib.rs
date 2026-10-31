@@ -44,6 +44,8 @@ mod ie;
 mod macros;
 mod list;
 mod message;
+#[cfg(feature = "node")]
+pub mod node;
 mod octets;
 pub mod framing;
 mod registry;
