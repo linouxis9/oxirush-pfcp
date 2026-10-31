@@ -62,7 +62,7 @@ use crate::registry::*;
 use crate::values::*;
 use crate::values_gen::*;
 
-use state::{Answered, Change, Effect, Outstanding, Scope};
+use state::{Answers, Change, Effect, Outstanding, Scope};
 pub use state::{Association, LoadControl, OverloadControl, Session};
 
 /// The function of the node: it sets up sessions, or it has them set up.
@@ -100,8 +100,11 @@ pub struct NodeConfig {
     /// while it can (§6.2.4.5.1): `None` for none.
     pub priority_up_to: Option<u8>,
     /// How many requests of the peers the node keeps for their retransmissions, and how
-    /// many Recovery Time Stamps of peers without an association: beyond it, the oldest
-    /// go, so that a flood of datagrams bounds what the node holds.
+    /// many Recovery Time Stamps of peers without an association, so that a flood of
+    /// datagrams bounds what the node holds. A request that waits for its answer stays;
+    /// beyond it, a rejection of the node's own goes first, then the oldest answer, and a
+    /// request that finds every place waiting is dropped: [`Node::counters`] counts both.
+    /// A Heartbeat Request is answered from the state, and not kept.
     pub capacity: usize,
 }
 
@@ -137,6 +140,19 @@ pub struct Transmit {
     pub octets: Vec<u8>,
 }
 
+/// What the node dropped to bound what it keeps of its peers' requests (§6.4), since it
+/// started.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct Counters {
+    /// Answers that went before `keep`, for a new request that found the node full: a
+    /// retransmission of their request comes again as a new request.
+    pub evicted: u64,
+    /// Requests dropped unanswered, for a node full of requests that wait for their
+    /// answer: the peer sends them again.
+    pub refused: u64,
+}
+
 /// A request that the node sends, until its response or its timeout.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct RequestId(pub u64);
@@ -160,6 +176,8 @@ pub struct Inbound {
     pub peer_seid: Option<u64>,
     /// The Node ID that it carries.
     pub node_id: Option<NodeId>,
+    /// What an answer that accepts it changes.
+    pub(crate) effect: Effect,
 }
 
 /// How a response goes, for a probe that breaks §6.4 on purpose.
@@ -445,8 +463,7 @@ pub struct Node {
     /// (sequence, peer) to (when they go, given up), and by when they go.
     finished: BTreeMap<(u32, SocketAddr), (Duration, bool)>,
     finishing: BTreeSet<(Duration, u32, SocketAddr)>,
-    answering: BTreeSet<(Duration, SocketAddr, u32)>,
-    answered: BTreeMap<(SocketAddr, u32), Answered>,
+    answers: Answers,
     associations: BTreeMap<Vec<u8>, Association>,
     sessions: BTreeMap<u64, Session>,
     /// The Recovery Time Stamp of each peer, and when the node last had it.
@@ -471,8 +488,7 @@ impl Node {
             deadlines: BTreeSet::new(),
             finished: BTreeMap::new(),
             finishing: BTreeSet::new(),
-            answering: BTreeSet::new(),
-            answered: BTreeMap::new(),
+            answers: Answers::default(),
             associations: BTreeMap::new(),
             sessions: BTreeMap::new(),
             recovery: BTreeMap::new(),
@@ -487,6 +503,14 @@ impl Node {
     /// What the node is.
     pub fn config(&self) -> &NodeConfig {
         &self.config
+    }
+
+    /// What the node dropped to bound what it keeps.
+    pub fn counters(&self) -> Counters {
+        Counters {
+            evicted: self.answers.evicted,
+            refused: self.answers.refused,
+        }
     }
 
     /// The next datagram to send: those of the highest priority first.
@@ -790,7 +814,7 @@ impl Node {
             return Err(NodeError::WrongResponse);
         }
         if self
-            .answered
+            .answers
             .get(&(request.from, request.sequence))
             .is_some_and(|answered| answered.response.is_some())
         {
@@ -802,6 +826,7 @@ impl Node {
             self.response_header(request),
             body,
             Delivery::Send,
+            false,
         )
     }
 
@@ -838,9 +863,11 @@ impl Node {
         message: Message,
         delivery: Delivery,
     ) -> Result<(), NodeError> {
-        self.respond_with(now, request, message.header, message.body, delivery)
+        self.respond_with(now, request, message.header, message.body, delivery, false)
     }
 
+    /// Answer a request, and keep the answer for its retransmissions: `rejection` for a
+    /// rejection of the node's own, which goes first when the node is full.
     fn respond_with(
         &mut self,
         now: Duration,
@@ -848,30 +875,25 @@ impl Node {
         header: Header,
         body: Body,
         delivery: Delivery,
+        rejection: bool,
     ) -> Result<(), NodeError> {
         let message = Message { header, body };
         let octets = message.encode()?;
         let key = (request.from, request.sequence);
         if delivery == Delivery::Forget {
             // A responder that lost its state: no answer kept, and nothing changed.
-            self.answered.remove(&key);
+            self.answers.remove(&key);
             return Ok(());
         }
-        let effect = self
-            .answered
-            .get(&key)
-            .map_or(Effect::Nothing, |answered| answered.effect.clone());
-        self.answered_effects(now, request, &message, effect);
         let expires = now.saturating_add(self.config.keep);
-        let entry = self.answered.entry(key).or_insert_with(|| Answered {
-            request: Vec::new(),
-            response: None,
-            expires,
-            effect: Effect::Nothing,
-        });
-        entry.response = Some(octets.clone());
-        entry.expires = expires;
-        self.answering.insert((expires, key.0, key.1));
+        let capacity = self.config.capacity;
+        if self
+            .answers
+            .answer(key, octets.clone(), expires, capacity, rejection)
+        {
+            // The first answer alone changes the node: a probe may answer again.
+            self.answered_effects(now, request, &message);
+        }
         if delivery == Delivery::Send {
             self.queue(Transmit {
                 to: request.from,
@@ -887,11 +909,11 @@ impl Node {
     pub fn forget(&mut self, request: &Inbound) {
         let key = (request.from, request.sequence);
         if self
-            .answered
+            .answers
             .get(&key)
             .is_some_and(|answered| answered.response.is_none())
         {
-            self.answered.remove(&key);
+            self.answers.remove(&key);
         }
     }
 
@@ -1115,7 +1137,7 @@ impl Node {
             self.violation(from, ViolationKind::WrongDirection, octets);
             return;
         }
-        if let Some(answered) = self.answered.get(&(from, sequence)) {
+        if let Some(answered) = self.answers.get(&(from, sequence)) {
             match (same_request(&answered.request, octets), &answered.response) {
                 (true, Some(response)) => {
                     let transmit = Transmit {
@@ -1137,29 +1159,11 @@ impl Node {
                 // A new request of a number whose request had its response (§6.4): a
                 // restarted peer numbers from the start again.
                 (false, Some(_)) => {
-                    self.answered.remove(&(from, sequence));
+                    self.answers.remove(&(from, sequence));
                 }
             }
         }
         self.note_recovery(now, from, &message.body);
-        let inbound = Inbound {
-            from,
-            message_type,
-            sequence,
-            priority: message
-                .header
-                .priority
-                .unwrap_or(self.config.default_priority),
-            prioritized: message.header.priority.is_some(),
-            seid: message.header.seid,
-            peer_seid: match &message.body {
-                Body::SessionEstablishmentRequest(request) => {
-                    request.cp_f_seid.as_ref().and_then(|f_seid| f_seid.seid)
-                }
-                _ => None,
-            },
-            node_id: node_id_of(&message.body),
-        };
         let effect = match &message.body {
             // A PFCP Session Retention Information of a null length keeps every session.
             Body::AssociationSetupRequest(request)
@@ -1210,16 +1214,25 @@ impl Node {
             }
             _ => Effect::Nothing,
         };
-        let expires = now.saturating_add(self.config.keep);
-        self.keep_answered(
-            (from, sequence),
-            Answered {
-                request: octets.to_vec(),
-                response: None,
-                expires,
-                effect,
+        let inbound = Inbound {
+            from,
+            message_type,
+            sequence,
+            priority: message
+                .header
+                .priority
+                .unwrap_or(self.config.default_priority),
+            prioritized: message.header.priority.is_some(),
+            seid: message.header.seid,
+            peer_seid: match &message.body {
+                Body::SessionEstablishmentRequest(request) => {
+                    request.cp_f_seid.as_ref().and_then(|f_seid| f_seid.seid)
+                }
+                _ => None,
             },
-        );
+            node_id: node_id_of(&message.body),
+            effect,
+        };
         // What the node answers itself.
         let known_node = |node: &Self| match &inbound.node_id {
             Some(node_id) => node.associations.contains_key(&key_of(node_id)),
@@ -1227,9 +1240,21 @@ impl Node {
         };
         let rejection = match message_type {
             1 => {
-                let response =
-                    HeartbeatResponse::new(RecoveryTimeStamp::new(self.config.recovery_time_stamp));
-                let _ = self.respond(now, &inbound, response);
+                // Answered from the state, the same each time: not kept.
+                let message = Message {
+                    header: self.response_header(&inbound),
+                    body: HeartbeatResponse::new(RecoveryTimeStamp::new(
+                        self.config.recovery_time_stamp,
+                    ))
+                    .into(),
+                };
+                if let Ok(octets) = message.encode() {
+                    self.queue(Transmit {
+                        to: from,
+                        priority: inbound.priority,
+                        octets,
+                    });
+                }
                 return;
             }
             7 | 9 if !known_node(self) => Some((
@@ -1265,8 +1290,18 @@ impl Node {
                         0
                     });
                 }
-                let _ = self.respond_with(now, &inbound, header, body, Delivery::Send);
+                let _ = self.respond_with(now, &inbound, header, body, Delivery::Send, true);
             }
+            return;
+        }
+        let expires = now.saturating_add(self.config.keep);
+        if !self.answers.wait(
+            (from, sequence),
+            octets.to_vec(),
+            expires,
+            self.config.capacity,
+        ) {
+            // Full of requests that wait for their answer: the peer sends it again.
             return;
         }
         self.note_controls(now, from, octets, &message.body);
@@ -1418,18 +1453,6 @@ impl Node {
         });
     }
 
-    /// Keep a request of a peer for its retransmissions: the oldest go beyond the
-    /// capacity.
-    fn keep_answered(&mut self, key: (SocketAddr, u32), answered: Answered) {
-        while self.answered.len() >= self.config.capacity.max(1)
-            && let Some((_, peer, sequence)) = self.answering.pop_first()
-        {
-            self.answered.remove(&(peer, sequence));
-        }
-        self.answering.insert((answered.expires, key.0, key.1));
-        self.answered.insert(key, answered);
-    }
-
     /// A request that had its response, or that the node gave up, kept until `keep`.
     fn finish(&mut self, now: Duration, sequence: u32, peer: SocketAddr, given_up: bool) {
         let until = now.saturating_add(self.config.keep);
@@ -1447,18 +1470,7 @@ impl Node {
             self.finishing.pop_first();
             self.finished.remove(&(sequence, peer));
         }
-        while let Some(&(until, peer, sequence)) = self.answering.first()
-            && until <= now
-        {
-            self.answering.pop_first();
-            if self
-                .answered
-                .get(&(peer, sequence))
-                .is_some_and(|answered| answered.expires <= now)
-            {
-                self.answered.remove(&(peer, sequence));
-            }
-        }
+        self.answers.prune(now);
     }
 
     fn association_of(&self, peer: SocketAddr) -> Option<&Association> {
@@ -1769,13 +1781,7 @@ impl Node {
     }
 
     /// What an answer of the caller changes: the association, the session.
-    fn answered_effects(
-        &mut self,
-        now: Duration,
-        request: &Inbound,
-        message: &Message,
-        effect: Effect,
-    ) {
+    fn answered_effects(&mut self, now: Duration, request: &Inbound, message: &Message) {
         let accepted = message
             .body
             .cause()
@@ -1783,7 +1789,7 @@ impl Node {
         if !accepted {
             return;
         }
-        match (&message.body, effect) {
+        match (&message.body, request.effect.clone()) {
             (Body::AssociationSetupResponse(_), Effect::Setup(retained)) => {
                 if let Some(node_id) = &request.node_id {
                     self.associate(now, request.from, node_id.clone(), Some(retained));
