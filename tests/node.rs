@@ -131,6 +131,11 @@ fn associated_as(smf: NodeConfig, now: Duration) -> (Node, Node) {
 
 /// A session between them: the SMF's SEID and the UPF's.
 fn established(smf: &mut Node, upf: &mut Node, now: Duration) -> (u64, u64) {
+    established_on(smf, upf, now, Ipv4Addr::new(10, 0, 0, 2))
+}
+
+/// A session between them, of a UP F-SEID of `address`.
+fn established_on(smf: &mut Node, upf: &mut Node, now: Duration, address: Ipv4Addr) -> (u64, u64) {
     let cp_seid = smf.new_session(UPF);
     let f_seid = FSeid {
         v4: true,
@@ -166,7 +171,7 @@ fn established(smf: &mut Node, upf: &mut Node, now: Duration) -> (u64, u64) {
     let up_f_seid = FSeid {
         v4: true,
         seid: Some(up_seid),
-        ipv4: Some(Ipv4Addr::new(10, 0, 0, 2)),
+        ipv4: Some(address),
         ..Default::default()
     };
     let response =
@@ -789,6 +794,78 @@ fn overloaded(smf: NodeConfig, metric: u8) -> (Node, u64) {
         with_overload(1, metric, 30, false),
     );
     (smf, cp_seid)
+}
+
+/// §6.2.4.3.1: the overload of a session is of the address of its UP F-SEID, which the
+/// requests of the session go to, whatever address of the UP function sent it.
+#[test]
+fn overload_of_the_address_of_the_up_f_seid() {
+    let (mut smf, mut upf) = associated(at(0));
+    let (cp_seid, up_seid) = established_on(&mut smf, &mut upf, at(0), Ipv4Addr::new(10, 0, 0, 22));
+    let timer = Timer {
+        timer_unit: TimerUnit::OneMinute,
+        timer_value: 30,
+        ..Default::default()
+    };
+    let report = SessionReportRequest::new(ReportType {
+        upir: true,
+        ..Default::default()
+    })
+    .with_overload_control_information(OverloadControlInformation::new(
+        SequenceNumber::new(1),
+        Metric::new(Percent(100)),
+        timer,
+    ));
+    upf.session_request(at(1), up_seid, report).unwrap();
+    pass(&mut upf, &mut smf, SMF, at(1));
+    let (inbound, _) = request(&mut smf);
+    smf.respond(at(1), &inbound, SessionReportResponse::new(accepted()))
+        .unwrap();
+    let f_seid_address = Ipv4Addr::new(10, 0, 0, 22).into_socket(8805);
+    assert!(smf.overload_control(f_seid_address).is_some());
+    assert_eq!(
+        smf.session_request(at(2), cp_seid, SessionModificationRequest::default()),
+        Err(NodeError::Throttled)
+    );
+}
+
+/// The load and overload of a peer without an association are not kept: a host that
+/// sends a session request of a SEID that it guessed throttles nothing, and leaves
+/// nothing behind.
+#[test]
+fn controls_of_a_peer_without_an_association_are_not_kept() {
+    let (mut smf, mut upf) = associated(at(0));
+    let (cp_seid, _) = established(&mut smf, &mut upf, at(0));
+    let timer = Timer {
+        timer_unit: TimerUnit::OneMinute,
+        timer_value: 30,
+        ..Default::default()
+    };
+    for i in 0..100u8 {
+        let from = Ipv4Addr::new(10, 7, 0, i).into_socket(8805);
+        let report = SessionReportRequest::new(ReportType {
+            upir: true,
+            ..Default::default()
+        })
+        .with_load_control_information(LoadControlInformation::new(
+            SequenceNumber::new(1),
+            Metric::new(Percent(10)),
+        ))
+        .with_overload_control_information(OverloadControlInformation::new(
+            SequenceNumber::new(1),
+            Metric::new(Percent(100)),
+            timer.clone(),
+        ));
+        let message = Message {
+            header: Header::session(cp_seid, u32::from(i) + 1),
+            body: report.into(),
+        };
+        smf.handle_datagram(at(1), from, &message.encode().unwrap());
+        assert!(smf.load_control(from).is_none() && smf.overload_control(from).is_none());
+    }
+    assert!(smf.overload_control(UPF).is_none());
+    smf.session_request(at(2), cp_seid, SessionModificationRequest::default())
+        .unwrap();
 }
 
 #[test]
