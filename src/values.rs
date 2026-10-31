@@ -26,6 +26,7 @@ use crate::Error;
 use crate::check::{Check, Deviation, DeviationKind};
 use crate::ie::{Codec, IeType};
 use crate::macros::pfcp_layout;
+use crate::octets::{IntoOwned, Octets};
 
 /// A field of a layout: its octets, read in network order.
 pub trait Field: Sized {
@@ -103,16 +104,16 @@ address_field!(Ipv4Addr, 4; Ipv6Addr, 16);
 
 /// The octets of an IE type that the crate does not read yet, of the IE type `N`.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct Raw<const N: u16>(pub Vec<u8>);
+pub struct Raw<'a, const N: u16>(pub Octets<'a>);
 
-impl<const N: u16> IeType for Raw<N> {
+impl<const N: u16> IeType for Raw<'_, N> {
     const IE_TYPE: u16 = N;
     const TYPE_NAME: &'static str = "IE";
 }
 
-impl<const N: u16> Codec for Raw<N> {
-    fn decode(octets: &[u8]) -> Option<Self> {
-        Some(Self(octets.to_vec()))
+impl<'a, const N: u16> Codec<'a> for Raw<'a, N> {
+    fn decode(octets: &'a [u8]) -> Option<Self> {
+        Some(Self(Octets::wire(octets)))
     }
     fn encode(&self, out: &mut Vec<u8>) -> Result<(), Error> {
         out.extend_from_slice(&self.0);
@@ -120,10 +121,17 @@ impl<const N: u16> Codec for Raw<N> {
     }
 }
 
-impl<const N: u16> Check for Raw<N> {}
+impl<const N: u16> Check for Raw<'_, N> {}
+
+impl<'a, const N: u16> IntoOwned for Raw<'a, N> {
+    type Owned = Raw<'static, N>;
+    fn into_owned(self) -> Raw<'static, N> {
+        Raw(self.0.into_owned())
+    }
+}
 
 #[cfg(feature = "tree")]
-impl<const N: u16> oxirush_utils::tree::Tree for Raw<N> {
+impl<const N: u16> oxirush_utils::tree::Tree for Raw<'_, N> {
     const NAME: &'static str = "IE";
     fn to_tree(&self) -> oxirush_utils::tree::Value {
         oxirush_utils::tree::octets(&self.0)
@@ -132,7 +140,7 @@ impl<const N: u16> oxirush_utils::tree::Tree for Raw<N> {
         value: &oxirush_utils::tree::Value,
         reading: &mut oxirush_utils::tree::Reading,
     ) -> Result<Self, oxirush_utils::tree::Refused> {
-        reading.octets(value).map(Self)
+        reading.octets(value).map(|octets| Self(octets.into()))
     }
 }
 
@@ -141,24 +149,31 @@ macro_rules! pfcp_number {
     ($( $(#[$meta:meta])* $ty:ident($t:ty) $field:literal $clause:literal; )*) => {$(
         $(#[$meta])*
         #[derive(Debug, Clone, Default, PartialEq, Eq)]
-        pub struct $ty {
+        pub struct $ty<'a> {
             #[doc = concat!("The ", $field, ".")]
             pub value: $t,
             /// The octets after it, which a later release adds.
-            pub extra: Vec<u8>,
+            pub extra: Octets<'a>,
         }
 
-        impl $ty {
+        impl $ty<'_> {
             /// The value.
             pub fn new(value: $t) -> Self {
-                Self { value, extra: Vec::new() }
+                Self { value, extra: Octets::new() }
             }
         }
 
-        impl Codec for $ty {
-            fn decode(mut octets: &[u8]) -> Option<Self> {
+        impl<'a> IntoOwned for $ty<'a> {
+            type Owned = $ty<'static>;
+            fn into_owned(self) -> $ty<'static> {
+                $ty { value: self.value, extra: self.extra.into_owned() }
+            }
+        }
+
+        impl<'a> Codec<'a> for $ty<'a> {
+            fn decode(mut octets: &'a [u8]) -> Option<Self> {
                 let value = Field::read(&mut octets)?;
-                Some(Self { value, extra: octets.to_vec() })
+                Some(Self { value, extra: Octets::wire(octets) })
             }
             fn encode(&self, out: &mut Vec<u8>) -> Result<(), Error> {
                 Field::write(&self.value, out);
@@ -167,13 +182,13 @@ macro_rules! pfcp_number {
             }
         }
 
-        impl Check for $ty {}
+        impl Check for $ty<'_> {}
 
         /// The number alone, or `{"Rule ID": 1, "extra": "00"}` with the octets of a later
         /// release.
         #[cfg(feature = "tree")]
-        impl oxirush_utils::tree::Tree for $ty {
-            const NAME: &'static str = <$ty as IeType>::TYPE_NAME;
+        impl oxirush_utils::tree::Tree for $ty<'_> {
+            const NAME: &'static str = <$ty<'static> as IeType>::TYPE_NAME;
             fn to_tree(&self) -> oxirush_utils::tree::Value {
                 if self.extra.is_empty() {
                     return Field::to_tree(&self.value);
@@ -193,7 +208,7 @@ macro_rules! pfcp_number {
                 let read = reading.members(value, &[$field, "extra"])?;
                 Ok(Self {
                     value: reading.member(&read, 0, <$t as Field>::from_tree)?,
-                    extra: reading.optional(&read, 1, |value, reading| reading.octets(value))?.unwrap_or_default(),
+                    extra: reading.optional(&read, 1, |value, reading| reading.octets(value))?.map(Octets::from).unwrap_or_default(),
                 })
             }
         }
@@ -260,29 +275,36 @@ impl InterfaceValue {
 
 /// Source Interface (§8.2.2): where the packets of a PDR come from.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct SourceInterface {
+pub struct SourceInterface<'a> {
     /// The Interface value, bits 4 to 1.
     pub value: InterfaceValue,
     /// Bits 8 to 5, which are spare.
     pub spare: u8,
     /// The octets after it, which a later release adds.
-    pub extra: Vec<u8>,
+    pub extra: Octets<'a>,
 }
 
-impl SourceInterface {
+impl SourceInterface<'_> {
     /// The interface.
     pub fn new(value: InterfaceValue) -> Self {
-        Self { value, spare: 0, extra: Vec::new() }
+        Self { value, spare: 0, extra: Octets::new() }
     }
 }
 
-impl Codec for SourceInterface {
-    fn decode(octets: &[u8]) -> Option<Self> {
+impl<'a> IntoOwned for SourceInterface<'a> {
+    type Owned = SourceInterface<'static>;
+    fn into_owned(self) -> SourceInterface<'static> {
+        SourceInterface { value: self.value, spare: self.spare, extra: self.extra.into_owned() }
+    }
+}
+
+impl<'a> Codec<'a> for SourceInterface<'a> {
+    fn decode(octets: &'a [u8]) -> Option<Self> {
         let (&first, rest) = octets.split_first()?;
         Some(Self {
             value: InterfaceValue::from_bits(first & 0x0f),
             spare: first >> 4,
-            extra: rest.to_vec(),
+            extra: Octets::wire(rest),
         })
     }
     fn encode(&self, out: &mut Vec<u8>) -> Result<(), Error> {
@@ -292,7 +314,7 @@ impl Codec for SourceInterface {
     }
 }
 
-impl Check for SourceInterface {
+impl Check for SourceInterface<'_> {
     fn check(&self, path: &str, found: &mut Vec<Deviation>) {
         if let InterfaceValue::Spare(value) = self.value {
             found.push(Deviation::new(path, "8.2.2", DeviationKind::SpareValue { value: value.into() }));
@@ -305,7 +327,7 @@ impl Check for SourceInterface {
 
 /// The name of the value, or its number for a spare one.
 #[cfg(feature = "tree")]
-impl oxirush_utils::tree::Tree for SourceInterface {
+impl oxirush_utils::tree::Tree for SourceInterface<'_> {
     const NAME: &'static str = "Source Interface";
     fn to_tree(&self) -> oxirush_utils::tree::Value {
         let value = match self.value {
@@ -345,7 +367,7 @@ impl oxirush_utils::tree::Tree for SourceInterface {
         Ok(Self {
             value: reading.member(&read, 0, interface)?,
             spare: reading.optional(&read, 1, |value, reading| reading.unsigned(value, 0, 15))?.unwrap_or(0) as u8,
-            extra: reading.optional(&read, 2, |value, reading| reading.octets(value))?.unwrap_or_default(),
+            extra: reading.optional(&read, 2, |value, reading| reading.octets(value))?.map(Octets::from).unwrap_or_default(),
         })
     }
 }
@@ -387,7 +409,7 @@ pfcp_layout! {
     }
 }
 
-impl FTeid {
+impl FTeid<'_> {
     /// An F-TEID of an IPv4 address.
     pub fn ipv4(teid: u32, address: Ipv4Addr) -> Self {
         Self { v4: true, teid: Some(teid), ipv4: Some(address), ..Self::default() }
@@ -399,7 +421,7 @@ impl FTeid {
     }
 }
 
-impl Check for FTeid {
+impl Check for FTeid<'_> {
     fn check(&self, path: &str, found: &mut Vec<Deviation>) {
         layout_checks(self.inconsistent(), self.spare, path, Self::CLAUSE, found);
         if !self.v4 && !self.v6 {
@@ -411,13 +433,13 @@ impl Check for FTeid {
     }
 }
 
-impl Check for FSeid {
+impl Check for FSeid<'_> {
     fn check(&self, path: &str, found: &mut Vec<Deviation>) {
         layout_checks(self.inconsistent(), self.spare, path, Self::CLAUSE, found);
     }
 }
 
-impl Check for UeIpAddress {
+impl Check for UeIpAddress<'_> {
     fn check(&self, path: &str, found: &mut Vec<Deviation>) {
         layout_checks(self.inconsistent(), self.spare, path, Self::CLAUSE, found);
         if self.v4 && self.chv4 {
@@ -446,27 +468,39 @@ fn layout_checks(
 
 /// Node ID (§8.2.38): an IPv4 address, an IPv6 address or an FQDN.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum NodeId {
+pub enum NodeId<'a> {
     /// Node ID Type 0.
     Ipv4(Ipv4Addr),
     /// Node ID Type 1.
     Ipv6(Ipv6Addr),
     /// Node ID Type 2: the labels of the FQDN, as RFC 1035 writes them without the last
     /// zero octet.
-    Fqdn(Vec<u8>),
+    Fqdn(Octets<'a>),
     /// A Node ID Type that Table 8.2.38-2 has as spare, or a value of a length that its
     /// type does not have: the first octet, then the others.
-    Other(u8, Vec<u8>),
+    Other(u8, Octets<'a>),
 }
 
-impl Codec for NodeId {
-    fn decode(octets: &[u8]) -> Option<Self> {
+impl<'a> IntoOwned for NodeId<'a> {
+    type Owned = NodeId<'static>;
+    fn into_owned(self) -> NodeId<'static> {
+        match self {
+            Self::Ipv4(address) => NodeId::Ipv4(address),
+            Self::Ipv6(address) => NodeId::Ipv6(address),
+            Self::Fqdn(labels) => NodeId::Fqdn(labels.into_owned()),
+            Self::Other(first, rest) => NodeId::Other(first, rest.into_owned()),
+        }
+    }
+}
+
+impl<'a> Codec<'a> for NodeId<'a> {
+    fn decode(octets: &'a [u8]) -> Option<Self> {
         let (&first, rest) = octets.split_first()?;
         Some(match (first, rest.len()) {
             (0, 4) => Self::Ipv4(Ipv4Addr::from(<[u8; 4]>::try_from(rest).ok()?)),
             (1, 16) => Self::Ipv6(Ipv6Addr::from(<[u8; 16]>::try_from(rest).ok()?)),
-            (2, _) if !rest.is_empty() => Self::Fqdn(rest.to_vec()),
-            _ => Self::Other(first, rest.to_vec()),
+            (2, _) if !rest.is_empty() => Self::Fqdn(Octets::wire(rest)),
+            _ => Self::Other(first, Octets::wire(rest)),
         })
     }
     fn encode(&self, out: &mut Vec<u8>) -> Result<(), Error> {
@@ -492,7 +526,7 @@ impl Codec for NodeId {
     }
 }
 
-impl Check for NodeId {
+impl Check for NodeId<'_> {
     fn check(&self, path: &str, found: &mut Vec<Deviation>) {
         if let Self::Other(first, _) = self {
             let kind = match first & 0x0f {
@@ -504,27 +538,34 @@ impl Check for NodeId {
     }
 }
 
-impl NodeId {
+impl NodeId<'_> {
     /// The FQDN as text, its labels with dots: `None` for labels that are not.
     pub fn fqdn(&self) -> Option<String> {
-        let Self::Fqdn(mut labels) = self.clone() else { return None };
+        let Self::Fqdn(labels) = self else { return None };
         let mut text = String::new();
-        let mut rest = labels.as_mut_slice();
+        let mut rest: &[u8] = labels;
         while let [length, tail @ ..] = rest {
             let label = tail.get(..usize::from(*length))?;
             if !text.is_empty() {
                 text.push('.');
             }
             text.push_str(core::str::from_utf8(label).ok()?);
-            rest = &mut tail[usize::from(*length)..];
+            rest = &tail[usize::from(*length)..];
         }
         Some(text)
+    }
+
+    #[cfg(feature = "tree")]
+    fn encoded(&self) -> Vec<u8> {
+        let mut out = Vec::new();
+        let _ = Codec::encode(self, &mut out);
+        out
     }
 }
 
 /// An address as text, or `{"FQDN": "upf.example"}`, or the octets of another Node ID.
 #[cfg(feature = "tree")]
-impl oxirush_utils::tree::Tree for NodeId {
+impl oxirush_utils::tree::Tree for NodeId<'_> {
     const NAME: &'static str = "Node ID";
     fn to_tree(&self) -> oxirush_utils::tree::Value {
         use oxirush_utils::tree;
@@ -563,22 +604,13 @@ impl oxirush_utils::tree::Tree for NodeId {
                     labels.push(length);
                     labels.extend_from_slice(label.as_bytes());
                 }
-                Ok(Self::Fqdn(labels))
+                Ok(Self::Fqdn(labels.into()))
             }),
             _ => reading.within("Node ID value", content, |content, reading| {
                 let octets = reading.octets(content)?;
                 let (first, rest) = octets.split_first().ok_or_else(|| reading.mismatch("one octet at least", content))?;
-                Ok(Self::Other(*first, rest.to_vec()))
+                Ok(Self::Other(*first, Octets::copied(rest)))
             }),
         }
-    }
-}
-
-impl NodeId {
-    #[cfg(feature = "tree")]
-    fn encoded(&self) -> Vec<u8> {
-        let mut out = Vec::new();
-        let _ = Codec::encode(self, &mut out);
-        out
     }
 }

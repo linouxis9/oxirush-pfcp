@@ -21,6 +21,7 @@
 use alloc::vec::Vec;
 
 use crate::Error;
+use crate::octets::Octets;
 
 /// The first IE type of a vendor (§8.1.1): from here an IE has an Enterprise ID.
 pub const VENDOR: u16 = 0x8000;
@@ -35,10 +36,10 @@ pub trait IeType {
 }
 
 /// How a value is read from the octets of its IE, after the Length, and written back.
-pub trait Codec: Sized {
+pub trait Codec<'a>: Sized {
     /// The value of the octets, or `None` for octets that are not one: the scope keeps
     /// them as they are.
-    fn decode(octets: &[u8]) -> Option<Self>;
+    fn decode(octets: &'a [u8]) -> Option<Self>;
 
     /// Write the value.
     ///
@@ -53,7 +54,7 @@ pub trait Codec: Sized {
 /// length, one whose value does not decode as its type, and one that repeats an IE that
 /// the table has once (§7.6.10).
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RawIe {
+pub struct RawIe<'a> {
     /// The IE type.
     pub ie_type: u16,
     /// The Enterprise ID of a vendor IE, which its octets follow.
@@ -62,19 +63,24 @@ pub struct RawIe {
     /// sends on purpose. A decoded IE never has one.
     pub length: Option<u16>,
     /// The content after the Length, or after the Enterprise ID of a vendor IE.
-    pub octets: Vec<u8>,
+    pub octets: Octets<'a>,
 }
 
-impl RawIe {
+impl<'a> RawIe<'a> {
     /// The IE of `ie_type` whose content is `octets`, whatever they are: none for an IE
     /// of a null length.
-    pub fn new(ie_type: u16, octets: Vec<u8>) -> Self {
+    pub fn new(ie_type: u16, octets: impl Into<Octets<'a>>) -> Self {
         Self {
             ie_type,
             enterprise_id: None,
             length: None,
-            octets,
+            octets: octets.into(),
         }
+    }
+
+    /// Whether the IE has a null length.
+    pub fn is_null(&self) -> bool {
+        self.enterprise_id.is_none() && self.octets.is_empty()
     }
 
     /// Write the IE.
@@ -130,40 +136,23 @@ pub enum IeFault {
     },
 }
 
-/// Each IE of a scope: its type and its content, in the order of the wire.
-pub(crate) fn split(mut octets: &[u8]) -> impl Iterator<Item = Result<(u16, &[u8]), IeFault>> {
-    core::iter::from_fn(move || {
-        if octets.is_empty() {
-            return None;
-        }
-        let Some(header) = octets.get(..4) else {
-            let fault = IeFault::HeaderCut { octets: octets.len() };
-            octets = &[];
-            return Some(Err(fault));
-        };
-        let ie_type = u16::from_be_bytes([header[0], header[1]]);
-        let length = u16::from_be_bytes([header[2], header[3]]);
-        let end = 4 + usize::from(length);
-        let Some(body) = octets.get(4..end) else {
-            let available = octets.len() - 4;
-            octets = &[];
-            return Some(Err(IeFault::Length { ie_type, length, available }));
-        };
-        octets = &octets[end..];
-        Some(Ok((ie_type, body)))
-    })
-}
-
 /// The raw IE of `ie_type` and its content.
-pub(crate) fn raw(ie_type: u16, body: &[u8]) -> RawIe {
+pub(crate) fn raw(ie_type: u16, body: &[u8]) -> RawIe<'_> {
     match (ie_type >= VENDOR, body) {
         (true, [high, low, rest @ ..]) => RawIe {
             ie_type,
             enterprise_id: Some(u16::from_be_bytes([*high, *low])),
             length: None,
-            octets: rest.to_vec(),
+            octets: Octets::wire(rest),
         },
-        _ => RawIe::new(ie_type, body.to_vec()),
+        _ => RawIe { ie_type, enterprise_id: None, length: None, octets: Octets::wire(body) },
+    }
+}
+
+impl<'a> crate::octets::IntoOwned for RawIe<'a> {
+    type Owned = RawIe<'static>;
+    fn into_owned(self) -> RawIe<'static> {
+        RawIe { ie_type: self.ie_type, enterprise_id: self.enterprise_id, length: self.length, octets: self.octets.into_owned() }
     }
 }
 
@@ -186,7 +175,7 @@ pub(crate) fn finish(ie_type: u16, at: usize, length: Option<u16>, out: &mut [u8
 }
 
 /// Write the IE of a value.
-pub(crate) fn encode_value<T: IeType + Codec>(value: &T, out: &mut Vec<u8>) -> Result<(), Error> {
+pub(crate) fn encode_value<'a, T: IeType + Codec<'a>>(value: &T, out: &mut Vec<u8>) -> Result<(), Error> {
     let at = begin(T::IE_TYPE, out);
     value.encode(out)?;
     finish(T::IE_TYPE, at, None, out)

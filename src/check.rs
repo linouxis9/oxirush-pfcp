@@ -153,7 +153,7 @@ pub(crate) fn at(path: &str, row: &str, nth: Option<usize>) -> String {
 
 /// Check a scope against its table: its mandatory IEs, the IEs that repeat or that it
 /// cannot have, then each of its values.
-pub(crate) fn check_scope<S: Scope + Checked>(scope: &S, path: &str, found: &mut Vec<Deviation>) {
+pub(crate) fn check_scope<'a, S: Scope<'a> + Checked>(scope: &S, path: &str, found: &mut Vec<Deviation>) {
     let table = S::table();
     for row in table.rows {
         // A row that N4 does not have is mandatory on the interfaces that have it.

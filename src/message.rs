@@ -24,25 +24,26 @@ use alloc::vec::Vec;
 use crate::Error;
 use crate::check::{Deviation, DeviationKind, check_scope};
 use crate::header::Header;
+use crate::octets::{IntoOwned, Octets};
 use crate::registry::{HeartbeatRequest, HeartbeatResponse, SessionEstablishmentRequest};
 use crate::table::{decode_scope, encode_scope};
 
 /// The body of a message: one type of Table 7.3-1 each.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
-pub enum Body {
+pub enum Body<'a> {
     /// PFCP Heartbeat Request (1).
-    HeartbeatRequest(HeartbeatRequest),
+    HeartbeatRequest(HeartbeatRequest<'a>),
     /// PFCP Heartbeat Response (2).
-    HeartbeatResponse(HeartbeatResponse),
+    HeartbeatResponse(HeartbeatResponse<'a>),
     /// PFCP Session Establishment Request (50).
-    SessionEstablishmentRequest(SessionEstablishmentRequest),
+    SessionEstablishmentRequest(SessionEstablishmentRequest<'a>),
     /// A message type that the crate does not read, with the octets after its header.
     Other {
         /// The message type.
         message_type: u8,
         /// The octets of its IEs.
-        octets: Vec<u8>,
+        octets: Octets<'a>,
     },
 }
 
@@ -51,7 +52,19 @@ pub fn is_node_related(message_type: u8) -> bool {
     (1..50).contains(&message_type)
 }
 
-impl Body {
+impl<'a> IntoOwned for Body<'a> {
+    type Owned = Body<'static>;
+    fn into_owned(self) -> Body<'static> {
+        match self {
+            Self::HeartbeatRequest(body) => Body::HeartbeatRequest(body.into_owned()),
+            Self::HeartbeatResponse(body) => Body::HeartbeatResponse(body.into_owned()),
+            Self::SessionEstablishmentRequest(body) => Body::SessionEstablishmentRequest(body.into_owned()),
+            Self::Other { message_type, octets } => Body::Other { message_type, octets: octets.into_owned() },
+        }
+    }
+}
+
+impl<'a> Body<'a> {
     /// The message type.
     pub fn message_type(&self) -> u8 {
         match self {
@@ -72,12 +85,12 @@ impl Body {
         }
     }
 
-    fn decode(message_type: u8, octets: &[u8]) -> Result<Self, crate::ie::IeFault> {
+    fn decode(message_type: u8, octets: &'a [u8]) -> Result<Self, crate::ie::IeFault> {
         Ok(match message_type {
             1 => Self::HeartbeatRequest(decode_scope(octets)?),
             2 => Self::HeartbeatResponse(decode_scope(octets)?),
             50 => Self::SessionEstablishmentRequest(decode_scope(octets)?),
-            other => Self::Other { message_type: other, octets: octets.to_vec() },
+            other => Self::Other { message_type: other, octets: Octets::wire(octets) },
         })
     }
 
@@ -96,14 +109,21 @@ impl Body {
 
 /// A PFCP message.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Message {
+pub struct Message<'a> {
     /// Its header.
     pub header: Header,
     /// Its message type and its IEs.
-    pub body: Body,
+    pub body: Body<'a>,
 }
 
-impl Message {
+impl<'a> IntoOwned for Message<'a> {
+    type Owned = Message<'static>;
+    fn into_owned(self) -> Message<'static> {
+        Message { header: self.header, body: self.body.into_owned() }
+    }
+}
+
+impl<'a> Message<'a> {
     /// Decode one message, which `octets` are whole.
     ///
     /// # Errors
@@ -111,7 +131,7 @@ impl Message {
     /// Octets shorter than a header, a Message Length that is not the length of the
     /// octets (§7.6.3), and IEs whose framing runs past the message (§7.6.7). The error
     /// has the header, which the answer of a receiver takes.
-    pub fn decode(octets: &[u8]) -> Result<Self, Error> {
+    pub fn decode(octets: &'a [u8]) -> Result<Self, Error> {
         let (message, used) = Self::decode_first(octets)?;
         if used != octets.len() {
             let (header, message_type, length) = Header::decode(octets).ok_or(Error::TooShort { octets: octets.len() })?;
@@ -125,7 +145,7 @@ impl Message {
     /// # Errors
     ///
     /// Those of [`decode`](Self::decode), for the first message that has one.
-    pub fn decode_datagram(mut octets: &[u8]) -> Result<Vec<Self>, Error> {
+    pub fn decode_datagram(mut octets: &'a [u8]) -> Result<Vec<Self>, Error> {
         let mut messages = Vec::new();
         loop {
             let (message, used) = Self::decode_first(octets)?;
@@ -139,7 +159,7 @@ impl Message {
         Ok(messages)
     }
 
-    fn decode_first(octets: &[u8]) -> Result<(Self, usize), Error> {
+    fn decode_first(octets: &'a [u8]) -> Result<(Self, usize), Error> {
         let (header, message_type, length) = Header::decode(octets).ok_or(Error::TooShort { octets: octets.len() })?;
         let end = 4 + usize::from(length);
         let Some(content) = octets.get(header.len()..end).filter(|_| end >= header.len()) else {
@@ -229,7 +249,7 @@ mod forms {
 
     /// `{"message": NAME, "SEID": ..., "Sequence Number": ..., "ies": {...}}`, with the
     /// other members of the header where they are not what a sender writes.
-    impl Tree for Message {
+    impl Tree for Message<'_> {
         const NAME: &'static str = "PFCP message";
 
         fn to_tree(&self) -> Value {
@@ -301,7 +321,7 @@ mod forms {
                     other => {
                         let (_, octets) = reading.alternative(value, &["octets"])?;
                         let octets = reading.within("octets", octets, |value, reading| reading.octets(value))?;
-                        Body::Other { message_type: (other - 100) as u8, octets }
+                        Body::Other { message_type: (other - 100) as u8, octets: octets.into() }
                     }
                 })
             })?;
@@ -309,7 +329,7 @@ mod forms {
         }
     }
 
-    impl Message {
+    impl Message<'_> {
         /// The tree of the message.
         pub fn to_tree(&self) -> Value {
             Tree::to_tree(self)
@@ -320,7 +340,7 @@ mod forms {
         /// # Errors
         ///
         /// Where the tree is not a message, by the names on the way, and why.
-        pub fn from_tree(value: &Value) -> Result<Self, tree::Error> {
+        pub fn from_tree(value: &Value) -> Result<Message<'static>, tree::Error> {
             tree::from_value(value)
         }
     }

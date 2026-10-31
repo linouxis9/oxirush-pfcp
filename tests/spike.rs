@@ -10,7 +10,7 @@ use oxirush_utils::tree;
 
 /// A Session Establishment Request of an SMF: one uplink PDR whose F-TEID the UPF
 /// chooses, one downlink PDR to the UE's address.
-fn establishment() -> Message {
+fn establishment() -> Message<'static> {
     let uplink = CreatePdr::new(
         PdrId::new(1),
         Precedence::new(255),
@@ -31,7 +31,7 @@ fn establishment() -> Message {
         NodeId::Ipv4(smf),
         seid,
         uplink,
-        Raw(vec![0x00, 0x6c, 0x00, 0x04, 0x00, 0x00, 0x00, 0x01, 0x00, 0x2c, 0x00, 0x02, 0x02, 0x00]),
+        Raw(vec![0x00, 0x6c, 0x00, 0x04, 0x00, 0x00, 0x00, 0x01, 0x00, 0x2c, 0x00, 0x02, 0x02, 0x00].into()),
     )
     .with_create_pdr(downlink);
     Message { header: Header::session(0, 7), body: Body::SessionEstablishmentRequest(request) }
@@ -106,7 +106,8 @@ fn what_the_table_does_not_have_is_kept_in_its_place() {
     // ID comes before the Recovery Time Stamp that was between them. The message means
     // the same, and its tree is the same.
     let read = Message::from_tree(&tree).unwrap();
-    let again = Message::decode(&read.encode().unwrap()).unwrap();
+    let encoded = read.encode().unwrap();
+    let again = Message::decode(&encoded).unwrap();
     assert_eq!(again.to_tree(), tree);
     assert_eq!(read.encode().unwrap().len(), octets.len());
 

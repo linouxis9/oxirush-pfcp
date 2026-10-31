@@ -54,7 +54,7 @@ fn put(members: &mut Map, name: String, list: bool, value: Value) {
 }
 
 /// The octets form of a raw IE.
-fn raw_tree(ie: &RawIe) -> Value {
+fn raw_tree(ie: &RawIe<'_>) -> Value {
     let mut members = Members::new();
     members.put("octets", tree::octets(&ie.octets));
     members.put_optional("length", ie.length.map(|length| tree::unsigned(length.into())));
@@ -63,7 +63,7 @@ fn raw_tree(ie: &RawIe) -> Value {
 }
 
 /// The tree of a scope.
-pub(crate) fn scope_to_tree<S: Scope + TreeScope>(scope: &S) -> Value {
+pub(crate) fn scope_to_tree<'a, S: Scope<'a> + TreeScope>(scope: &S) -> Value {
     let table = S::table();
     let mut members = Map::new();
     let mut nth = [0usize; 64];
@@ -112,7 +112,7 @@ fn is_octets(value: &Value) -> bool {
     value.as_object().is_some_and(|members| tree::member(members, "octets").is_some())
 }
 
-fn read_raw(ie_type: u16, value: &Value, reading: &mut Reading) -> Result<RawIe, Refused> {
+fn read_raw<'a>(ie_type: u16, value: &Value, reading: &mut Reading) -> Result<RawIe<'a>, Refused> {
     let read = reading.members(value, &["octets", "length", "Enterprise ID"])?;
     let octets = reading.member(&read, 0, |value, reading| reading.octets(value))?;
     let length = reading.optional(&read, 1, |value, reading| reading.unsigned(value, 0, 65535))?;
@@ -121,7 +121,7 @@ fn read_raw(ie_type: u16, value: &Value, reading: &mut Reading) -> Result<RawIe,
         ie_type,
         enterprise_id: enterprise.map(|id| id as u16),
         length: length.map(|length| length as u16),
-        octets,
+        octets: octets.into(),
     })
 }
 
@@ -138,7 +138,7 @@ fn type_of_name(name: &str) -> Option<u16> {
 }
 
 /// A scope from its tree. The IEs are encoded in the order in which they are written.
-pub(crate) fn scope_from_tree<S: Scope + TreeScope>(value: &Value, reading: &mut Reading) -> Result<S, Refused> {
+pub(crate) fn scope_from_tree<'a, S: Scope<'a> + TreeScope>(value: &Value, reading: &mut Reading) -> Result<S, Refused> {
     let Some(members) = value.as_object() else {
         return Err(reading.mismatch("an object of IEs", value));
     };

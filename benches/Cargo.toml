@@ -1,0 +1,23 @@
+# The measurements of oxirush-pfcp. A package of its own, so that the crate keeps its
+# few dependencies: nothing here is published.
+[package]
+name = "oxirush-pfcp-benches"
+version = "0.0.0"
+edition = "2024"
+publish = false
+license = "Apache-2.0"
+
+[workspace]
+
+[features]
+# Count the allocations with dhat in place of measuring.
+heap = ["dep:dhat"]
+
+[dependencies]
+oxirush-pfcp = { path = ".." }
+hex = "0.4"
+dhat = { version = "0.3", optional = true }
+
+[profile.release]
+debug = false
+codegen-units = 1
