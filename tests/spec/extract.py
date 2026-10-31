@@ -13,7 +13,8 @@ script:
     tables.tsv          the tables of clause 7, one row each
     layouts.tsv         the figures of clause 8.2: their clause, the type that they say, and
                         the names of their flags and fields, in order
-    value-tables.tsv    the tables of clause 8.2 that name values, or bits as octet/bit
+    value-tables.tsv    the tables of clause 8.2 that name values, or bits as octet/bit; a
+                        value that a table reserves is named <reserved>
     clause-6.tsv        the headings of clause 6, and how many sentences each has that say
                         "shall" or "should": the requirements that requirements.tsv lists
 
@@ -208,8 +209,9 @@ def value_rows(number, title, rows):
             continue
         value, name = row[at], without_notes(row[name_at])
         name = clean(re.sub(r'\s+– see .*$|\s*\(see clause .*$', '', name)).rstrip('.')
-        if re.fullmatch(r'\d+', value) and not re.match(r'(?i)spare|for future use|<?reserved', name):
-            out.append([number, title, value, name])
+        if not re.fullmatch(r'\d+', value) or re.match(r'(?i)spare|for future use', name):
+            continue
+        out.append([number, title, value, '<reserved>' if re.match(r'(?i)<?reserved', name) else name])
     return out
 
 

@@ -17,7 +17,7 @@ fn network_instance_fp() -> NetworkInstance<'static> {
 fn far(id: u32, core: bool) -> CreateFar<'static> {
     // FAR ID, Apply Action (FORW), Forwarding Parameters: Destination Interface, Network
     // Instance and, toward the access, Outer Header Creation (GTP-U/UDP/IPv4)
-    let mut forwarding = ForwardingParameters::new(DestinationInterface { interface_value: u8::from(core), ..Default::default() })
+    let mut forwarding = ForwardingParameters::new(DestinationInterface::new(DestinationInterfaceValue::from_value(u8::from(core))))
         .with_network_instance(network_instance_fp());
     if !core {
         let creation = OuterHeaderCreation { gtpu_udp_ipv4: true, teid: Some(1), ipv4: Some(Ipv4Addr::new(10, 0, 0, 2)), ..Default::default() };
@@ -45,12 +45,17 @@ fn qer(id: u32) -> CreateQer<'static> {
         .with_qos_flow_identifier(Qfi { qfi_value: 9, ..Default::default() })
 }
 
-fn sdf_filter(text: &str) -> Raw<'static, 23> {
+/// The value of the octets of an IE.
+fn value<'a, T: Codec<'a> + IntoOwned>(octets: &'a [u8]) -> T::Owned {
+    T::decode(octets).unwrap().into_owned()
+}
+
+fn sdf_filter(text: &str) -> SdfFilter<'static> {
     // FD, then the length of the Flow Description and the description
     let mut octets = vec![0x01, 0x00];
     octets.extend_from_slice(&(text.len() as u16).to_be_bytes());
     octets.extend_from_slice(text.as_bytes());
-    Raw(octets.into())
+    value::<SdfFilter>(&octets)
 }
 
 fn pdr(id: u16, uplink: bool) -> CreatePdr<'static> {
@@ -98,10 +103,10 @@ pub fn establishment(pdrs: u16) -> Vec<u8> {
     }
     request = request
         .with_create_qer(qer(1))
-        .with_pdn_type(Raw(vec![0x01].into()))
-        .with_apn_dnn(Raw(b"\x08internet".to_vec().into()))
-        .with_s_nssai(Raw(vec![0x01, 0x00, 0x00, 0x01].into()))
-        .with_user_id(Raw(vec![0x01, 0x08, 0x02, 0xf8, 0x39, 0x00, 0x00, 0x00, 0x00, 0xf1].into()));
+        .with_pdn_type(value::<PdnType>(&[0x01]))
+        .with_apn_dnn(value::<ApnDnn>(b"\x08internet"))
+        .with_s_nssai(value::<SNssai>(&[0x01, 0x00, 0x00, 0x01]))
+        .with_user_id(value::<UserId>(&[0x01, 0x08, 0x02, 0xf8, 0x39, 0x00, 0x00, 0x00, 0x00, 0xf1]));
     let message = Message { header: Header::session(0, 7), body: request.into() };
     message.encode().unwrap()
 }
@@ -145,13 +150,13 @@ pub fn read(message: &Message<'_>) -> u64 {
             sum += pdr.far_id.as_ref().map_or(0, |id| u64::from(id.value));
             sum += pdr.urr_id.iter().map(|id| u64::from(id.value)).sum::<u64>();
             sum += pdr.qer_id.iter().map(|id| u64::from(id.value)).sum::<u64>();
-            sum += pdr.outer_header_removal.as_ref().map_or(0, |r| u64::from(r.outer_header_removal_description));
+            sum += pdr.outer_header_removal.as_ref().map_or(0, |r| u64::from(r.outer_header_removal_description.value()));
             if let Some(pdi) = &pdr.pdi {
-                sum += pdi.source_interface.as_ref().map_or(0, |s| u64::from(s.spare));
+                sum += pdi.source_interface.as_ref().map_or(0, |s| u64::from(s.interface_value.value()));
                 sum += pdi.local_f_teid.as_ref().map_or(0, f_teid);
                 sum += pdi.network_instance.as_ref().map_or(0, |n| octets(&n.0));
                 sum += pdi.ue_ip_address.iter().map(|u| u.ipv4.map_or(0, |a| u64::from(a.to_bits()))).sum::<u64>();
-                sum += pdi.sdf_filter.iter().map(|f| octets(&f.0)).sum::<u64>();
+                sum += pdi.sdf_filter.iter().map(|f| f.flow_description.as_ref().map_or(0, |d| octets(&d.0))).sum::<u64>();
                 sum += pdi.qfi.iter().map(|q| u64::from(q.qfi_value)).sum::<u64>();
                 sum += raw(&pdi.raw);
             }
@@ -161,7 +166,7 @@ pub fn read(message: &Message<'_>) -> u64 {
             sum += far.far_id.as_ref().map_or(0, |id| u64::from(id.value));
             sum += far.apply_action.as_ref().map_or(0, |a| u64::from(a.forw) + u64::from(a.buff));
             if let Some(forwarding) = &far.forwarding_parameters {
-                sum += forwarding.destination_interface.as_ref().map_or(0, |d| u64::from(d.interface_value));
+                sum += forwarding.destination_interface.as_ref().map_or(0, |d| u64::from(d.interface_value.value()));
                 sum += forwarding.network_instance.as_ref().map_or(0, |n| octets(&n.0));
                 sum += forwarding.outer_header_creation.as_ref().map_or(0, |o| u64::from(o.teid.unwrap_or(0)) + o.ipv4.map_or(0, |a| u64::from(a.to_bits())));
                 sum += raw(&forwarding.raw);
@@ -178,16 +183,15 @@ pub fn read(message: &Message<'_>) -> u64 {
         }
         for qer in &request.create_qer {
             sum += qer.qer_id.as_ref().map_or(0, |id| u64::from(id.value));
-            sum += qer.gate_status.as_ref().map_or(0, |g| u64::from(g.ul_gate));
+            sum += qer.gate_status.as_ref().map_or(0, |g| u64::from(g.ul_gate.value()));
             sum += qer.maximum_bitrate.as_ref().map_or(0, |m| m.ul_mbr.0 + m.dl_mbr.0);
             sum += qer.qos_flow_identifier.as_ref().map_or(0, |q| u64::from(q.qfi_value));
             sum += raw(&qer.raw);
         }
-        for field in [&request.pdn_type.as_ref().map(|r| &r.0[..]), &request.apn_dnn.as_ref().map(|r| &r.0[..])] {
-            sum += field.map_or(0, octets);
-        }
-        sum += request.s_nssai.as_ref().map_or(0, |r| octets(&r.0));
-        sum += request.user_id.as_ref().map_or(0, |r| octets(&r.0));
+        sum += request.pdn_type.as_ref().map_or(0, |p| u64::from(p.pdn_type.value()));
+        sum += request.apn_dnn.as_ref().map_or(0, |a| octets(&a.0));
+        sum += request.s_nssai.as_ref().map_or(0, |s| u64::from(s.sst) + u64::from(s.sd.0));
+        sum += request.user_id.as_ref().map_or(0, |u| u.imsi.as_ref().map_or(0, |i| octets(&i.0)));
         sum += raw(&request.raw);
     }
     sum

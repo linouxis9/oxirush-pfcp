@@ -22,7 +22,7 @@ use crate::macros::pfcp_enum;
 
 pfcp_enum! {
     /// Cause values (Table 8.2.1-1).
-    pub enum CauseValue "Table 8.2.1-1" bits 8 {
+    pub enum CauseValue "Table 8.2.1-1" bits 8 reserved [0] {
         1 RequestAccepted "Request accepted (success)",
         2 MoreUsageReportToSend "More Usage Report to send",
         3 RequestPartiallyAccepted "Request partially accepted",
@@ -240,7 +240,7 @@ pfcp_enum! {
         1 AccessHasBecomeAvailable "Access has become available",
     }
     /// RAT Type values (Table 8.2.186-1).
-    pub enum RatTypeValue "Table 8.2.186-1" bits 8 {
+    pub enum RatTypeValue "Table 8.2.186-1" bits 8 reserved [0] {
         1 Utran "UTRAN",
         2 Geran "GERAN",
         3 Wlan "WLAN",
@@ -305,12 +305,12 @@ pfcp_enum! {
         2 TwoByte "2-byte (long) format is used",
     }
     /// Job Type values (Table 8.2.245-1).
-    pub enum JobType "Table 8.2.245-1" bits 8 {
+    pub enum JobType "Table 8.2.245-1" bits 8 reserved [0] {
         1 UeLevelMeasurementsOnly "5GC UE Level Measurements only",
         2 TraceAndUeLevelMeasurements "Trace and 5GC UE Level Measurements",
     }
     /// Measurement Type values (Table 8.2.245-2).
-    pub enum MeasurementType "Table 8.2.245-2" bits 8 {
+    pub enum MeasurementType "Table 8.2.245-2" bits 8 reserved [0] {
         1 DlDelayUe "Average DL packet delay between PSA UPF and UE for a QoS flow",
         2 UlDelayUeExcludingD1 "Average UL packet delay between PSA UPF and UE for a QoS flow (excluding D1)",
         3 UlDelayUeIncludingD1 "Average UL packet delay between PSA UPF and UE for a QoS flow (including D1)",

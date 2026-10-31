@@ -48,17 +48,15 @@ mod values_hand;
 use alloc::string::{String, ToString};
 use core::fmt;
 
-pub use check::{Check, Deviation, DeviationKind};
+pub use check::{Check, Deviation, DeviationKind, Path};
 pub use enums::*;
 pub use header::Header;
 pub use ie::{Codec, IeFault, IeType, Listed, Placed, RawIe, VENDOR};
-pub use message::{Body, MESSAGE_TYPES, Message, MessageTypeInfo, is_node_related, message_type_info};
+pub use check::Context;
+pub use message::{Body, MESSAGE_TYPES, Message, MessageTypeInfo, is_node_related, is_request, message_type_info};
 pub use list::List;
 pub use octets::{IntoOwned, Octets};
-pub use registry::{
-    CreateFar, CreatePdr, CreateQer, CreateUrr, Form, ForwardingParameters, HeartbeatRequest, HeartbeatResponse, IE_TYPES, IeTypeInfo, Pdi,
-    SessionEstablishmentRequest, ie_type_info, type_name,
-};
+pub use registry::*;
 pub use table::{Interfaces, Presence, Repeat, Role, Row, Table};
 pub use values::*;
 pub use values_gen::*;

@@ -16,18 +16,20 @@
 */
 
 //! What `check()` finds: each way in which a message is not as TS 29.244 has a sender
-//! construct it, with the path of the IE and the clause that it breaks.
+//! construct it, with the path of the IE, the clause that it breaks and the Cause with
+//! which a receiver answers a request for it.
 
 use alloc::format;
 use alloc::string::String;
 use alloc::vec::Vec;
 use core::fmt;
 
+use crate::enums::CauseValue;
 use crate::ie::VENDOR;
 use crate::registry::type_name;
-use crate::table::{Presence, Repeat, Scope};
+use crate::table::{Interfaces, Presence, Repeat, Row, Scope};
 
-/// One deviation: where, which clause, and what.
+/// One deviation: where, which clause, what, and the Cause of the answer.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Deviation {
     /// The path of the IE in the tree of the message: `/pfcp/Create PDR/0/PDI`.
@@ -36,6 +38,9 @@ pub struct Deviation {
     pub clause: &'static str,
     /// What is wrong.
     pub kind: DeviationKind,
+    /// The Cause with which the receiver of a request answers it (§7.6, Table 8.2.1-1):
+    /// `None` for a deviation that the receiver ignores, and in a response.
+    pub cause: Option<CauseValue>,
 }
 
 /// What a deviation is.
@@ -70,17 +75,59 @@ pub enum DeviationKind {
         /// Its IE type.
         ie_type: u16,
     },
+    /// An IE that its table has, but not on the interface (the Appl. columns).
+    NotOnInterface {
+        /// Its IE type.
+        ie_type: u16,
+    },
+    /// An IE in a response with a rejection Cause, which only the Cause, the Node ID, the
+    /// Offending IE, the Load and Overload Control Information and the Failed Rule ID may
+    /// accompany (§7.2.3.2).
+    WithRejection {
+        /// Its IE type.
+        ie_type: u16,
+    },
+    /// An IE of a fixed length (Table 8.1.2-1) that has another.
+    FixedLength {
+        /// Its IE type.
+        ie_type: u16,
+        /// Its length.
+        length: usize,
+    },
     /// An IE type that Table 8.1.2-1 does not have (§8.1.2).
     UnknownType {
         /// Its IE type.
         ie_type: u16,
     },
+    /// A message type that Table 7.3-1 does not have (§7.6.4).
+    UnknownMessage {
+        /// The message type.
+        message_type: u8,
+    },
+    /// A message type that Table 7.3-1 does not have on the interface (§7.6.5).
+    MessageNotOnInterface {
+        /// The message type.
+        message_type: u8,
+    },
+    /// A rule that one message creates, updates or removes more than once (§6.3.3.2).
+    RuleChangedTwice {
+        /// The type of the rule: `PDR`, `FAR`, `URR`, `QER`, `BAR`, `MAR` or `SRR`.
+        rule: &'static str,
+        /// Its ID.
+        id: u32,
+    },
     /// A vendor IE with the Enterprise ID of 3GPP, or none (§8.1.1).
     VendorId,
     /// Spare bits that are not zero (§8.1.2).
     SpareBits,
-    /// A value that its table has as spare or reserved (§7.6.8).
+    /// A value that its table has as spare, or does not have: the receiver ignores it
+    /// (§7.6.8).
     SpareValue {
+        /// The value.
+        value: u32,
+    },
+    /// A value that its table reserves: the receiver takes the IE as incorrect (§7.6.8).
+    ReservedValue {
         /// The value.
         value: u32,
     },
@@ -94,17 +141,23 @@ pub enum DeviationKind {
 }
 
 impl Deviation {
-    /// A deviation at `path`.
-    pub fn new(path: &str, clause: &'static str, kind: DeviationKind) -> Self {
-        Self { path: path.into(), clause, kind }
+    /// A deviation at `path`, that the receiver ignores.
+    pub fn new(path: impl fmt::Display, clause: &'static str, kind: DeviationKind) -> Self {
+        Self { path: format!("{path}"), clause, kind, cause: None }
     }
 
-    /// The Cause that a receiver answers a request with for it (Table 8.2.1-1): `None`
-    /// for a deviation that the receiver ignores.
-    pub fn cause(&self) -> Option<u8> {
+    /// The Cause with which the receiver of a request answers it: `None` for a deviation
+    /// that the receiver ignores, and in a response.
+    pub fn cause(&self) -> Option<CauseValue> {
+        self.cause
+    }
+
+    /// The IE type that the Offending IE of the answer carries, with its Cause.
+    pub fn offending_ie(&self) -> Option<u16> {
         match self.kind {
-            DeviationKind::MandatoryMissing { .. } => Some(66),
-            DeviationKind::MandatoryIncorrect { .. } => Some(69),
+            DeviationKind::MandatoryMissing { ie_type }
+            | DeviationKind::MandatoryIncorrect { ie_type }
+            | DeviationKind::FixedLength { ie_type, .. } => self.cause.map(|_| ie_type),
             _ => None,
         }
     }
@@ -119,91 +172,261 @@ impl fmt::Display for Deviation {
             DeviationKind::Incorrect { ie_type } => write!(f, "{} does not decode, and is taken as absent", name(*ie_type)),
             DeviationKind::Repeated { ie_type } => write!(f, "{} is there more times than its table allows", name(*ie_type)),
             DeviationKind::Unexpected { ie_type } => write!(f, "{} is no IE of this table", name(*ie_type)),
+            DeviationKind::NotOnInterface { ie_type } => write!(f, "{} is not on this interface", name(*ie_type)),
+            DeviationKind::WithRejection { ie_type } => write!(f, "{} accompanies a rejection", name(*ie_type)),
+            DeviationKind::FixedLength { ie_type, length } => {
+                write!(f, "{} has {length} octets, and its length is fixed", name(*ie_type))
+            }
             DeviationKind::UnknownType { ie_type } => write!(f, "IE type {ie_type} is in no table of Release 19"),
+            DeviationKind::UnknownMessage { message_type } => write!(f, "message type {message_type} is in no table of Release 19"),
+            DeviationKind::MessageNotOnInterface { message_type } => {
+                write!(f, "message type {message_type} is not on this interface")
+            }
+            DeviationKind::RuleChangedTwice { rule, id } => write!(f, "the message changes {rule} {id} more than once"),
             DeviationKind::VendorId => write!(f, "a vendor IE without an Enterprise ID of a vendor"),
             DeviationKind::SpareBits => write!(f, "spare bits are not zero"),
             DeviationKind::SpareValue { value } => write!(f, "{value} is a spare value"),
+            DeviationKind::ReservedValue { value } => write!(f, "{value} is a reserved value"),
             DeviationKind::Inconsistent { field } => write!(f, "{field} disagrees with the flags of its IE"),
             DeviationKind::Rule(rule) => write!(f, "{rule}"),
         }?;
-        write!(f, " (TS 29.244 {}), at {}", self.clause, self.path)
+        write!(f, " (TS 29.244 {}), at {}", self.clause, self.path)?;
+        if let Some(cause) = self.cause {
+            write!(f, ": the answer is \"{cause}\"")?;
+        }
+        Ok(())
     }
 }
 
-/// What a value checks of itself: its flags, its fields and its values.
+/// What a value checks of itself: its flags, its fields and its values. A grouped IE
+/// checks its table.
 pub trait Check {
     /// Add what is wrong with the value to `found`, at `path`.
-    fn check(&self, path: &str, found: &mut Vec<Deviation>) {
+    fn check(&self, path: &Path<'_>, found: &mut Vec<Deviation>) {
         let _ = (path, found);
+    }
+
+    /// The check of a value in its scope: a grouped IE checks its table there.
+    #[doc(hidden)]
+    fn check_in(&self, path: &Path<'_>, context: Context, found: &mut Vec<Deviation>) {
+        let _ = context;
+        self.check(path, found);
+    }
+}
+
+/// Where a check is: the interface, and how the receiver takes the mandatory IEs of the
+/// scope (§7.2.3.2: those of a conditional grouped IE as conditional, those of an
+/// optional one as optional).
+#[derive(Debug, Clone, Copy)]
+pub struct Context {
+    pub(crate) interface: Interfaces,
+    pub(crate) view: Presence,
+    /// In a request that the receiver answers with a Cause: not a Heartbeat Request.
+    pub(crate) request: bool,
+    /// The message level of a response whose Cause rejects the request.
+    pub(crate) rejected: bool,
+}
+
+impl Context {
+    /// The message level of a message on `interface`, which no receiver answers.
+    pub(crate) fn on(interface: Interfaces) -> Self {
+        Self { interface, view: Presence::Mandatory, request: false, rejected: false }
+    }
+
+    /// The context of the IEs of a grouped IE of the row of presence `presence`.
+    pub(crate) fn within(self, presence: Presence) -> Self {
+        let view = match (self.view, presence) {
+            (_, Presence::Optional) | (Presence::Optional, _) => Presence::Optional,
+            (Presence::Mandatory, Presence::Mandatory) => Presence::Mandatory,
+            _ => Presence::Conditional,
+        };
+        Self { view, rejected: false, ..self }
+    }
+
+    /// The Cause of an answer to a mandatory IE of the scope that is missing, or that is
+    /// there and incorrect.
+    fn cause(self, missing: bool) -> Option<CauseValue> {
+        match (self.request, self.view, missing) {
+            (false, ..) | (_, Presence::Optional, _) => None,
+            (true, Presence::Mandatory, true) => Some(CauseValue::MandatoryIeMissing),
+            (true, Presence::Conditional, true) => Some(CauseValue::ConditionalIeMissing),
+            (true, _, false) => Some(CauseValue::MandatoryIeIncorrect),
+        }
     }
 }
 
 /// What the table macro writes: the check of each value of the fields of a scope.
 pub(crate) trait Checked {
-    fn check_values(&self, path: &str, found: &mut Vec<Deviation>);
+    fn check_values(&self, path: &Path<'_>, context: Context, found: &mut Vec<Deviation>);
 }
 
-/// The path of the `nth` IE of a row: a row that is a list has its position.
-pub(crate) fn at(path: &str, row: &str, nth: Option<usize>) -> String {
-    match nth {
-        Some(nth) => format!("{path}/{row}/{nth}"),
-        None => format!("{path}/{row}"),
+/// Where an IE is in the tree of its message: written only for a deviation.
+#[derive(Debug, Clone, Copy)]
+pub enum Path<'a> {
+    /// The message level, or a path written already.
+    Root(&'a str),
+    /// The IE of a row in a scope: a row that is a list has its position.
+    Row {
+        /// The scope.
+        parent: &'a Path<'a>,
+        /// The name of the row.
+        row: &'static str,
+        /// The position in a list.
+        nth: Option<usize>,
+    },
+}
+
+impl fmt::Display for Path<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Root(path) => f.write_str(path),
+            Self::Row { parent, row, nth: Some(nth) } => write!(f, "{parent}/{row}/{nth}"),
+            Self::Row { parent, row, nth: None } => write!(f, "{parent}/{row}"),
+        }
     }
 }
 
-/// Check a scope against its table: its mandatory IEs, the IEs that repeat or that it
-/// cannot have, then each of its values.
-pub(crate) fn check_scope<'a, S: Scope<'a> + Checked>(scope: &S, path: &str, found: &mut Vec<Deviation>) {
-    let table = S::table();
-    for row in table.rows {
-        // A row that N4 does not have is mandatory on the interfaces that have it.
-        let mandatory = row.presence == Presence::Mandatory && row.interfaces.has(crate::table::Interfaces::N4);
-        let values = scope.count(row.ie_type);
-        let raw = scope.raw().iter().filter(|ie| ie.ie_type == row.ie_type && !ie.octets.is_empty());
-        let (mut repeated, mut incorrect) = (0, 0);
-        for ie in raw {
-            match scope.decodes(ie.ie_type, &ie.octets) {
-                true => repeated += 1,
-                false => incorrect += 1,
+/// Check a value of a row of a scope: itself, its length against Table 8.1.2-1, and a
+/// reserved value of a mandatory IE, which the receiver answers.
+pub(crate) fn check_field<'a, T: Check + crate::ie::Codec<'a> + crate::ie::IeType>(
+    value: &T,
+    path: &Path<'_>,
+    presence: Presence,
+    context: Context,
+    found: &mut Vec<Deviation>,
+) {
+    let from = found.len();
+    value.check_in(path, context.within(presence), found);
+    if let Some(fixed) = T::FIXED {
+        let length = value.encoded_len();
+        if length != usize::from(fixed) {
+            found.push(Deviation::new(path, "8.1.2", DeviationKind::FixedLength { ie_type: T::IE_TYPE, length }));
+        }
+    }
+    if presence != Presence::Optional {
+        for deviation in &mut found[from..] {
+            if matches!(deviation.kind, DeviationKind::ReservedValue { .. } | DeviationKind::FixedLength { .. }) {
+                deviation.cause = context.cause(false);
             }
         }
-        let here = format!("{path}/{}", row.name);
-        if mandatory && values == 0 {
-            let kind = match incorrect {
-                0 => DeviationKind::MandatoryMissing { ie_type: row.ie_type },
-                _ => DeviationKind::MandatoryIncorrect { ie_type: row.ie_type },
-            };
-            found.push(Deviation::new(&here, table.id, kind));
-        } else if incorrect > 0 {
-            found.push(Deviation::new(&here, "7.6.8", DeviationKind::Incorrect { ie_type: row.ie_type }));
-        }
-        let allowed = match row.repeat {
-            Repeat::Once => 1,
-            Repeat::Any => usize::MAX,
-            Repeat::AtMost(most) => usize::from(most),
-        };
-        if repeated > 0 || values > allowed {
-            found.push(Deviation::new(&here, "7.6.10", DeviationKind::Repeated { ie_type: row.ie_type }));
-        }
     }
-    for ie in scope.raw() {
-        if table.row_of(ie.ie_type).is_some() {
+}
+
+/// The IEs that a response with a rejection Cause may have (§7.2.3.2): Cause, Node ID,
+/// Offending IE, Load Control Information, Overload Control Information, Failed Rule ID.
+const WITH_REJECTION: [u16; 6] = [19, 60, 40, 51, 54, 114];
+
+/// Whether a row is on `interface`, and how many of its IEs are mandatory there: one, or
+/// one for each mandatory role of a shared field.
+fn on(row: &Row, interface: Interfaces) -> (bool, usize) {
+    if row.roles.is_empty() {
+        let here = row.interfaces.has(interface);
+        return (here, usize::from(here && row.presence == Presence::Mandatory));
+    }
+    let roles = row.roles.iter().filter(|role| role.interfaces.has(interface));
+    let mandatory = roles.clone().filter(|role| role.presence == Presence::Mandatory).count();
+    (roles.count() > 0, mandatory)
+}
+
+/// The IEs of a row that mandatory rows need on the interface, in the context.
+#[inline]
+fn mandatory(row: &Row, context: Context) -> usize {
+    if !row.mandatory.has(context.interface) {
+        return 0;
+    }
+    let (_, mandatory) = on(row, context.interface);
+    match context.rejected {
+        // The Node ID and the Offending IE follow their rows; the others may be missing.
+        true => mandatory.min(usize::from(matches!(row.ie_type, 19 | 60))),
+        false => mandatory,
+    }
+}
+
+/// Check a row that has `count` values: whether the interface has it, whether a
+/// rejection may carry it, and whether the table allows that many.
+#[inline]
+pub(crate) fn check_row(
+    table: &'static str,
+    row: &Row,
+    count: usize,
+    path: &Path<'_>,
+    context: Context,
+    found: &mut Vec<Deviation>,
+) {
+    let rejected = context.rejected && !WITH_REJECTION.contains(&row.ie_type);
+    let off = !row.interfaces.has(context.interface) && !on(row, context.interface).0;
+    let over = matches!(row.repeat, Repeat::AtMost(most) if count > usize::from(most));
+    if rejected || off || over {
+        row_deviations(table, row, [rejected, off, over], path, found);
+    }
+}
+
+#[cold]
+#[inline(never)]
+fn row_deviations(table: &'static str, row: &Row, [rejected, off, over]: [bool; 3], path: &Path<'_>, found: &mut Vec<Deviation>) {
+    let here = || Path::Row { parent: path, row: row.name, nth: None };
+    if rejected {
+        found.push(Deviation::new(here(), "7.2.3.2", DeviationKind::WithRejection { ie_type: row.ie_type }));
+    }
+    if off {
+        found.push(Deviation::new(here(), table, DeviationKind::NotOnInterface { ie_type: row.ie_type }));
+    }
+    if over {
+        found.push(Deviation::new(here(), "7.6.10", DeviationKind::Repeated { ie_type: row.ie_type }));
+    }
+}
+
+/// Check a scope against its table: its mandatory IEs on the interface, the IEs that it
+/// keeps as octets (repeated, incorrect, of no row of the table, of no release), then
+/// each row that has values, and each value.
+pub(crate) fn check_scope<'a, S: Scope<'a> + Checked>(scope: &S, path: &Path<'_>, context: Context, found: &mut Vec<Deviation>) {
+    let table = S::table();
+    let missing = |row: &Row| {
+        let needed = mandatory(row, context);
+        needed > 0 && scope.count(row.ie_type) < needed
+    };
+    for row in table.rows {
+        if !missing(row) {
             continue;
         }
-        let name = crate::tree_name(ie.ie_type, None);
-        let here = format!("{path}/{name}");
-        let kind = match ie.ie_type {
-            VENDOR.. if ie.enterprise_id.is_none_or(|id| id == 10415) => DeviationKind::VendorId,
-            VENDOR.. => continue,
-            known if type_name(known).is_some() => DeviationKind::Unexpected { ie_type: known },
-            unknown => DeviationKind::UnknownType { ie_type: unknown },
+        let incorrect = scope
+            .raw()
+            .iter()
+            .any(|ie| ie.ie_type == row.ie_type && !ie.octets.is_empty() && !scope.decodes(ie.ie_type, &ie.octets));
+        let (kind, missing) = match incorrect {
+            false => (DeviationKind::MandatoryMissing { ie_type: row.ie_type }, true),
+            true => (DeviationKind::MandatoryIncorrect { ie_type: row.ie_type }, false),
         };
-        let clause = match kind {
-            DeviationKind::Unexpected { .. } => "7.6.9",
-            DeviationKind::VendorId => "8.1.1",
-            _ => "8.1.2",
-        };
-        found.push(Deviation::new(&here, clause, kind));
+        let mut deviation = Deviation::new(Path::Row { parent: path, row: row.name, nth: None }, table.id, kind);
+        deviation.cause = context.cause(missing);
+        found.push(deviation);
     }
-    scope.check_values(path, found);
+    for ie in scope.raw() {
+        let Some(row) = table.row_of(ie.ie_type) else {
+            let name = crate::tree_name(ie.ie_type, None);
+            let (clause, kind) = match ie.ie_type {
+                VENDOR.. if ie.enterprise_id.is_none_or(|id| id == 10415) => ("8.1.1", DeviationKind::VendorId),
+                VENDOR.. => continue,
+                known if type_name(known).is_some() => ("7.6.9", DeviationKind::Unexpected { ie_type: known }),
+                unknown => ("8.1.2", DeviationKind::UnknownType { ie_type: unknown }),
+            };
+            found.push(Deviation::new(format!("{path}/{name}"), clause, kind));
+            continue;
+        };
+        // An IE of a null length says what its row allows it to (§8.1.2).
+        if ie.octets.is_empty() {
+            continue;
+        }
+        let here = || Path::Row { parent: path, row: row.name, nth: None };
+        let deviation = match scope.decodes(ie.ie_type, &ie.octets) {
+            true => Deviation::new(here(), "7.6.10", DeviationKind::Repeated { ie_type: row.ie_type }),
+            // A missing mandatory IE is reported above as incorrect.
+            false if missing(row) => continue,
+            false => Deviation::new(here(), "7.6.8", DeviationKind::Incorrect { ie_type: row.ie_type }),
+        };
+        if !found.contains(&deviation) {
+            found.push(deviation);
+        }
+    }
+    scope.check_values(path, context, found);
 }

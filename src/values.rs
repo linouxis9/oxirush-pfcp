@@ -38,7 +38,7 @@ pub trait Field: Sized {
     /// Its length.
     fn size(&self) -> usize;
     /// What it breaks of the clause of its layout: a value that its table does not name.
-    fn check(&self, _path: &str, _clause: &'static str, _found: &mut Vec<Deviation>) {}
+    fn check(&self, _path: &crate::check::Path<'_>, _clause: &'static str, _found: &mut Vec<Deviation>) {}
     /// Its tree.
     #[cfg(feature = "tree")]
     fn to_tree(&self) -> oxirush_utils::tree::Value;
@@ -221,6 +221,38 @@ impl Field for Rest {
     }
 }
 
+/// A percentage, from 0 to 100: a receiver takes another value as 0 (§8.2.34).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Percent(pub u8);
+
+impl Field for Percent {
+    fn read(octets: &mut &[u8]) -> Option<Self> {
+        u8::read(octets).map(Self)
+    }
+    fn write(&self, out: &mut Vec<u8>) {
+        out.push(self.0);
+    }
+    fn size(&self) -> usize {
+        1
+    }
+    fn check(&self, path: &crate::check::Path<'_>, clause: &'static str, found: &mut Vec<Deviation>) {
+        if self.0 > 100 {
+            found.push(Deviation::new(path, clause, DeviationKind::SpareValue { value: self.0.into() }));
+        }
+    }
+    #[cfg(feature = "tree")]
+    fn to_tree(&self) -> oxirush_utils::tree::Value {
+        oxirush_utils::tree::unsigned(self.0.into())
+    }
+    #[cfg(feature = "tree")]
+    fn from_tree(
+        value: &oxirush_utils::tree::Value,
+        reading: &mut oxirush_utils::tree::Reading,
+    ) -> Result<Self, oxirush_utils::tree::Refused> {
+        u8::from_tree(value, reading).map(Self)
+    }
+}
+
 /// An octet that is spare: zero from a sender, kept as it is.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Spare(pub u8);
@@ -235,7 +267,7 @@ impl Field for Spare {
     fn size(&self) -> usize {
         1
     }
-    fn check(&self, path: &str, _clause: &'static str, found: &mut Vec<Deviation>) {
+    fn check(&self, path: &crate::check::Path<'_>, _clause: &'static str, found: &mut Vec<Deviation>) {
         if self.0 != 0 {
             found.push(Deviation::new(path, "8.1.2", DeviationKind::SpareBits));
         }
@@ -277,7 +309,7 @@ impl<T: Field> Field for Counted<T> {
     fn size(&self) -> usize {
         1 + self.0.iter().map(Field::size).sum::<usize>()
     }
-    fn check(&self, path: &str, clause: &'static str, found: &mut Vec<Deviation>) {
+    fn check(&self, path: &crate::check::Path<'_>, clause: &'static str, found: &mut Vec<Deviation>) {
         if self.0.len() > usize::from(u8::MAX) {
             found.push(Deviation::new(path, clause, DeviationKind::Rule("more values than their number can say")));
         }
@@ -322,7 +354,7 @@ impl<T: Field> Field for Each<T> {
     fn size(&self) -> usize {
         self.0.iter().map(Field::size).sum()
     }
-    fn check(&self, path: &str, clause: &'static str, found: &mut Vec<Deviation>) {
+    fn check(&self, path: &crate::check::Path<'_>, clause: &'static str, found: &mut Vec<Deviation>) {
         for value in &self.0 {
             value.check(path, clause, found);
         }
@@ -434,7 +466,7 @@ impl Field for TypedAddress {
     fn size(&self) -> usize {
         1 + self.address.len().min(0x3f)
     }
-    fn check(&self, path: &str, clause: &'static str, found: &mut Vec<Deviation>) {
+    fn check(&self, path: &crate::check::Path<'_>, clause: &'static str, found: &mut Vec<Deviation>) {
         if self.ip().is_none() {
             found.push(Deviation::new(path, clause, DeviationKind::Rule("an address that is neither IPv4 of type 0 nor IPv6 of type 1")));
         }
@@ -614,7 +646,7 @@ macro_rules! pfcp_number {
         }
 
         impl Check for $ty<'_> {
-            fn check(&self, path: &str, found: &mut Vec<crate::check::Deviation>) {
+            fn check(&self, path: &crate::check::Path<'_>, found: &mut Vec<crate::check::Deviation>) {
                 Field::check(&self.value, path, $clause, found);
             }
         }
@@ -818,7 +850,7 @@ impl<'a> Codec<'a> for NodeId<'a> {
 }
 
 impl Check for NodeId<'_> {
-    fn check(&self, path: &str, found: &mut Vec<Deviation>) {
+    fn check(&self, path: &crate::check::Path<'_>, found: &mut Vec<Deviation>) {
         if let Self::Other(first, _) = self {
             let kind = match first & 0x0f {
                 0..=2 => DeviationKind::Rule("the Node ID value has a length that its type does not have"),
@@ -1028,7 +1060,7 @@ macro_rules! pfcp_fields {
 
         impl Check for $ty<'_> {
             #[allow(unused_variables)]
-            fn check(&self, path: &str, found: &mut Vec<crate::check::Deviation>) {
+            fn check(&self, path: &crate::check::Path<'_>, found: &mut Vec<crate::check::Deviation>) {
                 $( Field::check(&self.$field, path, $clause, found); )*
             }
         }

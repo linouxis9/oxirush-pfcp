@@ -83,8 +83,31 @@ pub struct Row {
     pub repeat: Repeat,
     /// The interfaces that have it.
     pub interfaces: Interfaces,
+    /// The interfaces on which it is mandatory: of a shared field, those of its mandatory
+    /// roles.
+    pub mandatory: Interfaces,
     /// The rows that share the field, when several do.
     pub roles: &'static [Role],
+}
+
+/// The interfaces on which a row is mandatory, from its presence and interfaces, or from
+/// its roles when it has some.
+pub(crate) const fn mandatory(presence: Presence, interfaces: Interfaces, roles: &[Role]) -> Interfaces {
+    if roles.is_empty() {
+        return match presence {
+            Presence::Mandatory => interfaces,
+            _ => Interfaces(0),
+        };
+    }
+    let mut on = 0;
+    let mut at = 0;
+    while at < roles.len() {
+        if let Presence::Mandatory = roles[at].presence {
+            on |= roles[at].interfaces.0;
+        }
+        at += 1;
+    }
+    Interfaces(on)
 }
 
 /// One of the rows of a table that share a field: the wire does not tell them apart.

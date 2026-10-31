@@ -139,7 +139,7 @@ fn check_names_the_clause() {
     assert!(said.iter().any(|said| said.contains("Node ID is missing") && said.contains("7.5.2.1-1")));
     assert!(said.iter().any(|said| said.contains("CHID is set and CH is not (TS 29.244 8.2.3), at /pfcp/Create PDR/0/PDI/Local F-TEID")));
     assert!(said.iter().any(|said| said.contains("no SEID")));
-    assert_eq!(found[1].cause(), Some(66), "{}", found[1]);
+    assert_eq!(found[1].cause(), Some(CauseValue::MandatoryIeMissing), "{}", found[1]);
 }
 
 #[test]
@@ -171,7 +171,8 @@ fn a_flag_that_disagrees_is_refused_where_it_is_written() {
 }
 
 /// The vectors of another implementation, when `PFCP_VECTORS` names their file: each
-/// decodes and encodes back to its octets, and so does its tree.
+/// decodes and encodes back to its octets, and so does its tree. A fourth column names the
+/// interface to check the message on; without it, on N4 with the IEs of any interface.
 #[test]
 fn other_vectors_round_trip() {
     let Ok(file) = std::env::var("PFCP_VECTORS") else { return };
@@ -195,8 +196,19 @@ fn other_vectors_round_trip() {
             if !matches!(message.body, Body::Other { .. }) {
                 read += 1;
                 println!("{} {}: {tree}", fields[0], fields[1]);
-                for deviation in message.check() {
-                    println!("  {deviation}");
+                let interface = match fields.get(3).copied() {
+                    Some("Sxa") => Interfaces::SXA,
+                    Some("Sxb") => Interfaces::SXB,
+                    Some("Sxc") => Interfaces::SXC,
+                    Some("N4mb") => Interfaces::N4MB,
+                    _ => Interfaces::N4,
+                };
+                // A vector of no interface may have the IEs of any.
+                let any = fields.len() < 4;
+                for deviation in message.check_on(interface) {
+                    if !(any && matches!(deviation.kind, DeviationKind::NotOnInterface { .. })) {
+                        println!("  {deviation}");
+                    }
                 }
             }
         }

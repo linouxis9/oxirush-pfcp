@@ -1,4 +1,5 @@
 # table	title	value	name
+8.2.1-1	Cause values	0	<reserved>
 8.2.1-1	Cause values	1	Request accepted (success)
 8.2.1-1	Cause values	2	More Usage Report to send
 8.2.1-1	Cause values	3	Request partially accepted
@@ -278,6 +279,7 @@
 8.2.153-1	Access Type	1	Non-3GPP access type
 8.2.153-2	Availability Status	0	Access has become unavailable
 8.2.153-2	Availability Status	1	Access has become available
+8.2.186-1	RAT Type values	0	<reserved>
 8.2.186-1	RAT Type values	1	UTRAN
 8.2.186-1	RAT Type values	2	GERAN
 8.2.186-1	RAT Type values	3	WLAN
@@ -322,8 +324,10 @@
 8.2.237-1	Payload Format	2	H.265
 8.2.241-1	Format field	1	1-byte (short) format is used
 8.2.241-1	Format field	2	2-byte (long) format is used
+8.2.245-1	Job Type values	0	<reserved>
 8.2.245-1	Job Type values	1	5GC UE Level Measurements only
 8.2.245-1	Job Type values	2	Trace and 5GC UE Level Measurements
+8.2.245-2	Measurement Type values	0	<reserved>
 8.2.245-2	Measurement Type values	1	Average DL packet delay between PSA UPF and UE for a QoS flow
 8.2.245-2	Measurement Type values	2	Average UL packet delay between PSA UPF and UE for a QoS flow (excluding D1)
 8.2.245-2	Measurement Type values	3	Average UL packet delay between PSA UPF and UE for a QoS flow (including D1)

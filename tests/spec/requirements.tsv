@@ -69,7 +69,7 @@
 6.2.4.3.2	10	The timer of the period of validity restarts with each new OCI.	planned overload_control_validity_expires
 6.2.4.3.2	11	When the timer expires, the overload has ceased.	planned overload_control_validity_expires
 6.2.4.3.2	12	The Period of Validity is supported.	test tables
-6.2.4.3.2	13	The Overload Reduction Metric is a percentage from 0 to 100.	planned check_overload_reduction_metric
+6.2.4.3.2	13	The Overload Reduction Metric is a percentage from 0 to 100.	test check_overload_reduction_metric
 6.2.4.3.2	14	A sender does not advertise every small change of the metric.	application: when the UP function sends its overload
 6.2.4.3.2	15	A change of 5 or more is worth advertising.	application: when the UP function sends its overload
 6.2.4.3.2	16	The Overload Reduction Metric is supported and always in the OCI.	test tables
@@ -180,7 +180,7 @@
 6.3.3.1	1	Session modification changes a session and its rules.	application: the rules of the session
 6.3.3.2	1	The CP function sends the modification to the SEID of the UP function.	planned session_messages_carry_peer_seid
 6.3.3.2	2	The updated rules have only what changes.	application: the rules of the CP function
-6.3.3.2	3	One message does not create, update or remove one rule twice.	planned check_one_change_per_rule
+6.3.3.2	3	One message does not create, update or remove one rule twice.	test check_one_change_per_rule
 6.3.3.2	4	On a success, the CP function goes on with what started the modification.	application: the procedure of the CP function
 6.3.3.2	5	With PSUCC, a partial acceptance is handled as clause 5.2.9 says.	application: the procedure of the CP function
 6.3.3.3	1	The UP function finds the session by its SEID, or answers that it is not found.	planned unknown_seid_answered

@@ -35,12 +35,16 @@ macro_rules! pfcp_ies {
                 tables: pfcp_ies!(@tables $form $($($ty),+)?),
             }, )*
         ];
-        $( $( $(
+        $( pfcp_ies!(@impls $num $name [pfcp_ies!(@length $form $(($fixed))?)] $($($ty),+)?); )*
+    };
+    (@impls $num:literal $name:literal [$fixed:expr] $($ty:ident),*) => {
+        $(
             impl crate::ie::IeType for $ty<'_> {
                 const IE_TYPE: u16 = $num;
                 const TYPE_NAME: &'static str = $name;
+                const FIXED: Option<u16> = $fixed;
             }
-        )+ )? )*
+        )*
     };
     (@form fixed) => { crate::registry::Form::Fixed };
     (@form variable) => { crate::registry::Form::Variable };
@@ -48,6 +52,8 @@ macro_rules! pfcp_ies {
     (@form grouped) => { crate::registry::Form::Grouped };
     (@fixed) => { None };
     (@fixed $fixed:literal) => { Some($fixed) };
+    (@length fixed ($fixed:literal)) => { Some($fixed) };
+    (@length $form:ident $(($fixed:literal))?) => { None };
     (@fields grouped $($ty:ident),+) => { &[] };
     (@fields $form:ident $ty:ident) => { $ty::FIELDS };
     (@tables grouped $($ty:ident),+) => { pastey::paste! { &[$(&[<$ty:snake:upper _TABLE>]),+] } };
@@ -173,7 +179,7 @@ macro_rules! pfcp_layout {
         }
 
         impl crate::check::Check for $ty<'_> {
-            fn check(&self, path: &str, found: &mut alloc::vec::Vec<crate::check::Deviation>) {
+            fn check(&self, path: &crate::check::Path<'_>, found: &mut alloc::vec::Vec<crate::check::Deviation>) {
                 if let Some(field) = self.inconsistent() {
                     found.push(crate::check::Deviation::new(path, $clause, crate::check::DeviationKind::Inconsistent { field }));
                 }
@@ -415,7 +421,7 @@ macro_rules! pfcp_bits {
         }
 
         impl crate::check::Check for $ty<'_> {
-            fn check(&self, path: &str, found: &mut alloc::vec::Vec<crate::check::Deviation>) {
+            fn check(&self, path: &crate::check::Path<'_>, found: &mut alloc::vec::Vec<crate::check::Deviation>) {
                 if self.spare.iter().any(|spare| *spare != 0) {
                     found.push(crate::check::Deviation::new(path, "8.1.2", crate::check::DeviationKind::SpareBits));
                 }
@@ -647,15 +653,15 @@ macro_rules! pfcp_messages {
                 }
             }
 
-            pub(crate) fn check(&self, path: &str, found: &mut alloc::vec::Vec<crate::check::Deviation>) {
+            pub(crate) fn check(&self, path: &crate::check::Path<'_>, context: crate::check::Context, found: &mut alloc::vec::Vec<crate::check::Deviation>) {
                 match self {
-                    $( Self::$ty(body) => crate::check::check_scope(&**body, path, found), )*
+                    $( Self::$ty(body) => crate::check::check_scope(&**body, path, context, found), )*
                     Self::Other { message_type, .. } => {
-                        let _ = message_type;
+                        let _ = context;
                         found.push(crate::check::Deviation::new(
                             "/message",
                             "7.6.4",
-                            crate::check::DeviationKind::Rule("a message type that Table 7.3-1 does not have"),
+                            crate::check::DeviationKind::UnknownMessage { message_type: *message_type },
                         ));
                     }
                 }
@@ -736,6 +742,15 @@ macro_rules! pfcp_table {
                     presence: pfcp_table!(@presence $p),
                     repeat: pfcp_table!(@repeat $(* $($max)?)?),
                     interfaces: crate::table::Interfaces(0 $(| crate::table::Interfaces::$interface.0)*),
+                    mandatory: crate::table::mandatory(
+                        pfcp_table!(@presence $p),
+                        crate::table::Interfaces(0 $(| crate::table::Interfaces::$interface.0)*),
+                        &[$($(crate::table::Role {
+                            name: $role,
+                            presence: pfcp_table!(@presence $rp),
+                            interfaces: crate::table::Interfaces(0 $(| crate::table::Interfaces::$ri.0)*),
+                        }),*)?],
+                    ),
                     roles: &[$($(crate::table::Role {
                         name: $role,
                         presence: pfcp_table!(@presence $rp),
@@ -866,12 +881,19 @@ macro_rules! pfcp_table {
         // A table without rows leaves its arguments unused.
         #[allow(unused_variables, unused_mut, unused_assignments)]
         impl<'a> crate::check::Checked for $ty<'a> {
-            fn check_values(&self, path: &str, found: &mut alloc::vec::Vec<crate::check::Deviation>) {
+            fn check_values(&self, path: &crate::check::Path<'_>, context: crate::check::Context, found: &mut alloc::vec::Vec<crate::check::Deviation>) {
+                let table = <Self as crate::table::Scope<'a>>::table();
+                let mut row = 0;
                 $(
-                    pfcp_table!(@each [$(* $($max)?)?] $p (pfcp_table!(@type $vty $($raw)?)) self.$field, |nth, value| {
-                        let at = crate::check::at(path, $row, pfcp_table!(@position [$(* $($max)?)?] nth));
-                        crate::check::Check::check(value, &at, found);
-                    });
+                    let count = pfcp_table!(@count [$(* $($max)?)?] self.$field);
+                    if count > 0 {
+                        crate::check::check_row(table.id, &table.rows[row], count, path, context, found);
+                        pfcp_table!(@each [$(* $($max)?)?] $p (pfcp_table!(@type $vty $($raw)?)) self.$field, |nth, value| {
+                            let at = crate::check::Path::Row { parent: path, row: $row, nth: pfcp_table!(@position [$(* $($max)?)?] nth) };
+                            crate::check::check_field(value, &at, pfcp_table!(@presence $p), context, found);
+                        });
+                    }
+                    row += 1;
                 )*
             }
         }
@@ -1072,8 +1094,13 @@ macro_rules! pfcp_table {
         }
 
         impl crate::check::Check for $ty<'_> {
-            fn check(&self, path: &str, found: &mut alloc::vec::Vec<crate::check::Deviation>) {
-                crate::check::check_scope(self, path, found);
+            /// Its table on N4, as the receiver of a response.
+            fn check(&self, path: &crate::check::Path<'_>, found: &mut alloc::vec::Vec<crate::check::Deviation>) {
+                crate::check::check_scope(self, path, crate::check::Context::on(crate::table::Interfaces::N4), found);
+            }
+
+            fn check_in(&self, path: &crate::check::Path<'_>, context: crate::check::Context, found: &mut alloc::vec::Vec<crate::check::Deviation>) {
+                crate::check::check_scope(self, path, context, found);
             }
         }
 
@@ -1139,7 +1166,7 @@ macro_rules! pfcp_table {
 macro_rules! pfcp_enum {
     ($(
         $(#[$meta:meta])*
-        pub enum $ty:ident $table:literal bits $bits:literal {
+        pub enum $ty:ident $table:literal bits $bits:literal $(reserved [$($reserved:literal),*])? {
             $( $value:literal $variant:ident $name:literal ),* $(,)?
         }
     )*) => {$(
@@ -1162,6 +1189,9 @@ macro_rules! pfcp_enum {
             pub const NAMES: &'static [(u8, &'static str)] = &[$(($value, $name)),*];
             /// The width of the field, in bits.
             pub const BITS: u32 = $bits;
+            /// The values that the tables reserve: a receiver takes the IE as incorrect
+            /// (§7.6.8), where it ignores a spare one.
+            pub const RESERVED: &'static [u8] = &[$($($reserved),*)?];
 
             /// The variant of a number.
             pub const fn from_value(value: u8) -> Self {
@@ -1254,13 +1284,14 @@ macro_rules! pfcp_enum {
             fn size(&self) -> usize {
                 1
             }
-            fn check(&self, path: &str, clause: &'static str, found: &mut alloc::vec::Vec<crate::check::Deviation>) {
+            fn check(&self, path: &crate::check::Path<'_>, clause: &'static str, found: &mut alloc::vec::Vec<crate::check::Deviation>) {
                 if self.name().is_none() {
-                    found.push(crate::check::Deviation::new(
-                        path,
-                        clause,
-                        crate::check::DeviationKind::SpareValue { value: self.value().into() },
-                    ));
+                    let value = self.value().into();
+                    let kind = match Self::RESERVED.contains(&self.value()) {
+                        true => crate::check::DeviationKind::ReservedValue { value },
+                        false => crate::check::DeviationKind::SpareValue { value },
+                    };
+                    found.push(crate::check::Deviation::new(path, clause, kind));
                 }
             }
             #[cfg(feature = "tree")]

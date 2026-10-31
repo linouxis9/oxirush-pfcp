@@ -634,7 +634,7 @@ impl<'a> Codec<'a> for FqCsid<'a> {
 }
 
 impl Check for FqCsid<'_> {
-    fn check(&self, path: &str, found: &mut Vec<Deviation>) {
+    fn check(&self, path: &crate::check::Path<'_>, found: &mut Vec<Deviation>) {
         if Self::address_length(self.node_id_type).is_none() {
             found.push(Deviation::new(path, "8.2.43", crate::check::DeviationKind::SpareValue { value: self.node_id_type.into() }));
         }

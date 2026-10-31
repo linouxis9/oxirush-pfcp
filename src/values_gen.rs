@@ -38,8 +38,8 @@ pfcp_number! {
     DownlinkDataNotificationDelay(u8) "Delay Value in integer multiples of 50 millisecs, or zero" "8.2.28";
     /// Sequence Number (§8.2.33).
     SequenceNumber(u32) "Sequence Number" "8.2.33";
-    /// Metric (§8.2.34).
-    Metric(u8) "Metric" "8.2.34";
+    /// Metric (§8.2.34): a percentage, the Load Metric or the Overload Reduction Metric.
+    Metric(Percent) "Metric" "8.2.34";
     /// Duration Measurement (§8.2.45).
     DurationMeasurement(u32) "Duration value" "8.2.45";
     /// Time of First Packet (§8.2.46).

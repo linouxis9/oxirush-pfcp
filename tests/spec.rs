@@ -326,47 +326,51 @@ fn tables() {
     report(problems);
 }
 
+/// An enumeration of the crate: its tables, the values that they name, and those that
+/// they reserve.
+type Enumeration = (&'static str, &'static [(u8, &'static str)], &'static [u8]);
+
 /// The tables of clause 8.2 that name values: each is an enumeration of the crate with
 /// the same values and names; and those of bits name flags of their IE type.
 #[test]
 fn value_tables() {
-    let enumerations: &[(&str, &[(u8, &str)])] = &[
-        (CauseValue::TABLE, CauseValue::NAMES),
-        (SourceInterfaceValue::TABLE, SourceInterfaceValue::NAMES),
-        (Gate::TABLE, Gate::NAMES),
-        (RedirectAddressType::TABLE, RedirectAddressType::NAMES),
-        (DestinationInterfaceValue::TABLE, DestinationInterfaceValue::NAMES),
-        (TimerUnit::TABLE, TimerUnit::NAMES),
-        (NodeIdType::TABLE, NodeIdType::NAMES),
-        (NodeType::TABLE, NodeType::NAMES),
-        (FlowDirection::TABLE, FlowDirection::NAMES),
-        (TimeUnit::TABLE, TimeUnit::NAMES),
-        (OuterHeaderRemovalDescription::TABLE, OuterHeaderRemovalDescription::NAMES),
-        (HeaderType::TABLE, HeaderType::NAMES),
-        (PdnTypeValue::TABLE, PdnTypeValue::NAMES),
-        (RuleIdType::TABLE, RuleIdType::NAMES),
-        (BaseTimeIntervalType::TABLE, BaseTimeIntervalType::NAMES),
-        (InterfaceTypeValue::TABLE, InterfaceTypeValue::NAMES),
-        (SteeringFunctionalityValue::TABLE, SteeringFunctionalityValue::NAMES),
-        (SteeringModeValue::TABLE, SteeringModeValue::NAMES),
-        (PriorityValue::TABLE, PriorityValue::NAMES),
-        (AccessType::TABLE, AccessType::NAMES),
-        (AvailabilityStatus::TABLE, AvailabilityStatus::NAMES),
-        (RatTypeValue::TABLE, RatTypeValue::NAMES),
-        (TransportModeValue::TABLE, TransportModeValue::NAMES),
-        (ReportingUrgencyValue::TABLE, ReportingUrgencyValue::NAMES),
-        (MediaTransportProtocolValue::TABLE, MediaTransportProtocolValue::NAMES),
-        (RtpHeaderExtensionTypeValue::TABLE, RtpHeaderExtensionTypeValue::NAMES),
-        (PayloadFormat::TABLE, PayloadFormat::NAMES),
-        (FormatField::TABLE, FormatField::NAMES),
-        (JobType::TABLE, JobType::NAMES),
-        (MeasurementType::TABLE, MeasurementType::NAMES),
-        (ActionValue::TABLE, ActionValue::NAMES),
-        (ConditionValue::TABLE, ConditionValue::NAMES),
-        (SignalingMethod::TABLE, SignalingMethod::NAMES),
-        (FailureCause::TABLE, FailureCause::NAMES),
-        (TransferringMethod::TABLE, TransferringMethod::NAMES),
-        (RemainingDataReportingIndicationValue::TABLE, RemainingDataReportingIndicationValue::NAMES),
+    let enumerations: &[Enumeration] = &[
+        (CauseValue::TABLE, CauseValue::NAMES, CauseValue::RESERVED),
+        (SourceInterfaceValue::TABLE, SourceInterfaceValue::NAMES, SourceInterfaceValue::RESERVED),
+        (Gate::TABLE, Gate::NAMES, Gate::RESERVED),
+        (RedirectAddressType::TABLE, RedirectAddressType::NAMES, RedirectAddressType::RESERVED),
+        (DestinationInterfaceValue::TABLE, DestinationInterfaceValue::NAMES, DestinationInterfaceValue::RESERVED),
+        (TimerUnit::TABLE, TimerUnit::NAMES, TimerUnit::RESERVED),
+        (NodeIdType::TABLE, NodeIdType::NAMES, NodeIdType::RESERVED),
+        (NodeType::TABLE, NodeType::NAMES, NodeType::RESERVED),
+        (FlowDirection::TABLE, FlowDirection::NAMES, FlowDirection::RESERVED),
+        (TimeUnit::TABLE, TimeUnit::NAMES, TimeUnit::RESERVED),
+        (OuterHeaderRemovalDescription::TABLE, OuterHeaderRemovalDescription::NAMES, OuterHeaderRemovalDescription::RESERVED),
+        (HeaderType::TABLE, HeaderType::NAMES, HeaderType::RESERVED),
+        (PdnTypeValue::TABLE, PdnTypeValue::NAMES, PdnTypeValue::RESERVED),
+        (RuleIdType::TABLE, RuleIdType::NAMES, RuleIdType::RESERVED),
+        (BaseTimeIntervalType::TABLE, BaseTimeIntervalType::NAMES, BaseTimeIntervalType::RESERVED),
+        (InterfaceTypeValue::TABLE, InterfaceTypeValue::NAMES, InterfaceTypeValue::RESERVED),
+        (SteeringFunctionalityValue::TABLE, SteeringFunctionalityValue::NAMES, SteeringFunctionalityValue::RESERVED),
+        (SteeringModeValue::TABLE, SteeringModeValue::NAMES, SteeringModeValue::RESERVED),
+        (PriorityValue::TABLE, PriorityValue::NAMES, PriorityValue::RESERVED),
+        (AccessType::TABLE, AccessType::NAMES, AccessType::RESERVED),
+        (AvailabilityStatus::TABLE, AvailabilityStatus::NAMES, AvailabilityStatus::RESERVED),
+        (RatTypeValue::TABLE, RatTypeValue::NAMES, RatTypeValue::RESERVED),
+        (TransportModeValue::TABLE, TransportModeValue::NAMES, TransportModeValue::RESERVED),
+        (ReportingUrgencyValue::TABLE, ReportingUrgencyValue::NAMES, ReportingUrgencyValue::RESERVED),
+        (MediaTransportProtocolValue::TABLE, MediaTransportProtocolValue::NAMES, MediaTransportProtocolValue::RESERVED),
+        (RtpHeaderExtensionTypeValue::TABLE, RtpHeaderExtensionTypeValue::NAMES, RtpHeaderExtensionTypeValue::RESERVED),
+        (PayloadFormat::TABLE, PayloadFormat::NAMES, PayloadFormat::RESERVED),
+        (FormatField::TABLE, FormatField::NAMES, FormatField::RESERVED),
+        (JobType::TABLE, JobType::NAMES, JobType::RESERVED),
+        (MeasurementType::TABLE, MeasurementType::NAMES, MeasurementType::RESERVED),
+        (ActionValue::TABLE, ActionValue::NAMES, ActionValue::RESERVED),
+        (ConditionValue::TABLE, ConditionValue::NAMES, ConditionValue::RESERVED),
+        (SignalingMethod::TABLE, SignalingMethod::NAMES, SignalingMethod::RESERVED),
+        (FailureCause::TABLE, FailureCause::NAMES, FailureCause::RESERVED),
+        (TransferringMethod::TABLE, TransferringMethod::NAMES, TransferringMethod::RESERVED),
+        (RemainingDataReportingIndicationValue::TABLE, RemainingDataReportingIndicationValue::NAMES, RemainingDataReportingIndicationValue::RESERVED),
     ];
     let mut document: BTreeMap<&str, Vec<(&str, &str)>> = BTreeMap::new();
     for cells in records(include_str!("spec/value-tables.tsv")) {
@@ -374,7 +378,7 @@ fn value_tables() {
     }
     let mut problems = Vec::new();
     let mut covered = BTreeSet::new();
-    for (tables, names) in enumerations {
+    for (tables, names, reserved) in enumerations {
         for table in tables.split(" and ") {
             let table = table.strip_prefix("Table ").unwrap();
             covered.insert(table);
@@ -383,8 +387,13 @@ fn value_tables() {
                 continue;
             };
             let rows: Vec<(u8, &str)> = rows.iter().map(|(value, name)| (value.parse().unwrap(), *name)).collect();
-            if rows != *names {
-                problems.push(format!("Table {table}: {names:?} in the crate, {rows:?} in the document"));
+            let named: Vec<(u8, &str)> = rows.iter().filter(|(_, name)| *name != "<reserved>").copied().collect();
+            let kept: Vec<u8> = rows.iter().filter(|(_, name)| *name == "<reserved>").map(|(value, _)| *value).collect();
+            if named != *names {
+                problems.push(format!("Table {table}: {names:?} in the crate, {named:?} in the document"));
+            }
+            if kept != *reserved {
+                problems.push(format!("Table {table}: reserved {reserved:?} in the crate, {kept:?} in the document"));
             }
         }
     }

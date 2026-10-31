@@ -33,6 +33,8 @@ pub trait IeType {
     const IE_TYPE: u16;
     /// Its name in Table 8.1.2-1.
     const TYPE_NAME: &'static str;
+    /// Its length, when Table 8.1.2-1 fixes it.
+    const FIXED: Option<u16> = None;
 }
 
 /// How a value is read from the octets of its IE, after the Length, and written back.

@@ -18,11 +18,12 @@
 //! A PFCP message: its header and its typed body, and the datagram that carries one or
 //! more of them (§7.2.1A).
 
-use alloc::string::String;
 use alloc::vec::Vec;
 
 use crate::Error;
-use crate::check::{Deviation, DeviationKind};
+use crate::check::{Context, Deviation, DeviationKind};
+use crate::enums::CauseValue;
+use crate::table::{Interfaces, Presence};
 use crate::header::Header;
 use crate::octets::IntoOwned;
 use crate::macros::pfcp_messages;
@@ -166,33 +167,205 @@ impl<'a> Message<'a> {
         Ok(out)
     }
 
-    /// Each way in which the message is not as TS 29.244 has a sender construct it.
+    /// Each way in which the message is not as TS 29.244 has a sender construct it on N4.
     pub fn check(&self) -> Vec<Deviation> {
+        self.check_on(Interfaces::N4)
+    }
+
+    /// Each way in which the message is not as TS 29.244 has a sender construct it on
+    /// `interface`: its mandatory IEs, and the IEs that it may have, are those of the
+    /// Appl. column of the interface.
+    pub fn check_on(&self, interface: Interfaces) -> Vec<Deviation> {
         let mut found = Vec::new();
         let header = &self.header;
         let message_type = self.body.message_type();
         let node = is_node_related(message_type);
-        let path = String::from("/header");
+        let known = !matches!(self.body, Body::Other { .. });
+        let path = "/header";
         if header.version != 1 {
-            found.push(Deviation::new(&path, "7.2.2.4.1", DeviationKind::Rule("the version is not 1")));
+            found.push(Deviation::new(path, "7.2.2.4.1", DeviationKind::Rule("the version is not 1")));
         }
         if header.spare != 0 || (header.priority.is_none() && header.spare_last != 0) {
-            found.push(Deviation::new(&path, "7.2.2.1", DeviationKind::SpareBits));
+            found.push(Deviation::new(path, "7.2.2.1", DeviationKind::SpareBits));
         }
-        if node && header.seid.is_some() {
-            found.push(Deviation::new(&path, "7.2.2.2", DeviationKind::Rule("a node related message has the S flag")));
+        if known && node && header.seid.is_some() {
+            found.push(Deviation::new(path, "7.2.2.2", DeviationKind::Rule("a node related message has the S flag")));
         }
-        if !node && header.seid.is_none() {
-            found.push(Deviation::new(&path, "7.2.2.4.1", DeviationKind::Rule("a session related message has no SEID")));
+        if known && !node && header.seid.is_none() {
+            found.push(Deviation::new(path, "7.2.2.4.1", DeviationKind::Rule("a session related message has no SEID")));
         }
-        if node && header.priority.is_some() {
-            found.push(Deviation::new(&path, "7.2.2.2", DeviationKind::Rule("a node related message has the MP flag")));
+        if known && node && header.priority.is_some() {
+            found.push(Deviation::new(path, "7.2.2.2", DeviationKind::Rule("a node related message has the MP flag")));
         }
-        if node && header.follow_on {
-            found.push(Deviation::new(&path, "6.5", DeviationKind::Rule("a node related message is bundled")));
+        if known && node && header.follow_on {
+            found.push(Deviation::new(path, "6.5", DeviationKind::Rule("a node related message is bundled")));
         }
-        self.body.check("/pfcp", &mut found);
+        let cause = self.body.cause();
+        // SEID 0: an establishment, a report to another SMF, or an answer to a session
+        // that the node does not have or to a request that it rejects (§7.2.2.4.2).
+        let rejection = cause.is_some_and(|cause| cause.value() >= 64);
+        if header.seid == Some(0) && matches!(message_type, 52 | 54) || header.seid == Some(0) && cause.is_some() && !rejection {
+            found.push(Deviation::new(path, "7.2.2.4.2", DeviationKind::Rule("SEID 0 where the peer's SEID is known")));
+        }
+        match message_type_info(message_type) {
+            Some(info) if !info.interfaces.has(interface) => {
+                found.push(Deviation::new("/message", "7.3", DeviationKind::MessageNotOnInterface { message_type }));
+            }
+            _ => {}
+        }
+        let context = Context {
+            interface,
+            view: Presence::Mandatory,
+            request: is_request(message_type) && message_type != 1,
+            rejected: rejection,
+        };
+        self.body.check(&crate::check::Path::Root("/pfcp"), context, &mut found);
+        for (rule, id) in self.body.rules_changed_twice() {
+            found.push(Deviation::new("/pfcp", "6.3.3.2", DeviationKind::RuleChangedTwice { rule, id }));
+        }
         found
+    }
+}
+
+/// The IDs of the rules of one type that a message changes: on the stack while they are
+/// few, as they are in a message of a lab.
+#[derive(Default)]
+struct Ids {
+    few: [u32; 32],
+    len: usize,
+    many: Vec<u32>,
+}
+
+impl Ids {
+    fn push(&mut self, id: u32) {
+        match self.len < self.few.len() {
+            true => self.few[self.len] = id,
+            false => {
+                if self.many.is_empty() {
+                    self.many.extend_from_slice(&self.few);
+                }
+                self.many.push(id);
+            }
+        }
+        self.len += 1;
+    }
+
+    fn clear(&mut self) {
+        self.len = 0;
+        self.many.clear();
+    }
+
+    /// Each ID that is there more than once, once.
+    fn repeated(&mut self) -> Vec<u32> {
+        let ids = match self.len <= self.few.len() {
+            true => &mut self.few[..self.len],
+            false => &mut self.many[..],
+        };
+        ids.sort_unstable();
+        let mut repeated = Vec::new();
+        for pair in ids.windows(2) {
+            if pair[0] == pair[1] && repeated.last() != Some(&pair[0]) {
+                repeated.push(pair[0]);
+            }
+        }
+        repeated
+    }
+}
+
+/// Whether a message type is a request: the odd ones of the node related messages but 11,
+/// Version Not Supported Response, and the even ones of the session related messages.
+pub fn is_request(message_type: u8) -> bool {
+    match is_node_related(message_type) {
+        true => message_type % 2 == 1 && message_type != 11,
+        false => message_type % 2 == 0,
+    }
+}
+
+impl Body<'_> {
+    /// The Cause of a response.
+    pub fn cause(&self) -> Option<CauseValue> {
+        let cause = match self {
+            Self::PfdManagementResponse(body) => &body.cause,
+            Self::AssociationSetupResponse(body) => &body.cause,
+            Self::AssociationUpdateResponse(body) => &body.cause,
+            Self::AssociationReleaseResponse(body) => &body.cause,
+            Self::NodeReportResponse(body) => &body.cause,
+            Self::SessionSetDeletionResponse(body) => &body.cause,
+            Self::SessionSetModificationResponse(body) => &body.cause,
+            Self::SessionEstablishmentResponse(body) => &body.cause,
+            Self::SessionModificationResponse(body) => &body.cause,
+            Self::SessionDeletionResponse(body) => &body.cause,
+            Self::SessionReportResponse(body) => &body.cause,
+            _ => return None,
+        };
+        cause.as_ref().map(|cause| cause.value)
+    }
+
+    /// Each rule that the message creates, updates or removes more than once (§6.3.3.2),
+    /// by the name of its type and its ID.
+    fn rules_changed_twice(&self) -> Vec<(&'static str, u32)> {
+        fn ids<'b, T: 'b>(rules: impl IntoIterator<Item = &'b T>, id: impl Fn(&T) -> Option<u32>, out: &mut Ids) {
+            for id in rules.into_iter().filter_map(id) {
+                out.push(id);
+            }
+        }
+        let mut twice = Vec::new();
+        let mut each = |rule: &'static str, mut ids: Ids| {
+            for id in ids.repeated() {
+                twice.push((rule, id));
+            }
+            ids.clear();
+        };
+        match self {
+            Self::SessionEstablishmentRequest(body) => {
+                let mut rules = Ids::default();
+                ids(&body.create_pdr, |rule| rule.pdr_id.as_ref().map(|id| id.value.into()), &mut rules);
+                each("PDR", core::mem::take(&mut rules));
+                ids(&body.create_far, |rule| rule.far_id.as_ref().map(|id| id.value), &mut rules);
+                each("FAR", core::mem::take(&mut rules));
+                ids(&body.create_urr, |rule| rule.urr_id.as_ref().map(|id| id.value), &mut rules);
+                each("URR", core::mem::take(&mut rules));
+                ids(&body.create_qer, |rule| rule.qer_id.as_ref().map(|id| id.value), &mut rules);
+                each("QER", core::mem::take(&mut rules));
+                ids(&body.create_mar, |rule| rule.mar_id.as_ref().map(|id| id.value.into()), &mut rules);
+                each("MAR", core::mem::take(&mut rules));
+                ids(&body.create_srr, |rule| rule.srr_id.as_ref().map(|id| id.value.into()), &mut rules);
+                each("SRR", rules);
+            }
+            Self::SessionModificationRequest(body) => {
+                let mut rules = Ids::default();
+                ids(&body.create_pdr, |rule| rule.pdr_id.as_ref().map(|id| id.value.into()), &mut rules);
+                ids(&body.update_pdr, |rule| rule.pdr_id.as_ref().map(|id| id.value.into()), &mut rules);
+                ids(&body.remove_pdr, |rule| rule.pdr_id.as_ref().map(|id| id.value.into()), &mut rules);
+                each("PDR", core::mem::take(&mut rules));
+                ids(&body.create_far, |rule| rule.far_id.as_ref().map(|id| id.value), &mut rules);
+                ids(&body.update_far, |rule| rule.far_id.as_ref().map(|id| id.value), &mut rules);
+                ids(&body.remove_far, |rule| rule.far_id.as_ref().map(|id| id.value), &mut rules);
+                each("FAR", core::mem::take(&mut rules));
+                ids(&body.create_urr, |rule| rule.urr_id.as_ref().map(|id| id.value), &mut rules);
+                ids(&body.update_urr, |rule| rule.urr_id.as_ref().map(|id| id.value), &mut rules);
+                ids(&body.remove_urr, |rule| rule.urr_id.as_ref().map(|id| id.value), &mut rules);
+                each("URR", core::mem::take(&mut rules));
+                ids(&body.create_qer, |rule| rule.qer_id.as_ref().map(|id| id.value), &mut rules);
+                ids(&body.update_qer, |rule| rule.qer_id.as_ref().map(|id| id.value), &mut rules);
+                ids(&body.remove_qer, |rule| rule.qer_id.as_ref().map(|id| id.value), &mut rules);
+                each("QER", core::mem::take(&mut rules));
+                ids(body.create_bar.iter().map(|rule| &**rule), |rule| rule.bar_id.as_ref().map(|id| id.value.into()), &mut rules);
+                ids(body.update_bar.iter().map(|rule| &**rule), |rule| rule.bar_id.as_ref().map(|id| id.value.into()), &mut rules);
+                ids(body.remove_bar.iter().map(|rule| &**rule), |rule| rule.bar_id.as_ref().map(|id| id.value.into()), &mut rules);
+                each("BAR", core::mem::take(&mut rules));
+                ids(&body.create_mar, |rule| rule.mar_id.as_ref().map(|id| id.value.into()), &mut rules);
+                ids(&body.update_mar, |rule| rule.mar_id.as_ref().map(|id| id.value.into()), &mut rules);
+                ids(&body.remove_mar, |rule| rule.mar_id.as_ref().map(|id| id.value.into()), &mut rules);
+                each("MAR", core::mem::take(&mut rules));
+                ids(&body.create_srr, |rule| rule.srr_id.as_ref().map(|id| id.value.into()), &mut rules);
+                ids(&body.update_srr, |rule| rule.srr_id.as_ref().map(|id| id.value.into()), &mut rules);
+                ids(&body.remove_srr, |rule| rule.srr_id.as_ref().map(|id| id.value.into()), &mut rules);
+                each("SRR", rules);
+            }
+            _ => {}
+        }
+        twice
     }
 }
 
