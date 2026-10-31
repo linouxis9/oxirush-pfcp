@@ -51,7 +51,6 @@ pub trait Codec: Sized {
         slot.is_some()
     }
 
-
     /// Write the value.
     ///
     /// # Errors
@@ -125,7 +124,10 @@ pub struct RawIe {
 impl core::fmt::Debug for RawIe {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         let mut debug = f.debug_struct("RawIe");
-        debug.field("ie_type", &self.ie_type).field("enterprise_id", &self.enterprise_id).field("length", &self.length);
+        debug
+            .field("ie_type", &self.ie_type)
+            .field("enterprise_id", &self.enterprise_id)
+            .field("length", &self.length);
         match self.enterprise_id.is_none() && crate::values_hand::SECRETS.contains(&self.ie_type) {
             true => debug.field("octets", &format_args!("{} octets", self.octets.len())),
             false => debug.field("octets", &self.octets),
@@ -207,9 +209,19 @@ pub enum IeFault {
 impl core::fmt::Display for IeFault {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         match self {
-            Self::HeaderCut { octets } => write!(f, "{octets} octets are left, fewer than the four of an IE header"),
-            Self::Length { ie_type, length, available } => {
-                write!(f, "IE type {ie_type} has the Length {length}, and {available} octets follow its header")
+            Self::HeaderCut { octets } => write!(
+                f,
+                "{octets} octets are left, fewer than the four of an IE header"
+            ),
+            Self::Length {
+                ie_type,
+                length,
+                available,
+            } => {
+                write!(
+                    f,
+                    "IE type {ie_type} has the Length {length}, and {available} octets follow its header"
+                )
             }
         }
     }
@@ -224,7 +236,12 @@ pub(crate) fn raw(ie_type: u16, body: &[u8]) -> RawIe {
             length: None,
             octets: Octets::wire(rest),
         },
-        _ => RawIe { ie_type, enterprise_id: None, length: None, octets: Octets::wire(body) },
+        _ => RawIe {
+            ie_type,
+            enterprise_id: None,
+            length: None,
+            octets: Octets::wire(body),
+        },
     }
 }
 
@@ -236,11 +253,19 @@ pub(crate) fn begin(ie_type: u16, out: &mut Vec<u8>) -> usize {
 }
 
 /// Write the Length of the IE that starts at `at`: `length`, or that of its content.
-pub(crate) fn finish(ie_type: u16, at: usize, length: Option<u16>, out: &mut [u8]) -> Result<(), Error> {
+pub(crate) fn finish(
+    ie_type: u16,
+    at: usize,
+    length: Option<u16>,
+    out: &mut [u8],
+) -> Result<(), Error> {
     let written = out.len() - at - 2;
     let length = match length {
         Some(length) => length,
-        None => u16::try_from(written).map_err(|_| Error::TooLong { ie_type, length: written })?,
+        None => u16::try_from(written).map_err(|_| Error::TooLong {
+            ie_type,
+            length: written,
+        })?,
     };
     out[at..at + 2].copy_from_slice(&length.to_be_bytes());
     Ok(())

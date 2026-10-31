@@ -18,7 +18,6 @@
 //! The registry: every IE type of Table 8.1.2-1, one line each, and the tables of
 //! clause 7, one row each, which the macros expand into the types of the crate.
 
-
 use crate::enums::CauseValue;
 use crate::macros::{pfcp_ies, pfcp_table};
 use crate::values::*;
@@ -28,11 +27,17 @@ use crate::values_hand::*;
 // The conditions of the C rows that a scope alone shows (§7.6.6), beside their rows.
 
 /// A Cause that rejects a request for an IE, which the Offending IE then names.
-const OF_AN_IE: [CauseValue; 3] = [CauseValue::MandatoryIeMissing, CauseValue::ConditionalIeMissing, CauseValue::MandatoryIeIncorrect];
+const OF_AN_IE: [CauseValue; 3] = [
+    CauseValue::MandatoryIeMissing,
+    CauseValue::ConditionalIeMissing,
+    CauseValue::MandatoryIeIncorrect,
+];
 
 /// Whether the Cause is one of `values`.
 fn cause_is(cause: &Option<Cause>, values: &[CauseValue]) -> bool {
-    cause.as_ref().is_some_and(|cause| values.contains(&cause.value))
+    cause
+        .as_ref()
+        .is_some_and(|cause| values.contains(&cause.value))
 }
 
 /// Whether the Measurement Method of a Create URR has a method.
@@ -2284,4 +2289,3 @@ pfcp_table! {
         extended_dl_buffering_notification_policy: "Extended DL Buffering Notification Policy" C ExtendedDlBufferingNotificationPolicy [N4],
     }
 }
-

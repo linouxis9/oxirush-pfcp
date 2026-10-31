@@ -31,9 +31,9 @@
 //! # Ok::<(), oxirush_pfcp::Error>(())
 //! ```
 
+use crate::Error;
 use crate::header::Header;
 use crate::ie::{IeFault, VENDOR};
-use crate::Error;
 
 /// One IE, as a slice of the octets that hold it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -81,11 +81,18 @@ pub fn ies(octets: &[u8]) -> Ies<'_> {
 /// Octets shorter than a header, and a Message Length that runs past the octets
 /// (§7.6.3).
 pub fn message_ies(octets: &[u8]) -> Result<(Header, u8, Ies<'_>), Error> {
-    let (header, message_type, length) = Header::decode(octets).ok_or(Error::TooShort { octets: octets.len() })?;
+    let (header, message_type, length) = Header::decode(octets).ok_or(Error::TooShort {
+        octets: octets.len(),
+    })?;
     let end = 4 + usize::from(length);
     match octets.get(header.len()..end) {
         Some(content) if end >= header.len() => Ok((header, message_type, ies(content))),
-        _ => Err(Error::MessageLength { header, message_type, length, available: octets.len() - 4 }),
+        _ => Err(Error::MessageLength {
+            header,
+            message_type,
+            length,
+            available: octets.len() - 4,
+        }),
     }
 }
 
@@ -100,7 +107,9 @@ impl<'a> Iterator for Ies<'a> {
         }
         let Some(&[t0, t1, l0, l1]) = octets.first_chunk::<4>() else {
             self.rest = &[];
-            return Some(Err(IeFault::HeaderCut { octets: octets.len() }));
+            return Some(Err(IeFault::HeaderCut {
+                octets: octets.len(),
+            }));
         };
         let ie_type = u16::from_be_bytes([t0, t1]);
         let length = u16::from_be_bytes([l0, l1]);
@@ -108,13 +117,23 @@ impl<'a> Iterator for Ies<'a> {
         let Some(content) = octets.get(4..end) else {
             self.rest = &[];
             let available = octets.len() - 4;
-            return Some(Err(IeFault::Length { ie_type, length, available }));
+            return Some(Err(IeFault::Length {
+                ie_type,
+                length,
+                available,
+            }));
         };
         self.rest = &octets[end..];
         let (enterprise_id, value) = match (ie_type >= VENDOR, content) {
             (true, [high, low, value @ ..]) => (Some(u16::from_be_bytes([*high, *low])), value),
             _ => (None, content),
         };
-        Some(Ok(IeSlice { ie_type, length, enterprise_id, value, content }))
+        Some(Ok(IeSlice {
+            ie_type,
+            length,
+            enterprise_id,
+            value,
+            content,
+        }))
     }
 }

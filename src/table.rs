@@ -185,7 +185,11 @@ impl<T> FieldValues<T> for Vec<T> {
 
 /// Write the `nth` value of a field as its IE: `false` when it has no such value.
 #[inline]
-pub(crate) fn emit_field<T: IeType + Codec, F: FieldValues<T>>(field: &F, nth: usize, out: &mut Vec<u8>) -> Result<bool, Error> {
+pub(crate) fn emit_field<T: IeType + Codec, F: FieldValues<T>>(
+    field: &F,
+    nth: usize,
+    out: &mut Vec<u8>,
+) -> Result<bool, Error> {
     match field.values().get(nth) {
         Some(value) => crate::ie::encode_value(value, out).map(|()| true),
         None => Ok(false),
@@ -194,7 +198,11 @@ pub(crate) fn emit_field<T: IeType + Codec, F: FieldValues<T>>(field: &F, nth: u
 
 /// The interfaces on which a row is mandatory, from its presence and interfaces, or from
 /// its roles when it has some.
-pub(crate) const fn mandatory(presence: Presence, interfaces: Interfaces, roles: &[Role]) -> Interfaces {
+pub(crate) const fn mandatory(
+    presence: Presence,
+    interfaces: Interfaces,
+    roles: &[Role],
+) -> Interfaces {
     if roles.is_empty() {
         return match presence {
             Presence::Mandatory => interfaces,
@@ -302,7 +310,11 @@ pub(crate) fn decode_scope_into<S: Scope>(scope: &mut S, octets: &[u8]) -> Resul
 /// The scope of `octets`, in `scope`, which is empty; its large lists sized first by a
 /// pass over its IEs where `presize` asks for it: a message, whose lists of grouped IEs
 /// are long, and not a grouped IE, whose lists are short or empty.
-pub(crate) fn decode_scope_sized<S: Scope>(scope: &mut S, octets: &[u8], presize: bool) -> Result<(), IeFault> {
+pub(crate) fn decode_scope_sized<S: Scope>(
+    scope: &mut S,
+    octets: &[u8],
+    presize: bool,
+) -> Result<(), IeFault> {
     if presize && S::PRESIZE {
         scope.presize(octets);
     }
@@ -323,7 +335,9 @@ pub(crate) fn decode_scope_sized<S: Scope>(scope: &mut S, octets: &[u8], presize
         };
         if (placing == Placing::Malformed || (body.is_empty() && ie_type < VENDOR))
             && !kept_first.contains(&ie_type)
-            && S::table().row_of(ie_type).is_some_and(|row| row.repeat == Repeat::Once)
+            && S::table()
+                .row_of(ie_type)
+                .is_some_and(|row| row.repeat == Repeat::Once)
         {
             kept_first.push(ie_type);
         }

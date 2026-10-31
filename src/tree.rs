@@ -46,7 +46,12 @@ pub(crate) trait TreeScope {
     /// The tree of the `nth` value of the field of `ie_type`.
     fn field_tree(&self, ie_type: u16, nth: usize) -> Option<Value>;
     /// Read a value of the field of `ie_type` from its tree, and add it to the field.
-    fn read_field(&mut self, ie_type: u16, value: &Value, reading: &mut Reading) -> Result<(), Refused>;
+    fn read_field(
+        &mut self,
+        ie_type: u16,
+        value: &Value,
+        reading: &mut Reading,
+    ) -> Result<(), Refused>;
 }
 
 /// The tree of the `nth` value of a field.
@@ -55,7 +60,11 @@ pub(crate) fn field_tree<T: tree::Tree, F: FieldValues<T>>(field: &F, nth: usize
 }
 
 /// Read a value of a field from its tree, and add it to the field.
-pub(crate) fn read_field<T: tree::Tree, F: FieldValues<T>>(field: &mut F, value: &Value, reading: &mut Reading) -> Result<(), Refused> {
+pub(crate) fn read_field<T: tree::Tree, F: FieldValues<T>>(
+    field: &mut F,
+    value: &Value,
+    reading: &mut Reading,
+) -> Result<(), Refused> {
     field.add(T::from_tree(value, reading)?);
     Ok(())
 }
@@ -70,7 +79,11 @@ fn put(members: &mut Map, name: String, list: bool, value: Value) {
             *single = Value::Array(alloc::vec![first, value]);
         }
         None => {
-            let value = if list { Value::Array(alloc::vec![value]) } else { value };
+            let value = if list {
+                Value::Array(alloc::vec![value])
+            } else {
+                value
+            };
             members.insert(name, value);
         }
     }
@@ -80,8 +93,14 @@ fn put(members: &mut Map, name: String, list: bool, value: Value) {
 fn raw_tree(ie: &RawIe) -> Value {
     let mut members = Members::new();
     members.put("octets", tree::octets(&ie.octets));
-    members.put_optional("length", ie.length.map(|length| tree::unsigned(length.into())));
-    members.put_optional("Enterprise ID", ie.enterprise_id.map(|id| tree::unsigned(id.into())));
+    members.put_optional(
+        "length",
+        ie.length.map(|length| tree::unsigned(length.into())),
+    );
+    members.put_optional(
+        "Enterprise ID",
+        ie.enterprise_id.map(|id| tree::unsigned(id.into())),
+    );
     members.finish()
 }
 
@@ -93,7 +112,11 @@ pub(crate) fn scope_to_tree<S: Scope + TreeScope>(scope: &S) -> Value {
     let raws = scope.raw();
     let order = scope.order();
     // The kept IEs that the order places; those after them were added since.
-    let ordered = order.iter().filter(|placed| matches!(placed, Placed::Raw)).count().min(raws.len());
+    let ordered = order
+        .iter()
+        .filter(|placed| matches!(placed, Placed::Raw))
+        .count()
+        .min(raws.len());
     let mut members = Map::new();
     for row in table.rows {
         let kept = raws.iter().any(|ie| ie.ie_type == row.ie_type);
@@ -133,26 +156,37 @@ pub(crate) fn scope_to_tree<S: Scope + TreeScope>(scope: &S) -> Value {
             _ => 0,
         };
         while field(&mut members, &mut nth) {}
-        for ie in raws[kept_from..].iter().filter(|ie| ie.ie_type == row.ie_type) {
+        for ie in raws[kept_from..]
+            .iter()
+            .filter(|ie| ie.ie_type == row.ie_type)
+        {
             put(&mut members, row.name.into(), list, raw_tree(ie));
         }
     }
     for ie in raws.iter().filter(|ie| table.row_of(ie.ie_type).is_none()) {
-        put(&mut members, crate::tree_name(ie.ie_type, Some(table)), false, raw_tree(ie));
+        put(
+            &mut members,
+            crate::tree_name(ie.ie_type, Some(table)),
+            false,
+            raw_tree(ie),
+        );
     }
     Value::Object(members)
 }
 
 /// Whether an entry is written as octets.
 fn is_octets(value: &Value) -> bool {
-    value.as_object().is_some_and(|members| tree::member(members, "octets").is_some())
+    value
+        .as_object()
+        .is_some_and(|members| tree::member(members, "octets").is_some())
 }
 
 fn read_raw(ie_type: u16, value: &Value, reading: &mut Reading) -> Result<RawIe, Refused> {
     let read = reading.members(value, &["octets", "length", "Enterprise ID"])?;
     let octets = reading.member(&read, 0, |value, reading| reading.octets(value))?;
     let length = reading.optional(&read, 1, |value, reading| reading.unsigned(value, 0, 65535))?;
-    let enterprise = reading.optional(&read, 2, |value, reading| reading.unsigned(value, 0, 65535))?;
+    let enterprise =
+        reading.optional(&read, 2, |value, reading| reading.unsigned(value, 0, 65535))?;
     Ok(RawIe {
         ie_type,
         enterprise_id: enterprise.map(|id| id as u16),
@@ -176,7 +210,10 @@ fn type_of_name(name: &str) -> Option<u16> {
 /// A scope from its tree, which encodes in the order of its table whatever the order in
 /// which the tree writes its rows: the values of a row, and the IEs of its type written
 /// as octets, in the order written; the IEs of no row last.
-pub(crate) fn scope_from_tree<S: Scope + TreeScope>(value: &Value, reading: &mut Reading) -> Result<S, Refused> {
+pub(crate) fn scope_from_tree<S: Scope + TreeScope>(
+    value: &Value,
+    reading: &mut Reading,
+) -> Result<S, Refused> {
     let Some(members) = value.as_object() else {
         return Err(reading.mismatch("an object of IEs", value));
     };
@@ -195,7 +232,10 @@ pub(crate) fn scope_from_tree<S: Scope + TreeScope>(value: &Value, reading: &mut
         };
         if let Some(at) = at {
             if let Some((_, before)) = rows_written.iter().find(|(row, _)| *row == at) {
-                let why = alloc::format!("{written:?} and {before:?} are both the row {}", table.rows[at].name);
+                let why = alloc::format!(
+                    "{written:?} and {before:?} are both the row {}",
+                    table.rows[at].name
+                );
                 return Err(reading.refuse(ErrorKind::Value, why));
             }
             rows_written.push((at, written));
@@ -203,7 +243,10 @@ pub(crate) fn scope_from_tree<S: Scope + TreeScope>(value: &Value, reading: &mut
         if row.is_none()
             && let Some(row) = table.row_of(ie_type)
         {
-            let why = alloc::format!("{written:?} is the IE type of the row {}, which goes by its name", row.name);
+            let why = alloc::format!(
+                "{written:?} is the IE type of the row {}, which goes by its name",
+                row.name
+            );
             return Err(reading.refuse(ErrorKind::NoSuchMember, why));
         }
         let position = at.unwrap_or(usize::MAX);
@@ -250,20 +293,35 @@ pub(crate) fn scope_from_tree<S: Scope + TreeScope>(value: &Value, reading: &mut
     placed.sort_by_key(|(position, _)| *position);
     kept.sort_by_key(|(position, _)| *position);
     scope.raw_mut().extend(kept.into_iter().map(|(_, ie)| ie));
-    keep_order(&mut scope, placed.into_iter().map(|(_, placed)| placed).collect());
+    keep_order(
+        &mut scope,
+        placed.into_iter().map(|(_, placed)| placed).collect(),
+    );
     Ok(scope)
 }
 
 /// Why a name is no IE of a table: the nearest names, or the row whose role it is.
 fn no_such_ie(table: &crate::table::Table, names: &[&str], written: &str) -> String {
-    if let Some(row) = table.rows.iter().find(|row| row.roles.iter().any(|role| tree::same_name(role.name, written))) {
-        return alloc::format!("{written:?} is a row that the wire does not tell apart from the others of {}: they are written as {}", row.name, row.name);
+    if let Some(row) = table.rows.iter().find(|row| {
+        row.roles
+            .iter()
+            .any(|role| tree::same_name(role.name, written))
+    }) {
+        return alloc::format!(
+            "{written:?} is a row that the wire does not tell apart from the others of {}: they are written as {}",
+            row.name,
+            row.name
+        );
     }
     let near = tree::nearest(names, written, 3);
     alloc::format!(
         "{written:?} is no IE of {}{}",
         table.name,
-        if near.is_empty() { String::new() } else { alloc::format!(": the nearest are {}", near.join(", ")) }
+        if near.is_empty() {
+            String::new()
+        } else {
+            alloc::format!(": the nearest are {}", near.join(", "))
+        }
     )
 }
 

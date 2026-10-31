@@ -27,13 +27,13 @@
 //! batches its datagrams (`recvmmsg`, `sendmmsg`) drives a [`Node`] itself.
 
 use std::collections::BTreeMap;
-use std::vec;
-use std::vec::Vec;
 use std::io;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Instant;
+use std::vec;
+use std::vec::Vec;
 
 use tokio::net::UdpSocket;
 use tokio::sync::{mpsc, oneshot};
@@ -58,7 +58,11 @@ pub struct Queues {
 
 impl Default for Queues {
     fn default() -> Self {
-        Self { commands: 1024, incoming: 1024, events: 1024 }
+        Self {
+            commands: 1024,
+            incoming: 1024,
+            events: 1024,
+        }
     }
 }
 
@@ -126,19 +130,46 @@ impl Incoming {
     pub async fn respond(self, body: impl Into<Body>) -> Result<(), EndpointError> {
         let commands = self.commands.upgrade().ok_or(EndpointError::Closed)?;
         let (reply, done) = oneshot::channel();
-        let command = Command::Respond { request: self.request, body: body.into(), reply };
-        commands.send(command).await.map_err(|_| EndpointError::Closed)?;
+        let command = Command::Respond {
+            request: self.request,
+            body: body.into(),
+            reply,
+        };
+        commands
+            .send(command)
+            .await
+            .map_err(|_| EndpointError::Closed)?;
         drop(commands);
-        done.await.map_err(|_| EndpointError::Closed)?.map_err(EndpointError::Node)
+        done.await
+            .map_err(|_| EndpointError::Closed)?
+            .map_err(EndpointError::Node)
     }
 }
 
 enum Command {
-    Request { to: SocketAddr, message: Message, reply: oneshot::Sender<Result<Message, EndpointError>> },
-    SessionRequest { local_seid: u64, body: Body, reply: oneshot::Sender<Result<Message, EndpointError>> },
-    Respond { request: Inbound, body: Body, reply: oneshot::Sender<Result<(), NodeError>> },
-    NewSession { peer: SocketAddr, reply: oneshot::Sender<u64> },
-    SendRaw { to: SocketAddr, octets: Vec<u8> },
+    Request {
+        to: SocketAddr,
+        message: Message,
+        reply: oneshot::Sender<Result<Message, EndpointError>>,
+    },
+    SessionRequest {
+        local_seid: u64,
+        body: Body,
+        reply: oneshot::Sender<Result<Message, EndpointError>>,
+    },
+    Respond {
+        request: Inbound,
+        body: Body,
+        reply: oneshot::Sender<Result<(), NodeError>>,
+    },
+    NewSession {
+        peer: SocketAddr,
+        reply: oneshot::Sender<u64>,
+    },
+    SendRaw {
+        to: SocketAddr,
+        octets: Vec<u8>,
+    },
 }
 
 impl core::fmt::Debug for Command {
@@ -175,7 +206,11 @@ impl Endpoint {
     /// # Errors
     ///
     /// The socket does not bind.
-    pub async fn bind_with(address: SocketAddr, config: NodeConfig, queues: Queues) -> io::Result<Self> {
+    pub async fn bind_with(
+        address: SocketAddr,
+        config: NodeConfig,
+        queues: Queues,
+    ) -> io::Result<Self> {
         let socket = UdpSocket::bind(address).await?;
         let local = socket.local_addr()?;
         let (commands, command_rx) = mpsc::channel(queues.commands);
@@ -194,13 +229,26 @@ impl Endpoint {
             statistics: statistics.clone(),
         };
         let task = tokio::spawn(task.run());
-        Ok(Self { local, commands, incoming, events, statistics, task })
+        Ok(Self {
+            local,
+            commands,
+            incoming,
+            events,
+            statistics,
+            task,
+        })
     }
 
     /// End the task of the endpoint, and wait until it has freed its socket. The
     /// requests that wait for their responses end with [`EndpointError::Closed`].
     pub async fn close(self) {
-        let Self { commands, incoming, events, task, .. } = self;
+        let Self {
+            commands,
+            incoming,
+            events,
+            task,
+            ..
+        } = self;
         drop((commands, incoming, events));
         let _ = task.await;
     }
@@ -221,9 +269,16 @@ impl Endpoint {
     ///
     /// No response after N1 retransmissions, a request that the node does not send
     /// (no association, throttled), and an endpoint that has ended.
-    pub async fn request(&self, to: SocketAddr, message: Message) -> Result<Message, EndpointError> {
+    pub async fn request(
+        &self,
+        to: SocketAddr,
+        message: Message,
+    ) -> Result<Message, EndpointError> {
         let (reply, response) = oneshot::channel();
-        self.commands.send(Command::Request { to, message, reply }).await.map_err(|_| EndpointError::Closed)?;
+        self.commands
+            .send(Command::Request { to, message, reply })
+            .await
+            .map_err(|_| EndpointError::Closed)?;
         response.await.map_err(|_| EndpointError::Closed)?
     }
 
@@ -232,10 +287,21 @@ impl Endpoint {
     /// # Errors
     ///
     /// As [`request`](Self::request), and a session that the node does not have.
-    pub async fn session_request(&self, local_seid: u64, body: impl Into<Body>) -> Result<Message, EndpointError> {
+    pub async fn session_request(
+        &self,
+        local_seid: u64,
+        body: impl Into<Body>,
+    ) -> Result<Message, EndpointError> {
         let (reply, response) = oneshot::channel();
-        let command = Command::SessionRequest { local_seid, body: body.into(), reply };
-        self.commands.send(command).await.map_err(|_| EndpointError::Closed)?;
+        let command = Command::SessionRequest {
+            local_seid,
+            body: body.into(),
+            reply,
+        };
+        self.commands
+            .send(command)
+            .await
+            .map_err(|_| EndpointError::Closed)?;
         response.await.map_err(|_| EndpointError::Closed)?
     }
 
@@ -246,7 +312,10 @@ impl Endpoint {
     /// The endpoint has ended.
     pub async fn new_session(&self, peer: SocketAddr) -> Result<u64, EndpointError> {
         let (reply, seid) = oneshot::channel();
-        self.commands.send(Command::NewSession { peer, reply }).await.map_err(|_| EndpointError::Closed)?;
+        self.commands
+            .send(Command::NewSession { peer, reply })
+            .await
+            .map_err(|_| EndpointError::Closed)?;
         seid.await.map_err(|_| EndpointError::Closed)
     }
 
@@ -256,7 +325,10 @@ impl Endpoint {
     ///
     /// The endpoint has ended.
     pub async fn send_raw(&self, to: SocketAddr, octets: Vec<u8>) -> Result<(), EndpointError> {
-        self.commands.send(Command::SendRaw { to, octets }).await.map_err(|_| EndpointError::Closed)
+        self.commands
+            .send(Command::SendRaw { to, octets })
+            .await
+            .map_err(|_| EndpointError::Closed)
     }
 
     /// The next request of a peer: `None` once the endpoint has ended.
@@ -296,7 +368,10 @@ impl Task {
         loop {
             self.flush().await;
             // A time beyond what an Instant holds is never.
-            let wake = self.node.poll_timeout().and_then(|at| self.start.checked_add(at));
+            let wake = self
+                .node
+                .poll_timeout()
+                .and_then(|at| self.start.checked_add(at));
             tokio::select! {
                 received = self.socket.recv_from(&mut buffer) => {
                     match received {
@@ -341,7 +416,11 @@ impl Task {
                     let _ = reply.send(Err(EndpointError::Node(error)));
                 }
             },
-            Command::SessionRequest { local_seid, body, reply } => match self.node.session_request(now, local_seid, body) {
+            Command::SessionRequest {
+                local_seid,
+                body,
+                reply,
+            } => match self.node.session_request(now, local_seid, body) {
                 Ok(id) => {
                     self.pending.insert(id, reply);
                 }
@@ -349,7 +428,11 @@ impl Task {
                     let _ = reply.send(Err(EndpointError::Node(error)));
                 }
             },
-            Command::Respond { request, body, reply } => {
+            Command::Respond {
+                request,
+                body,
+                reply,
+            } => {
                 let _ = reply.send(self.node.respond(now, &request, body));
             }
             Command::NewSession { peer, reply } => {
@@ -379,25 +462,36 @@ impl Task {
                         let _ = reply.send(Err(EndpointError::Timeout));
                     }
                 }
-                Event::Failed { request, failure, .. } => {
+                Event::Failed {
+                    request, failure, ..
+                } => {
                     if let Some(reply) = self.pending.remove(&request) {
                         let _ = reply.send(Err(EndpointError::Failed(failure)));
                     }
                 }
                 Event::Request { request, message } => {
-                    let incoming = Incoming { message, request, commands: self.responder.clone() };
+                    let incoming = Incoming {
+                        message,
+                        request,
+                        commands: self.responder.clone(),
+                    };
                     if let Err(dropped) = self.incoming.try_send(incoming) {
                         // Its retransmission comes in again.
                         let dropped = match dropped {
-                            mpsc::error::TrySendError::Full(dropped) | mpsc::error::TrySendError::Closed(dropped) => dropped,
+                            mpsc::error::TrySendError::Full(dropped)
+                            | mpsc::error::TrySendError::Closed(dropped) => dropped,
                         };
                         self.node.forget(&dropped.request);
-                        self.statistics.incoming_dropped.fetch_add(1, Ordering::Relaxed);
+                        self.statistics
+                            .incoming_dropped
+                            .fetch_add(1, Ordering::Relaxed);
                     }
                 }
                 other => {
                     if self.events.try_send(other).is_err() {
-                        self.statistics.events_dropped.fetch_add(1, Ordering::Relaxed);
+                        self.statistics
+                            .events_dropped
+                            .fetch_add(1, Ordering::Relaxed);
                     }
                 }
             }

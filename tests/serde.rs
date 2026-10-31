@@ -23,11 +23,34 @@ use oxirush_pfcp::*;
 
 #[test]
 fn a_message_and_an_ie_are_their_trees_in_json() {
-    let seid = FSeid { v4: true, seid: Some(0x1001), ipv4: Some(Ipv4Addr::new(10, 0, 0, 1)), ..Default::default() };
-    let pdr = CreatePdr::new_n4(PdrId::new(1), Precedence::new(255), Pdi::new(SourceInterface::new(SourceInterfaceValue::Access)));
-    let far = CreateFar::new(FarId::new(1), ApplyAction { forw: true, ..Default::default() });
-    let request = SessionEstablishmentRequest::new_n4(NodeId::Ipv4(Ipv4Addr::new(10, 0, 0, 1)), seid.clone(), pdr, far);
-    let message = Message { header: Header::session(0, 7), body: request.into() };
+    let seid = FSeid {
+        v4: true,
+        seid: Some(0x1001),
+        ipv4: Some(Ipv4Addr::new(10, 0, 0, 1)),
+        ..Default::default()
+    };
+    let pdr = CreatePdr::new_n4(
+        PdrId::new(1),
+        Precedence::new(255),
+        Pdi::new(SourceInterface::new(SourceInterfaceValue::Access)),
+    );
+    let far = CreateFar::new(
+        FarId::new(1),
+        ApplyAction {
+            forw: true,
+            ..Default::default()
+        },
+    );
+    let request = SessionEstablishmentRequest::new_n4(
+        NodeId::Ipv4(Ipv4Addr::new(10, 0, 0, 1)),
+        seid.clone(),
+        pdr,
+        far,
+    );
+    let message = Message {
+        header: Header::session(0, 7),
+        body: request.into(),
+    };
 
     let json = serde_json::to_string(&message).unwrap();
     assert!(json.contains(r#""Source Interface":"Access""#), "{json}");

@@ -18,7 +18,6 @@
 //! The PFCP header (TS 29.244 §7.2.2): its flags, the SEID of a session message, the
 //! sequence number and the message priority.
 
-
 /// The length of the header of a node related message (§7.2.2.2).
 pub const NODE_HEADER: usize = 8;
 /// The length of the header of a session related message (§7.2.2.3).
@@ -89,7 +88,12 @@ impl Header {
 
     /// Write the header of a message of `message_type` whose IEs have `body` octets, at
     /// the start of `out`, which has room for it.
-    pub(crate) fn encode_into(&self, message_type: u8, body: usize, out: &mut [u8]) -> Result<(), crate::Error> {
+    pub(crate) fn encode_into(
+        &self,
+        message_type: u8,
+        body: usize,
+        out: &mut [u8],
+    ) -> Result<(), crate::Error> {
         let (octets, length) = self.octets(message_type, body)?;
         out[..length].copy_from_slice(&octets[..length]);
         Ok(())
@@ -102,13 +106,24 @@ impl Header {
             ("Spare", u64::from(self.spare), 3),
             ("Sequence Number", u64::from(self.sequence), 0x00ff_ffff),
             ("Message Priority", self.priority.map_or(0, u64::from), 15),
-            ("Spare octet", u64::from(self.spare_last), if self.priority.is_some() { 15 } else { 255 }),
+            (
+                "Spare octet",
+                u64::from(self.spare_last),
+                if self.priority.is_some() { 15 } else { 255 },
+            ),
         ];
-        fields.into_iter().find(|(_, value, most)| value > most).map(|(field, value, _)| (field, value))
+        fields
+            .into_iter()
+            .find(|(_, value, most)| value > most)
+            .map(|(field, value, _)| (field, value))
     }
 
     /// The octets of the header, and how many there are.
-    fn octets(&self, message_type: u8, body: usize) -> Result<([u8; SESSION_HEADER], usize), crate::Error> {
+    fn octets(
+        &self,
+        message_type: u8,
+        body: usize,
+    ) -> Result<([u8; SESSION_HEADER], usize), crate::Error> {
         if let Some((field, value)) = self.overflow() {
             return Err(crate::Error::HeaderField { field, value });
         }
@@ -119,7 +134,10 @@ impl Header {
             | u8::from(self.seid.is_some());
         let length = match self.length {
             Some(length) => length,
-            None => u16::try_from(self.len() - 4 + body).map_err(|_| crate::Error::TooLong { ie_type: 0, length: body })?,
+            None => u16::try_from(self.len() - 4 + body).map_err(|_| crate::Error::TooLong {
+                ie_type: 0,
+                length: body,
+            })?,
         };
         let mut octets = [0; SESSION_HEADER];
         octets[0] = flags;
@@ -160,7 +178,11 @@ impl Header {
             seid,
             sequence,
             priority,
-            spare_last: if priority.is_some() { last & 0x0f } else { last },
+            spare_last: if priority.is_some() {
+                last & 0x0f
+            } else {
+                last
+            },
             length: None,
         };
         Some((header, octets[1], message_length))

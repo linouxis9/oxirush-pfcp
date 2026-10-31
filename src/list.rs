@@ -20,7 +20,6 @@
 use alloc::vec::Vec;
 use core::ops::Deref;
 
-
 /// The values of a row that is a list. Most lists of a message have one value, which it
 /// keeps in place: only a second one allocates. It dereferences to a slice.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -52,7 +51,9 @@ impl<T> List<T> {
             Repr::Empty => self.0 = Repr::One(value),
             Repr::Many(values) => values.push(value),
             Repr::One(_) => {
-                let Repr::One(first) = core::mem::replace(&mut self.0, Repr::Empty) else { unreachable!() };
+                let Repr::One(first) = core::mem::replace(&mut self.0, Repr::Empty) else {
+                    unreachable!()
+                };
                 let mut values = Vec::with_capacity(4);
                 values.push(first);
                 values.push(value);

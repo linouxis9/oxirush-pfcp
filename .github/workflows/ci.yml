@@ -39,14 +39,15 @@ jobs:
       - run: cargo build --no-default-features --features node
 
   lint:
-    name: Clippy and documentation
+    name: Format, Clippy and documentation
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
-          components: clippy
+          components: clippy, rustfmt
       - uses: Swatinem/rust-cache@v2
+      - run: cargo fmt --check
       - run: cargo clippy --all-features --all-targets -- -D warnings
       - run: cargo doc --no-deps --all-features
         env:

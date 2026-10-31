@@ -23,9 +23,9 @@ use alloc::vec::Vec;
 use crate::Error;
 use crate::check::{Context, Deviation, DeviationKind};
 use crate::enums::CauseValue;
-use crate::table::{Interfaces, Presence};
 use crate::header::Header;
 use crate::macros::pfcp_messages;
+use crate::table::{Interfaces, Presence};
 
 pfcp_messages! {
     1 HeartbeatRequest [SXA SXB SXC N4 N4MB],
@@ -90,7 +90,9 @@ impl MessageTypeInfo {
 
 /// The message type of `message_type`.
 pub fn message_type_info(message_type: u8) -> Option<&'static MessageTypeInfo> {
-    MESSAGE_TYPES.iter().find(|info| info.message_type == message_type)
+    MESSAGE_TYPES
+        .iter()
+        .find(|info| info.message_type == message_type)
 }
 
 /// Whether a message type is one of a node related message (Table 7.3-1): from 1 to 49.
@@ -118,8 +120,15 @@ impl Message {
     pub fn decode(octets: &[u8]) -> Result<Self, Error> {
         let (message, used) = Self::decode_first(octets)?;
         if used != octets.len() {
-            let (header, message_type, length) = Header::decode(octets).ok_or(Error::TooShort { octets: octets.len() })?;
-            return Err(Error::MessageLength { header, message_type, length, available: octets.len() - 4 });
+            let (header, message_type, length) = Header::decode(octets).ok_or(Error::TooShort {
+                octets: octets.len(),
+            })?;
+            return Err(Error::MessageLength {
+                header,
+                message_type,
+                length,
+                available: octets.len() - 4,
+            });
         }
         Ok(message)
     }
@@ -131,16 +140,33 @@ impl Message {
     /// it (§7.6.3); after an FO flag, a datagram that has no octets left ends with
     /// [`Error::TooShort`]. A Message Length that runs past the datagram ends it.
     pub fn decode_datagram(octets: &[u8]) -> Vec<Result<Self, Error>> {
-        datagram_parts(octets).into_iter().map(|(_, message)| message).collect()
+        datagram_parts(octets)
+            .into_iter()
+            .map(|(_, message)| message)
+            .collect()
     }
 
     fn decode_first(octets: &[u8]) -> Result<(Self, usize), Error> {
-        let (header, message_type, length) = Header::decode(octets).ok_or(Error::TooShort { octets: octets.len() })?;
+        let (header, message_type, length) = Header::decode(octets).ok_or(Error::TooShort {
+            octets: octets.len(),
+        })?;
         let end = 4 + usize::from(length);
-        let Some(content) = octets.get(header.len()..end).filter(|_| end >= header.len()) else {
-            return Err(Error::MessageLength { header, message_type, length, available: octets.len() - 4 });
+        let Some(content) = octets
+            .get(header.len()..end)
+            .filter(|_| end >= header.len())
+        else {
+            return Err(Error::MessageLength {
+                header,
+                message_type,
+                length,
+                available: octets.len() - 4,
+            });
         };
-        let body = Body::decode(message_type, content).map_err(|fault| Error::Ies { header, message_type, fault })?;
+        let body = Body::decode(message_type, content).map_err(|fault| Error::Ies {
+            header,
+            message_type,
+            fault,
+        })?;
         Ok((Self { header, body }, end))
     }
 
@@ -158,8 +184,12 @@ impl Message {
         out.resize(header, 0);
         self.body.encode(&mut out)?;
         let body = out.len() - header;
-        debug_assert_eq!(body, expected, "the encoded length of the IEs is the one computed first");
-        self.header.encode_into(self.body.message_type(), body, &mut out)?;
+        debug_assert_eq!(
+            body, expected,
+            "the encoded length of the IEs is the one computed first"
+        );
+        self.header
+            .encode_into(self.body.message_type(), body, &mut out)?;
         Ok(out)
     }
 
@@ -176,7 +206,11 @@ impl Message {
         let known = !matches!(self.body, Body::Other { .. });
         let path = "/header";
         if header.version != 1 {
-            found.push(Deviation::new(path, "7.2.2.4.1", DeviationKind::Rule("the version is not 1")));
+            found.push(Deviation::new(
+                path,
+                "7.2.2.4.1",
+                DeviationKind::Rule("the version is not 1"),
+            ));
         }
         if let Some((field, _)) = header.overflow() {
             let rule = match field {
@@ -193,27 +227,53 @@ impl Message {
             found.push(Deviation::new(path, "7.2.2.1", DeviationKind::SpareBits));
         }
         if known && node && header.seid.is_some() {
-            found.push(Deviation::new(path, "7.2.2.2", DeviationKind::Rule("a node related message has the S flag")));
+            found.push(Deviation::new(
+                path,
+                "7.2.2.2",
+                DeviationKind::Rule("a node related message has the S flag"),
+            ));
         }
         if known && !node && header.seid.is_none() {
-            found.push(Deviation::new(path, "7.2.2.4.1", DeviationKind::Rule("a session related message has no SEID")));
+            found.push(Deviation::new(
+                path,
+                "7.2.2.4.1",
+                DeviationKind::Rule("a session related message has no SEID"),
+            ));
         }
         if known && node && header.priority.is_some() {
-            found.push(Deviation::new(path, "7.2.2.2", DeviationKind::Rule("a node related message has the MP flag")));
+            found.push(Deviation::new(
+                path,
+                "7.2.2.2",
+                DeviationKind::Rule("a node related message has the MP flag"),
+            ));
         }
         if known && node && header.follow_on {
-            found.push(Deviation::new(path, "6.5", DeviationKind::Rule("a node related message is bundled")));
+            found.push(Deviation::new(
+                path,
+                "6.5",
+                DeviationKind::Rule("a node related message is bundled"),
+            ));
         }
         let cause = self.body.cause();
         // SEID 0: an establishment, a report to another SMF, or an answer to a session
         // that the node does not have or to a request that it rejects (§7.2.2.4.2).
         let rejection = cause.is_some_and(|cause| cause.value() >= 64);
-        if header.seid == Some(0) && matches!(message_type, 52 | 54) || header.seid == Some(0) && cause.is_some() && !rejection {
-            found.push(Deviation::new(path, "7.2.2.4.2", DeviationKind::Rule("SEID 0 where the peer's SEID is known")));
+        if header.seid == Some(0) && matches!(message_type, 52 | 54)
+            || header.seid == Some(0) && cause.is_some() && !rejection
+        {
+            found.push(Deviation::new(
+                path,
+                "7.2.2.4.2",
+                DeviationKind::Rule("SEID 0 where the peer's SEID is known"),
+            ));
         }
         match message_type_info(message_type) {
             Some(info) if !info.interfaces.has(interface) => {
-                found.push(Deviation::new("/message", "7.3", DeviationKind::MessageNotOnInterface { message_type }));
+                found.push(Deviation::new(
+                    "/message",
+                    "7.3",
+                    DeviationKind::MessageNotOnInterface { message_type },
+                ));
             }
             _ => {}
         }
@@ -223,13 +283,22 @@ impl Message {
             request: is_request(message_type) && message_type != 1,
             rejected: rejection,
         };
-        self.body.check(&crate::check::Path::Root("/pfcp"), context, &mut found);
+        self.body
+            .check(&crate::check::Path::Root("/pfcp"), context, &mut found);
         // An establishment that creates a rule twice gives two rules one Rule ID, which
         // identifies one rule of its type in the session (§5.2.1); a modification changes
         // a rule once (§6.3.3.2).
-        let clause = if message_type == 50 { "5.2.1" } else { "6.3.3.2" };
+        let clause = if message_type == 50 {
+            "5.2.1"
+        } else {
+            "6.3.3.2"
+        };
         for (rule, id) in self.body.rules_changed_twice() {
-            found.push(Deviation::new("/pfcp", clause, DeviationKind::RuleChangedTwice { rule, id }));
+            found.push(Deviation::new(
+                "/pfcp",
+                clause,
+                DeviationKind::RuleChangedTwice { rule, id },
+            ));
         }
         found
     }
@@ -241,7 +310,12 @@ pub(crate) fn datagram_parts(mut octets: &[u8]) -> Vec<(&[u8], Result<Message, E
     let mut messages = Vec::new();
     loop {
         let Some((header, _, length)) = Header::decode(octets) else {
-            messages.push((octets, Err(Error::TooShort { octets: octets.len() })));
+            messages.push((
+                octets,
+                Err(Error::TooShort {
+                    octets: octets.len(),
+                }),
+            ));
             return messages;
         };
         let end = 4 + usize::from(length);
@@ -304,7 +378,10 @@ impl Ids {
 /// Not Supported Response, 12 to 16 even, and 50 to 56 even. A type that the table does
 /// not have is none.
 pub fn is_request(message_type: u8) -> bool {
-    matches!(message_type, 1 | 3 | 5 | 7 | 9 | 12 | 14 | 16 | 50 | 52 | 54 | 56)
+    matches!(
+        message_type,
+        1 | 3 | 5 | 7 | 9 | 12 | 14 | 16 | 50 | 52 | 54 | 56
+    )
 }
 
 impl Body {
@@ -330,7 +407,11 @@ impl Body {
     /// Each rule that the message creates, updates or removes more than once (§5.2.1,
     /// §6.3.3.2), by the name of its type and its ID.
     fn rules_changed_twice(&self) -> Vec<(&'static str, u32)> {
-        fn ids<'b, T: 'b>(rules: impl IntoIterator<Item = &'b T>, id: impl Fn(&T) -> Option<u32>, out: &mut Ids) {
+        fn ids<'b, T: 'b>(
+            rules: impl IntoIterator<Item = &'b T>,
+            id: impl Fn(&T) -> Option<u32>,
+            out: &mut Ids,
+        ) {
             for id in rules.into_iter().filter_map(id) {
                 out.push(id);
             }
@@ -345,48 +426,156 @@ impl Body {
         match self {
             Self::SessionEstablishmentRequest(body) => {
                 let mut rules = Ids::default();
-                ids(&body.create_pdr, |rule| rule.pdr_id.as_ref().map(|id| id.value.into()), &mut rules);
+                ids(
+                    &body.create_pdr,
+                    |rule| rule.pdr_id.as_ref().map(|id| id.value.into()),
+                    &mut rules,
+                );
                 each("PDR", core::mem::take(&mut rules));
-                ids(&body.create_far, |rule| rule.far_id.as_ref().map(|id| id.value), &mut rules);
+                ids(
+                    &body.create_far,
+                    |rule| rule.far_id.as_ref().map(|id| id.value),
+                    &mut rules,
+                );
                 each("FAR", core::mem::take(&mut rules));
-                ids(&body.create_urr, |rule| rule.urr_id.as_ref().map(|id| id.value), &mut rules);
+                ids(
+                    &body.create_urr,
+                    |rule| rule.urr_id.as_ref().map(|id| id.value),
+                    &mut rules,
+                );
                 each("URR", core::mem::take(&mut rules));
-                ids(&body.create_qer, |rule| rule.qer_id.as_ref().map(|id| id.value), &mut rules);
+                ids(
+                    &body.create_qer,
+                    |rule| rule.qer_id.as_ref().map(|id| id.value),
+                    &mut rules,
+                );
                 each("QER", core::mem::take(&mut rules));
-                ids(&body.create_mar, |rule| rule.mar_id.as_ref().map(|id| id.value.into()), &mut rules);
+                ids(
+                    &body.create_mar,
+                    |rule| rule.mar_id.as_ref().map(|id| id.value.into()),
+                    &mut rules,
+                );
                 each("MAR", core::mem::take(&mut rules));
-                ids(&body.create_srr, |rule| rule.srr_id.as_ref().map(|id| id.value.into()), &mut rules);
+                ids(
+                    &body.create_srr,
+                    |rule| rule.srr_id.as_ref().map(|id| id.value.into()),
+                    &mut rules,
+                );
                 each("SRR", rules);
             }
             Self::SessionModificationRequest(body) => {
                 let mut rules = Ids::default();
-                ids(&body.create_pdr, |rule| rule.pdr_id.as_ref().map(|id| id.value.into()), &mut rules);
-                ids(&body.update_pdr, |rule| rule.pdr_id.as_ref().map(|id| id.value.into()), &mut rules);
-                ids(&body.remove_pdr, |rule| rule.pdr_id.as_ref().map(|id| id.value.into()), &mut rules);
+                ids(
+                    &body.create_pdr,
+                    |rule| rule.pdr_id.as_ref().map(|id| id.value.into()),
+                    &mut rules,
+                );
+                ids(
+                    &body.update_pdr,
+                    |rule| rule.pdr_id.as_ref().map(|id| id.value.into()),
+                    &mut rules,
+                );
+                ids(
+                    &body.remove_pdr,
+                    |rule| rule.pdr_id.as_ref().map(|id| id.value.into()),
+                    &mut rules,
+                );
                 each("PDR", core::mem::take(&mut rules));
-                ids(&body.create_far, |rule| rule.far_id.as_ref().map(|id| id.value), &mut rules);
-                ids(&body.update_far, |rule| rule.far_id.as_ref().map(|id| id.value), &mut rules);
-                ids(&body.remove_far, |rule| rule.far_id.as_ref().map(|id| id.value), &mut rules);
+                ids(
+                    &body.create_far,
+                    |rule| rule.far_id.as_ref().map(|id| id.value),
+                    &mut rules,
+                );
+                ids(
+                    &body.update_far,
+                    |rule| rule.far_id.as_ref().map(|id| id.value),
+                    &mut rules,
+                );
+                ids(
+                    &body.remove_far,
+                    |rule| rule.far_id.as_ref().map(|id| id.value),
+                    &mut rules,
+                );
                 each("FAR", core::mem::take(&mut rules));
-                ids(&body.create_urr, |rule| rule.urr_id.as_ref().map(|id| id.value), &mut rules);
-                ids(&body.update_urr, |rule| rule.urr_id.as_ref().map(|id| id.value), &mut rules);
-                ids(&body.remove_urr, |rule| rule.urr_id.as_ref().map(|id| id.value), &mut rules);
+                ids(
+                    &body.create_urr,
+                    |rule| rule.urr_id.as_ref().map(|id| id.value),
+                    &mut rules,
+                );
+                ids(
+                    &body.update_urr,
+                    |rule| rule.urr_id.as_ref().map(|id| id.value),
+                    &mut rules,
+                );
+                ids(
+                    &body.remove_urr,
+                    |rule| rule.urr_id.as_ref().map(|id| id.value),
+                    &mut rules,
+                );
                 each("URR", core::mem::take(&mut rules));
-                ids(&body.create_qer, |rule| rule.qer_id.as_ref().map(|id| id.value), &mut rules);
-                ids(&body.update_qer, |rule| rule.qer_id.as_ref().map(|id| id.value), &mut rules);
-                ids(&body.remove_qer, |rule| rule.qer_id.as_ref().map(|id| id.value), &mut rules);
+                ids(
+                    &body.create_qer,
+                    |rule| rule.qer_id.as_ref().map(|id| id.value),
+                    &mut rules,
+                );
+                ids(
+                    &body.update_qer,
+                    |rule| rule.qer_id.as_ref().map(|id| id.value),
+                    &mut rules,
+                );
+                ids(
+                    &body.remove_qer,
+                    |rule| rule.qer_id.as_ref().map(|id| id.value),
+                    &mut rules,
+                );
                 each("QER", core::mem::take(&mut rules));
-                ids(body.create_bar.iter().map(|rule| &**rule), |rule| rule.bar_id.as_ref().map(|id| id.value.into()), &mut rules);
-                ids(body.update_bar.iter().map(|rule| &**rule), |rule| rule.bar_id.as_ref().map(|id| id.value.into()), &mut rules);
-                ids(body.remove_bar.iter().map(|rule| &**rule), |rule| rule.bar_id.as_ref().map(|id| id.value.into()), &mut rules);
+                ids(
+                    body.create_bar.iter().map(|rule| &**rule),
+                    |rule| rule.bar_id.as_ref().map(|id| id.value.into()),
+                    &mut rules,
+                );
+                ids(
+                    body.update_bar.iter().map(|rule| &**rule),
+                    |rule| rule.bar_id.as_ref().map(|id| id.value.into()),
+                    &mut rules,
+                );
+                ids(
+                    body.remove_bar.iter().map(|rule| &**rule),
+                    |rule| rule.bar_id.as_ref().map(|id| id.value.into()),
+                    &mut rules,
+                );
                 each("BAR", core::mem::take(&mut rules));
-                ids(&body.create_mar, |rule| rule.mar_id.as_ref().map(|id| id.value.into()), &mut rules);
-                ids(&body.update_mar, |rule| rule.mar_id.as_ref().map(|id| id.value.into()), &mut rules);
-                ids(&body.remove_mar, |rule| rule.mar_id.as_ref().map(|id| id.value.into()), &mut rules);
+                ids(
+                    &body.create_mar,
+                    |rule| rule.mar_id.as_ref().map(|id| id.value.into()),
+                    &mut rules,
+                );
+                ids(
+                    &body.update_mar,
+                    |rule| rule.mar_id.as_ref().map(|id| id.value.into()),
+                    &mut rules,
+                );
+                ids(
+                    &body.remove_mar,
+                    |rule| rule.mar_id.as_ref().map(|id| id.value.into()),
+                    &mut rules,
+                );
                 each("MAR", core::mem::take(&mut rules));
-                ids(&body.create_srr, |rule| rule.srr_id.as_ref().map(|id| id.value.into()), &mut rules);
-                ids(&body.update_srr, |rule| rule.srr_id.as_ref().map(|id| id.value.into()), &mut rules);
-                ids(&body.remove_srr, |rule| rule.srr_id.as_ref().map(|id| id.value.into()), &mut rules);
+                ids(
+                    &body.create_srr,
+                    |rule| rule.srr_id.as_ref().map(|id| id.value.into()),
+                    &mut rules,
+                );
+                ids(
+                    &body.update_srr,
+                    |rule| rule.srr_id.as_ref().map(|id| id.value.into()),
+                    &mut rules,
+                );
+                ids(
+                    &body.remove_srr,
+                    |rule| rule.srr_id.as_ref().map(|id| id.value.into()),
+                    &mut rules,
+                );
                 each("SRR", rules);
             }
             _ => {}
@@ -444,11 +633,19 @@ mod forms {
             }
             members.put_optional("SEID", header.seid.map(tree::unsigned));
             members.put("Sequence Number", tree::unsigned(header.sequence.into()));
-            members.put_optional("Message Priority", header.priority.map(|priority| tree::unsigned(priority.into())));
+            members.put_optional(
+                "Message Priority",
+                header
+                    .priority
+                    .map(|priority| tree::unsigned(priority.into())),
+            );
             if header.spare_last != 0 {
                 members.put("Spare octet", tree::unsigned(header.spare_last.into()));
             }
-            members.put_optional("Message Length", header.length.map(|length| tree::unsigned(length.into())));
+            members.put_optional(
+                "Message Length",
+                header.length.map(|length| tree::unsigned(length.into())),
+            );
             members.put("ies", self.body.ies_tree());
             members.finish()
         }
@@ -464,14 +661,32 @@ mod forms {
             };
             let version = small(reading, 1, 7)?.unwrap_or(1) as u8;
             let spare = small(reading, 2, 3)?.unwrap_or(0) as u8;
-            let follow_on = reading.optional(&read, 3, |value, reading| reading.boolean(value))?.unwrap_or(false);
-            let seid = reading.optional(&read, 4, |value, reading| reading.unsigned(value, 0, u64::MAX))?;
-            let sequence = reading.member(&read, 5, |value, reading| reading.unsigned(value, 0, 0xff_ffff))? as u32;
+            let follow_on = reading
+                .optional(&read, 3, |value, reading| reading.boolean(value))?
+                .unwrap_or(false);
+            let seid = reading.optional(&read, 4, |value, reading| {
+                reading.unsigned(value, 0, u64::MAX)
+            })?;
+            let sequence = reading.member(&read, 5, |value, reading| {
+                reading.unsigned(value, 0, 0xff_ffff)
+            })? as u32;
             let priority = small(reading, 6, 15)?.map(|priority| priority as u8);
-            let spare_last = small(reading, 7, if priority.is_some() { 15 } else { 255 })?.unwrap_or(0) as u8;
+            let spare_last =
+                small(reading, 7, if priority.is_some() { 15 } else { 255 })?.unwrap_or(0) as u8;
             let length = small(reading, 8, 65535)?.map(|length| length as u16);
-            let header = Header { version, spare, follow_on, seid, sequence, priority, spare_last, length };
-            let body = reading.member(&read, 9, |value, reading| Body::from_ies_tree(kind, value, reading))?;
+            let header = Header {
+                version,
+                spare,
+                follow_on,
+                seid,
+                sequence,
+                priority,
+                spare_last,
+                length,
+            };
+            let body = reading.member(&read, 9, |value, reading| {
+                Body::from_ies_tree(kind, value, reading)
+            })?;
             Ok(Self { header, body })
         }
     }
