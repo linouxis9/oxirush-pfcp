@@ -154,7 +154,9 @@ An `Endpoint` runs a node on a UDP socket, in a task of its own: a request is
 a future of its response, and a request of a peer comes through `incoming()`
 with what answers it. Its queues are bounded, and `statistics()` counts what
 they drop. A program that batches its datagrams (`recvmmsg`, `sendmmsg`)
-drives a `Node` itself.
+drives a `Node` itself. A node sends its own requests to port 8805, and with
+`request_port: None` to the port that its peer sent from, for peers on ports
+of their own.
 
 ```rust
 use std::net::Ipv4Addr;

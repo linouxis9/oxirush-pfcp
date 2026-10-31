@@ -106,12 +106,17 @@ pub struct NodeConfig {
     /// request that finds every place waiting is dropped: [`Node::counters`] counts both.
     /// A Heartbeat Request is answered from the state, and not kept.
     pub capacity: usize,
+    /// The UDP port of the requests that the node sends to a peer of its own accord, a
+    /// heartbeat or a session request: 8805 (§4.2.2), whatever port the peer sends its
+    /// requests from. `None` for the port that the peer's request came from, for peers
+    /// on other ports, as in a test.
+    pub request_port: Option<u16>,
 }
 
 impl NodeConfig {
     /// A node of `node_id`: T1 of 3 s, N1 of 3, a heartbeat every 60 s, answers kept for
-    /// 24 s, default priority 8, throttling on, no priority spared, and room for 65,536
-    /// requests of the peers.
+    /// 24 s, default priority 8, throttling on, no priority spared, room for 65,536
+    /// requests of the peers, and requests to port 8805.
     pub fn new(node_id: NodeId, function: Function, recovery_time_stamp: u32) -> Self {
         Self {
             node_id,
@@ -125,9 +130,13 @@ impl NodeConfig {
             throttling: true,
             priority_up_to: None,
             capacity: 65_536,
+            request_port: Some(PORT),
         }
     }
 }
+
+/// The UDP port of PFCP (§4.2.2).
+pub const PORT: u16 = 8805;
 
 /// A datagram to send.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -466,8 +475,8 @@ pub struct Node {
     answers: Answers,
     associations: BTreeMap<Vec<u8>, Association>,
     sessions: BTreeMap<u64, Session>,
-    /// The Recovery Time Stamp of each peer, and when the node last had it.
-    recovery: BTreeMap<SocketAddr, (u32, Duration)>,
+    /// The Recovery Time Stamp of each peer, by its address, and when the node last had it.
+    recovery: BTreeMap<IpAddr, (u32, Duration)>,
     heartbeats: BTreeMap<SocketAddr, Duration>,
     load: BTreeMap<Scope, LoadControl>,
     overload: BTreeMap<Scope, OverloadControl>,
@@ -1436,7 +1445,9 @@ impl Node {
     fn local_seid_of(&self, peer: SocketAddr, peer_seid: u64) -> Option<u64> {
         self.sessions
             .iter()
-            .find(|(_, session)| session.peer == peer && session.peer_seid == Some(peer_seid))
+            .find(|(_, session)| {
+                session.peer.ip() == peer.ip() && session.peer_seid == Some(peer_seid)
+            })
             .map(|(seid, _)| *seid)
     }
 
@@ -1473,10 +1484,17 @@ impl Node {
         self.answers.prune(now);
     }
 
+    /// The association of the address of `peer`, whatever its port (§4.2.2).
     fn association_of(&self, peer: SocketAddr) -> Option<&Association> {
         self.associations
             .values()
-            .find(|association| association.peer == peer)
+            .find(|association| association.peer.ip() == peer.ip())
+    }
+
+    /// Where the requests of the node to the peer of `from` go: to port 8805 (§4.2.2),
+    /// or to the port of `from` for a node without `request_port`.
+    fn request_address(&self, from: SocketAddr) -> SocketAddr {
+        SocketAddr::new(from.ip(), self.config.request_port.unwrap_or(from.port()))
     }
 
     /// Answer a request that does not decode, when its header says that it is one:
@@ -1529,12 +1547,13 @@ impl Node {
             return;
         };
         // The stamps of peers without an association are bounded, the oldest first.
-        if !self.recovery.contains_key(&from) && self.recovery.len() >= self.config.capacity.max(1)
+        if !self.recovery.contains_key(&from.ip())
+            && self.recovery.len() >= self.config.capacity.max(1)
         {
-            let associated: BTreeSet<SocketAddr> = self
+            let associated: BTreeSet<IpAddr> = self
                 .associations
                 .values()
-                .map(|association| association.peer)
+                .map(|association| association.peer.ip())
                 .collect();
             let oldest = self
                 .recovery
@@ -1546,7 +1565,7 @@ impl Node {
                 self.recovery.remove(&oldest);
             }
         }
-        if let Some((known, _)) = self.recovery.insert(from, (stamp, now))
+        if let Some((known, _)) = self.recovery.insert(from.ip(), (stamp, now))
             && known != stamp
         {
             // Load and overload of the peer start again (§6.2.3.3.2, §6.2.4.3.2).
@@ -1792,7 +1811,8 @@ impl Node {
         match (&message.body, request.effect.clone()) {
             (Body::AssociationSetupResponse(_), Effect::Setup(retained)) => {
                 if let Some(node_id) = &request.node_id {
-                    self.associate(now, request.from, node_id.clone(), Some(retained));
+                    let peer = self.request_address(request.from);
+                    self.associate(now, peer, node_id.clone(), Some(retained));
                 }
             }
             (Body::AssociationReleaseResponse(_), _) => {
@@ -1813,6 +1833,7 @@ impl Node {
                         }
                         _ => request.from,
                     };
+                    let peer = self.request_address(peer);
                     self.sessions.insert(
                         local,
                         Session {
@@ -1824,8 +1845,9 @@ impl Node {
                 }
             }
             (Body::SessionModificationResponse(_), Effect::PeerFSeid(seid, address)) => {
+                let peer = self.request_address(SocketAddr::new(address, request.from.port()));
                 if let Some(session) = request.seid.and_then(|seid| self.sessions.get_mut(&seid)) {
-                    session.peer = SocketAddr::new(address, request.from.port());
+                    session.peer = peer;
                     session.peer_seid = Some(seid);
                 }
             }
@@ -1905,7 +1927,7 @@ impl Node {
         let ended: Vec<u64> = self
             .sessions
             .iter()
-            .filter(|(_, session)| session.node == key || session.peer == peer)
+            .filter(|(_, session)| session.node == key || session.peer.ip() == peer.ip())
             .map(|(seid, _)| *seid)
             .collect();
         for seid in &ended {
