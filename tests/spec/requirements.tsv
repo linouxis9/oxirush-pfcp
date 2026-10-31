@@ -162,10 +162,10 @@
 6.2.8.3	3	The UP function answers with a success.	test association_release
 6.2.9	0	The title of node report.	informative: a title
 6.2.9.1	1	Node report carries what the UP function reports outside a session.	application: what the UP function reports
-6.2.9.2	1	The UP function starts a node report to report.	application: what the UP function reports
+6.2.9.2	1	The UP function starts a node report to report.	test node_report_and_session_sets
 6.2.9.2	2	The request carries what is reported.	application: what the UP function reports
-6.2.9.2	3	A success means that the report was delivered.	application: what the UP function reports
-6.2.9.3	1	On a node report, the CP function handles it and answers.	application: what the CP function does with a report
+6.2.9.2	3	A success means that the report was delivered.	test node_report_and_session_sets
+6.2.9.3	1	On a node report, the CP function handles it and answers.	test node_report_and_session_sets
 6.3	0	The title of the session related procedures.	informative: a title
 6.3.1	0	The clauses describe the session related procedures.	informative: no requirement
 6.3.2	0	The title of session establishment.	informative: a title

@@ -684,6 +684,35 @@ fn version_not_supported() {
     assert!(events(&mut upf).is_empty(), "the request is discarded");
 }
 
+/// §6.2.9: a node report, and the session set procedures, run as the other requests:
+/// Table 7.3-1 makes 12, 14 and 16 requests, and 13, 15 and 17 their responses.
+#[test]
+fn node_report_and_session_sets() {
+    let (mut smf, mut upf) = associated(at(0));
+    events(&mut upf);
+    let change = PfcpSessionChangeInfo::new(AlternativeSmfIpAddress { v4: true, ipv4_address: Some(Ipv4Addr::new(10, 0, 0, 9)), ..Default::default() });
+    let exchanges: [(bool, Body, Body); 3] = [
+        (false, NodeReportRequest::new(node_id(UPF), NodeReportType { uprr: true, ..Default::default() }).into(), NodeReportResponse::new(node_id(SMF), accepted()).into()),
+        (false, SessionSetDeletionRequest::new(node_id(UPF)).into(), SessionSetDeletionResponse::new(node_id(SMF), accepted()).into()),
+        (true, SessionSetModificationRequest::new(node_id(SMF), change).into(), SessionSetModificationResponse::new(node_id(UPF), accepted()).into()),
+    ];
+    for (from_smf, body, answer) in exchanges {
+        let message_type = body.message_type();
+        let (sender, receiver, to, back) = match from_smf {
+            true => (&mut smf, &mut upf, UPF, SMF),
+            false => (&mut upf, &mut smf, SMF, UPF),
+        };
+        let id = sender.request(at(1), to, Message { header: Header::node(0), body }).unwrap();
+        pass(sender, receiver, to, at(1));
+        let (inbound, message) = request(receiver);
+        assert_eq!(message.body.message_type(), message_type);
+        receiver.respond(at(1), &inbound, answer).unwrap();
+        pass(receiver, sender, back, at(1));
+        let got = events(sender);
+        assert!(matches!(&got[..], [Event::Response { request, message }] if *request == id && message.body.message_type() == message_type + 1), "{got:?}");
+    }
+}
+
 // ── Sessions ────────────────────────────────────────────────────────────────
 
 #[test]

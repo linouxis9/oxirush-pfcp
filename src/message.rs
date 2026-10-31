@@ -279,13 +279,11 @@ impl Ids {
     }
 }
 
-/// Whether a message type is a request: the odd ones of the node related messages but 11,
-/// Version Not Supported Response, and the even ones of the session related messages.
+/// Whether a message type is a request of Table 7.3-1: 1 to 9 odd, then, after 11, Version
+/// Not Supported Response, 12 to 16 even, and 50 to 56 even. A type that the table does
+/// not have is none.
 pub fn is_request(message_type: u8) -> bool {
-    match is_node_related(message_type) {
-        true => !message_type.is_multiple_of(2) && message_type != 11,
-        false => message_type.is_multiple_of(2),
-    }
+    matches!(message_type, 1 | 3 | 5 | 7 | 9 | 12 | 14 | 16 | 50 | 52 | 54 | 56)
 }
 
 impl Body {

@@ -195,3 +195,20 @@ fn reserved_values_and_fixed_lengths() {
     assert_eq!(found[0].kind, DeviationKind::FixedLength { ie_type: 257, length: 5 }, "{found:?}");
     assert_eq!(found[0].cause(), None, "an optional IE");
 }
+
+/// Table 7.3-1: after 11, Version Not Supported Response, a request has an even type: 12
+/// Node Report, 14 Session Set Deletion and 16 Session Set Modification.
+#[test]
+fn a_request_by_the_name_of_its_type() {
+    for info in MESSAGE_TYPES {
+        assert_eq!(is_request(info.message_type), info.name().ends_with(" Request"), "{}", info.name());
+    }
+    for message_type in (0..=255).filter(|&message_type| message_type_info(message_type).is_none()) {
+        assert!(!is_request(message_type), "{message_type}");
+    }
+    let request = Message { header: Header::node(1), body: NodeReportRequest::default().into() };
+    let causes: Vec<_> = request.check().iter().map(Deviation::cause).collect();
+    assert_eq!(causes, [Some(CauseValue::MandatoryIeMissing); 2]);
+    let response = Message { header: Header::node(1), body: NodeReportResponse::default().into() };
+    assert!(response.check().iter().all(|deviation| deviation.cause().is_none()));
+}
