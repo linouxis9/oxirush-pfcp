@@ -21,11 +21,12 @@ use alloc::vec::Vec;
 use core::ops::Deref;
 
 /// The values of a row that is a list. Most lists of a message have one value, which it
-/// keeps in place: only a second one allocates. It dereferences to a slice.
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// keeps in place: only a second one allocates. It dereferences to a slice, and is equal
+/// to another, and printed, by its values, however it holds them.
+#[derive(Clone)]
 pub struct List<T>(Repr<T>);
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone)]
 enum Repr<T> {
     Empty,
     One(T),
@@ -101,6 +102,20 @@ impl<T> List<T> {
             Repr::One(value) => alloc::vec![value],
             Repr::Many(values) => values,
         }
+    }
+}
+
+impl<T: PartialEq> PartialEq for List<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.as_slice() == other.as_slice()
+    }
+}
+
+impl<T: Eq> Eq for List<T> {}
+
+impl<T: core::fmt::Debug> core::fmt::Debug for List<T> {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        f.debug_list().entries(self.as_slice()).finish()
     }
 }
 

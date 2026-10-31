@@ -908,6 +908,42 @@ fn a_list_is_sized_for_its_values() {
     }
 }
 
+/// A list is equal to another of the same values, however it holds them: a message
+/// read back from its tree is equal to the one decoded.
+#[test]
+fn a_list_equals_by_its_values() {
+    let mut reserved: List<u16> = List::new();
+    reserved.reserve_exact(2);
+    reserved.push(7);
+    assert_eq!(reserved, List::from(vec![7]));
+    assert_eq!(
+        format!("{reserved:?}"),
+        format!("{:?}", List::from(vec![7]))
+    );
+    // An FQ-CSID of IPv6 whose content frames as IEs, and one that does not decode
+    let mut address = [0; 16];
+    address[2] = 15;
+    let fq_csid = FqCsid {
+        node_id_type: 1,
+        node_address: address.to_vec(),
+        csids: vec![1],
+        ..Default::default()
+    };
+    let request = SessionSetDeletionRequest::new(NodeId::Ipv4(Ipv4Addr::new(10, 0, 0, 1)))
+        .with_fq_csid(fq_csid);
+    let mut octets = Message {
+        header: Header::node(1),
+        body: request.into(),
+    }
+    .encode()
+    .unwrap();
+    octets.extend_from_slice(&[0, 65, 0, 4, 0, 0, 0, 0]);
+    let length = (octets.len() - 4) as u16;
+    octets[2..4].copy_from_slice(&length.to_be_bytes());
+    let decoded = Message::decode(&octets).unwrap();
+    assert_eq!(Message::from_tree(&decoded.to_tree()).unwrap(), decoded);
+}
+
 /// §7.2.2: a header value that its bits cannot hold is not cut: encode() refuses it, and
 /// check() says it; a tree cannot write it.
 #[test]
