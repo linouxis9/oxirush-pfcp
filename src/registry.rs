@@ -66,11 +66,11 @@ pub fn type_name(ie_type: u16) -> Option<&'static str> {
 pfcp_ies! {
     1 "Create PDR" grouped "7.5.2.2-1" => CreatePdr;
     2 "PDI" grouped "7.5.2.2-2" => Pdi;
-    3 "Create FAR" grouped "7.5.2.3-1";
-    4 "Forwarding Parameters" grouped "7.5.2.3-2";
+    3 "Create FAR" grouped "7.5.2.3-1" => CreateFar;
+    4 "Forwarding Parameters" grouped "7.5.2.3-2" => ForwardingParameters;
     5 "Duplicating Parameters" grouped "7.5.2.3-3";
-    6 "Create URR" grouped "7.5.2.4-1";
-    7 "Create QER" grouped "7.5.2.5-1";
+    6 "Create URR" grouped "7.5.2.4-1" => CreateUrr;
+    7 "Create QER" grouped "7.5.2.5-1" => CreateQer;
     8 "Created PDR" grouped "7.5.3.2-1";
     9 "Update PDR" grouped "7.5.4.2-1";
     10 "Update FAR" grouped "7.5.4.3-1";
@@ -85,29 +85,29 @@ pfcp_ies! {
     19 "Cause" fixed(1) "8.2.1";
     20 "Source Interface" extendable(1) "8.2.2" => SourceInterface;
     21 "F-TEID" extendable(1) "8.2.3" => FTeid;
-    22 "Network Instance" variable "8.2.4";
+    22 "Network Instance" variable "8.2.4" => NetworkInstance;
     23 "SDF Filter" extendable(2) "8.2.5";
     24 "Application ID" variable "8.2.6";
-    25 "Gate Status" extendable(1) "8.2.7";
-    26 "MBR" extendable(10) "8.2.8";
-    27 "GBR" extendable(10) "8.2.9";
-    28 "QER Correlation ID" extendable(4) "8.2.10";
+    25 "Gate Status" extendable(1) "8.2.7" => GateStatus;
+    26 "MBR" extendable(10) "8.2.8" => Mbr;
+    27 "GBR" extendable(10) "8.2.9" => Gbr;
+    28 "QER Correlation ID" extendable(4) "8.2.10" => QerCorrelationId;
     29 "Precedence" extendable(4) "8.2.11" => Precedence;
-    30 "Transport Level Marking" extendable(2) "8.2.12";
-    31 "Volume Threshold" extendable(1) "8.2.13";
-    32 "Time Threshold" extendable(4) "8.2.14";
-    33 "Monitoring Time" extendable(4) "8.2.15";
-    34 "Subsequent Volume Threshold" extendable(1) "8.2.16";
-    35 "Subsequent Time Threshold" extendable(4) "8.2.17";
-    36 "Inactivity Detection Time" extendable(4) "8.2.18";
-    37 "Reporting Triggers" extendable(2) "8.2.19";
+    30 "Transport Level Marking" extendable(2) "8.2.12" => TransportLevelMarking;
+    31 "Volume Threshold" extendable(1) "8.2.13" => VolumeThreshold;
+    32 "Time Threshold" extendable(4) "8.2.14" => TimeThreshold;
+    33 "Monitoring Time" extendable(4) "8.2.15" => MonitoringTime;
+    34 "Subsequent Volume Threshold" extendable(1) "8.2.16" => SubsequentVolumeThreshold;
+    35 "Subsequent Time Threshold" extendable(4) "8.2.17" => SubsequentTimeThreshold;
+    36 "Inactivity Detection Time" extendable(4) "8.2.18" => InactivityDetectionTime;
+    37 "Reporting Triggers" extendable(2) "8.2.19" => ReportingTriggers;
     38 "Redirect Information" extendable(3) "8.2.20";
     39 "Report Type" extendable(1) "8.2.21";
     40 "Offending IE" fixed(2) "8.2.22";
     41 "Forwarding Policy" extendable(1) "8.2.23";
-    42 "Destination Interface" extendable(1) "8.2.24";
+    42 "Destination Interface" extendable(1) "8.2.24" => DestinationInterface;
     43 "UP Function Features" extendable(1) "8.2.25";
-    44 "Apply Action" extendable(1) "8.2.26";
+    44 "Apply Action" extendable(1) "8.2.26" => ApplyAction;
     45 "Downlink Data Service Information" extendable(1) "8.2.27";
     46 "Downlink Data Notification Delay" extendable(1) "8.2.28";
     47 "DL Buffering Duration" extendable(1) "8.2.29";
@@ -125,19 +125,19 @@ pfcp_ies! {
     59 "PFD context" grouped "7.4.3.1-3";
     60 "Node ID" extendable(1) "8.2.38" => NodeId;
     61 "PFD contents" extendable(2) "8.2.39";
-    62 "Measurement Method" extendable(1) "8.2.40";
+    62 "Measurement Method" extendable(1) "8.2.40" => MeasurementMethod;
     63 "Usage Report Trigger" extendable(2) "8.2.41";
-    64 "Measurement Period" extendable(4) "8.2.42";
+    64 "Measurement Period" extendable(4) "8.2.42" => MeasurementPeriod;
     65 "FQ-CSID" extendable(1) "8.2.43";
     66 "Volume Measurement" extendable(1) "8.2.44";
     67 "Duration Measurement" extendable(4) "8.2.45";
     68 "Application Detection Information" grouped "7.5.8.3-2";
     69 "Time of First Packet" extendable(4) "8.2.46";
     70 "Time of Last Packet" extendable(4) "8.2.47";
-    71 "Quota Holding Time" extendable(4) "8.2.48";
+    71 "Quota Holding Time" extendable(4) "8.2.48" => QuotaHoldingTime;
     72 "Dropped DL Traffic Threshold" extendable(1) "8.2.49";
-    73 "Volume Quota" extendable(1) "8.2.50";
-    74 "Time Quota" extendable(4) "8.2.51";
+    73 "Volume Quota" extendable(1) "8.2.50" => VolumeQuota;
+    74 "Time Quota" extendable(4) "8.2.51" => TimeQuota;
     75 "Start Time" extendable(4) "8.2.52";
     76 "End Time" extendable(4) "8.2.53";
     77 "Query URR" grouped "7.5.4.10-1";
@@ -145,20 +145,20 @@ pfcp_ies! {
     79 "Usage Report (Session Deletion Response)" grouped "7.5.7.2-1";
     80 "Usage Report (Session Report Request)" grouped "7.5.8.3-1";
     81 "URR ID" extendable(4) "8.2.54" => UrrId;
-    82 "Linked URR ID" extendable(4) "8.2.55";
+    82 "Linked URR ID" extendable(4) "8.2.55" => LinkedUrrId;
     83 "Downlink Data Report" grouped "7.5.8.2-1";
-    84 "Outer Header Creation" extendable(2) "8.2.56";
+    84 "Outer Header Creation" extendable(2) "8.2.56" => OuterHeaderCreation;
     85 "Create BAR" grouped "7.5.2.6-1";
     86 "Update BAR (Session Modification Request)" grouped "7.5.4.11-1";
     87 "Remove BAR" grouped "7.5.4.12-1";
-    88 "BAR ID" extendable(1) "8.2.57";
+    88 "BAR ID" extendable(1) "8.2.57" => BarId;
     89 "CP Function Features" extendable(1) "8.2.58";
     90 "Usage Information" extendable(1) "8.2.59";
     91 "Application Instance ID" variable "8.2.60";
     92 "Flow Information" extendable(3) "8.2.61";
     93 "UE IP Address" extendable(1) "8.2.62" => UeIpAddress;
     94 "Packet Rate" extendable(1) "8.2.63";
-    95 "Outer Header Removal" extendable(1) "8.2.64";
+    95 "Outer Header Removal" extendable(1) "8.2.64" => OuterHeaderRemoval;
     96 "Recovery Time Stamp" extendable(4) "8.2.65";
     97 "DL Flow Level Marking" extendable(1) "8.2.66";
     98 "Header Enrichment" extendable(1) "8.2.67";
@@ -185,8 +185,8 @@ pfcp_ies! {
     120 "Aggregated URR ID" fixed(4) "8.2.85";
     121 "Subsequent Volume Quota" extendable(1) "8.2.86";
     122 "Subsequent Time Quota" extendable(4) "8.2.87";
-    123 "RQI" extendable(1) "8.2.88";
-    124 "QFI" extendable(1) "8.2.89";
+    123 "RQI" extendable(1) "8.2.88" => Rqi;
+    124 "QFI" extendable(1) "8.2.89" => Qfi;
     125 "Query URR Reference" extendable(4) "8.2.90";
     126 "Additional Usage Reports Information" extendable(2) "8.2.91";
     127 "Create Traffic Endpoint" grouped "7.5.2.7-1";
@@ -219,10 +219,10 @@ pfcp_ies! {
     154 "Framed-Routing" fixed(4) "8.2.110";
     155 "Framed-IPv6-Route" variable "8.2.111";
     156 "Time Stamp" extendable(4) "8.2.114";
-    157 "Averaging Window" extendable(4) "8.2.115";
-    158 "Paging Policy Indicator" extendable(1) "8.2.116";
+    157 "Averaging Window" extendable(4) "8.2.115" => AveragingWindow;
+    158 "Paging Policy Indicator" extendable(1) "8.2.116" => PagingPolicyIndicator;
     159 "APN/DNN" variable "8.2.117";
-    160 "3GPP Interface Type" extendable(1) "8.2.118";
+    160 "3GPP Interface Type" extendable(1) "8.2.118" => InterfaceType3gpp;
     161 "PFCPSRReq-Flags" extendable(1) "8.2.119";
     162 "PFCPAUReq-Flags" extendable(1) "8.2.120";
     163 "Activation Time" extendable(4) "8.2.121";
@@ -487,9 +487,9 @@ pfcp_table! {
         node_id: "Node ID" M NodeId [SXA SXB SXC N4 N4MB],
         cp_f_seid: "CP F-SEID" M FSeid [SXA SXB SXC N4 N4MB],
         create_pdr: "Create PDR" M* CreatePdr [SXA SXB SXC N4 N4MB],
-        create_far: "Create FAR" M* raw 3 [SXA SXB SXC N4 N4MB],
-        create_urr: "Create URR" C* raw 6 [SXA SXB SXC N4 N4MB],
-        create_qer: "Create QER" C* raw 7 [SXB SXC N4 N4MB],
+        create_far: "Create FAR" M* CreateFar [SXA SXB SXC N4 N4MB],
+        create_urr: "Create URR" C* CreateUrr [SXA SXB SXC N4 N4MB],
+        create_qer: "Create QER" C* CreateQer [SXB SXC N4 N4MB],
         create_bar: "Create BAR" O raw 85 [SXA N4],
         create_traffic_endpoint: "Create Traffic Endpoint" C* raw 127 [SXA SXB SXC N4 N4MB],
         pdn_type: "PDN Type" C raw 113 [SXA SXB N4],
@@ -530,7 +530,7 @@ pfcp_table! {
         pdr_id: "PDR ID" M PdrId [SXA SXB SXC N4 N4MB],
         precedence: "Precedence" M Precedence [SXB SXC N4 N4MB],
         pdi: "PDI" M Pdi [SXA SXB SXC N4 N4MB],
-        outer_header_removal: "Outer Header Removal" C raw 95 [SXA SXB N4 N4MB],
+        outer_header_removal: "Outer Header Removal" C OuterHeaderRemoval [SXA SXB N4 N4MB],
         far_id: "FAR ID" C FarId [SXA SXB SXC N4 N4MB],
         urr_id: "URR ID" C* UrrId [SXA SXB SXC N4],
         qer_id: "QER ID" C* QerId [SXB SXC N4 N4MB],
@@ -554,7 +554,7 @@ pfcp_table! {
         source_interface: "Source Interface" M SourceInterface [SXA SXB SXC N4 N4MB],
         local_f_teid: "Local F-TEID" O FTeid [SXA SXB N4],
         local_ingress_tunnel: "Local Ingress Tunnel" C raw 308 [N4MB],
-        network_instance: "Network Instance" O raw 22 [SXA SXB SXC N4 N4MB],
+        network_instance: "Network Instance" O NetworkInstance [SXA SXB SXC N4 N4MB],
         redundant_transmission_detection_parameters:
             "Redundant Transmission Detection Parameters" O raw 255 [N4],
         ue_ip_address: "UE IP address" O* UeIpAddress [SXB SXC N4],
@@ -565,11 +565,11 @@ pfcp_table! {
         application_id: "Application ID" O raw 24 [SXB SXC N4 N4MB],
         ethernet_pdu_session_information: "Ethernet PDU Session Information" O raw 142 [N4],
         ethernet_packet_filter: "Ethernet Packet Filter" O* raw 132 [N4],
-        qfi: "QFI" O* raw 124 [N4],
+        qfi: "QFI" O* Qfi [N4],
         framed_route: "Framed-Route" O* raw 153 [SXB N4],
         framed_routing: "Framed-Routing" O raw 154 [SXB N4],
         framed_ipv6_route: "Framed-IPv6-Route" O* raw 155 [SXB N4],
-        source_interface_type: "Source Interface Type" C raw 160 [SXA SXB N4 N4MB],
+        source_interface_type: "Source Interface Type" C InterfaceType3gpp [SXA SXB N4 N4MB],
         ip_multicast_addressing_info: "IP Multicast Addressing Info" O* raw 188 [N4 N4MB],
         dns_query_response_filter: "DNS Query/Response Filter" O* raw 294 [N4]
             roles ["DNS Query Filter" O [N4], "DNS Response Filter" O [N4]],
@@ -580,3 +580,100 @@ pfcp_table! {
     }
 }
 
+
+pfcp_table! {
+    /// Create FAR within PFCP Session Establishment Request (Table 7.5.2.3-1).
+    group CreateFar = 3, "Create FAR", "7.5.2.3-1" {
+        far_id: "FAR ID" M FarId [SXA SXB SXC N4 N4MB],
+        apply_action: "Apply Action" M ApplyAction [SXA SXB SXC N4 N4MB],
+        forwarding_parameters: "Forwarding Parameters" C ForwardingParameters [SXA SXB SXC N4],
+        duplicating_parameters: "Duplicating Parameters" C* raw 5 [SXA SXB],
+        bar_id: "BAR ID" O BarId [SXA N4],
+        redundant_transmission_forwarding_parameters: "Redundant Transmission Forwarding Parameters" C raw 270 [N4],
+        mbs_multicast_parameters: "MBS Multicast Parameters" C raw 301 [N4MB],
+        add_mbs_unicast_parameters: "Add MBS Unicast Parameters" C* raw 302 [N4MB],
+    }
+}
+
+pfcp_table! {
+    /// Forwarding Parameters IE in FAR (Table 7.5.2.3-2).
+    group ForwardingParameters = 4, "Forwarding Parameters", "7.5.2.3-2" {
+        destination_interface: "Destination Interface" M DestinationInterface [SXA SXB SXC N4],
+        network_instance: "Network Instance" O NetworkInstance [SXA SXB SXC N4],
+        redirect_information: "Redirect Information" C raw 38 [SXB SXC N4],
+        outer_header_creation: "Outer Header Creation" C OuterHeaderCreation [SXA SXB N4],
+        transport_level_marking: "Transport Level Marking" C TransportLevelMarking [SXA SXB N4],
+        extended_transport_level_marking: "Extended Transport Level Marking" C* raw 383 [N4],
+        transport_level_marking_indications: "Transport Level Marking Indications" C raw 398 [N4],
+        forwarding_policy: "Forwarding Policy" C raw 41 [SXB SXC N4],
+        metadata: "Metadata" O raw 322 [N4],
+        header_enrichment: "Header Enrichment" O raw 98 [SXB SXC N4],
+        linked_traffic_endpoint_id: "Linked Traffic Endpoint ID" C raw 131 [SXA SXB N4],
+        proxying: "Proxying" C raw 137 [N4],
+        destination_interface_type: "Destination Interface Type" C InterfaceType3gpp [SXA SXB N4],
+        data_network_access_identifier: "Data Network Access Identifier" C raw 232 [],
+        ip_address_and_port_number_replacement: "IP Address and Port Number Replacement" C raw 293 [N4],
+        n6_routing_information: "N6 Routing Information" O raw 351 [N4],
+        header_handling_control_rule: "Header Handling Control Rule" C* raw 361 [N4],
+        on_path_n6_connection_information: "On-path N6 Connection Information" O raw 374 [N4],
+    }
+}
+
+pfcp_table! {
+    /// Create URR within PFCP Session Establishment Request (Table 7.5.2.4-1).
+    group CreateUrr = 6, "Create URR", "7.5.2.4-1" {
+        urr_id: "URR ID" M UrrId [SXA SXB SXC N4 N4MB],
+        measurement_method: "Measurement Method" M MeasurementMethod [SXA SXB SXC N4 N4MB],
+        reporting_triggers: "Reporting Triggers" M ReportingTriggers [SXA SXB SXC N4 N4MB],
+        measurement_period: "Measurement Period" C MeasurementPeriod [SXA SXB SXC N4 N4MB],
+        volume_threshold: "Volume Threshold" C VolumeThreshold [SXA SXB SXC N4 N4MB],
+        volume_quota: "Volume Quota" C VolumeQuota [SXB SXC N4],
+        event_threshold: "Event Threshold" C raw 149 [SXB SXC N4],
+        event_quota: "Event Quota" C raw 148 [SXB SXC N4],
+        time_threshold: "Time Threshold" C TimeThreshold [SXA SXB SXC N4],
+        time_quota: "Time Quota" C TimeQuota [SXB SXC N4],
+        quota_holding_time: "Quota Holding Time" C QuotaHoldingTime [SXB SXC N4],
+        dropped_dl_traffic_threshold: "Dropped DL Traffic Threshold" C raw 72 [SXA N4],
+        quota_validity_time: "Quota Validity Time" C raw 181 [SXB N4],
+        monitoring_time: "Monitoring Time" O MonitoringTime [SXA SXB SXC N4],
+        subsequent_volume_threshold: "Subsequent Volume Threshold" O SubsequentVolumeThreshold [SXA SXB SXC N4],
+        subsequent_time_threshold: "Subsequent Time Threshold" O SubsequentTimeThreshold [SXA SXB SXC N4],
+        subsequent_volume_quota: "Subsequent Volume Quota" O raw 121 [SXB SXC N4],
+        subsequent_time_quota: "Subsequent Time Quota" O raw 122 [SXB SXC N4],
+        subsequent_event_threshold: "Subsequent Event Threshold" O raw 151 [SXB SXC N4],
+        subsequent_event_quota: "Subsequent Event Quota" O raw 150 [SXB SXC N4],
+        inactivity_detection_time: "Inactivity Detection Time" C InactivityDetectionTime [SXB SXC N4],
+        linked_urr_id: "Linked URR ID" C* LinkedUrrId [SXB SXC N4 N4MB],
+        measurement_information: "Measurement Information" C raw 100 [SXB SXC N4],
+        time_quota_mechanism: "Time Quota Mechanism" C raw 115 [SXB],
+        aggregated_urrs: "Aggregated URRs" C* raw 118 [SXB],
+        far_id_for_quota_action: "FAR ID for Quota Action" C FarId [SXB SXC N4],
+        ethernet_inactivity_timer: "Ethernet Inactivity Timer" C raw 146 [N4],
+        additional_monitoring_time: "Additional Monitoring Time" O* raw 147 [SXA SXB SXC N4],
+        number_of_reports: "Number of Reports" O raw 182 [SXA SXB SXC N4],
+        exempted_application_id_for_quota_action: "Exempted Application ID for Quota Action" O* raw 24 [SXB SXC N4],
+        exempted_sdf_filter_for_quota_action: "Exempted SDF Filter for Quota Action" O* raw 23 [SXB SXC N4],
+        user_plane_inactivity_timer: "User Plane Inactivity Timer" C raw 117 [N4],
+    }
+}
+
+pfcp_table! {
+    /// Create QER within PFCP Session Establishment Request (Table 7.5.2.5-1).
+    group CreateQer = 7, "Create QER", "7.5.2.5-1" {
+        qer_id: "QER ID" M QerId [SXB SXC N4 N4MB],
+        qer_correlation_id: "QER Correlation ID" C QerCorrelationId [SXB N4],
+        gate_status: "Gate Status" M GateStatus [SXB SXC N4 N4MB],
+        maximum_bitrate: "Maximum Bitrate" C Mbr [SXB SXC N4 N4MB],
+        guaranteed_bitrate: "Guaranteed Bitrate" C Gbr [SXB SXC N4 N4MB],
+        packet_rate: "Packet Rate" C raw 94 [SXB N4],
+        packet_rate_status: "Packet Rate Status" C raw 193 [SXB N4],
+        dl_flow_level_marking: "DL Flow Level Marking" C raw 97 [SXB SXC],
+        qos_flow_identifier: "QoS flow identifier" C Qfi [N4 N4MB],
+        reflective_qos: "Reflective QoS" C Rqi [N4],
+        paging_policy_indicator: "Paging Policy Indicator" C PagingPolicyIndicator [N4],
+        averaging_window: "Averaging Window" O AveragingWindow [N4],
+        qer_control_indications: "QER Control Indications" C raw 251 [SXB N4],
+        qer_indications: "QER Indications" C raw 319 [N4 N4MB],
+        pdu_set_importance_for_n6_unmarked_pdus: "PDU Set Importance for N6-unmarked PDUs" C raw 403 [N4],
+    }
+}

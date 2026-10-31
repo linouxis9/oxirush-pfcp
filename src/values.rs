@@ -25,7 +25,7 @@ use core::net::{Ipv4Addr, Ipv6Addr};
 use crate::Error;
 use crate::check::{Check, Deviation, DeviationKind};
 use crate::ie::{Codec, IeType};
-use crate::macros::pfcp_layout;
+use crate::macros::{pfcp_bits, pfcp_layout};
 use crate::octets::{IntoOwned, Octets};
 
 /// A field of a layout: its octets, read in network order.
@@ -80,6 +80,60 @@ macro_rules! number_field {
     )*};
 }
 number_field!(u8, u16, u32, u64);
+
+/// A number of five octets: a bitrate of MBR and GBR, in kbps.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct U40(pub u64);
+
+impl Field for U40 {
+    fn read(octets: &mut &[u8]) -> Option<Self> {
+        let [a, b, c, d, e] = take::<5>(octets)?;
+        Some(Self(u64::from_be_bytes([0, 0, 0, a, b, c, d, e])))
+    }
+    fn write(&self, out: &mut Vec<u8>) {
+        out.extend_from_slice(&self.0.to_be_bytes()[3..]);
+    }
+    fn size(&self) -> usize {
+        5
+    }
+    #[cfg(feature = "tree")]
+    fn to_tree(&self) -> oxirush_utils::tree::Value {
+        oxirush_utils::tree::unsigned(self.0)
+    }
+    #[cfg(feature = "tree")]
+    fn from_tree(
+        value: &oxirush_utils::tree::Value,
+        reading: &mut oxirush_utils::tree::Reading,
+    ) -> Result<Self, oxirush_utils::tree::Refused> {
+        Ok(Self(reading.unsigned(value, 0, (1 << 40) - 1)?))
+    }
+}
+
+/// A VLAN tag of three octets: the C-TAG and S-TAG of Outer Header Creation.
+pub type VlanTag = [u8; 3];
+
+impl Field for [u8; 3] {
+    fn read(octets: &mut &[u8]) -> Option<Self> {
+        take::<3>(octets)
+    }
+    fn write(&self, out: &mut Vec<u8>) {
+        out.extend_from_slice(self);
+    }
+    fn size(&self) -> usize {
+        3
+    }
+    #[cfg(feature = "tree")]
+    fn to_tree(&self) -> oxirush_utils::tree::Value {
+        oxirush_utils::tree::octets(self)
+    }
+    #[cfg(feature = "tree")]
+    fn from_tree(
+        value: &oxirush_utils::tree::Value,
+        reading: &mut oxirush_utils::tree::Reading,
+    ) -> Result<Self, oxirush_utils::tree::Refused> {
+        reading.octet_array::<3>(value)
+    }
+}
 
 macro_rules! address_field {
     ($($t:ty, $n:literal);*) => {$(
@@ -393,7 +447,7 @@ pfcp_layout! {
     /// F-TEID (§8.2.3): a TEID with its addresses, or a request that the UP function
     /// choose one (CH).
     pub struct FTeid "8.2.3" {
-        flags { chid "CHID": 4, ch "CH": 3, v6 "V6": 2, v4 "V4": 1 }
+        flags(u8) { chid "CHID": 4, ch "CH": 3, v6 "V6": 2, v4 "V4": 1 }
         teid "TEID": u32 if !ch,
         ipv4 "IPv4 address": Ipv4Addr if v4 && !ch,
         ipv6 "IPv6 address": Ipv6Addr if v6 && !ch,
@@ -404,7 +458,7 @@ pfcp_layout! {
 pfcp_layout! {
     /// F-SEID (§8.2.37): a SEID with the addresses of its node.
     pub struct FSeid "8.2.37" {
-        flags { v4 "V4": 2, v6 "V6": 1 }
+        flags(u8) { v4 "V4": 2, v6 "V6": 1 }
         seid "SEID": u64 if true,
         ipv4 "IPv4 address": Ipv4Addr if v4,
         ipv6 "IPv6 address": Ipv6Addr if v6,
@@ -415,7 +469,7 @@ pfcp_layout! {
     /// UE IP Address (§8.2.62): an address of the UE, or a request that the UP function
     /// choose one (CHV4, CHV6).
     pub struct UeIpAddress "8.2.62" {
-        flags {
+        flags(u8) {
             ip6pl "IP6PL": 7, chv6 "CHV6": 6, chv4 "CHV4": 5, ipv6d "IPv6D": 4,
             sd "S/D": 3, v4 "V4": 2, v6 "V6": 1,
         }
@@ -637,5 +691,286 @@ impl oxirush_utils::tree::Tree for NodeId<'_> {
                 Ok(Self::Other(*first, Octets::copied(rest)))
             }),
         }
+    }
+}
+
+pfcp_number! {
+    /// BAR ID (§8.2.57).
+    BarId(u8) "BAR ID value" "8.2.57";
+    /// Transport Level Marking (§8.2.12): the ToS/Traffic Class, and its mask.
+    TransportLevelMarking(u16) "ToS/Traffic Class" "8.2.12";
+    /// Time Threshold (§8.2.14), in seconds.
+    TimeThreshold(u32) "Time Threshold" "8.2.14";
+    /// Monitoring Time (§8.2.15), in the NTP timestamp of its seconds.
+    MonitoringTime(u32) "Monitoring Time" "8.2.15";
+    /// Subsequent Time Threshold (§8.2.17), in seconds.
+    SubsequentTimeThreshold(u32) "Subsequent Time Threshold" "8.2.17";
+    /// Inactivity Detection Time (§8.2.18), in seconds.
+    InactivityDetectionTime(u32) "Inactivity Detection Time" "8.2.18";
+    /// Measurement Period (§8.2.42), in seconds.
+    MeasurementPeriod(u32) "Measurement Period" "8.2.42";
+    /// Quota Holding Time (§8.2.48), in seconds.
+    QuotaHoldingTime(u32) "Quota Holding Time value" "8.2.48";
+    /// Time Quota (§8.2.51), in seconds.
+    TimeQuota(u32) "Time Quota value" "8.2.51";
+    /// Linked URR ID (§8.2.55).
+    LinkedUrrId(u32) "Linked URR ID value" "8.2.55";
+    /// QER Correlation ID (§8.2.10).
+    QerCorrelationId(u32) "QER Correlation ID value" "8.2.10";
+    /// Averaging Window (§8.2.115), in milliseconds.
+    AveragingWindow(u32) "Averaging Window" "8.2.115";
+}
+
+/// A value that is octets that its clause does not split: a Network Instance, as a
+/// domain name or an APN (§8.2.4).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct NetworkInstance<'a>(pub Octets<'a>);
+
+impl<'a> Codec<'a> for NetworkInstance<'a> {
+    fn decode(octets: &'a [u8]) -> Option<Self> {
+        Some(Self(Octets::wire(octets)))
+    }
+    fn encode(&self, out: &mut Vec<u8>) -> Result<(), Error> {
+        out.extend_from_slice(&self.0);
+        Ok(())
+    }
+    fn encoded_len(&self) -> usize {
+        self.0.len()
+    }
+}
+
+impl Check for NetworkInstance<'_> {}
+
+impl<'a> IntoOwned for NetworkInstance<'a> {
+    type Owned = NetworkInstance<'static>;
+    fn into_owned(self) -> NetworkInstance<'static> {
+        NetworkInstance(self.0.into_owned())
+    }
+}
+
+#[cfg(feature = "tree")]
+impl oxirush_utils::tree::Tree for NetworkInstance<'_> {
+    const NAME: &'static str = "Network Instance";
+    fn to_tree(&self) -> oxirush_utils::tree::Value {
+        oxirush_utils::tree::octets(&self.0)
+    }
+    fn from_tree(
+        value: &oxirush_utils::tree::Value,
+        reading: &mut oxirush_utils::tree::Reading,
+    ) -> Result<Self, oxirush_utils::tree::Refused> {
+        reading.octets(value).map(|octets| Self(octets.into()))
+    }
+}
+
+/// A value of fixed fields without flags, then the octets that a later release adds.
+macro_rules! pfcp_fields {
+    ($( $(#[$meta:meta])* pub struct $ty:ident $clause:literal { $( $field:ident $name:literal : $kind:ty ),* $(,)? } )*) => {$(
+        $(#[$meta])*
+        #[derive(Debug, Clone, Default, PartialEq, Eq)]
+        pub struct $ty<'a> {
+            $(
+                #[doc = concat!("The ", $name, " field.")]
+                pub $field: $kind,
+            )*
+            /// The octets after the fields, which a later release adds.
+            pub extra: Octets<'a>,
+        }
+
+        impl<'a> Codec<'a> for $ty<'a> {
+            fn decode(mut octets: &'a [u8]) -> Option<Self> {
+                $( let $field = <$kind as Field>::read(&mut octets)?; )*
+                Some(Self { $($field,)* extra: Octets::wire(octets) })
+            }
+            fn encode(&self, out: &mut Vec<u8>) -> Result<(), Error> {
+                $( Field::write(&self.$field, out); )*
+                out.extend_from_slice(&self.extra);
+                Ok(())
+            }
+            fn encoded_len(&self) -> usize {
+                0 $( + Field::size(&self.$field) )* + self.extra.len()
+            }
+        }
+
+        impl Check for $ty<'_> {}
+
+        impl<'a> IntoOwned for $ty<'a> {
+            type Owned = $ty<'static>;
+            fn into_owned(self) -> $ty<'static> {
+                $ty { $($field: self.$field,)* extra: self.extra.into_owned() }
+            }
+        }
+
+        #[cfg(feature = "tree")]
+        impl oxirush_utils::tree::Tree for $ty<'_> {
+            const NAME: &'static str = <Self as IeType>::TYPE_NAME;
+            fn to_tree(&self) -> oxirush_utils::tree::Value {
+                let mut members = oxirush_utils::tree::Members::new();
+                $( members.put($name, Field::to_tree(&self.$field)); )*
+                if !self.extra.is_empty() {
+                    members.put("extra", oxirush_utils::tree::octets(&self.extra));
+                }
+                members.finish()
+            }
+            fn from_tree(
+                value: &oxirush_utils::tree::Value,
+                reading: &mut oxirush_utils::tree::Reading,
+            ) -> Result<Self, oxirush_utils::tree::Refused> {
+                let read = reading.members(value, &[$($name,)* "extra"])?;
+                let mut at = 0;
+                $(
+                    let $field = reading.member(&read, at, <$kind as Field>::from_tree)?;
+                    at += 1;
+                )*
+                let extra = reading.optional(&read, at, |value, reading| reading.octets(value))?;
+                Ok(Self { $($field,)* extra: extra.map(Octets::from).unwrap_or_default() })
+            }
+        }
+    )*};
+}
+
+pfcp_fields! {
+    /// MBR (§8.2.8): the maximum bitrates of the uplink and of the downlink, in kbps.
+    pub struct Mbr "8.2.8" { ul_mbr "UL MBR": U40, dl_mbr "DL MBR": U40 }
+    /// GBR (§8.2.9): the guaranteed bitrates of the uplink and of the downlink, in kbps.
+    pub struct Gbr "8.2.9" { ul_gbr "UL GBR": U40, dl_gbr "DL GBR": U40 }
+}
+
+pfcp_layout! {
+    /// Volume Threshold (§8.2.13), in octets.
+    pub struct VolumeThreshold "8.2.13" {
+        flags(u8) { dlvol "DLVOL": 3, ulvol "ULVOL": 2, tovol "TOVOL": 1 }
+        total_volume "Total Volume": u64 if tovol,
+        uplink_volume "Uplink Volume": u64 if ulvol,
+        downlink_volume "Downlink Volume": u64 if dlvol,
+    }
+}
+
+pfcp_layout! {
+    /// Volume Quota (§8.2.50), in octets.
+    pub struct VolumeQuota "8.2.50" {
+        flags(u8) { dlvol "DLVOL": 3, ulvol "ULVOL": 2, tovol "TOVOL": 1 }
+        total_volume "Total Volume": u64 if tovol,
+        uplink_volume "Uplink Volume": u64 if ulvol,
+        downlink_volume "Downlink Volume": u64 if dlvol,
+    }
+}
+
+pfcp_layout! {
+    /// Subsequent Volume Threshold (§8.2.16), in octets.
+    pub struct SubsequentVolumeThreshold "8.2.16" {
+        flags(u8) { dlvol "DLVOL": 3, ulvol "ULVOL": 2, tovol "TOVOL": 1 }
+        total_volume "Total Volume": u64 if tovol,
+        uplink_volume "Uplink Volume": u64 if ulvol,
+        downlink_volume "Downlink Volume": u64 if dlvol,
+    }
+}
+
+pfcp_layout! {
+    /// Outer Header Creation (§8.2.56): the outer headers to create, from the bits of its
+    /// description (Table 8.2.56-1), octet 5 in the high octet.
+    pub struct OuterHeaderCreation "8.2.56" {
+        flags(u16) {
+            gtpu_udp_ipv4 "GTP-U/UDP/IPv4": 9, gtpu_udp_ipv6 "GTP-U/UDP/IPv6": 10,
+            udp_ipv4 "UDP/IPv4": 11, udp_ipv6 "UDP/IPv6": 12, ipv4_header "IPv4": 13, ipv6_header "IPv6": 14,
+            c_tag_header "C-TAG": 15, s_tag_header "S-TAG": 16,
+            n19_indication "N19 Indication": 1, n6_indication "N6 Indication": 2,
+            low_layer_ssm_and_c_teid "Low Layer SSM and C-TEID": 3,
+        }
+        teid "TEID": u32 if gtpu_udp_ipv4 || gtpu_udp_ipv6,
+        ipv4 "IPv4 Address": Ipv4Addr if gtpu_udp_ipv4 || udp_ipv4 || ipv4_header,
+        ipv6 "IPv6 Address": Ipv6Addr if gtpu_udp_ipv6 || udp_ipv6 || ipv6_header,
+        port "Port Number": u16 if udp_ipv4 || udp_ipv6,
+        c_tag "C-TAG field": VlanTag if c_tag_header,
+        s_tag "S-TAG field": VlanTag if s_tag_header,
+    }
+}
+
+impl Check for VolumeThreshold<'_> {}
+impl Check for VolumeQuota<'_> {}
+impl Check for SubsequentVolumeThreshold<'_> {}
+impl Check for OuterHeaderCreation<'_> {
+    fn check(&self, path: &str, found: &mut Vec<Deviation>) {
+        layout_checks(self.inconsistent(), u8::from(self.spare != 0), path, Self::CLAUSE, found);
+        if !(self.gtpu_udp_ipv4 || self.gtpu_udp_ipv6 || self.udp_ipv4 || self.udp_ipv6 || self.ipv4_header || self.ipv6_header || self.c_tag_header || self.s_tag_header) {
+            found.push(Deviation::new(path, "8.2.56", DeviationKind::Rule("no bit of the description is set")));
+        }
+    }
+}
+
+pfcp_bits! {
+    /// Apply Action (§8.2.26).
+    pub struct ApplyAction "8.2.26" octets 2 min 1 {
+        drop "DROP": 0 1 1, forw "FORW": 0 2 1, buff "BUFF": 0 3 1, nocp "NOCP": 0 4 1,
+        dupl "DUPL": 0 5 1, ipma "IPMA": 0 6 1, ipmd "IPMD": 0 7 1, dfrt "DFRT": 0 8 1,
+        edrt "EDRT": 1 1 1, bdpn "BDPN": 1 2 1, ddpn "DDPN": 1 3 1, fssm "FSSM": 1 4 1, mbsu "MBSU": 1 5 1,
+    }
+}
+
+pfcp_bits! {
+    /// Destination Interface (§8.2.24): its Interface value (Table 8.2.24-1).
+    pub struct DestinationInterface "8.2.24" octets 1 min 1 {
+        interface_value "Interface value": 0 1 4,
+    }
+}
+
+pfcp_bits! {
+    /// Outer Header Removal (§8.2.64): its description (Table 8.2.64-1), and the GTP-U
+    /// extension headers to delete (Table 8.2.64-2), which a later release added.
+    pub struct OuterHeaderRemoval "8.2.64" octets 2 min 1 {
+        outer_header_removal_description "Outer Header Removal Description": 0 1 8,
+        pdu_session_container "PDU Session Container": 1 1 1,
+    }
+}
+
+pfcp_bits! {
+    /// Measurement Method (§8.2.40).
+    pub struct MeasurementMethod "8.2.40" octets 1 min 1 {
+        durat "DURAT": 0 1 1, volum "VOLUM": 0 2 1, event "EVENT": 0 3 1,
+    }
+}
+
+pfcp_bits! {
+    /// Reporting Triggers (§8.2.19).
+    pub struct ReportingTriggers "8.2.19" octets 3 min 2 {
+        perio "PERIO": 0 1 1, volth "VOLTH": 0 2 1, timth "TIMTH": 0 3 1, quhti "QUHTI": 0 4 1,
+        start "START": 0 5 1, stopt "STOPT": 0 6 1, droth "DROTH": 0 7 1, liusa "LIUSA": 0 8 1,
+        volqu "VOLQU": 1 1 1, timqu "TIMQU": 1 2 1, envcl "ENVCL": 1 3 1, macar "MACAR": 1 4 1,
+        eveth "EVETH": 1 5 1, evequ "EVEQU": 1 6 1, ipmjl "IPMJL": 1 7 1, quvti "QUVTI": 1 8 1,
+        reemr "REEMR": 2 1 1, upint "UPINT": 2 2 1,
+    }
+}
+
+pfcp_bits! {
+    /// Gate Status (§8.2.7): the UL Gate and the DL Gate, 0 OPEN and 1 CLOSED.
+    pub struct GateStatus "8.2.7" octets 1 min 1 {
+        dl_gate "DL Gate": 0 1 2, ul_gate "UL Gate": 0 3 2,
+    }
+}
+
+pfcp_bits! {
+    /// QFI (§8.2.89).
+    pub struct Qfi "8.2.89" octets 1 min 1 {
+        qfi_value "QFI value": 0 1 6,
+    }
+}
+
+pfcp_bits! {
+    /// RQI (§8.2.88).
+    pub struct Rqi "8.2.88" octets 1 min 1 {
+        rqi "RQI": 0 1 1,
+    }
+}
+
+pfcp_bits! {
+    /// Paging Policy Indicator (§8.2.116).
+    pub struct PagingPolicyIndicator "8.2.116" octets 1 min 1 {
+        ppi_value "PPI value": 0 1 3,
+    }
+}
+
+pfcp_bits! {
+    /// 3GPP Interface Type (§8.2.118): its Interface Type value (Table 8.2.118-1).
+    pub struct InterfaceType3gpp "8.2.118" octets 1 min 1 {
+        interface_type_value "Interface Type value": 0 1 6,
     }
 }

@@ -31,7 +31,7 @@ fn establishment() -> Message<'static> {
         NodeId::Ipv4(smf),
         seid,
         uplink,
-        Raw(vec![0x00, 0x6c, 0x00, 0x04, 0x00, 0x00, 0x00, 0x01, 0x00, 0x2c, 0x00, 0x02, 0x02, 0x00].into()),
+        CreateFar::new(FarId::new(1), ApplyAction { forw: true, ..Default::default() }),
     )
     .with_create_pdr(downlink);
     Message { header: Header::session(0, 7), body: Body::SessionEstablishmentRequest(request) }

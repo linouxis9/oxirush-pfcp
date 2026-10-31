@@ -54,7 +54,7 @@ macro_rules! pfcp_ies {
 ///
 /// ```text
 /// pub struct FTeid "8.2.3" {
-///     flags { chid "CHID": 4, ch "CH": 3, v6 "V6": 2, v4 "V4": 1 }
+///     flags(u8) { chid "CHID": 4, ch "CH": 3, v6 "V6": 2, v4 "V4": 1 }
 ///     teid "TEID": u32 if !ch,
 ///     ipv4 "IPv4 address": Ipv4Addr if v4 && !ch,
 /// }
@@ -63,7 +63,7 @@ macro_rules! pfcp_layout {
     (
         $(#[$meta:meta])*
         pub struct $ty:ident $clause:literal {
-            flags { $( $flag:ident $flag_name:literal : $bit:literal ),* $(,)? }
+            flags($fk:ty) { $( $flag:ident $flag_name:literal : $bit:literal ),* $(,)? }
             $( $field:ident $field_name:literal : $kind:ident if $cond:expr ),* $(,)?
         }
     ) => {
@@ -75,7 +75,7 @@ macro_rules! pfcp_layout {
                 pub $flag: bool,
             )*
             /// The other bits of the first octet, which are spare: zero from a sender.
-            pub spare: u8,
+            pub spare: $fk,
             $(
                 #[doc = concat!("The ", $field_name, " field.")]
                 pub $field: Option<$kind>,
@@ -86,7 +86,7 @@ macro_rules! pfcp_layout {
 
         impl $ty<'_> {
             /// The bits of the first octet that are flags.
-            const FLAGS: u8 = 0 $( | 1 << ($bit - 1) )*;
+            const FLAGS: $fk = 0 $( | 1 << ($bit - 1) )*;
             /// The clause of the layout.
             pub const CLAUSE: &'static str = $clause;
 
@@ -107,7 +107,8 @@ macro_rules! pfcp_layout {
         impl<'a> crate::ie::Codec<'a> for $ty<'a> {
             #[allow(unused_variables)]
             fn decode(octets: &'a [u8]) -> Option<Self> {
-                let (&first, mut rest) = octets.split_first()?;
+                let mut rest = octets;
+                let first = <$fk as crate::values::Field>::read(&mut rest)?;
                 $( let $flag = first & 1 << ($bit - 1) != 0; )*
                 $(
                     let $field = match $cond {
@@ -131,7 +132,7 @@ macro_rules! pfcp_layout {
                         clause: $clause,
                     });
                 }
-                out.push(self.spare & !Self::FLAGS $( | u8::from(self.$flag) << ($bit - 1) )*);
+                crate::values::Field::write(&(self.spare & !Self::FLAGS $( | <$fk>::from(self.$flag) << ($bit - 1) )*), out);
                 $(
                     if let Some(field) = &self.$field {
                         crate::values::Field::write(field, out);
@@ -142,7 +143,7 @@ macro_rules! pfcp_layout {
             }
 
             fn encoded_len(&self) -> usize {
-                1 $( + self.$field.as_ref().map_or(0, crate::values::Field::size) )* + self.extra.len()
+                core::mem::size_of::<$fk>() $( + self.$field.as_ref().map_or(0, crate::values::Field::size) )* + self.extra.len()
             }
         }
 
@@ -188,8 +189,8 @@ macro_rules! pfcp_layout {
                     at += 1;
                 )*
                 let spare = reading
-                    .optional(&read, at, |value, reading| reading.unsigned(value, 0, 255))?
-                    .unwrap_or(0) as u8;
+                    .optional(&read, at, |value, reading| reading.unsigned(value, 0, <$fk>::MAX.into()))?
+                    .unwrap_or(0) as $fk;
                 at += 1;
                 $(
                     let $field = reading.optional(&read, at, <$kind as crate::values::Field>::from_tree)?;
@@ -215,6 +216,192 @@ macro_rules! pfcp_layout {
                 }
             }
         }
+    };
+}
+
+/// A value of octets of bits: flags of one bit and fields of a few, each at its octet
+/// (from 0), its lowest bit (from 1) and its width, in at most `N` octets of which the
+/// first `MIN` are always there; then the octets that a later release adds. The other
+/// bits are spare and kept, and so is how many of the `N` octets a decoded value had.
+///
+/// ```text
+/// pub struct ApplyAction "8.2.26" octets 2 min 1 {
+///     drop "DROP": 0 1 1, forw "FORW": 0 2 1, edrt "EDRT": 1 1 1,
+/// }
+/// ```
+macro_rules! pfcp_bits {
+    (
+        $(#[$meta:meta])*
+        pub struct $ty:ident $clause:literal octets $n:literal min $min:literal {
+            $( $field:ident $name:literal : $octet:literal $low:literal $width:tt ),* $(,)?
+        }
+    ) => {
+        $(#[$meta])*
+        #[derive(Debug, Clone, PartialEq, Eq)]
+        pub struct $ty<'a> {
+            $(
+                #[doc = concat!("The ", $name, " field.")]
+                pub $field: pfcp_bits!(@type $width),
+            )*
+            /// The bits of each octet that no field has, which are spare.
+            pub spare: [u8; $n],
+            /// How many of the octets of the fields the value has: the first ones of a
+            /// later release are absent from a sender of an earlier one.
+            pub present: u8,
+            /// The octets after them, which a later release adds.
+            pub extra: crate::octets::Octets<'a>,
+        }
+
+        impl Default for $ty<'_> {
+            fn default() -> Self {
+                Self { $( $field: Default::default(), )* spare: [0; $n], present: $n, extra: Default::default() }
+            }
+        }
+
+        impl $ty<'_> {
+            /// The clause of the layout.
+            pub const CLAUSE: &'static str = $clause;
+            /// The bits of each octet that a field has.
+            const MASKS: [u8; $n] = {
+                let mut masks = [0u8; $n];
+                $( masks[$octet] |= ((((1u16 << $width) - 1) << ($low - 1)) & 0xff) as u8; )*
+                masks
+            };
+
+            /// The octets of the fields, and how many are written.
+            fn octets(&self) -> ([u8; $n], usize) {
+                let mut octets = [0u8; $n];
+                for (octet, (spare, mask)) in octets.iter_mut().zip(self.spare.iter().zip(Self::MASKS)) {
+                    *octet = spare & !mask;
+                }
+                $( octets[$octet] |= pfcp_bits!(@write $width self.$field, $low); )*
+                let mut used = usize::from(self.present).clamp($min, $n);
+                if !self.extra.is_empty() {
+                    used = $n;
+                }
+                for (at, octet) in octets.iter().enumerate().skip(used) {
+                    if *octet != 0 {
+                        used = at + 1;
+                    }
+                }
+                (octets, used)
+            }
+        }
+
+        impl<'a> crate::ie::Codec<'a> for $ty<'a> {
+            fn decode(octets: &'a [u8]) -> Option<Self> {
+                if octets.len() < $min {
+                    return None;
+                }
+                let present = octets.len().min($n);
+                let at = |octet: usize| if octet < present { octets[octet] } else { 0 };
+                let mut spare = [0u8; $n];
+                for octet in 0..present {
+                    spare[octet] = octets[octet] & !Self::MASKS[octet];
+                }
+                Some(Self {
+                    $( $field: pfcp_bits!(@read $width at($octet), $low), )*
+                    spare,
+                    present: present as u8,
+                    extra: crate::octets::Octets::wire(&octets[present..]),
+                })
+            }
+
+            fn encode(&self, out: &mut alloc::vec::Vec<u8>) -> Result<(), crate::Error> {
+                let (octets, used) = self.octets();
+                out.extend_from_slice(&octets[..used]);
+                out.extend_from_slice(&self.extra);
+                Ok(())
+            }
+
+            fn encoded_len(&self) -> usize {
+                self.octets().1 + self.extra.len()
+            }
+        }
+
+        impl<'a> crate::octets::IntoOwned for $ty<'a> {
+            type Owned = $ty<'static>;
+            fn into_owned(self) -> $ty<'static> {
+                $ty { $( $field: self.$field, )* spare: self.spare, present: self.present, extra: self.extra.into_owned() }
+            }
+        }
+
+        impl crate::check::Check for $ty<'_> {
+            fn check(&self, path: &str, found: &mut alloc::vec::Vec<crate::check::Deviation>) {
+                if self.spare.iter().any(|spare| *spare != 0) {
+                    found.push(crate::check::Deviation::new(path, "8.1.2", crate::check::DeviationKind::SpareBits));
+                }
+            }
+        }
+
+        /// The flags that are set and the fields, with `Spare`, `length` (the octets of
+        /// the fields that the value has, when it lacks some) and `extra` where they are
+        /// not what a sender of this release writes.
+        #[cfg(feature = "tree")]
+        impl oxirush_utils::tree::Tree for $ty<'_> {
+            const NAME: &'static str = <Self as crate::ie::IeType>::TYPE_NAME;
+
+            fn to_tree(&self) -> oxirush_utils::tree::Value {
+                let mut members = oxirush_utils::tree::Members::new();
+                $( pfcp_bits!(@put $width members, $name, self.$field); )*
+                if self.spare.iter().any(|spare| *spare != 0) {
+                    members.put("Spare", oxirush_utils::tree::octets(&self.spare));
+                }
+                if usize::from(self.present) < $n {
+                    members.put("length", oxirush_utils::tree::unsigned(self.present.into()));
+                }
+                if !self.extra.is_empty() {
+                    members.put("extra", oxirush_utils::tree::octets(&self.extra));
+                }
+                members.finish()
+            }
+
+            fn from_tree(
+                value: &oxirush_utils::tree::Value,
+                reading: &mut oxirush_utils::tree::Reading,
+            ) -> Result<Self, oxirush_utils::tree::Refused> {
+                const NAMES: &[&str] = &[$($name,)* "Spare", "length", "extra"];
+                let read = reading.members(value, NAMES)?;
+                let mut at = 0;
+                let mut bits = Self::default();
+                $(
+                    if let Some(value) = reading.optional(&read, at, |value, reading| pfcp_bits!(@get $width value, reading))? {
+                        bits.$field = value;
+                    }
+                    at += 1;
+                )*
+                if let Some(spare) = reading.optional(&read, at, |value, reading| reading.octet_array::<$n>(value))? {
+                    bits.spare = spare;
+                }
+                if let Some(present) = reading.optional(&read, at + 1, |value, reading| reading.unsigned(value, $min, $n))? {
+                    bits.present = present as u8;
+                }
+                bits.extra = reading
+                    .optional(&read, at + 2, |value, reading| reading.octets(value))?
+                    .map(crate::octets::Octets::from)
+                    .unwrap_or_default();
+                if bits.spare.iter().zip(Self::MASKS).any(|(spare, mask)| spare & mask != 0) {
+                    return Err(reading.refuse(oxirush_utils::tree::ErrorKind::Value, "Spare has a bit that a field has"));
+                }
+                Ok(bits)
+            }
+        }
+    };
+    (@type 1) => { bool };
+    (@type $width:tt) => { u8 };
+    (@read 1 $octet:expr, $low:literal) => { $octet >> ($low - 1) & 1 == 1 };
+    (@read $width:tt $octet:expr, $low:literal) => { ($octet >> ($low - 1)) & (((1u16 << $width) - 1) as u8) };
+    (@write 1 $value:expr, $low:literal) => { u8::from($value) << ($low - 1) };
+    (@write $width:tt $value:expr, $low:literal) => { ($value & (((1u16 << $width) - 1) as u8)) << ($low - 1) };
+    (@put 1 $members:ident, $name:literal, $value:expr) => {
+        if $value { $members.put($name, oxirush_utils::tree::Value::Bool(true)); }
+    };
+    (@put $width:tt $members:ident, $name:literal, $value:expr) => {
+        $members.put($name, oxirush_utils::tree::unsigned($value.into()));
+    };
+    (@get 1 $value:expr, $reading:expr) => { $reading.boolean($value) };
+    (@get $width:tt $value:expr, $reading:expr) => {
+        $reading.unsigned($value, 0, (1u64 << $width) - 1).map(|value| value as u8)
     };
 }
 
@@ -582,4 +769,4 @@ macro_rules! pfcp_table {
     };
 }
 
-pub(crate) use {pfcp_ies, pfcp_layout, pfcp_table};
+pub(crate) use {pfcp_bits, pfcp_ies, pfcp_layout, pfcp_table};

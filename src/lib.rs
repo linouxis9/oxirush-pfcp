@@ -50,7 +50,7 @@ pub use ie::{Codec, IeFault, IeType, Placed, RawIe, VENDOR};
 pub use message::{Body, Message, is_node_related};
 pub use octets::{IntoOwned, Octets};
 pub use registry::{
-    CreatePdr, Form, HeartbeatRequest, HeartbeatResponse, IE_TYPES, IeTypeInfo, Pdi,
+    CreateFar, CreatePdr, CreateQer, CreateUrr, Form, ForwardingParameters, HeartbeatRequest, HeartbeatResponse, IE_TYPES, IeTypeInfo, Pdi,
     SessionEstablishmentRequest, ie_type_info, type_name,
 };
 pub use table::{Interfaces, Presence, Repeat, Role, Row, Table};

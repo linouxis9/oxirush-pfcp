@@ -6,48 +6,43 @@ use std::net::Ipv4Addr;
 use oxirush_pfcp::*;
 
 /// A Network Instance, as an APN: `internet`.
-fn network_instance() -> Raw<'static, 22> {
-    Raw(b"\x08internet".to_vec().into())
+fn network_instance() -> NetworkInstance<'static> {
+    NetworkInstance(b"\x08internet".to_vec().into())
 }
 
-fn far(id: u32, core: bool) -> Raw<'static, 3> {
+fn network_instance_fp() -> NetworkInstance<'static> {
+    NetworkInstance(b"\x08internet".to_vec().into())
+}
+
+fn far(id: u32, core: bool) -> CreateFar<'static> {
     // FAR ID, Apply Action (FORW), Forwarding Parameters: Destination Interface, Network
     // Instance and, toward the access, Outer Header Creation (GTP-U/UDP/IPv4)
-    let mut ies = vec![0x00, 0x6c, 0x00, 0x04];
-    ies.extend_from_slice(&id.to_be_bytes());
-    ies.extend_from_slice(&[0x00, 0x2c, 0x00, 0x02, 0x02, 0x00]);
-    let mut forwarding = vec![0x00, 0x2a, 0x00, 0x01, if core { 1 } else { 0 }];
-    forwarding.extend_from_slice(&[0x00, 0x16, 0x00, 0x09]);
-    forwarding.extend_from_slice(b"\x08internet");
+    let mut forwarding = ForwardingParameters::new(DestinationInterface { interface_value: u8::from(core), ..Default::default() })
+        .with_network_instance(network_instance_fp());
     if !core {
-        forwarding.extend_from_slice(&[0x00, 0x54, 0x00, 0x0a, 0x01, 0x00, 0x00, 0x00, 0x00, 0x01, 10, 0, 0, 2]);
+        let creation = OuterHeaderCreation { gtpu_udp_ipv4: true, teid: Some(1), ipv4: Some(Ipv4Addr::new(10, 0, 0, 2)), ..Default::default() };
+        forwarding = forwarding.with_outer_header_creation(creation);
     }
-    ies.extend_from_slice(&[0x00, 0x04]);
-    ies.extend_from_slice(&(forwarding.len() as u16).to_be_bytes());
-    ies.extend_from_slice(&forwarding);
-    Raw(ies.into())
+    CreateFar::new(FarId::new(id), ApplyAction { forw: true, ..Default::default() }).with_forwarding_parameters(forwarding)
 }
 
-fn urr(id: u32) -> Raw<'static, 6> {
+fn urr(id: u32) -> CreateUrr<'static> {
     // URR ID, Measurement Method (VOLUM DURAT), Reporting Triggers (VOLTH TIMTH),
     // Volume Threshold (TOVOL), Time Threshold
-    let mut ies = vec![0x00, 0x51, 0x00, 0x04];
-    ies.extend_from_slice(&id.to_be_bytes());
-    ies.extend_from_slice(&[0x00, 0x3e, 0x00, 0x01, 0x03]);
-    ies.extend_from_slice(&[0x00, 0x25, 0x00, 0x03, 0x06, 0x00, 0x00]);
-    ies.extend_from_slice(&[0x00, 0x1f, 0x00, 0x09, 0x01, 0, 0, 0, 0, 0x40, 0, 0, 0]);
-    ies.extend_from_slice(&[0x00, 0x20, 0x00, 0x04, 0, 0, 0x0e, 0x10]);
-    Raw(ies.into())
+    CreateUrr::new(
+        UrrId::new(id),
+        MeasurementMethod { volum: true, durat: true, ..Default::default() },
+        ReportingTriggers { volth: true, timth: true, ..Default::default() },
+    )
+    .with_volume_threshold(VolumeThreshold { tovol: true, total_volume: Some(0x4000_0000), ..Default::default() })
+    .with_time_threshold(TimeThreshold::new(3600))
 }
 
-fn qer(id: u32) -> Raw<'static, 7> {
+fn qer(id: u32) -> CreateQer<'static> {
     // QER ID, Gate Status, MBR, QFI
-    let mut ies = vec![0x00, 0x6d, 0x00, 0x04];
-    ies.extend_from_slice(&id.to_be_bytes());
-    ies.extend_from_slice(&[0x00, 0x19, 0x00, 0x01, 0x00]);
-    ies.extend_from_slice(&[0x00, 0x1a, 0x00, 0x0a, 0, 0, 0x0f, 0x42, 0x40, 0, 0, 0x0f, 0x42, 0x40]);
-    ies.extend_from_slice(&[0x00, 0x7c, 0x00, 0x01, 0x09]);
-    Raw(ies.into())
+    CreateQer::new(QerId::new(id), GateStatus::default())
+        .with_maximum_bitrate(Mbr { ul_mbr: U40(1_000_000), dl_mbr: U40(1_000_000), ..Default::default() })
+        .with_qos_flow_identifier(Qfi { qfi_value: 9, ..Default::default() })
 }
 
 fn sdf_filter(text: &str) -> Raw<'static, 23> {
@@ -63,7 +58,7 @@ fn pdr(id: u16, uplink: bool) -> CreatePdr<'static> {
         Pdi::new(SourceInterface::new(InterfaceValue::Access))
             .with_local_f_teid(FTeid::choose_ipv4())
             .with_network_instance(network_instance())
-            .with_qfi(Raw(vec![0x09].into()))
+            .with_qfi(Qfi { qfi_value: 9, ..Default::default() })
     } else {
         let ue = UeIpAddress { v4: true, sd: true, ipv4: Some(Ipv4Addr::new(10, 45, 0, 2)), ..Default::default() };
         Pdi::new(SourceInterface::new(InterfaceValue::Core))
@@ -76,7 +71,7 @@ fn pdr(id: u16, uplink: bool) -> CreatePdr<'static> {
         .with_urr_id(UrrId::new(u32::from(id).div_ceil(2)))
         .with_qer_id(QerId::new(1));
     if uplink {
-        created = created.with_outer_header_removal(Raw(vec![0x00].into()));
+        created = created.with_outer_header_removal(OuterHeaderRemoval::default());
     }
     created
 }
@@ -150,21 +145,44 @@ pub fn read(message: &Message<'_>) -> u64 {
             sum += pdr.far_id.as_ref().map_or(0, |id| u64::from(id.value));
             sum += pdr.urr_id.iter().map(|id| u64::from(id.value)).sum::<u64>();
             sum += pdr.qer_id.iter().map(|id| u64::from(id.value)).sum::<u64>();
-            sum += pdr.outer_header_removal.as_ref().map_or(0, |r| octets(&r.0));
+            sum += pdr.outer_header_removal.as_ref().map_or(0, |r| u64::from(r.outer_header_removal_description));
             if let Some(pdi) = &pdr.pdi {
                 sum += pdi.source_interface.as_ref().map_or(0, |s| u64::from(s.spare));
                 sum += pdi.local_f_teid.as_ref().map_or(0, f_teid);
                 sum += pdi.network_instance.as_ref().map_or(0, |n| octets(&n.0));
                 sum += pdi.ue_ip_address.iter().map(|u| u.ipv4.map_or(0, |a| u64::from(a.to_bits()))).sum::<u64>();
                 sum += pdi.sdf_filter.iter().map(|f| octets(&f.0)).sum::<u64>();
-                sum += pdi.qfi.iter().map(|q| octets(&q.0)).sum::<u64>();
+                sum += pdi.qfi.iter().map(|q| u64::from(q.qfi_value)).sum::<u64>();
                 sum += raw(&pdi.raw);
             }
             sum += raw(&pdr.raw);
         }
-        sum += request.create_far.iter().map(|f| octets(&f.0)).sum::<u64>();
-        sum += request.create_urr.iter().map(|u| octets(&u.0)).sum::<u64>();
-        sum += request.create_qer.iter().map(|q| octets(&q.0)).sum::<u64>();
+        for far in &request.create_far {
+            sum += far.far_id.as_ref().map_or(0, |id| u64::from(id.value));
+            sum += far.apply_action.as_ref().map_or(0, |a| u64::from(a.forw) + u64::from(a.buff));
+            if let Some(forwarding) = &far.forwarding_parameters {
+                sum += forwarding.destination_interface.as_ref().map_or(0, |d| u64::from(d.interface_value));
+                sum += forwarding.network_instance.as_ref().map_or(0, |n| octets(&n.0));
+                sum += forwarding.outer_header_creation.as_ref().map_or(0, |o| u64::from(o.teid.unwrap_or(0)) + o.ipv4.map_or(0, |a| u64::from(a.to_bits())));
+                sum += raw(&forwarding.raw);
+            }
+            sum += raw(&far.raw);
+        }
+        for urr in &request.create_urr {
+            sum += urr.urr_id.as_ref().map_or(0, |id| u64::from(id.value));
+            sum += urr.measurement_method.as_ref().map_or(0, |m| u64::from(m.volum));
+            sum += urr.reporting_triggers.as_ref().map_or(0, |r| u64::from(r.volth));
+            sum += urr.volume_threshold.as_ref().map_or(0, |v| v.total_volume.unwrap_or(0));
+            sum += urr.time_threshold.as_ref().map_or(0, |t| u64::from(t.value));
+            sum += raw(&urr.raw);
+        }
+        for qer in &request.create_qer {
+            sum += qer.qer_id.as_ref().map_or(0, |id| u64::from(id.value));
+            sum += qer.gate_status.as_ref().map_or(0, |g| u64::from(g.ul_gate));
+            sum += qer.maximum_bitrate.as_ref().map_or(0, |m| m.ul_mbr.0 + m.dl_mbr.0);
+            sum += qer.qos_flow_identifier.as_ref().map_or(0, |q| u64::from(q.qfi_value));
+            sum += raw(&qer.raw);
+        }
         for field in [&request.pdn_type.as_ref().map(|r| &r.0[..]), &request.apn_dnn.as_ref().map(|r| &r.0[..])] {
             sum += field.map_or(0, octets);
         }

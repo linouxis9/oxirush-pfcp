@@ -52,7 +52,9 @@ impl<'a> Octets<'a> {
     /// A copy of `octets`.
     pub fn copied(octets: &[u8]) -> Self {
         match octets.len() {
-            length @ 0..=INLINE => {
+            // No octets, without an array to fill: an empty box allocates nothing.
+            0 => Self(Repr::Heap(Box::default())),
+            length @ 1..=INLINE => {
                 let mut inline = [0; INLINE];
                 inline[..length].copy_from_slice(octets);
                 Self(Repr::Inline { length: length as u8, octets: inline })
@@ -101,7 +103,7 @@ impl<'a> Octets<'a> {
 
 impl Default for Octets<'_> {
     fn default() -> Self {
-        Self::new()
+        Self(Repr::Heap(Box::default()))
     }
 }
 
