@@ -60,7 +60,7 @@
 6.2.4.3.2	1	The sequence number tells two OCIs of one UP function apart.	test overload_control_kept_by_sequence
 6.2.4.3.2	2	The Overload Control Sequence Number is supported and always in the OCI.	test tables
 6.2.4.3.2	3	The UP function increments the sequence number when it changes the information.	test overload_control_sequence_violation
-6.2.4.3.2	4	The sequence number does not change otherwise.	test overload_control_sequence_violation
+6.2.4.3.2	4	The sequence number does not change otherwise.	application: when the UP function sends its overload; a new number with the same values extends the period of validity (NOTE 1), which the receiver cannot tell from it
 6.2.4.3.2	5	The receiver orders OCIs that arrive out of order by their sequence numbers.	test overload_control_kept_by_sequence
 6.2.4.3.2	6	The receiver tells by the sequence number whether the information changed.	test overload_control_kept_by_sequence
 6.2.4.3.2	7	The receiver keeps new valid information only if its sequence number is larger.	test overload_control_kept_by_sequence
