@@ -1,6 +1,6 @@
 [package]
 name = "oxirush-pfcp"
-version = "0.0.0"
+version = "0.1.0"
 edition = "2024"
 description = "PFCP (3GPP TS 29.244, Release 19) in Rust: decode, build, check and encode every message and IE of N4, Sxa, Sxb and Sxc, and edit them as JSON. no_std."
 license = "Apache-2.0"
