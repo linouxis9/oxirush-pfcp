@@ -2319,6 +2319,131 @@ fn overload_control_of_a_new_period() {
     assert!(got.iter().any(|event| matches!(event, Event::Violation { kind: ViolationKind::OverloadControlSequence, octets, .. } if !octets.is_empty())), "{got:?}");
 }
 
+// ── What the node keeps for the retransmissions, under load ────────────────
+
+/// An Association Setup Request of `from`, of sequence number `sequence`.
+fn setup_of(from: SocketAddr, sequence: u32, stamp: u32) -> Vec<u8> {
+    Message {
+        header: Header::node(sequence),
+        body: AssociationSetupRequest::new(node_id(from), RecoveryTimeStamp::new(stamp)).into(),
+    }
+    .encode()
+    .unwrap()
+}
+
+fn setup_answer() -> AssociationSetupResponse {
+    AssociationSetupResponse::new(node_id(UPF), accepted(), RecoveryTimeStamp::new(1000))
+}
+
+/// §6.4: a request that waits for the caller's answer stays, whatever comes meanwhile:
+/// the answer has its effect, and answers the retransmission.
+#[test]
+fn a_request_waits_for_its_answer_through_a_flood() {
+    let mut upf = Node::new(NodeConfig {
+        capacity: 4,
+        ..config(UPF, Function::Up)
+    });
+    let setup = setup_of(SMF, 1, 1000);
+    upf.handle_datagram(at(0), SMF, &setup);
+    let (inbound, _) = request(&mut upf);
+    for i in 0..8u8 {
+        let from = SocketAddr::new(std::net::IpAddr::V4(Ipv4Addr::new(10, 9, 9, i)), 8805);
+        upf.handle_datagram(at(0), from, &heartbeat().encode().unwrap());
+    }
+    assert_eq!(sent(&mut upf).len(), 8, "each heartbeat answered");
+    events(&mut upf);
+    upf.respond(at(1), &inbound, setup_answer()).unwrap();
+    assert!(upf.association(SMF).is_some());
+    assert!(matches!(events(&mut upf)[..], [Event::Associated { .. }]));
+    sent(&mut upf);
+    upf.handle_datagram(at(2), SMF, &setup);
+    assert!(events(&mut upf).is_empty(), "no new request");
+    assert_eq!(sent(&mut upf).len(), 1, "the kept answer");
+    assert_eq!(upf.counters(), Counters::default());
+}
+
+/// Beyond `capacity`, the oldest answer goes for a new request, and a request that
+/// finds every place waiting for an answer is dropped: both are counted.
+#[test]
+fn what_a_full_node_drops_is_counted() {
+    let mut upf = Node::new(NodeConfig {
+        capacity: 2,
+        ..config(UPF, Function::Up)
+    });
+    let peers: Vec<SocketAddr> = (1..=3u8)
+        .map(|i| SocketAddr::new(std::net::IpAddr::V4(Ipv4Addr::new(10, 9, 0, i)), 8805))
+        .collect();
+    let mut waiting = Vec::new();
+    for peer in &peers[..2] {
+        upf.handle_datagram(at(0), *peer, &setup_of(*peer, 1, 1000));
+        waiting.push(request(&mut upf).0);
+    }
+    upf.handle_datagram(at(0), peers[2], &setup_of(peers[2], 1, 1000));
+    assert_eq!(requests_of(&events(&mut upf)), 0, "dropped");
+    assert_eq!(upf.counters().refused, 1);
+    for inbound in &waiting {
+        upf.respond(at(1), inbound, setup_answer()).unwrap();
+    }
+    sent(&mut upf);
+    events(&mut upf);
+    upf.handle_datagram(at(2), peers[2], &setup_of(peers[2], 1, 1000));
+    assert_eq!(requests_of(&events(&mut upf)), 1);
+    let counters = upf.counters();
+    assert_eq!((counters.evicted, counters.refused), (1, 1));
+}
+
+/// A peer that changes the request of an answered sequence number again and again
+/// leaves behind no more than one request (§6.4).
+#[test]
+fn a_number_used_again_and_again_is_kept_once() {
+    let mut upf = Node::new(NodeConfig {
+        capacity: 16,
+        ..config(UPF, Function::Up)
+    });
+    let from: SocketAddr = "10.0.0.9:8805".parse().unwrap();
+    for i in 0..1_000u32 {
+        let now = Duration::from_millis(u64::from(i));
+        upf.handle_datagram(now, from, &setup_of(from, 1, i % 2));
+        let (inbound, _) = request(&mut upf);
+        upf.respond(now, &inbound, setup_answer()).unwrap();
+        sent(&mut upf);
+    }
+    let kept = format!("{upf:?}");
+    assert!(kept.matches("10.0.0.9").count() <= 8, "{kept}");
+}
+
+/// A probe that answers again changes nothing more: the first answer had the effects.
+#[test]
+fn a_second_answer_has_no_effect() {
+    let mut upf = node(UPF, Function::Up);
+    let mut smf = node(SMF, Function::Cp);
+    let setup = AssociationSetupRequest::new(node_id(SMF), RecoveryTimeStamp::new(1000));
+    smf.request(
+        at(0),
+        UPF,
+        Message {
+            header: Header::node(0),
+            body: setup.into(),
+        },
+    )
+    .unwrap();
+    pass(&mut smf, &mut upf, UPF, at(0));
+    let (inbound, _) = request(&mut upf);
+    upf.respond(at(0), &inbound, setup_answer()).unwrap();
+    pass(&mut upf, &mut smf, SMF, at(0));
+    events(&mut smf);
+    events(&mut upf);
+    let (_, up_seid) = established(&mut smf, &mut upf, at(1));
+    let again = Message {
+        header: Header::node(inbound.sequence),
+        body: setup_answer().into(),
+    };
+    upf.respond_message(at(2), &inbound, again, Delivery::CacheOnly)
+        .unwrap();
+    assert!(events(&mut upf).is_empty());
+    assert!(upf.session(up_seid).is_some());
+}
+
 trait IntoSocket {
     fn into_socket(self, port: u16) -> SocketAddr;
 }

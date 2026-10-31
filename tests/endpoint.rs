@@ -213,6 +213,26 @@ async fn a_request_dropped_for_a_full_queue_comes_again() {
     );
 }
 
+/// What the node drops to bound what it keeps is in the statistics of the endpoint.
+#[tokio::test]
+async fn a_request_refused_by_a_full_node_is_counted() {
+    use std::sync::atomic::Ordering;
+    let upf_config = NodeConfig {
+        capacity: 1,
+        ..config(Function::Up)
+    };
+    let mut upf = Endpoint::bind(ANY, upf_config).await.unwrap();
+    let peer = tokio::net::UdpSocket::bind(ANY).await.unwrap();
+    peer.send_to(&setup(1), upf.local_addr()).await.unwrap();
+    let first = upf.incoming().await.unwrap();
+    peer.send_to(&setup(2), upf.local_addr()).await.unwrap();
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    let statistics = upf.statistics();
+    assert_eq!(statistics.requests_refused.load(Ordering::Relaxed), 1);
+    assert_eq!(statistics.answers_evicted.load(Ordering::Relaxed), 0);
+    drop(first);
+}
+
 /// An answer that does not encode, or that is not the request's response, is an error
 /// of `respond`.
 #[tokio::test]

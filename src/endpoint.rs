@@ -81,6 +81,12 @@ pub struct Statistics {
     pub received: AtomicU64,
     /// Datagrams sent.
     pub sent: AtomicU64,
+    /// Answers that the node dropped before `keep` to make room:
+    /// [`Counters::evicted`](crate::node::Counters::evicted).
+    pub answers_evicted: AtomicU64,
+    /// Requests that the node dropped, full of requests that wait for their answer:
+    /// [`Counters::refused`](crate::node::Counters::refused).
+    pub requests_refused: AtomicU64,
 }
 
 /// Why a request of the endpoint has no response.
@@ -379,6 +385,9 @@ impl Task {
                             self.statistics.received.fetch_add(1, Ordering::Relaxed);
                             let now = self.start.elapsed();
                             self.node.handle_datagram(now, from, &buffer[..length]);
+                            let counters = self.node.counters();
+                            self.statistics.answers_evicted.store(counters.evicted, Ordering::Relaxed);
+                            self.statistics.requests_refused.store(counters.refused, Ordering::Relaxed);
                         }
                         Err(_) => {
                             self.statistics.receive_errors.fetch_add(1, Ordering::Relaxed);
