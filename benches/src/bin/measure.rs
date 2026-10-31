@@ -86,7 +86,7 @@ fn main() {
         let before = dhat::HeapStats::get();
         match workload.as_str() {
             "encode" => drop(black_box(message.encode().unwrap())),
-            "check" => drop(black_box(message.check(Interfaces::N4))),
+            "check" => drop(black_box(message.check(oxirush_pfcp::Interfaces::N4))),
             #[cfg(feature = "tree")]
             "to_tree" => drop(black_box(message.to_tree())),
             #[cfg(feature = "tree")]
