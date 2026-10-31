@@ -24,7 +24,7 @@ use core::net::{Ipv4Addr, Ipv6Addr};
 
 use crate::Error;
 use crate::check::{Check, Deviation, DeviationKind};
-use crate::ie::{Codec, IeType};
+use crate::ie::{Codec, IeType, listed_value};
 use crate::macros::{pfcp_bits, pfcp_layout};
 use crate::octets::{IntoOwned, Octets};
 
@@ -972,5 +972,24 @@ pfcp_bits! {
     /// 3GPP Interface Type (§8.2.118): its Interface Type value (Table 8.2.118-1).
     pub struct InterfaceType3gpp "8.2.118" octets 1 min 1 {
         interface_type_value "Interface Type value": 0 1 6,
+    }
+}
+
+listed_value!(
+    PdrId, Precedence, FarId, UrrId, QerId, SourceInterface, FTeid, FSeid, UeIpAddress, NodeId,
+    BarId, TransportLevelMarking, TimeThreshold, MonitoringTime, SubsequentTimeThreshold,
+    InactivityDetectionTime, MeasurementPeriod, QuotaHoldingTime, TimeQuota, LinkedUrrId,
+    QerCorrelationId, AveragingWindow, NetworkInstance, Mbr, Gbr, VolumeThreshold, VolumeQuota,
+    SubsequentVolumeThreshold, OuterHeaderCreation, ApplyAction, DestinationInterface,
+    OuterHeaderRemoval, MeasurementMethod, ReportingTriggers, GateStatus, Qfi, Rqi,
+    PagingPolicyIndicator, InterfaceType3gpp,
+);
+
+impl<'a, const N: u16> crate::ie::Listed<'a> for Raw<'a, N> {
+    type List = crate::list::List<Self>;
+    #[inline]
+    fn decode_push(list: &mut Self::List, octets: &'a [u8]) -> bool {
+        list.push(Self(Octets::wire(octets)));
+        true
     }
 }

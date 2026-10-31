@@ -32,6 +32,7 @@ mod check;
 mod header;
 mod ie;
 mod macros;
+mod list;
 mod message;
 mod octets;
 pub mod framing;
@@ -46,8 +47,9 @@ use core::fmt;
 
 pub use check::{Check, Deviation, DeviationKind};
 pub use header::Header;
-pub use ie::{Codec, IeFault, IeType, Placed, RawIe, VENDOR};
+pub use ie::{Codec, IeFault, IeType, Listed, Placed, RawIe, VENDOR};
 pub use message::{Body, Message, is_node_related};
+pub use list::List;
 pub use octets::{IntoOwned, Octets};
 pub use registry::{
     CreateFar, CreatePdr, CreateQer, CreateUrr, Form, ForwardingParameters, HeartbeatRequest, HeartbeatResponse, IE_TYPES, IeTypeInfo, Pdi,

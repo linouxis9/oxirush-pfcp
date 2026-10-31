@@ -49,17 +49,6 @@ pub trait Codec<'a>: Sized {
         slot.is_some()
     }
 
-    /// Decode at the end of the field of a row that is a list.
-    #[inline]
-    fn decode_push(list: &mut Vec<Self>, octets: &'a [u8]) -> bool {
-        match Self::decode(octets) {
-            Some(value) => {
-                list.push(value);
-                true
-            }
-            None => false,
-        }
-    }
 
     /// Write the value.
     ///
@@ -71,6 +60,36 @@ pub trait Codec<'a>: Sized {
     /// How many octets [`encode`](Self::encode) writes.
     fn encoded_len(&self) -> usize;
 }
+
+/// The values of a row that is a list of a type: a [`List`](crate::List) for a value,
+/// which keeps one in place, or a vector for a grouped IE, which is large.
+pub trait Listed<'a>: Codec<'a> {
+    /// The field of a row that is a list of values of the type.
+    type List: Default + Clone + PartialEq + core::fmt::Debug;
+
+    /// Decode at the end of the field of a row that is a list.
+    fn decode_push(list: &mut Self::List, octets: &'a [u8]) -> bool;
+}
+
+/// What a value that is not a grouped IE writes as its [`Listed`].
+macro_rules! listed_value {
+    ($($ty:ident),* $(,)?) => {$(
+        impl<'a> crate::ie::Listed<'a> for $ty<'a> {
+            type List = crate::list::List<Self>;
+            #[inline]
+            fn decode_push(list: &mut Self::List, octets: &'a [u8]) -> bool {
+                match <Self as crate::ie::Codec<'a>>::decode(octets) {
+                    Some(value) => {
+                        list.push(value);
+                        true
+                    }
+                    None => false,
+                }
+            }
+        }
+    )*};
+}
+pub(crate) use listed_value;
 
 /// An IE that a scope keeps as its octets, in its place: one whose type the table of the
 /// scope does not have (§7.6.9) or that no release has, a vendor IE, one of a null

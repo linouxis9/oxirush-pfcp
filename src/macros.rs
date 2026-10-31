@@ -507,7 +507,7 @@ macro_rules! pfcp_table {
             fn place(&mut self, ie_type: u16, body: &'a [u8]) -> crate::ie::Placing {
                 $(
                     if ie_type == <pfcp_table!(@type $vty $($raw)?) as crate::ie::IeType>::IE_TYPE {
-                        return pfcp_table!(@place [$(* $($max)?)?] self.$field, body);
+                        return pfcp_table!(@place [$(* $($max)?)?] (pfcp_table!(@type $vty $($raw)?)) self.$field, body);
                     }
                 )*
                 crate::ie::Placing::Unexpected
@@ -632,7 +632,7 @@ macro_rules! pfcp_table {
     (@type_any raw $raw:literal) => { crate::values::Raw<'_, $raw> };
     (@type_any $vty:ident) => { $vty<'_> };
     (@field ($t:ty)) => { Option<$t> };
-    (@field ($t:ty) * $($max:literal)?) => { alloc::vec::Vec<$t> };
+    (@field ($t:ty) * $($max:literal)?) => { <$t as crate::ie::Listed<'a>>::List };
     (@presence M) => { crate::table::Presence::Mandatory };
     (@presence C) => { crate::table::Presence::Conditional };
     (@presence O) => { crate::table::Presence::Optional };
@@ -653,17 +653,17 @@ macro_rules! pfcp_table {
     (@each [* $($max:literal)?] $f:expr, |$nth:ident, $value:ident| $body:block) => {
         for ($nth, $value) in $f.iter().enumerate() $body
     };
-    (@place [] $f:expr, $body:expr) => {
+    (@place [] ($t:ty) $f:expr, $body:expr) => {
         match $f.is_some() {
             true => crate::ie::Placing::Repeated,
             false if crate::ie::Codec::decode_into(&mut $f, $body) => crate::ie::Placing::Placed,
             false => crate::ie::Placing::Malformed,
         }
     };
-    (@place [* $($max:literal)?] $f:expr, $body:expr) => {
+    (@place [* $($max:literal)?] ($t:ty) $f:expr, $body:expr) => {
         if pfcp_table!(@full [$($max)?] $f) {
             crate::ie::Placing::Repeated
-        } else if crate::ie::Codec::decode_push(&mut $f, $body) {
+        } else if <$t as crate::ie::Listed>::decode_push(&mut $f, $body) {
             crate::ie::Placing::Placed
         } else {
             crate::ie::Placing::Malformed
@@ -695,7 +695,19 @@ macro_rules! pfcp_table {
                 true
             }
 
-            fn decode_push(list: &mut alloc::vec::Vec<Self>, octets: &'a [u8]) -> bool {
+            fn encode(&self, out: &mut alloc::vec::Vec<u8>) -> Result<(), crate::Error> {
+                crate::table::encode_scope(self, out)
+            }
+
+            fn encoded_len(&self) -> usize {
+                crate::table::Scope::encoded_len(self)
+            }
+        }
+
+        impl<'a> crate::ie::Listed<'a> for $ty<'a> {
+            type List = alloc::vec::Vec<Self>;
+
+            fn decode_push(list: &mut Self::List, octets: &'a [u8]) -> bool {
                 list.push(Self::default());
                 let last = list.len() - 1;
                 if crate::table::decode_scope_into(&mut list[last], octets).is_err() {
@@ -703,14 +715,6 @@ macro_rules! pfcp_table {
                     return false;
                 }
                 true
-            }
-
-            fn encode(&self, out: &mut alloc::vec::Vec<u8>) -> Result<(), crate::Error> {
-                crate::table::encode_scope(self, out)
-            }
-
-            fn encoded_len(&self) -> usize {
-                crate::table::Scope::encoded_len(self)
             }
         }
 
