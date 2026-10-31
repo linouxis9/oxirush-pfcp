@@ -123,11 +123,11 @@
 8.2.199	V4	set	IPv4 Address	present
 8.2.200	DPN	set	Destination Port Number	present
 8.2.200	SPN	set	Source Port Number	present
-8.2.200	UMN6RS	set	Destination IPv6 Address	absent
 8.2.200	UMN6RS	set	Destination IPv4 Address	absent
+8.2.200	UMN6RS	set	Destination IPv6 Address	absent
 8.2.200	UMN6RS	set	Destination Port Number	absent
-8.2.200	UMN6RS	set	Source IPv6 Address	absent
 8.2.200	UMN6RS	set	Source IPv4 Address	absent
+8.2.200	UMN6RS	set	Source IPv6 Address	absent
 8.2.200	UMN6RS	set	Source Port Number	absent
 8.2.206	TMGI	set	TMGI	present
 8.2.206	SSMI	set	Source Specific IP Multicast Address	present
