@@ -291,7 +291,8 @@ pub enum Event {
         message: Message,
     },
     /// A request of the caller without a response after N1 retransmissions (§6.4). An
-    /// establishment that times out takes its local SEID with it.
+    /// establishment that ends without its response, so, failed or cancelled, takes its
+    /// local SEID with it.
     Timeout {
         /// The request.
         request: RequestId,
@@ -388,6 +389,9 @@ pub enum NodeError {
     Answered,
     /// An answer of another type than the response of the request.
     WrongResponse,
+    /// An establishment, or its answer, of a local SEID that another session or
+    /// establishment has.
+    SeidInUse,
     /// It does not encode.
     Encode(crate::Error),
 }
@@ -415,6 +419,7 @@ impl core::fmt::Display for NodeError {
             Self::NoSequence => write!(f, "no sequence number is free"),
             Self::Answered => write!(f, "the request has its answer (TS 29.244 6.4)"),
             Self::WrongResponse => write!(f, "the answer is not the response of the request"),
+            Self::SeidInUse => write!(f, "the local SEID is of another session"),
             Self::Encode(error) => write!(f, "the message does not encode: {error}"),
         }
     }
@@ -575,16 +580,7 @@ impl Node {
             match request.heartbeat {
                 true => self.events.push_back(Event::PeerDown { peer: request.to }),
                 false => {
-                    // An establishment that times out leaves no session.
-                    if request.message_type == 50
-                        && let Some(local) = request.local_seid
-                        && self
-                            .sessions
-                            .get(&local)
-                            .is_some_and(|session| session.peer_seid.is_none())
-                    {
-                        self.sessions.remove(&local);
-                    }
+                    self.abandon(&request);
                     self.events.push_back(Event::Timeout {
                         request: request.id,
                         to: request.to,
@@ -631,13 +627,17 @@ impl Node {
     }
 
     /// Send a request to `to`, with the next sequence number. A session request needs an
-    /// association with the peer, and may be throttled for its overload.
+    /// association with the peer, and may be throttled for its overload. The SEID of the
+    /// CP F-SEID of an establishment is the local SEID of its session, from
+    /// [`new_session`](Self::new_session) or of the caller's own, which no other session
+    /// then takes until the establishment ends.
     ///
     /// # Errors
     ///
     /// A session request without an association or throttled, a message that is no
-    /// request or that the function of the node does not send, no free sequence number,
-    /// and a message that does not encode.
+    /// request or that the function of the node does not send, an establishment of a
+    /// local SEID that a session or another establishment has, or a modification to it,
+    /// no free sequence number, and a message that does not encode.
     pub fn request(
         &mut self,
         now: Duration,
@@ -670,6 +670,10 @@ impl Node {
         if !sends(self.config.function, message_type) {
             return Err(NodeError::WrongDirection);
         }
+        let establishment = message_type == 50;
+        if establishment && local_seid.is_some_and(|seid| self.in_use(seid)) {
+            return Err(NodeError::SeidInUse);
+        }
         let mut change = Change::Nothing;
         if !is_node_related(message_type) {
             // The association of the session, whose F-SEID may have another address.
@@ -698,6 +702,11 @@ impl Node {
                 }
                 Body::SessionModificationRequest(request) => {
                     match request.cp_f_seid.as_ref().and_then(|f_seid| f_seid.seid) {
+                        Some(seid)
+                            if self.sessions.contains_key(&seid) && Some(seid) != local_seid =>
+                        {
+                            return Err(NodeError::SeidInUse);
+                        }
                         Some(seid) if Some(seid) != local_seid => Change::Moves(seid),
                         _ => Change::Nothing,
                     }
@@ -705,7 +714,42 @@ impl Node {
                 _ => Change::Nothing,
             };
         }
-        self.send(now, to, message, false, local_seid, change)
+        let id = self.send(now, to, message, false, local_seid, change)?;
+        // The SEID is the establishment's until it ends, even one of the caller's own.
+        if establishment && let Some(seid) = local_seid {
+            let node = self
+                .association_of(to)
+                .map(|association| association.key.clone())
+                .unwrap_or_default();
+            let session = self.sessions.entry(seid).or_insert(Session {
+                peer: to,
+                peer_seid: None,
+                node,
+                establishing: false,
+            });
+            session.establishing = true;
+        }
+        Ok(id)
+    }
+
+    /// Whether a local SEID is of a session, or of an outstanding establishment.
+    fn in_use(&self, seid: u64) -> bool {
+        self.sessions
+            .get(&seid)
+            .is_some_and(|session| session.peer_seid.is_some() || session.establishing)
+    }
+
+    /// A request that ends without its response: an establishment leaves no session.
+    fn abandon(&mut self, request: &Outstanding) {
+        if request.message_type == 50
+            && let Some(local) = request.local_seid
+            && self
+                .sessions
+                .get(&local)
+                .is_some_and(|session| session.peer_seid.is_none())
+        {
+            self.sessions.remove(&local);
+        }
     }
 
     /// Send a session request to the peer of the session of `local_seid`, to its SEID.
@@ -745,6 +789,7 @@ impl Node {
         let outstanding = self.outstanding.remove(&sequence).expect("outstanding");
         self.deadlines.remove(&(outstanding.deadline, sequence));
         self.finish(now, sequence, outstanding.to, true);
+        self.abandon(&outstanding);
         true
     }
 
@@ -766,6 +811,7 @@ impl Node {
                 peer,
                 peer_seid: None,
                 node,
+                establishing: false,
             },
         );
         seid
@@ -811,7 +857,8 @@ impl Node {
     /// # Errors
     ///
     /// A body of another type than the response of the request, a request answered
-    /// already, and a body that does not encode.
+    /// already, an establishment's answer of the local SEID of another session, and a
+    /// body that does not encode.
     pub fn respond(
         &mut self,
         now: Duration,
@@ -828,6 +875,12 @@ impl Node {
             .is_some_and(|answered| answered.response.is_some())
         {
             return Err(NodeError::Answered);
+        }
+        if let Body::SessionEstablishmentResponse(response) = &body
+            && let Some(seid) = response.up_f_seid.as_ref().and_then(|f_seid| f_seid.seid)
+            && self.in_use(seid)
+        {
+            return Err(NodeError::SeidInUse);
         }
         self.respond_with(
             now,
@@ -1103,17 +1156,18 @@ impl Node {
 
     /// End the request of `sequence` to `from` without its response.
     fn fail(&mut self, now: Duration, from: SocketAddr, sequence: u32, failure: Failure) {
-        let Some(request) = self
+        if self
             .outstanding
             .get(&sequence)
-            .filter(|request| request.to == from)
-        else {
+            .is_none_or(|request| request.to != from)
+        {
             return;
-        };
+        }
+        let request = self.outstanding.remove(&sequence).expect("outstanding");
         let (id, deadline, heartbeat) = (request.id, request.deadline, request.heartbeat);
-        self.outstanding.remove(&sequence);
         self.deadlines.remove(&(deadline, sequence));
         self.finish(now, sequence, from, false);
+        self.abandon(&request);
         if !heartbeat {
             self.events.push_back(Event::Failed {
                 request: id,
@@ -1763,12 +1817,11 @@ impl Node {
                                     peer: fseid_peer(from, f_seid),
                                     peer_seid: f_seid.seid,
                                     node,
+                                    establishing: false,
                                 },
                             );
                         }
-                        _ => {
-                            self.sessions.remove(&local);
-                        }
+                        _ => self.abandon(request),
                     }
                 }
             }
@@ -1822,7 +1875,10 @@ impl Node {
                 }
             }
             (Body::SessionEstablishmentResponse(response), effect) => {
-                if let Some(local) = response.up_f_seid.as_ref().and_then(|f_seid| f_seid.seid) {
+                // Not a SEID of another session, which a probe may answer with.
+                if let Some(local) = response.up_f_seid.as_ref().and_then(|f_seid| f_seid.seid)
+                    && !self.in_use(local)
+                {
                     let node = self
                         .association_of(request.from)
                         .map(|association| association.key.clone())
@@ -1840,6 +1896,7 @@ impl Node {
                             peer,
                             peer_seid: request.peer_seid,
                             node,
+                            establishing: false,
                         },
                     );
                 }
