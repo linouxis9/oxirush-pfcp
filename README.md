@@ -373,17 +373,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ## Performance
 
-On one core of an AMD Ryzen 7 5700G (Linux 7.0, Rust 1.88.0), at b7364f6 on
+On one core of an AMD Ryzen 7 5700G (Linux 7.0, Rust 1.88.0), at ed70497 on
 2026-10-31, for a Session Establishment Request of 16 PDRs, 16 FARs, 8 URRs and
-a QER (2,824 octets, 347 IEs):
+a QER (2,824 octets, 347 IEs), in instructions of one round, which a shared
+machine does not change as it changes times:
 
-| Operation | Time | Allocations |
-|-----------|------|-------------|
-| `decode` | 6.3 µs | 15 |
-| `encode` | 4.2 µs | 1 |
-| `check` | 2.4 µs | 0 |
-| `to_tree` | 44.6 µs | 894 |
-| `from_tree` | 29.0 µs | 413 |
+| Operation | Instructions | Allocations |
+|-----------|--------------|-------------|
+| `decode` | 97,858 | 15 |
+| `encode` | 59,519 | 1 |
+| `check` | 37,258 | 0 |
+| `to_tree` | 580,030 | 899 |
+| `from_tree` | 420,821 | 587 |
 
 [`benches/`](benches/README.md) has every workload, with instructions and
 allocations, and how to run them.
@@ -395,10 +396,10 @@ v0.0.24, in instructions on one core. A ratio is go-pfcp's over this crate's.
 
 | Message | Decode | Decode, then read every value | Encode |
 |---|---|---|---|
-| Heartbeat Request (41 octets) | 2.9x | 3.0x | 5.0x |
-| Session Establishment Request, 4 PDRs (820 octets) | 4.3x | 8.5x | 8.2x |
-| Session Establishment Request, 16 PDRs (2,824 octets) | 4.6x | 9.6x | 8.2x |
-| go-pfcp's own Session Establishment Request (2,110 octets) | 4.6x | 8.5x | 9.4x |
+| Heartbeat Request (41 octets) | 3.4x | 2.9x | 4.9x |
+| Session Establishment Request, 4 PDRs (820 octets) | 4.0x | 8.5x | 7.7x |
+| Session Establishment Request, 16 PDRs (2,824 octets) | 4.6x | 9.3x | 9.4x |
+| go-pfcp's own Session Establishment Request (2,110 octets) | 4.1x | 7.7x | 8.4x |
 
 [`benches/`](benches/README.md#against-go-pfcp) has the figures and the method.
 
