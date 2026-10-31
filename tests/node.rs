@@ -29,7 +29,7 @@ const UPF: SocketAddr = SocketAddr::new(std::net::IpAddr::V4(Ipv4Addr::new(10, 0
 const OTHER: SocketAddr = SocketAddr::new(std::net::IpAddr::V4(Ipv4Addr::new(10, 0, 0, 3)), 8805);
 const T1: Duration = Duration::from_secs(3);
 
-fn node_id(address: SocketAddr) -> NodeId<'static> {
+fn node_id(address: SocketAddr) -> NodeId {
     match address.ip() {
         std::net::IpAddr::V4(ip) => NodeId::Ipv4(ip),
         std::net::IpAddr::V6(ip) => NodeId::Ipv6(ip),
@@ -71,7 +71,7 @@ fn pass(from: &mut Node, to: &mut Node, address: SocketAddr, now: Duration) {
 }
 
 /// The one request event of a node.
-fn request(node: &mut Node) -> (Inbound, Message<'static>) {
+fn request(node: &mut Node) -> (Inbound, Message) {
     let mut requests = events(node).into_iter().filter_map(|event| match event {
         Event::Request { request, message } => Some((request, message)),
         _ => None,
@@ -91,7 +91,7 @@ fn violations(node: &mut Node) -> Vec<ViolationKind> {
         .collect()
 }
 
-fn accepted() -> Cause<'static> {
+fn accepted() -> Cause {
     Cause::new(CauseValue::RequestAccepted)
 }
 
@@ -132,11 +132,11 @@ fn established(smf: &mut Node, upf: &mut Node, now: Duration) -> (u64, u64) {
     (cp_seid, up_seid)
 }
 
-fn decoded(transmit: &Transmit) -> Message<'static> {
-    Message::decode(&transmit.octets).unwrap().into_owned()
+fn decoded(transmit: &Transmit) -> Message {
+    Message::decode(&transmit.octets).unwrap()
 }
 
-fn heartbeat() -> Message<'static> {
+fn heartbeat() -> Message {
     Message { header: Header::node(0), body: HeartbeatRequest::new(RecoveryTimeStamp::new(1000)).into() }
 }
 
@@ -300,11 +300,11 @@ fn heartbeat_answered_from_unknown_peer() {
 
 // ── §6.2.3, §6.2.4: load and overload control ───────────────────────────────
 
-fn with_load(sequence: u32, metric: u8) -> SessionModificationResponse<'static> {
+fn with_load(sequence: u32, metric: u8) -> SessionModificationResponse {
     SessionModificationResponse::new(accepted()).with_load_control_information(LoadControlInformation::new(SequenceNumber::new(sequence), Metric::new(Percent(metric))))
 }
 
-fn with_overload(sequence: u32, metric: u8, minutes: u8, of_node: bool) -> SessionModificationResponse<'static> {
+fn with_overload(sequence: u32, metric: u8, minutes: u8, of_node: bool) -> SessionModificationResponse {
     let timer = Timer { timer_unit: TimerUnit::OneMinute, timer_value: minutes, ..Default::default() };
     let mut overload = OverloadControlInformation::new(SequenceNumber::new(sequence), Metric::new(Percent(metric)), timer);
     if of_node {
@@ -314,7 +314,7 @@ fn with_overload(sequence: u32, metric: u8, minutes: u8, of_node: bool) -> Sessi
 }
 
 /// The UPF answers a modification of the session with `response`.
-fn modified(smf: &mut Node, upf: &mut Node, cp_seid: u64, now: Duration, response: SessionModificationResponse<'static>) {
+fn modified(smf: &mut Node, upf: &mut Node, cp_seid: u64, now: Duration, response: SessionModificationResponse) {
     smf.session_request(now, cp_seid, SessionModificationRequest::default()).unwrap();
     pass(smf, upf, UPF, now);
     let (inbound, _) = request(upf);
@@ -733,7 +733,7 @@ fn session_deletion_ends_session() {
 
 // ── §6.5: bundling ──────────────────────────────────────────────────────────
 
-fn bundle(messages: &[Message<'_>]) -> Vec<u8> {
+fn bundle(messages: &[Message]) -> Vec<u8> {
     let mut octets = Vec::new();
     for (rank, message) in messages.iter().enumerate() {
         let mut message = message.clone();

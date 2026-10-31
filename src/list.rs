@@ -20,7 +20,6 @@
 use alloc::vec::Vec;
 use core::ops::Deref;
 
-use crate::octets::IntoOwned;
 
 /// The values of a row that is a list. Most lists of a message have one value, which it
 /// keeps in place: only a second one allocates. It dereferences to a slice.
@@ -119,17 +118,6 @@ impl<T> From<Vec<T>> for List<T> {
             1 => Self(Repr::One(values.pop().unwrap_or_else(|| unreachable!()))),
             _ => Self(Repr::Many(values)),
         }
-    }
-}
-
-impl<T: IntoOwned> IntoOwned for List<T> {
-    type Owned = List<T::Owned>;
-    fn into_owned(self) -> Self::Owned {
-        List(match self.0 {
-            Repr::Empty => Repr::Empty,
-            Repr::One(value) => Repr::One(value.into_owned()),
-            Repr::Many(values) => Repr::Many(values.into_owned()),
-        })
     }
 }
 

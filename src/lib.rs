@@ -68,7 +68,7 @@ pub use ie::{Codec, IeFault, IeType, Listed, Placed, RawIe, VENDOR};
 pub use check::Context;
 pub use message::{Body, MESSAGE_TYPES, Message, MessageTypeInfo, is_node_related, is_request, message_type_info};
 pub use list::List;
-pub use octets::{IntoOwned, Octets};
+pub use octets::Octets;
 pub use registry::*;
 pub use table::{Interfaces, Presence, Repeat, Role, Row, Table};
 pub use values::*;
@@ -129,7 +129,7 @@ pub enum Error {
 }
 
 impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Self::TooShort { octets } => write!(f, "{octets} octets are fewer than a PFCP header"),
             Self::MessageLength { length, available, .. } => {

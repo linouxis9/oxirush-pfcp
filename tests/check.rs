@@ -23,16 +23,16 @@ use oxirush_pfcp::*;
 
 const SMF: Ipv4Addr = Ipv4Addr::new(10, 0, 0, 1);
 
-fn pdr(id: u16) -> CreatePdr<'static> {
+fn pdr(id: u16) -> CreatePdr {
     CreatePdr::new(PdrId::new(id), Precedence::new(255), Pdi::new(SourceInterface::new(SourceInterfaceValue::Access)))
         .with_far_id(FarId::new(1))
 }
 
-fn far(id: u32) -> CreateFar<'static> {
+fn far(id: u32) -> CreateFar {
     CreateFar::new(FarId::new(id), ApplyAction { forw: true, ..Default::default() })
 }
 
-fn establishment() -> Message<'static> {
+fn establishment() -> Message {
     let seid = FSeid { v4: true, seid: Some(0x1001), ipv4: Some(SMF), ..Default::default() };
     let request = SessionEstablishmentRequest::new(NodeId::Ipv4(SMF), seid, pdr(1), far(1));
     Message { header: Header::session(0, 7), body: request.into() }
@@ -64,7 +64,7 @@ fn check_on_takes_the_rows_of_the_interface() {
     assert_eq!(kinds(&message, Interfaces::SXA), [DeviationKind::NotOnInterface { ie_type: 29 }]);
 }
 
-fn request_with(message: &mut Message<'static>, change: impl FnOnce(&mut SessionEstablishmentRequest<'static>)) {
+fn request_with(message: &mut Message, change: impl FnOnce(&mut SessionEstablishmentRequest)) {
     let Body::SessionEstablishmentRequest(request) = &mut message.body else { panic!() };
     change(request);
 }

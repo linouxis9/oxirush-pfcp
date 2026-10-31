@@ -27,7 +27,7 @@ use crate::check::{Check, Deviation, DeviationKind};
 use crate::enums::*;
 use crate::ie::{Codec, IeType, listed_value};
 use crate::macros::{pfcp_bits, pfcp_layout};
-use crate::octets::{IntoOwned, Octets};
+use crate::octets::Octets;
 
 /// A field of a layout: its octets, read in network order.
 pub trait Field: Sized {
@@ -38,7 +38,7 @@ pub trait Field: Sized {
     /// Its length.
     fn size(&self) -> usize;
     /// What it breaks of the clause of its layout: a value that its table does not name.
-    fn check(&self, _path: &crate::check::Path<'_>, _clause: &'static str, _found: &mut Vec<Deviation>) {}
+    fn check(&self, _path: &crate::check::Path, _clause: &'static str, _found: &mut Vec<Deviation>) {}
     /// Its tree.
     #[cfg(feature = "tree")]
     fn to_tree(&self) -> oxirush_utils::tree::Value;
@@ -235,7 +235,7 @@ impl Field for Percent {
     fn size(&self) -> usize {
         1
     }
-    fn check(&self, path: &crate::check::Path<'_>, clause: &'static str, found: &mut Vec<Deviation>) {
+    fn check(&self, path: &crate::check::Path, clause: &'static str, found: &mut Vec<Deviation>) {
         if self.0 > 100 {
             found.push(Deviation::new(path, clause, DeviationKind::SpareValue { value: self.0.into() }));
         }
@@ -267,7 +267,7 @@ impl Field for Spare {
     fn size(&self) -> usize {
         1
     }
-    fn check(&self, path: &crate::check::Path<'_>, _clause: &'static str, found: &mut Vec<Deviation>) {
+    fn check(&self, path: &crate::check::Path, _clause: &'static str, found: &mut Vec<Deviation>) {
         if self.0 != 0 {
             found.push(Deviation::new(path, "8.1.2", DeviationKind::SpareBits));
         }
@@ -309,7 +309,7 @@ impl<T: Field> Field for Counted<T> {
     fn size(&self) -> usize {
         1 + self.0.iter().map(Field::size).sum::<usize>()
     }
-    fn check(&self, path: &crate::check::Path<'_>, clause: &'static str, found: &mut Vec<Deviation>) {
+    fn check(&self, path: &crate::check::Path, clause: &'static str, found: &mut Vec<Deviation>) {
         if self.0.len() > usize::from(u8::MAX) {
             found.push(Deviation::new(path, clause, DeviationKind::Rule("more values than their number can say")));
         }
@@ -354,7 +354,7 @@ impl<T: Field> Field for Each<T> {
     fn size(&self) -> usize {
         self.0.iter().map(Field::size).sum()
     }
-    fn check(&self, path: &crate::check::Path<'_>, clause: &'static str, found: &mut Vec<Deviation>) {
+    fn check(&self, path: &crate::check::Path, clause: &'static str, found: &mut Vec<Deviation>) {
         for value in &self.0 {
             value.check(path, clause, found);
         }
@@ -466,7 +466,7 @@ impl Field for TypedAddress {
     fn size(&self) -> usize {
         1 + self.address.len().min(0x3f)
     }
-    fn check(&self, path: &crate::check::Path<'_>, clause: &'static str, found: &mut Vec<Deviation>) {
+    fn check(&self, path: &crate::check::Path, clause: &'static str, found: &mut Vec<Deviation>) {
         if self.ip().is_none() {
             found.push(Deviation::new(path, clause, DeviationKind::Rule("an address that is neither IPv4 of type 0 nor IPv6 of type 1")));
         }
@@ -558,15 +558,15 @@ address_field!(Ipv4Addr, 4; Ipv6Addr, 16);
 
 /// The octets of an IE type that the crate does not read yet, of the IE type `N`.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct Raw<'a, const N: u16>(pub Octets<'a>);
+pub struct Raw<const N: u16>(pub Octets);
 
-impl<const N: u16> IeType for Raw<'_, N> {
+impl<const N: u16> IeType for Raw<N> {
     const IE_TYPE: u16 = N;
     const TYPE_NAME: &'static str = "IE";
 }
 
-impl<'a, const N: u16> Codec<'a> for Raw<'a, N> {
-    fn decode(octets: &'a [u8]) -> Option<Self> {
+impl<const N: u16> Codec for Raw<N> {
+    fn decode(octets: &[u8]) -> Option<Self> {
         Some(Self(Octets::wire(octets)))
     }
     fn encode(&self, out: &mut Vec<u8>) -> Result<(), Error> {
@@ -578,17 +578,10 @@ impl<'a, const N: u16> Codec<'a> for Raw<'a, N> {
     }
 }
 
-impl<const N: u16> Check for Raw<'_, N> {}
-
-impl<'a, const N: u16> IntoOwned for Raw<'a, N> {
-    type Owned = Raw<'static, N>;
-    fn into_owned(self) -> Raw<'static, N> {
-        Raw(self.0.into_owned())
-    }
-}
+impl<const N: u16> Check for Raw<N> {}
 
 #[cfg(feature = "tree")]
-impl<const N: u16> oxirush_utils::tree::Tree for Raw<'_, N> {
+impl<const N: u16> oxirush_utils::tree::Tree for Raw<N> {
     const NAME: &'static str = "IE";
     fn to_tree(&self) -> oxirush_utils::tree::Value {
         oxirush_utils::tree::octets(&self.0)
@@ -606,14 +599,14 @@ macro_rules! pfcp_number {
     ($( $(#[$meta:meta])* $ty:ident($t:ty) $field:literal $clause:literal; )*) => {$(
         $(#[$meta])*
         #[derive(Debug, Clone, Default, PartialEq, Eq)]
-        pub struct $ty<'a> {
+        pub struct $ty {
             #[doc = concat!("The ", $field, ".")]
             pub value: $t,
             /// The octets after it, which a later release adds.
-            pub extra: Octets<'a>,
+            pub extra: Octets,
         }
 
-        impl $ty<'_> {
+        impl $ty {
             /// The name of its field.
             pub const FIELDS: &'static [&'static str] = &[$field];
 
@@ -623,15 +616,8 @@ macro_rules! pfcp_number {
             }
         }
 
-        impl<'a> IntoOwned for $ty<'a> {
-            type Owned = $ty<'static>;
-            fn into_owned(self) -> $ty<'static> {
-                $ty { value: self.value, extra: self.extra.into_owned() }
-            }
-        }
-
-        impl<'a> Codec<'a> for $ty<'a> {
-            fn decode(mut octets: &'a [u8]) -> Option<Self> {
+        impl Codec for $ty {
+            fn decode(mut octets: &[u8]) -> Option<Self> {
                 let value = Field::read(&mut octets)?;
                 Some(Self { value, extra: Octets::wire(octets) })
             }
@@ -645,20 +631,20 @@ macro_rules! pfcp_number {
             }
         }
 
-        impl Check for $ty<'_> {
-            fn check(&self, path: &crate::check::Path<'_>, found: &mut Vec<crate::check::Deviation>) {
+        impl Check for $ty {
+            fn check(&self, path: &crate::check::Path, found: &mut Vec<crate::check::Deviation>) {
                 Field::check(&self.value, path, $clause, found);
             }
         }
 
         #[cfg(feature = "serde")]
-        oxirush_utils::impl_serde!($ty<'a>);
+        oxirush_utils::impl_serde!($ty);
 
         /// The number alone, or `{"Rule ID": 1, "extra": "00"}` with the octets of a later
         /// release.
         #[cfg(feature = "tree")]
-        impl oxirush_utils::tree::Tree for $ty<'_> {
-            const NAME: &'static str = <$ty<'static> as crate::ie::IeType>::TYPE_NAME;
+        impl oxirush_utils::tree::Tree for $ty {
+            const NAME: &'static str = <$ty as crate::ie::IeType>::TYPE_NAME;
             fn to_tree(&self) -> oxirush_utils::tree::Value {
                 if self.extra.is_empty() {
                     return Field::to_tree(&self.value);
@@ -705,14 +691,14 @@ pfcp_bits! {
     }
 }
 
-impl SourceInterface<'_> {
+impl SourceInterface {
     /// The interface.
     pub fn new(interface_value: SourceInterfaceValue) -> Self {
         Self { interface_value, ..Self::default() }
     }
 }
 
-impl DestinationInterface<'_> {
+impl DestinationInterface {
     /// The interface.
     pub fn new(interface_value: DestinationInterfaceValue) -> Self {
         Self { interface_value, ..Self::default() }
@@ -772,7 +758,7 @@ pfcp_layout! {
     }
 }
 
-impl FTeid<'_> {
+impl FTeid {
     /// An F-TEID of an IPv4 address.
     pub fn ipv4(teid: u32, address: Ipv4Addr) -> Self {
         Self { v4: true, teid: Some(teid), ipv4: Some(address), ..Self::default() }
@@ -786,33 +772,21 @@ impl FTeid<'_> {
 
 /// Node ID (§8.2.38): an IPv4 address, an IPv6 address or an FQDN.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum NodeId<'a> {
+pub enum NodeId {
     /// Node ID Type 0.
     Ipv4(Ipv4Addr),
     /// Node ID Type 1.
     Ipv6(Ipv6Addr),
     /// Node ID Type 2: the labels of the FQDN, as RFC 1035 writes them without the last
     /// zero octet.
-    Fqdn(Octets<'a>),
+    Fqdn(Octets),
     /// A Node ID Type that Table 8.2.38-2 has as spare, or a value of a length that its
     /// type does not have: the first octet, then the others.
-    Other(u8, Octets<'a>),
+    Other(u8, Octets),
 }
 
-impl<'a> IntoOwned for NodeId<'a> {
-    type Owned = NodeId<'static>;
-    fn into_owned(self) -> NodeId<'static> {
-        match self {
-            Self::Ipv4(address) => NodeId::Ipv4(address),
-            Self::Ipv6(address) => NodeId::Ipv6(address),
-            Self::Fqdn(labels) => NodeId::Fqdn(labels.into_owned()),
-            Self::Other(first, rest) => NodeId::Other(first, rest.into_owned()),
-        }
-    }
-}
-
-impl<'a> Codec<'a> for NodeId<'a> {
-    fn decode(octets: &'a [u8]) -> Option<Self> {
+impl Codec for NodeId {
+    fn decode(octets: &[u8]) -> Option<Self> {
         let (&first, rest) = octets.split_first()?;
         Some(match (first, rest.len()) {
             (0, 4) => Self::Ipv4(Ipv4Addr::from(<[u8; 4]>::try_from(rest).ok()?)),
@@ -852,8 +826,8 @@ impl<'a> Codec<'a> for NodeId<'a> {
     }
 }
 
-impl Check for NodeId<'_> {
-    fn check(&self, path: &crate::check::Path<'_>, found: &mut Vec<Deviation>) {
+impl Check for NodeId {
+    fn check(&self, path: &crate::check::Path, found: &mut Vec<Deviation>) {
         if let Self::Other(first, _) = self {
             let kind = match first & 0x0f {
                 0..=2 => DeviationKind::Rule("the Node ID value has a length that its type does not have"),
@@ -864,7 +838,7 @@ impl Check for NodeId<'_> {
     }
 }
 
-impl NodeId<'_> {
+impl NodeId {
     /// The names of its fields.
     pub const FIELDS: &'static [&'static str] = &["Node ID Type", "Node ID value"];
 
@@ -903,11 +877,11 @@ impl NodeId<'_> {
 }
 
 #[cfg(feature = "serde")]
-oxirush_utils::impl_serde!(NodeId<'a>);
+oxirush_utils::impl_serde!(NodeId);
 
 /// An address as text, or `{"FQDN": "upf.example"}`, or the octets of another Node ID.
 #[cfg(feature = "tree")]
-impl oxirush_utils::tree::Tree for NodeId<'_> {
+impl oxirush_utils::tree::Tree for NodeId {
     const NAME: &'static str = "Node ID";
     fn to_tree(&self) -> oxirush_utils::tree::Value {
         use oxirush_utils::tree;
@@ -987,15 +961,15 @@ pfcp_number! {
 /// A value that is octets that its clause does not split: a Network Instance, as a
 /// domain name or an APN (§8.2.4).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct NetworkInstance<'a>(pub Octets<'a>);
+pub struct NetworkInstance(pub Octets);
 
-impl NetworkInstance<'_> {
+impl NetworkInstance {
     /// The name of its field.
     pub const FIELDS: &'static [&'static str] = &["Network Instance"];
 }
 
-impl<'a> Codec<'a> for NetworkInstance<'a> {
-    fn decode(octets: &'a [u8]) -> Option<Self> {
+impl Codec for NetworkInstance {
+    fn decode(octets: &[u8]) -> Option<Self> {
         Some(Self(Octets::wire(octets)))
     }
     fn encode(&self, out: &mut Vec<u8>) -> Result<(), Error> {
@@ -1007,20 +981,13 @@ impl<'a> Codec<'a> for NetworkInstance<'a> {
     }
 }
 
-impl Check for NetworkInstance<'_> {}
-
-impl<'a> IntoOwned for NetworkInstance<'a> {
-    type Owned = NetworkInstance<'static>;
-    fn into_owned(self) -> NetworkInstance<'static> {
-        NetworkInstance(self.0.into_owned())
-    }
-}
+impl Check for NetworkInstance {}
 
 #[cfg(feature = "serde")]
-oxirush_utils::impl_serde!(NetworkInstance<'a>);
+oxirush_utils::impl_serde!(NetworkInstance);
 
 #[cfg(feature = "tree")]
-impl oxirush_utils::tree::Tree for NetworkInstance<'_> {
+impl oxirush_utils::tree::Tree for NetworkInstance {
     const NAME: &'static str = "Network Instance";
     fn to_tree(&self) -> oxirush_utils::tree::Value {
         oxirush_utils::tree::octets(&self.0)
@@ -1038,22 +1005,22 @@ macro_rules! pfcp_fields {
     ($( $(#[$meta:meta])* pub struct $ty:ident $clause:literal { $( $field:ident $name:literal : $kind:ty ),* $(,)? } )*) => {$(
         $(#[$meta])*
         #[derive(Debug, Clone, Default, PartialEq, Eq)]
-        pub struct $ty<'a> {
+        pub struct $ty {
             $(
                 #[doc = concat!("The ", $name, " field.")]
                 pub $field: $kind,
             )*
             /// The octets after the fields, which a later release adds.
-            pub extra: Octets<'a>,
+            pub extra: Octets,
         }
 
-        impl $ty<'_> {
+        impl $ty {
             /// The names of its fields.
             pub const FIELDS: &'static [&'static str] = &[$($name),*];
         }
 
-        impl<'a> Codec<'a> for $ty<'a> {
-            fn decode(mut octets: &'a [u8]) -> Option<Self> {
+        impl Codec for $ty {
+            fn decode(mut octets: &[u8]) -> Option<Self> {
                 $( let $field = <$kind as Field>::read(&mut octets)?; )*
                 Some(Self { $($field,)* extra: Octets::wire(octets) })
             }
@@ -1067,25 +1034,18 @@ macro_rules! pfcp_fields {
             }
         }
 
-        impl Check for $ty<'_> {
+        impl Check for $ty {
             #[allow(unused_variables)]
-            fn check(&self, path: &crate::check::Path<'_>, found: &mut Vec<crate::check::Deviation>) {
+            fn check(&self, path: &crate::check::Path, found: &mut Vec<crate::check::Deviation>) {
                 $( Field::check(&self.$field, path, $clause, found); )*
             }
         }
 
-        impl<'a> IntoOwned for $ty<'a> {
-            type Owned = $ty<'static>;
-            fn into_owned(self) -> $ty<'static> {
-                $ty { $($field: self.$field,)* extra: self.extra.into_owned() }
-            }
-        }
-
         #[cfg(feature = "serde")]
-        oxirush_utils::impl_serde!($ty<'a>);
+        oxirush_utils::impl_serde!($ty);
 
         #[cfg(feature = "tree")]
-        impl oxirush_utils::tree::Tree for $ty<'_> {
+        impl oxirush_utils::tree::Tree for $ty {
             const NAME: &'static str = <Self as crate::ie::IeType>::TYPE_NAME;
             fn to_tree(&self) -> oxirush_utils::tree::Value {
                 let mut members = oxirush_utils::tree::Members::new();
@@ -1262,15 +1222,15 @@ listed_value!(
     PagingPolicyIndicator, InterfaceType3gpp,
 );
 
-impl<'a, const N: u16> crate::ie::Listed<'a> for Raw<'a, N> {
+impl<const N: u16> crate::ie::Listed for Raw<N> {
     type List = crate::list::List<Self>;
     type Slot = Option<Self>;
-    fn decode_slot(slot: &mut Self::Slot, octets: &'a [u8]) -> bool {
+    fn decode_slot(slot: &mut Self::Slot, octets: &[u8]) -> bool {
         *slot = Some(Self(Octets::wire(octets)));
         true
     }
     #[inline]
-    fn decode_push(list: &mut Self::List, octets: &'a [u8]) -> bool {
+    fn decode_push(list: &mut Self::List, octets: &[u8]) -> bool {
         list.push(Self(Octets::wire(octets)));
         true
     }
@@ -1281,15 +1241,15 @@ macro_rules! pfcp_octets {
     ($( $(#[$meta:meta])* $ty:ident $name:literal $clause:literal; )*) => {$(
         $(#[$meta])*
         #[derive(Debug, Clone, Default, PartialEq, Eq)]
-        pub struct $ty<'a>(pub Octets<'a>);
+        pub struct $ty(pub Octets);
 
-        impl $ty<'_> {
+        impl $ty {
             /// The name of its field.
             pub const FIELDS: &'static [&'static str] = &[$name];
         }
 
-        impl<'a> Codec<'a> for $ty<'a> {
-            fn decode(octets: &'a [u8]) -> Option<Self> {
+        impl Codec for $ty {
+            fn decode(octets: &[u8]) -> Option<Self> {
                 Some(Self(Octets::wire(octets)))
             }
             fn encode(&self, out: &mut Vec<u8>) -> Result<(), Error> {
@@ -1301,21 +1261,14 @@ macro_rules! pfcp_octets {
             }
         }
 
-        impl Check for $ty<'_> {}
-
-        impl<'a> IntoOwned for $ty<'a> {
-            type Owned = $ty<'static>;
-            fn into_owned(self) -> $ty<'static> {
-                $ty(self.0.into_owned())
-            }
-        }
+        impl Check for $ty {}
 
         #[cfg(feature = "serde")]
-        oxirush_utils::impl_serde!($ty<'a>);
+        oxirush_utils::impl_serde!($ty);
 
         #[cfg(feature = "tree")]
-        impl oxirush_utils::tree::Tree for $ty<'_> {
-            const NAME: &'static str = <$ty<'static> as crate::ie::IeType>::TYPE_NAME;
+        impl oxirush_utils::tree::Tree for $ty {
+            const NAME: &'static str = <$ty as crate::ie::IeType>::TYPE_NAME;
             fn to_tree(&self) -> oxirush_utils::tree::Value {
                 oxirush_utils::tree::octets(&self.0)
             }

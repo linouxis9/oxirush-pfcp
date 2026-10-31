@@ -67,7 +67,6 @@ required-features = ["endpoint"]
 name = "readme"
 required-features = ["serde", "endpoint"]
 
-# `pfcp_borrowed`: decoded values borrow their octets, for the measurement of the two
-# forms. cargo-fuzz sets `fuzzing`, and docs.rs `docsrs`.
+# cargo-fuzz sets `fuzzing`, and docs.rs `docsrs`.
 [lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(pfcp_borrowed)', 'cfg(fuzzing)', 'cfg(docsrs)'] }
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(fuzzing)', 'cfg(docsrs)'] }

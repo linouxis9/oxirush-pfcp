@@ -38,15 +38,15 @@ pub trait IeType {
 }
 
 /// How a value is read from the octets of its IE, after the Length, and written back.
-pub trait Codec<'a>: Sized {
+pub trait Codec: Sized {
     /// The value of the octets, or `None` for octets that are not one: the scope keeps
     /// them as they are.
-    fn decode(octets: &'a [u8]) -> Option<Self>;
+    fn decode(octets: &[u8]) -> Option<Self>;
 
     /// Decode into the field of a row that is there once: `false`, and the field left
     /// empty, for octets that are no value. A grouped IE decodes in its place.
     #[inline]
-    fn decode_into(slot: &mut Option<Self>, octets: &'a [u8]) -> bool {
+    fn decode_into(slot: &mut Option<Self>, octets: &[u8]) -> bool {
         *slot = Self::decode(octets);
         slot.is_some()
     }
@@ -65,34 +65,34 @@ pub trait Codec<'a>: Sized {
 
 /// The values of a row that is a list of a type: a [`List`](crate::List) for a value,
 /// which keeps one in place, or a vector for a grouped IE, which is large.
-pub trait Listed<'a>: Codec<'a> {
+pub trait Listed: Codec {
     /// The field of a row that is a list of values of the type.
     type List: Default + Clone + PartialEq + core::fmt::Debug;
 
     /// Decode at the end of the field of a row that is a list.
-    fn decode_push(list: &mut Self::List, octets: &'a [u8]) -> bool;
+    fn decode_push(list: &mut Self::List, octets: &[u8]) -> bool;
 
     /// The field of a row that is conditional or optional and there once: an `Option` of
     /// a value, or of a box for a grouped IE.
     type Slot: Default + Clone + PartialEq + core::fmt::Debug;
 
     /// Decode into a slot that is empty.
-    fn decode_slot(slot: &mut Self::Slot, octets: &'a [u8]) -> bool;
+    fn decode_slot(slot: &mut Self::Slot, octets: &[u8]) -> bool;
 }
 
 /// What a value that is not a grouped IE writes as its [`Listed`].
 macro_rules! listed_value {
     ($($ty:ident),* $(,)?) => {$(
-        impl<'a> crate::ie::Listed<'a> for $ty<'a> {
+        impl crate::ie::Listed for $ty {
             type List = crate::list::List<Self>;
             type Slot = Option<Self>;
             #[inline]
-            fn decode_slot(slot: &mut Self::Slot, octets: &'a [u8]) -> bool {
-                <Self as crate::ie::Codec<'a>>::decode_into(slot, octets)
+            fn decode_slot(slot: &mut Self::Slot, octets: &[u8]) -> bool {
+                <Self as crate::ie::Codec>::decode_into(slot, octets)
             }
             #[inline]
-            fn decode_push(list: &mut Self::List, octets: &'a [u8]) -> bool {
-                match <Self as crate::ie::Codec<'a>>::decode(octets) {
+            fn decode_push(list: &mut Self::List, octets: &[u8]) -> bool {
+                match <Self as crate::ie::Codec>::decode(octets) {
                     Some(value) => {
                         list.push(value);
                         true
@@ -110,7 +110,7 @@ pub(crate) use listed_value;
 /// length, one whose value does not decode as its type, and one that repeats an IE that
 /// the table has once (§7.6.10).
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RawIe<'a> {
+pub struct RawIe {
     /// The IE type.
     pub ie_type: u16,
     /// The Enterprise ID of a vendor IE, which its octets follow.
@@ -119,13 +119,13 @@ pub struct RawIe<'a> {
     /// sends on purpose. A decoded IE never has one.
     pub length: Option<u16>,
     /// The content after the Length, or after the Enterprise ID of a vendor IE.
-    pub octets: Octets<'a>,
+    pub octets: Octets,
 }
 
-impl<'a> RawIe<'a> {
+impl RawIe {
     /// The IE of `ie_type` whose content is `octets`, whatever they are: none for an IE
     /// of a null length.
-    pub fn new(ie_type: u16, octets: impl Into<Octets<'a>>) -> Self {
+    pub fn new(ie_type: u16, octets: impl Into<Octets>) -> Self {
         Self {
             ie_type,
             enterprise_id: None,
@@ -193,7 +193,7 @@ pub enum IeFault {
 }
 
 /// The raw IE of `ie_type` and its content.
-pub(crate) fn raw(ie_type: u16, body: &[u8]) -> RawIe<'_> {
+pub(crate) fn raw(ie_type: u16, body: &[u8]) -> RawIe {
     match (ie_type >= VENDOR, body) {
         (true, [high, low, rest @ ..]) => RawIe {
             ie_type,
@@ -202,13 +202,6 @@ pub(crate) fn raw(ie_type: u16, body: &[u8]) -> RawIe<'_> {
             octets: Octets::wire(rest),
         },
         _ => RawIe { ie_type, enterprise_id: None, length: None, octets: Octets::wire(body) },
-    }
-}
-
-impl<'a> crate::octets::IntoOwned for RawIe<'a> {
-    type Owned = RawIe<'static>;
-    fn into_owned(self) -> RawIe<'static> {
-        RawIe { ie_type: self.ie_type, enterprise_id: self.enterprise_id, length: self.length, octets: self.octets.into_owned() }
     }
 }
 
@@ -231,7 +224,7 @@ pub(crate) fn finish(ie_type: u16, at: usize, length: Option<u16>, out: &mut [u8
 }
 
 /// Write the IE of a value.
-pub(crate) fn encode_value<'a, T: IeType + Codec<'a>>(value: &T, out: &mut Vec<u8>) -> Result<(), Error> {
+pub(crate) fn encode_value<T: IeType + Codec>(value: &T, out: &mut Vec<u8>) -> Result<(), Error> {
     let at = begin(T::IE_TYPE, out);
     value.encode(out)?;
     finish(T::IE_TYPE, at, None, out)

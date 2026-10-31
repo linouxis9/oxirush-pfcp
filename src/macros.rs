@@ -39,7 +39,7 @@ macro_rules! pfcp_ies {
     };
     (@impls $num:literal $name:literal [$fixed:expr] $($ty:ident),*) => {
         $(
-            impl crate::ie::IeType for $ty<'_> {
+            impl crate::ie::IeType for $ty {
                 const IE_TYPE: u16 = $num;
                 const TYPE_NAME: &'static str = $name;
                 const FIXED: Option<u16> = $fixed;
@@ -83,7 +83,7 @@ macro_rules! pfcp_layout {
     ) => {
         $(#[$meta])*
         #[derive(Debug, Clone, Default, PartialEq, Eq)]
-        pub struct $ty<'a> {
+        pub struct $ty {
             $($(
                 #[doc = concat!("The ", $head_name, " field, before the flags.")]
                 pub $head: $hkind,
@@ -99,10 +99,10 @@ macro_rules! pfcp_layout {
                 pub $field: Option<$kind $(<$param>)?>,
             )*
             /// The octets after the fields, which a later release adds.
-            pub extra: crate::octets::Octets<'a>,
+            pub extra: crate::octets::Octets,
         }
 
-        impl $ty<'_> {
+        impl $ty {
             /// The bits of the first octet that are flags.
             const FLAGS: $fk = 0 $( | pfcp_layout!(@fmask $bit $(, $width)?) )*;
             /// The names of its flags and fields.
@@ -124,9 +124,9 @@ macro_rules! pfcp_layout {
             }
         }
 
-        impl<'a> crate::ie::Codec<'a> for $ty<'a> {
+        impl crate::ie::Codec for $ty {
             #[allow(unused_variables)]
-            fn decode(octets: &'a [u8]) -> Option<Self> {
+            fn decode(octets: &[u8]) -> Option<Self> {
                 let mut rest = octets;
                 $($( let $head = <$hkind as crate::values::Field>::read(&mut rest)?; )*)?
                 let first = <$fk as crate::values::Field>::read(&mut rest)?;
@@ -171,15 +171,8 @@ macro_rules! pfcp_layout {
             }
         }
 
-        impl<'a> crate::octets::IntoOwned for $ty<'a> {
-            type Owned = $ty<'static>;
-            fn into_owned(self) -> $ty<'static> {
-                $ty { $($($head: self.$head,)*)? $($flag: self.$flag,)* spare: self.spare, $($field: self.$field,)* extra: self.extra.into_owned() }
-            }
-        }
-
-        impl crate::check::Check for $ty<'_> {
-            fn check(&self, path: &crate::check::Path<'_>, found: &mut alloc::vec::Vec<crate::check::Deviation>) {
+        impl crate::check::Check for $ty {
+            fn check(&self, path: &crate::check::Path, found: &mut alloc::vec::Vec<crate::check::Deviation>) {
                 if let Some(field) = self.inconsistent() {
                     found.push(crate::check::Deviation::new(path, $clause, crate::check::DeviationKind::Inconsistent { field }));
                 }
@@ -201,10 +194,10 @@ macro_rules! pfcp_layout {
         }
 
         #[cfg(feature = "serde")]
-        oxirush_utils::impl_serde!($ty<'a>);
+        oxirush_utils::impl_serde!($ty);
 
         #[cfg(feature = "tree")]
-        impl oxirush_utils::tree::Tree for $ty<'_> {
+        impl oxirush_utils::tree::Tree for $ty {
             const NAME: &'static str = <Self as crate::ie::IeType>::TYPE_NAME;
 
             fn to_tree(&self) -> oxirush_utils::tree::Value {
@@ -330,7 +323,7 @@ macro_rules! pfcp_bits {
     ) => {
         $(#[$meta])*
         #[derive(Debug, Clone, PartialEq, Eq)]
-        pub struct $ty<'a> {
+        pub struct $ty {
             $(
                 #[doc = concat!("The ", $name, " field.")]
                 pub $field: pfcp_bits!(@type $width [$($kind)? $(+ $octet2 $low2 $width2)?]),
@@ -341,16 +334,16 @@ macro_rules! pfcp_bits {
             /// later release are absent from a sender of an earlier one.
             pub present: u8,
             /// The octets after them, which a later release adds.
-            pub extra: crate::octets::Octets<'a>,
+            pub extra: crate::octets::Octets,
         }
 
-        impl Default for $ty<'_> {
+        impl Default for $ty {
             fn default() -> Self {
                 Self { $( $field: Default::default(), )* spare: [0; $n], present: $n, extra: Default::default() }
             }
         }
 
-        impl $ty<'_> {
+        impl $ty {
             /// The clause of the layout.
             pub const CLAUSE: &'static str = $clause;
             /// The names of its flags and fields.
@@ -385,8 +378,8 @@ macro_rules! pfcp_bits {
             }
         }
 
-        impl<'a> crate::ie::Codec<'a> for $ty<'a> {
-            fn decode(octets: &'a [u8]) -> Option<Self> {
+        impl crate::ie::Codec for $ty {
+            fn decode(octets: &[u8]) -> Option<Self> {
                 if octets.len() < $min {
                     return None;
                 }
@@ -416,15 +409,8 @@ macro_rules! pfcp_bits {
             }
         }
 
-        impl<'a> crate::octets::IntoOwned for $ty<'a> {
-            type Owned = $ty<'static>;
-            fn into_owned(self) -> $ty<'static> {
-                $ty { $( $field: self.$field, )* spare: self.spare, present: self.present, extra: self.extra.into_owned() }
-            }
-        }
-
-        impl crate::check::Check for $ty<'_> {
-            fn check(&self, path: &crate::check::Path<'_>, found: &mut alloc::vec::Vec<crate::check::Deviation>) {
+        impl crate::check::Check for $ty {
+            fn check(&self, path: &crate::check::Path, found: &mut alloc::vec::Vec<crate::check::Deviation>) {
                 if self.spare.iter().any(|spare| *spare != 0) {
                     found.push(crate::check::Deviation::new(path, "8.1.2", crate::check::DeviationKind::SpareBits));
                 }
@@ -433,13 +419,13 @@ macro_rules! pfcp_bits {
         }
 
         #[cfg(feature = "serde")]
-        oxirush_utils::impl_serde!($ty<'a>);
+        oxirush_utils::impl_serde!($ty);
 
         /// The flags that are set and the fields, with `Spare`, `length` (the octets of
         /// the fields that the value has, when it lacks some) and `extra` where they are
         /// not what a sender of this release writes.
         #[cfg(feature = "tree")]
-        impl oxirush_utils::tree::Tree for $ty<'_> {
+        impl oxirush_utils::tree::Tree for $ty {
             const NAME: &'static str = <Self as crate::ie::IeType>::TYPE_NAME;
 
             fn to_tree(&self) -> oxirush_utils::tree::Value {
@@ -569,10 +555,10 @@ macro_rules! pfcp_messages {
         /// The body of a message: one type of Table 7.3-1 each.
         #[derive(Debug, Clone, PartialEq, Eq)]
         #[non_exhaustive]
-        pub enum Body<'a> {
+        pub enum Body {
             $(
                 #[doc = concat!("Message type ", stringify!($code), ".")]
-                $ty(alloc::boxed::Box<crate::registry::$ty<'a>>),
+                $ty(alloc::boxed::Box<crate::registry::$ty>),
             )*
             /// A message type that Table 7.3-1 does not have, with the octets after its
             /// header (§7.6.4).
@@ -580,29 +566,19 @@ macro_rules! pfcp_messages {
                 /// The message type.
                 message_type: u8,
                 /// The octets of its IEs.
-                octets: crate::octets::Octets<'a>,
+                octets: crate::octets::Octets,
             },
         }
 
         $(
-            impl<'a> From<crate::registry::$ty<'a>> for Body<'a> {
-                fn from(body: crate::registry::$ty<'a>) -> Self {
+            impl From<crate::registry::$ty> for Body {
+                fn from(body: crate::registry::$ty) -> Self {
                     Self::$ty(alloc::boxed::Box::new(body))
                 }
             }
         )*
 
-        impl<'a> crate::octets::IntoOwned for Body<'a> {
-            type Owned = Body<'static>;
-            fn into_owned(self) -> Body<'static> {
-                match self {
-                    $( Self::$ty(body) => Body::$ty(crate::octets::IntoOwned::into_owned(body)), )*
-                    Self::Other { message_type, octets } => Body::Other { message_type, octets: octets.into_owned() },
-                }
-            }
-        }
-
-        impl<'a> Body<'a> {
+        impl Body {
             /// The message type.
             pub fn message_type(&self) -> u8 {
                 match self {
@@ -630,11 +606,11 @@ macro_rules! pfcp_messages {
                 [$( crate::registry::$ty::table().name ),*]
             }
 
-            pub(crate) fn decode(message_type: u8, octets: &'a [u8]) -> Result<Self, crate::ie::IeFault> {
+            pub(crate) fn decode(message_type: u8, octets: &[u8]) -> Result<Self, crate::ie::IeFault> {
                 Ok(match message_type {
                     $( $code => {
                         // The message is decoded in its box, and not moved there.
-                        let mut body = alloc::boxed::Box::<crate::registry::$ty<'a>>::default();
+                        let mut body = alloc::boxed::Box::<crate::registry::$ty>::default();
                         crate::table::decode_scope_sized(&mut *body, octets, true)?;
                         Self::$ty(body)
                     } )*
@@ -659,7 +635,7 @@ macro_rules! pfcp_messages {
                 }
             }
 
-            pub(crate) fn check(&self, path: &crate::check::Path<'_>, context: crate::check::Context, found: &mut alloc::vec::Vec<crate::check::Deviation>) {
+            pub(crate) fn check(&self, path: &crate::check::Path, context: crate::check::Context, found: &mut alloc::vec::Vec<crate::check::Deviation>) {
                 match self {
                     $( Self::$ty(body) => crate::check::check_scope(&**body, path, context, found), )*
                     Self::Other { message_type, .. } => {
@@ -726,13 +702,13 @@ macro_rules! pfcp_table {
     ) => { pastey::paste! {
         $(#[$meta])*
         #[derive(Debug, Clone, Default, PartialEq, Eq)]
-        pub struct $ty<'a> {
+        pub struct $ty {
             $(
                 #[doc = concat!("The ", $row, " IE.")]
                 pub $field: pfcp_table!(@field [$(* $($max)?)?] $p (pfcp_table!(@type $vty $($raw)?))),
             )*
             /// The IEs that the scope keeps as octets, in the order of the wire.
-            pub raw: alloc::vec::Vec<crate::ie::RawIe<'a>>,
+            pub raw: alloc::vec::Vec<crate::ie::RawIe>,
             /// The order of the wire, when it is not that of the table.
             pub order: alloc::vec::Vec<crate::ie::Placed>,
         }
@@ -766,7 +742,7 @@ macro_rules! pfcp_table {
             )*],
         };
 
-        impl<'a> $ty<'a> {
+        impl $ty {
             /// The table of the scope.
             pub fn table() -> &'static crate::table::Table {
                 &[<$ty:snake:upper _TABLE>]
@@ -785,7 +761,7 @@ macro_rules! pfcp_table {
 
         // A table without rows leaves its arguments unused.
         #[allow(unused_variables, unused_mut, unused_assignments)]
-        impl<'a> crate::table::Scope<'a> for $ty<'a> {
+        impl crate::table::Scope for $ty {
             fn table() -> &'static crate::table::Table {
                 &[<$ty:snake:upper _TABLE>]
             }
@@ -818,7 +794,7 @@ macro_rules! pfcp_table {
                 $( pfcp_table!(@reserve [$(* $($max)?)?] self.$field, [<count_ $field>]); )*
             }
 
-            fn place(&mut self, ie_type: u16, body: &'a [u8]) -> crate::ie::Placing {
+            fn place(&mut self, ie_type: u16, body: &[u8]) -> crate::ie::Placing {
                 $(
                     if ie_type == <pfcp_table!(@type $vty $($raw)?) as crate::ie::IeType>::IE_TYPE {
                         return pfcp_table!(@place [$(* $($max)?)?] $p (pfcp_table!(@type $vty $($raw)?)) self.$field, body);
@@ -866,23 +842,23 @@ macro_rules! pfcp_table {
             fn decodes(&self, ie_type: u16, octets: &[u8]) -> bool {
                 $(
                     if ie_type == <pfcp_table!(@type $vty $($raw)?) as crate::ie::IeType>::IE_TYPE {
-                        return <pfcp_table!(@type_any $vty $($raw)?) as crate::ie::Codec<'_>>::decode(octets).is_some();
+                        return <pfcp_table!(@type_any $vty $($raw)?) as crate::ie::Codec>::decode(octets).is_some();
                     }
                 )*
                 false
             }
 
-            fn raw(&self) -> &[crate::ie::RawIe<'a>] { &self.raw }
-            fn raw_mut(&mut self) -> &mut alloc::vec::Vec<crate::ie::RawIe<'a>> { &mut self.raw }
+            fn raw(&self) -> &[crate::ie::RawIe] { &self.raw }
+            fn raw_mut(&mut self) -> &mut alloc::vec::Vec<crate::ie::RawIe> { &mut self.raw }
             fn order(&self) -> &[crate::ie::Placed] { &self.order }
             fn order_mut(&mut self) -> &mut alloc::vec::Vec<crate::ie::Placed> { &mut self.order }
         }
 
         // A table without rows leaves its arguments unused.
         #[allow(unused_variables, unused_mut, unused_assignments)]
-        impl<'a> crate::check::Checked for $ty<'a> {
-            fn check_values(&self, path: &crate::check::Path<'_>, context: crate::check::Context, found: &mut alloc::vec::Vec<crate::check::Deviation>) {
-                let table = <Self as crate::table::Scope<'a>>::table();
+        impl crate::check::Checked for $ty {
+            fn check_values(&self, path: &crate::check::Path, context: crate::check::Context, found: &mut alloc::vec::Vec<crate::check::Deviation>) {
+                let table = <Self as crate::table::Scope>::table();
                 let mut row = 0;
                 $(
                     crate::check::check_field_values::<pfcp_table!(@type $vty $($raw)?), _>(
@@ -893,23 +869,12 @@ macro_rules! pfcp_table {
             }
         }
 
-        impl<'a> crate::octets::IntoOwned for $ty<'a> {
-            type Owned = $ty<'static>;
-            fn into_owned(self) -> $ty<'static> {
-                $ty {
-                    $( $field: crate::octets::IntoOwned::into_owned(self.$field), )*
-                    raw: crate::octets::IntoOwned::into_owned(self.raw),
-                    order: self.order,
-                }
-            }
-        }
-
         pfcp_table!(@kind $kind $ty);
 
         #[cfg(feature = "tree")]
         // A table without rows leaves its arguments unused.
         #[allow(unused_variables, unused_mut, unused_assignments)]
-        impl<'a> crate::tree::TreeScope for $ty<'a> {
+        impl crate::tree::TreeScope for $ty {
             fn field_tree(&self, ie_type: u16, nth: usize) -> Option<oxirush_utils::tree::Value> {
                 $(
                     if ie_type == <pfcp_table!(@type $vty $($raw)?) as crate::ie::IeType>::IE_TYPE {
@@ -937,19 +902,19 @@ macro_rules! pfcp_table {
 
     // ── The parts of a row ──────────────────────────────────────────────────
 
-    (@type raw $raw:literal) => { crate::values::Raw<'a, $raw> };
-    (@type $vty:ident) => { $vty<'a> };
-    (@type_static raw $raw:literal) => { crate::values::Raw<'static, $raw> };
-    (@type_static $vty:ident) => { $vty<'static> };
-    (@type_any raw $raw:literal) => { crate::values::Raw<'_, $raw> };
-    (@type_any $vty:ident) => { $vty<'_> };
+    (@type raw $raw:literal) => { crate::values::Raw<$raw> };
+    (@type $vty:ident) => { $vty };
+    (@type_static raw $raw:literal) => { crate::values::Raw<$raw> };
+    (@type_static $vty:ident) => { $vty };
+    (@type_any raw $raw:literal) => { crate::values::Raw<$raw> };
+    (@type_any $vty:ident) => { $vty };
     // A row that is there once is a field of its value, mandatory ones in place, and the
     // others as the slot of their type: a grouped IE, large and rare, is boxed.
     (@field [] M ($t:ty)) => { Option<$t> };
     (@field [] Ci ($t:ty)) => { Option<$t> };
     (@field [] Oi ($t:ty)) => { Option<$t> };
-    (@field [] $p:ident ($t:ty)) => { <$t as crate::ie::Listed<'a>>::Slot };
-    (@field [* $($max:literal)?] $p:ident ($t:ty)) => { <$t as crate::ie::Listed<'a>>::List };
+    (@field [] $p:ident ($t:ty)) => { <$t as crate::ie::Listed>::Slot };
+    (@field [* $($max:literal)?] $p:ident ($t:ty)) => { <$t as crate::ie::Listed>::List };
     (@presence M) => { crate::table::Presence::Mandatory };
     (@presence C) => { crate::table::Presence::Conditional };
     (@presence O) => { crate::table::Presence::Optional };
@@ -1007,13 +972,13 @@ macro_rules! pfcp_table {
     // ── A message, or the content of a grouped IE ───────────────────────────
 
     (@kind group $ty:ident) => {
-        impl<'a> crate::ie::Codec<'a> for $ty<'a> {
-            fn decode(octets: &'a [u8]) -> Option<Self> {
+        impl crate::ie::Codec for $ty {
+            fn decode(octets: &[u8]) -> Option<Self> {
                 crate::table::decode_scope(octets).ok()
             }
 
             // A grouped IE is large: it is decoded in its place, and not moved there.
-            fn decode_into(slot: &mut Option<Self>, octets: &'a [u8]) -> bool {
+            fn decode_into(slot: &mut Option<Self>, octets: &[u8]) -> bool {
                 let scope = slot.insert(Self::default());
                 if crate::table::decode_scope_into(scope, octets).is_err() {
                     *slot = None;
@@ -1031,11 +996,11 @@ macro_rules! pfcp_table {
             }
         }
 
-        impl<'a> crate::ie::Listed<'a> for $ty<'a> {
+        impl crate::ie::Listed for $ty {
             type List = alloc::vec::Vec<Self>;
             type Slot = Option<alloc::boxed::Box<Self>>;
 
-            fn decode_slot(slot: &mut Self::Slot, octets: &'a [u8]) -> bool {
+            fn decode_slot(slot: &mut Self::Slot, octets: &[u8]) -> bool {
                 let scope = slot.insert(alloc::boxed::Box::default());
                 if crate::table::decode_scope_into(&mut **scope, octets).is_err() {
                     *slot = None;
@@ -1044,7 +1009,7 @@ macro_rules! pfcp_table {
                 true
             }
 
-            fn decode_push(list: &mut Self::List, octets: &'a [u8]) -> bool {
+            fn decode_push(list: &mut Self::List, octets: &[u8]) -> bool {
                 list.push(Self::default());
                 let last = list.len() - 1;
                 if crate::table::decode_scope_into(&mut list[last], octets).is_err() {
@@ -1055,23 +1020,23 @@ macro_rules! pfcp_table {
             }
         }
 
-        impl crate::check::Check for $ty<'_> {
+        impl crate::check::Check for $ty {
             /// Its table on N4, as the receiver of a response.
-            fn check(&self, path: &crate::check::Path<'_>, found: &mut alloc::vec::Vec<crate::check::Deviation>) {
+            fn check(&self, path: &crate::check::Path, found: &mut alloc::vec::Vec<crate::check::Deviation>) {
                 crate::check::check_scope(self, path, crate::check::Context::on(crate::table::Interfaces::N4), found);
             }
 
-            fn check_in(&self, path: &crate::check::Path<'_>, context: crate::check::Context, found: &mut alloc::vec::Vec<crate::check::Deviation>) {
+            fn check_in(&self, path: &crate::check::Path, context: crate::check::Context, found: &mut alloc::vec::Vec<crate::check::Deviation>) {
                 crate::check::check_scope(self, path, context, found);
             }
         }
 
         #[cfg(feature = "serde")]
-        oxirush_utils::impl_serde!($ty<'a>);
+        oxirush_utils::impl_serde!($ty);
 
         #[cfg(feature = "tree")]
-        impl oxirush_utils::tree::Tree for $ty<'_> {
-            const NAME: &'static str = <$ty<'static> as crate::ie::IeType>::TYPE_NAME;
+        impl oxirush_utils::tree::Tree for $ty {
+            const NAME: &'static str = <$ty as crate::ie::IeType>::TYPE_NAME;
 
             fn to_tree(&self) -> oxirush_utils::tree::Value {
                 crate::tree::scope_to_tree(self)
@@ -1089,7 +1054,7 @@ macro_rules! pfcp_table {
 
     // `new()`, with the fields of the mandatory rows, which a muncher collects.
     (@new $ty:ident [$($arg:tt)*] [$( ($f:ident [$($m:tt)*] ($ft:ty)) )*]) => {
-        impl<'a> $ty<'a> {
+        impl $ty {
             /// The scope with its mandatory IEs.
             #[allow(clippy::too_many_arguments)]
             pub fn new($($arg)*) -> Self {
@@ -1228,7 +1193,7 @@ macro_rules! pfcp_enum {
 
         impl core::fmt::Display for $ty {
             /// The name, or the number of a value that the table does not name.
-            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+            fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
                 match self.name() {
                     Some(name) => f.write_str(name),
                     None => write!(f, "{}", self.value()),
@@ -1249,7 +1214,7 @@ macro_rules! pfcp_enum {
             fn size(&self) -> usize {
                 1
             }
-            fn check(&self, path: &crate::check::Path<'_>, clause: &'static str, found: &mut alloc::vec::Vec<crate::check::Deviation>) {
+            fn check(&self, path: &crate::check::Path, clause: &'static str, found: &mut alloc::vec::Vec<crate::check::Deviation>) {
                 if self.name().is_none() {
                     let value = self.value().into();
                     let kind = match Self::RESERVED.contains(&self.value()) {

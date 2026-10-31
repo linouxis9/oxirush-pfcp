@@ -76,7 +76,7 @@ fn put(members: &mut Map, name: String, list: bool, value: Value) {
 }
 
 /// The octets form of a raw IE.
-fn raw_tree(ie: &RawIe<'_>) -> Value {
+fn raw_tree(ie: &RawIe) -> Value {
     let mut members = Members::new();
     members.put("octets", tree::octets(&ie.octets));
     members.put_optional("length", ie.length.map(|length| tree::unsigned(length.into())));
@@ -87,7 +87,7 @@ fn raw_tree(ie: &RawIe<'_>) -> Value {
 /// The tree of a scope, in the order of its table. The values of a row, and the IEs of
 /// its type that the scope keeps as octets, keep the order of the wire among themselves
 /// (§7.6.10); the IEs of no row come last, in the order of the wire.
-pub(crate) fn scope_to_tree<'a, S: Scope<'a> + TreeScope>(scope: &S) -> Value {
+pub(crate) fn scope_to_tree<S: Scope + TreeScope>(scope: &S) -> Value {
     let table = S::table();
     let raws = scope.raw();
     let order = scope.order();
@@ -147,7 +147,7 @@ fn is_octets(value: &Value) -> bool {
     value.as_object().is_some_and(|members| tree::member(members, "octets").is_some())
 }
 
-fn read_raw<'a>(ie_type: u16, value: &Value, reading: &mut Reading) -> Result<RawIe<'a>, Refused> {
+fn read_raw(ie_type: u16, value: &Value, reading: &mut Reading) -> Result<RawIe, Refused> {
     let read = reading.members(value, &["octets", "length", "Enterprise ID"])?;
     let octets = reading.member(&read, 0, |value, reading| reading.octets(value))?;
     let length = reading.optional(&read, 1, |value, reading| reading.unsigned(value, 0, 65535))?;
@@ -173,7 +173,7 @@ fn type_of_name(name: &str) -> Option<u16> {
 }
 
 /// A scope from its tree. The IEs are encoded in the order in which they are written.
-pub(crate) fn scope_from_tree<'a, S: Scope<'a> + TreeScope>(value: &Value, reading: &mut Reading) -> Result<S, Refused> {
+pub(crate) fn scope_from_tree<S: Scope + TreeScope>(value: &Value, reading: &mut Reading) -> Result<S, Refused> {
     let Some(members) = value.as_object() else {
         return Err(reading.mismatch("an object of IEs", value));
     };
@@ -243,7 +243,7 @@ pub struct Paths;
 impl tree::Family for Paths {
     type Shape = ();
 
-    fn root(&self) -> Root<'_> {
+    fn root(&self) -> Root {
         Root::new("pfcp", &["ies"], false)
     }
 }

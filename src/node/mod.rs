@@ -56,7 +56,6 @@ use core::time::Duration;
 use crate::enums::{CauseValue, TimerUnit};
 use crate::header::Header;
 use crate::message::{Body, Message, is_node_related, is_request};
-use crate::octets::IntoOwned;
 use crate::registry::*;
 use crate::values::*;
 use crate::values_gen::*;
@@ -77,7 +76,7 @@ pub enum Function {
 #[derive(Debug, Clone)]
 pub struct NodeConfig {
     /// Its Node ID, in the answers that the node writes itself.
-    pub node_id: NodeId<'static>,
+    pub node_id: NodeId,
     /// Its function.
     pub function: Function,
     /// When it started, as the Recovery Time Stamp has it (§8.2.65).
@@ -103,7 +102,7 @@ pub struct NodeConfig {
 impl NodeConfig {
     /// A node of `node_id`: T1 of 3 s, N1 of 3, a heartbeat every 60 s, answers kept for
     /// 24 s, default priority 8, throttling on, and no priority spared.
-    pub fn new(node_id: NodeId<'static>, function: Function, recovery_time_stamp: u32) -> Self {
+    pub fn new(node_id: NodeId, function: Function, recovery_time_stamp: u32) -> Self {
         Self {
             node_id,
             function,
@@ -152,7 +151,7 @@ pub struct Inbound {
     /// The SEID of the peer's F-SEID, of an establishment.
     pub peer_seid: Option<u64>,
     /// The Node ID that it carries.
-    pub node_id: Option<NodeId<'static>>,
+    pub node_id: Option<NodeId>,
 }
 
 /// How a response goes, for a probe that breaks §6.4 on purpose.
@@ -213,14 +212,14 @@ pub enum Event {
         /// What to answer.
         request: Inbound,
         /// The request.
-        message: Message<'static>,
+        message: Message,
     },
     /// The response to a request of the caller.
     Response {
         /// The request.
         request: RequestId,
         /// The response.
-        message: Message<'static>,
+        message: Message,
     },
     /// A request of the caller without a response after N1 retransmissions (§6.4).
     Timeout {
@@ -234,14 +233,14 @@ pub enum Event {
         /// The peer.
         peer: SocketAddr,
         /// Its Node ID.
-        node_id: NodeId<'static>,
+        node_id: NodeId,
         /// It replaces an association of the same Node ID (§6.2.6.2.2).
         replaced: bool,
     },
     /// An association ended by a successful Association Release, with its sessions.
     Released {
         /// The peer's Node ID.
-        node_id: NodeId<'static>,
+        node_id: NodeId,
         /// The local SEIDs of the sessions that ended with it (§6.2.8).
         sessions: Vec<u64>,
     },
@@ -298,7 +297,7 @@ pub enum NodeError {
 }
 
 impl core::fmt::Display for NodeError {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         match self {
             Self::NoAssociation => write!(f, "a session request to a peer without an association (TS 29.244 6.2.6.2.1)"),
             Self::NoSession => write!(f, "a session request to a session that the node does not have"),
@@ -442,7 +441,7 @@ impl Node {
     ///
     /// A session request without an association or throttled, a message that is no
     /// request, and one that does not encode.
-    pub fn request(&mut self, now: Duration, to: SocketAddr, message: Message<'_>) -> Result<RequestId, NodeError> {
+    pub fn request(&mut self, now: Duration, to: SocketAddr, message: Message) -> Result<RequestId, NodeError> {
         let message_type = message.body.message_type();
         if !is_request(message_type) {
             return Err(NodeError::NotARequest);
@@ -468,7 +467,7 @@ impl Node {
     /// # Errors
     ///
     /// As [`request`](Self::request), and a session that the node does not have.
-    pub fn session_request(&mut self, now: Duration, local_seid: u64, body: impl Into<Body<'static>>) -> Result<RequestId, NodeError> {
+    pub fn session_request(&mut self, now: Duration, local_seid: u64, body: impl Into<Body>) -> Result<RequestId, NodeError> {
         let session = self.sessions.get(&local_seid).ok_or(NodeError::NoSession)?;
         let (peer, peer_seid) = (session.peer, session.peer_seid.unwrap_or(0));
         self.request(now, peer, Message { header: Header::session(peer_seid, 0), body: body.into() })
@@ -493,7 +492,7 @@ impl Node {
     /// # Errors
     ///
     /// A body that does not encode.
-    pub fn respond(&mut self, now: Duration, request: &Inbound, body: impl Into<Body<'static>>) -> Result<(), NodeError> {
+    pub fn respond(&mut self, now: Duration, request: &Inbound, body: impl Into<Body>) -> Result<(), NodeError> {
         let body = body.into();
         let mut header = match is_node_related(request.message_type) {
             true => Header::node(request.sequence),
@@ -516,7 +515,7 @@ impl Node {
     /// # Errors
     ///
     /// A message that does not encode.
-    pub fn respond_with(&mut self, now: Duration, request: &Inbound, message: Message<'static>, delivery: Delivery) -> Result<(), NodeError> {
+    pub fn respond_with(&mut self, now: Duration, request: &Inbound, message: Message, delivery: Delivery) -> Result<(), NodeError> {
         let octets = message.encode()?;
         self.answered_effects(now, request, &message);
         let key = (request.from, request.sequence);
@@ -613,7 +612,7 @@ impl Node {
                     }
                 }
                 match Message::decode(this) {
-                    Ok(message) => self.handle_message(now, from, this, message.into_owned()),
+                    Ok(message) => self.handle_message(now, from, this, message),
                     Err(error) => {
                         let offending = match &error {
                             crate::Error::Ies { fault: crate::IeFault::Length { ie_type, .. }, .. } => Some(*ie_type),
@@ -632,7 +631,7 @@ impl Node {
         }
     }
 
-    fn handle_message(&mut self, now: Duration, from: SocketAddr, octets: &[u8], message: Message<'static>) {
+    fn handle_message(&mut self, now: Duration, from: SocketAddr, octets: &[u8], message: Message) {
         let message_type = message.body.message_type();
         match is_request(message_type) {
             true => self.handle_request(now, from, octets, message),
@@ -640,7 +639,7 @@ impl Node {
         }
     }
 
-    fn handle_request(&mut self, now: Duration, from: SocketAddr, octets: &[u8], message: Message<'static>) {
+    fn handle_request(&mut self, now: Duration, from: SocketAddr, octets: &[u8], message: Message) {
         let sequence = message.header.sequence;
         let message_type = message.body.message_type();
         if let Some(answered) = self.answered.get(&(from, sequence)) {
@@ -704,7 +703,7 @@ impl Node {
         self.events.push_back(Event::Request { request: inbound, message });
     }
 
-    fn handle_response(&mut self, now: Duration, from: SocketAddr, octets: &[u8], message: Message<'static>) {
+    fn handle_response(&mut self, now: Duration, from: SocketAddr, octets: &[u8], message: Message) {
         let sequence = message.header.sequence;
         let message_type = message.body.message_type();
         let Some(request) = self.outstanding.get(&sequence) else {
@@ -735,7 +734,7 @@ impl Node {
         }
     }
 
-    fn send(&mut self, now: Duration, to: SocketAddr, mut message: Message<'_>, heartbeat: bool, local_seid: Option<u64>) -> Result<RequestId, NodeError> {
+    fn send(&mut self, now: Duration, to: SocketAddr, mut message: Message, heartbeat: bool, local_seid: Option<u64>) -> Result<RequestId, NodeError> {
         let sequence = self.next_free_sequence();
         message.header.sequence = sequence;
         let octets = message.encode()?;
@@ -824,7 +823,7 @@ impl Node {
     }
 
     /// The Recovery Time Stamp that a message carries: a change is a restart (§6.2.2).
-    fn note_recovery(&mut self, from: SocketAddr, body: &Body<'_>) {
+    fn note_recovery(&mut self, from: SocketAddr, body: &Body) {
         let stamp = match body {
             Body::HeartbeatRequest(message) => message.recovery_time_stamp.as_ref(),
             Body::HeartbeatResponse(message) => message.recovery_time_stamp.as_ref(),
@@ -846,7 +845,7 @@ impl Node {
 
     /// The load and overload control information that a message carries (§6.2.3.3.3,
     /// §6.2.4.3.3).
-    fn note_controls(&mut self, now: Duration, from: SocketAddr, body: &Body<'_>) {
+    fn note_controls(&mut self, now: Duration, from: SocketAddr, body: &Body) {
         let (load, overload) = match body {
             Body::SessionEstablishmentResponse(message) => (message.load_control_information.as_deref(), message.overload_control_information.as_deref()),
             Body::SessionModificationResponse(message) => (message.load_control_information.as_deref(), message.overload_control_information.as_deref()),
@@ -931,12 +930,12 @@ impl Node {
     }
 
     /// What a response to a request of the node changes: the association, the session.
-    fn response_effects(&mut self, now: Duration, from: SocketAddr, request: &Outstanding, message: &Message<'_>) {
+    fn response_effects(&mut self, now: Duration, from: SocketAddr, request: &Outstanding, message: &Message) {
         let accepted = message.body.cause().is_some_and(|cause| cause.value() < 64);
         match &message.body {
             Body::AssociationSetupResponse(response) if accepted => {
                 if let Some(node_id) = &response.node_id {
-                    self.associate(now, from, node_id.clone().into_owned());
+                    self.associate(now, from, node_id.clone());
                 }
             }
             Body::AssociationReleaseResponse(_) if accepted => self.release(from),
@@ -965,7 +964,7 @@ impl Node {
     }
 
     /// What an answer of the caller changes: the association, the session.
-    fn answered_effects(&mut self, now: Duration, request: &Inbound, message: &Message<'_>) {
+    fn answered_effects(&mut self, now: Duration, request: &Inbound, message: &Message) {
         let accepted = message.body.cause().is_some_and(|cause| cause.value() < 64);
         if !accepted {
             return;
@@ -988,7 +987,7 @@ impl Node {
         }
     }
 
-    fn associate(&mut self, now: Duration, peer: SocketAddr, node_id: NodeId<'static>) {
+    fn associate(&mut self, now: Duration, peer: SocketAddr, node_id: NodeId) {
         let key = key_of(&node_id);
         let replaced = self.associations.insert(key.clone(), Association { node_id: node_id.clone(), peer, key }).is_some();
         if let Some(interval) = self.config.heartbeat {
@@ -1015,14 +1014,14 @@ fn newer(new: u32, known: u32) -> bool {
 }
 
 /// The Node ID as the key of its association.
-fn key_of(node_id: &NodeId<'_>) -> Vec<u8> {
+fn key_of(node_id: &NodeId) -> Vec<u8> {
     let mut octets = Vec::new();
     let _ = crate::ie::Codec::encode(node_id, &mut octets);
     octets
 }
 
 /// The Node ID that a node related request carries.
-fn node_id_of(body: &Body<'_>) -> Option<NodeId<'static>> {
+fn node_id_of(body: &Body) -> Option<NodeId> {
     let node_id = match body {
         Body::AssociationSetupRequest(message) => message.node_id.as_ref(),
         Body::AssociationUpdateRequest(message) => message.node_id.as_ref(),
@@ -1033,11 +1032,11 @@ fn node_id_of(body: &Body<'_>) -> Option<NodeId<'static>> {
         Body::SessionEstablishmentRequest(message) => message.node_id.as_ref(),
         _ => None,
     };
-    node_id.map(|node_id| node_id.clone().into_owned())
+    node_id.cloned()
 }
 
 /// The period of a Timer (§8.2.35): `None` for an infinite one.
-fn timer(timer: &Timer<'_>) -> Option<Duration> {
+fn timer(timer: &Timer) -> Option<Duration> {
     let value = u64::from(timer.timer_value);
     let unit = match timer.timer_unit {
         TimerUnit::TwoSeconds => 2,
@@ -1054,7 +1053,7 @@ fn timer(timer: &Timer<'_>) -> Option<Duration> {
 
 /// The response that rejects a request of `message_type` with `cause`, with the node's
 /// Node ID where the response has one, and the Offending IE.
-fn rejection_body(message_type: u8, cause: CauseValue, offending: Option<u16>, node_id: &NodeId<'static>) -> Option<Body<'static>> {
+fn rejection_body(message_type: u8, cause: CauseValue, offending: Option<u16>, node_id: &NodeId) -> Option<Body> {
     let cause = Some(Cause::new(cause));
     let node_id = Some(node_id.clone());
     let offending_ie = offending.map(OffendingIe::new);

@@ -163,7 +163,7 @@ impl<T> FieldValues<T> for Vec<T> {
 
 /// Write the `nth` value of a field as its IE: `false` when it has no such value.
 #[inline]
-pub(crate) fn emit_field<'a, T: IeType + Codec<'a>, F: FieldValues<T>>(field: &F, nth: usize, out: &mut Vec<u8>) -> Result<bool, Error> {
+pub(crate) fn emit_field<T: IeType + Codec, F: FieldValues<T>>(field: &F, nth: usize, out: &mut Vec<u8>) -> Result<bool, Error> {
     match field.values().get(nth) {
         Some(value) => crate::ie::encode_value(value, out).map(|()| true),
         None => Ok(false),
@@ -229,7 +229,7 @@ impl Table {
 
 /// What the table macro writes for a message or a grouped IE, which the code of every
 /// scope takes: the fields by IE type, the raw IEs and the order.
-pub(crate) trait Scope<'a>: Default {
+pub(crate) trait Scope: Default {
     /// The table of the scope.
     fn table() -> &'static Table;
     /// The position in the table of the row of `ie_type`.
@@ -240,7 +240,7 @@ pub(crate) trait Scope<'a>: Default {
     /// Size the lists for the IEs of `octets`.
     fn presize(&mut self, octets: &[u8]);
     /// Read the content of an IE of `ie_type` into its field.
-    fn place(&mut self, ie_type: u16, body: &'a [u8]) -> Placing;
+    fn place(&mut self, ie_type: u16, body: &[u8]) -> Placing;
     /// Write the `nth` value of the field of `ie_type`: `false` for one that is not there.
     fn emit(&self, ie_type: u16, nth: usize, out: &mut Vec<u8>) -> Result<bool, Error>;
     /// How many octets the IEs of the scope have, their headers included.
@@ -252,9 +252,9 @@ pub(crate) trait Scope<'a>: Default {
     /// Whether `octets` decode as the value of the field of `ie_type`.
     fn decodes(&self, ie_type: u16, octets: &[u8]) -> bool;
     /// The IEs that the scope keeps as octets.
-    fn raw(&self) -> &[RawIe<'a>];
+    fn raw(&self) -> &[RawIe];
     /// The same, to change.
-    fn raw_mut(&mut self) -> &mut Vec<RawIe<'a>>;
+    fn raw_mut(&mut self) -> &mut Vec<RawIe>;
     /// The order of the wire, when it is not that of the table.
     fn order(&self) -> &[Placed];
     /// The same, to change.
@@ -262,21 +262,21 @@ pub(crate) trait Scope<'a>: Default {
 }
 
 /// The scope of `octets`.
-pub(crate) fn decode_scope<'a, S: Scope<'a>>(octets: &'a [u8]) -> Result<S, IeFault> {
+pub(crate) fn decode_scope<S: Scope>(octets: &[u8]) -> Result<S, IeFault> {
     let mut scope = S::default();
     decode_scope_into(&mut scope, octets)?;
     Ok(scope)
 }
 
 /// The scope of `octets`, in `scope`, which is empty.
-pub(crate) fn decode_scope_into<'a, S: Scope<'a>>(scope: &mut S, octets: &'a [u8]) -> Result<(), IeFault> {
+pub(crate) fn decode_scope_into<S: Scope>(scope: &mut S, octets: &[u8]) -> Result<(), IeFault> {
     decode_scope_sized(scope, octets, false)
 }
 
 /// The scope of `octets`, in `scope`, which is empty; its large lists sized first by a
 /// pass over its IEs where `presize` asks for it: a message, whose lists of grouped IEs
 /// are long, and not a grouped IE, whose lists are short or empty.
-pub(crate) fn decode_scope_sized<'a, S: Scope<'a>>(scope: &mut S, octets: &'a [u8], presize: bool) -> Result<(), IeFault> {
+pub(crate) fn decode_scope_sized<S: Scope>(scope: &mut S, octets: &[u8], presize: bool) -> Result<(), IeFault> {
     if presize && S::PRESIZE {
         scope.presize(octets);
     }
@@ -329,7 +329,7 @@ pub(crate) fn decode_scope_sized<'a, S: Scope<'a>>(scope: &mut S, octets: &'a [u
 /// Keep `order` in `scope`, unless the fields in the order of the table give the same
 /// octets: then nothing is kept, and a scope that is changed stays in that order.
 #[cfg(feature = "tree")]
-pub(crate) fn keep_order<'a, S: Scope<'a>>(scope: &mut S, order: Vec<Placed>) {
+pub(crate) fn keep_order<S: Scope>(scope: &mut S, order: Vec<Placed>) {
     let mut last = 0;
     let in_table_order = order.iter().all(|placed| match placed {
         Placed::Raw => false,
@@ -345,7 +345,7 @@ pub(crate) fn keep_order<'a, S: Scope<'a>>(scope: &mut S, order: Vec<Placed>) {
 
 /// Write `scope`: in the order that it keeps, with the values that were added since in
 /// the places of their rows, or in the order of its table.
-pub(crate) fn encode_scope<'a, S: Scope<'a>>(scope: &S, out: &mut Vec<u8>) -> Result<(), Error> {
+pub(crate) fn encode_scope<S: Scope>(scope: &S, out: &mut Vec<u8>) -> Result<(), Error> {
     let order = scope.order();
     if order.is_empty() {
         scope.encode_fields(out)?;

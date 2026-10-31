@@ -25,7 +25,6 @@ use crate::check::{Context, Deviation, DeviationKind};
 use crate::enums::CauseValue;
 use crate::table::{Interfaces, Presence};
 use crate::header::Header;
-use crate::octets::IntoOwned;
 use crate::macros::pfcp_messages;
 
 pfcp_messages! {
@@ -58,8 +57,8 @@ pfcp_messages! {
 
 /// The name of the message, its SEID and its sequence number: `PFCP Session
 /// Establishment Request (SEID 0, sequence 7)`.
-impl core::fmt::Display for Message<'_> {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+impl core::fmt::Display for Message {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         match self.body.name() {
             Some(name) => f.write_str(name)?,
             None => write!(f, "PFCP message type {}", self.body.message_type())?,
@@ -101,21 +100,14 @@ pub fn is_node_related(message_type: u8) -> bool {
 
 /// A PFCP message.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Message<'a> {
+pub struct Message {
     /// Its header.
     pub header: Header,
     /// Its message type and its IEs.
-    pub body: Body<'a>,
+    pub body: Body,
 }
 
-impl<'a> IntoOwned for Message<'a> {
-    type Owned = Message<'static>;
-    fn into_owned(self) -> Message<'static> {
-        Message { header: self.header, body: self.body.into_owned() }
-    }
-}
-
-impl<'a> Message<'a> {
+impl Message {
     /// Decode one message, which `octets` are whole.
     ///
     /// # Errors
@@ -123,7 +115,7 @@ impl<'a> Message<'a> {
     /// Octets shorter than a header, a Message Length that is not the length of the
     /// octets (§7.6.3), and IEs whose framing runs past the message (§7.6.7). The error
     /// has the header, which the answer of a receiver takes.
-    pub fn decode(octets: &'a [u8]) -> Result<Self, Error> {
+    pub fn decode(octets: &[u8]) -> Result<Self, Error> {
         let (message, used) = Self::decode_first(octets)?;
         if used != octets.len() {
             let (header, message_type, length) = Header::decode(octets).ok_or(Error::TooShort { octets: octets.len() })?;
@@ -137,7 +129,7 @@ impl<'a> Message<'a> {
     /// # Errors
     ///
     /// Those of [`decode`](Self::decode), for the first message that has one.
-    pub fn decode_datagram(mut octets: &'a [u8]) -> Result<Vec<Self>, Error> {
+    pub fn decode_datagram(mut octets: &[u8]) -> Result<Vec<Self>, Error> {
         let mut messages = Vec::new();
         loop {
             let (message, used) = Self::decode_first(octets)?;
@@ -151,7 +143,7 @@ impl<'a> Message<'a> {
         Ok(messages)
     }
 
-    fn decode_first(octets: &'a [u8]) -> Result<(Self, usize), Error> {
+    fn decode_first(octets: &[u8]) -> Result<(Self, usize), Error> {
         let (header, message_type, length) = Header::decode(octets).ok_or(Error::TooShort { octets: octets.len() })?;
         let end = 4 + usize::from(length);
         let Some(content) = octets.get(header.len()..end).filter(|_| end >= header.len()) else {
@@ -296,7 +288,7 @@ pub fn is_request(message_type: u8) -> bool {
     }
 }
 
-impl Body<'_> {
+impl Body {
     /// The Cause of a response.
     pub fn cause(&self) -> Option<CauseValue> {
         let cause = match self {
@@ -405,11 +397,11 @@ mod forms {
     ];
 
     #[cfg(feature = "serde")]
-    oxirush_utils::impl_serde!(Message<'a>);
+    oxirush_utils::impl_serde!(Message);
 
     /// `{"message": NAME, "SEID": ..., "Sequence Number": ..., "ies": {...}}`, with the
     /// other members of the header where they are not what a sender writes.
-    impl Tree for Message<'_> {
+    impl Tree for Message {
         const NAME: &'static str = "PFCP message";
 
         fn to_tree(&self) -> Value {
@@ -465,7 +457,7 @@ mod forms {
         }
     }
 
-    impl Message<'_> {
+    impl Message {
         /// The tree of the message.
         pub fn to_tree(&self) -> Value {
             Tree::to_tree(self)
@@ -476,7 +468,7 @@ mod forms {
         /// # Errors
         ///
         /// Where the tree is not a message, by the names on the way, and why.
-        pub fn from_tree(value: &Value) -> Result<Message<'static>, tree::Error> {
+        pub fn from_tree(value: &Value) -> Result<Message, tree::Error> {
             tree::from_value(value)
         }
     }

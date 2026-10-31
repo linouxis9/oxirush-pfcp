@@ -16,11 +16,11 @@
 */
 
 //! Any octets: a datagram that decodes encodes back to its octets, byte for byte, and its
-//! check, its framing and its owned form do not panic.
+//! check and its framing do not panic.
 #![no_main]
 
 use libfuzzer_sys::fuzz_target;
-use oxirush_pfcp::{IntoOwned, Message, framing};
+use oxirush_pfcp::{Message, framing};
 
 fuzz_target!(|octets: &[u8]| {
     if let Ok(messages) = Message::decode_datagram(octets) {
@@ -30,8 +30,6 @@ fuzz_target!(|octets: &[u8]| {
             again.extend(message.encode().expect("a decoded message encodes"));
         }
         assert_eq!(again, octets[..again.len()], "decode then encode");
-        let owned: Vec<Message<'static>> = messages.into_iter().map(IntoOwned::into_owned).collect();
-        assert_eq!(owned.len(), owned.len());
     }
     if let Ok((_, _, ies)) = framing::message_ies(octets) {
         for ie in ies.flatten() {

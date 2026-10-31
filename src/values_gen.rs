@@ -25,7 +25,7 @@ use crate::Error;
 use crate::check::Check;
 use crate::ie::{Codec, listed_value};
 use crate::macros::{pfcp_bits, pfcp_layout};
-use crate::octets::{IntoOwned, Octets};
+use crate::octets::Octets;
 use crate::enums::*;
 use crate::values::*;
 

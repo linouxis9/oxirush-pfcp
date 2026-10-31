@@ -31,7 +31,7 @@ fn a_message_and_an_ie_are_their_trees_in_json() {
 
     let json = serde_json::to_string(&message).unwrap();
     assert!(json.contains(r#""Source Interface":"Access""#), "{json}");
-    let back: Message<'static> = serde_json::from_str(&json).unwrap();
+    let back: Message = serde_json::from_str(&json).unwrap();
     assert_eq!(back.encode().unwrap(), message.encode().unwrap());
 
     let json = serde_json::to_string(&seid).unwrap();

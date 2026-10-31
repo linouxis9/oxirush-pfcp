@@ -6,15 +6,15 @@ use std::net::Ipv4Addr;
 use oxirush_pfcp::*;
 
 /// A Network Instance, as an APN: `internet`.
-fn network_instance() -> NetworkInstance<'static> {
+fn network_instance() -> NetworkInstance {
     NetworkInstance(b"\x08internet".to_vec().into())
 }
 
-fn network_instance_fp() -> NetworkInstance<'static> {
+fn network_instance_fp() -> NetworkInstance {
     NetworkInstance(b"\x08internet".to_vec().into())
 }
 
-fn far(id: u32, core: bool) -> CreateFar<'static> {
+fn far(id: u32, core: bool) -> CreateFar {
     // FAR ID, Apply Action (FORW), Forwarding Parameters: Destination Interface, Network
     // Instance and, toward the access, Outer Header Creation (GTP-U/UDP/IPv4)
     let mut forwarding = ForwardingParameters::new(DestinationInterface::new(DestinationInterfaceValue::from_value(u8::from(core))))
@@ -26,7 +26,7 @@ fn far(id: u32, core: bool) -> CreateFar<'static> {
     CreateFar::new(FarId::new(id), ApplyAction { forw: true, ..Default::default() }).with_forwarding_parameters(forwarding)
 }
 
-fn urr(id: u32) -> CreateUrr<'static> {
+fn urr(id: u32) -> CreateUrr {
     // URR ID, Measurement Method (VOLUM DURAT), Reporting Triggers (VOLTH TIMTH),
     // Volume Threshold (TOVOL), Time Threshold
     CreateUrr::new(
@@ -38,7 +38,7 @@ fn urr(id: u32) -> CreateUrr<'static> {
     .with_time_threshold(TimeThreshold::new(3600))
 }
 
-fn qer(id: u32) -> CreateQer<'static> {
+fn qer(id: u32) -> CreateQer {
     // QER ID, Gate Status, MBR, QFI
     CreateQer::new(QerId::new(id), GateStatus::default())
         .with_maximum_bitrate(Mbr { ul_mbr: U40(1_000_000), dl_mbr: U40(1_000_000), ..Default::default() })
@@ -46,11 +46,11 @@ fn qer(id: u32) -> CreateQer<'static> {
 }
 
 /// The value of the octets of an IE.
-fn value<'a, T: Codec<'a> + IntoOwned>(octets: &'a [u8]) -> T::Owned {
-    T::decode(octets).unwrap().into_owned()
+fn value<T: Codec>(octets: &[u8]) -> T {
+    T::decode(octets).unwrap()
 }
 
-fn sdf_filter(text: &str) -> SdfFilter<'static> {
+fn sdf_filter(text: &str) -> SdfFilter {
     // FD, then the length of the Flow Description and the description
     let mut octets = vec![0x01, 0x00];
     octets.extend_from_slice(&(text.len() as u16).to_be_bytes());
@@ -58,7 +58,7 @@ fn sdf_filter(text: &str) -> SdfFilter<'static> {
     value::<SdfFilter>(&octets)
 }
 
-fn pdr(id: u16, uplink: bool) -> CreatePdr<'static> {
+fn pdr(id: u16, uplink: bool) -> CreatePdr {
     let pdi = if uplink {
         Pdi::new(SourceInterface::new(SourceInterfaceValue::Access))
             .with_local_f_teid(FTeid::choose_ipv4())
@@ -138,11 +138,11 @@ pub fn messages() -> Vec<(&'static str, Vec<u8>)> {
 }
 
 /// Every value of a decoded message, read: what a program that takes all of it does.
-pub fn read(message: &Message<'_>) -> u64 {
+pub fn read(message: &Message) -> u64 {
     let mut sum = u64::from(message.header.sequence);
     let octets = |octets: &[u8]| octets.len() as u64 + u64::from(octets.first().copied().unwrap_or(0));
-    let raw = |raw: &[RawIe<'_>]| raw.iter().map(|ie| u64::from(ie.ie_type) + octets(&ie.octets)).sum::<u64>();
-    let f_teid = |f: &FTeid<'_>| u64::from(f.teid.unwrap_or(0)) + u64::from(f.ch) + f.ipv4.map_or(0, |a| u64::from(a.to_bits()));
+    let raw = |raw: &[RawIe]| raw.iter().map(|ie| u64::from(ie.ie_type) + octets(&ie.octets)).sum::<u64>();
+    let f_teid = |f: &FTeid| u64::from(f.teid.unwrap_or(0)) + u64::from(f.ch) + f.ipv4.map_or(0, |a| u64::from(a.to_bits()));
     if let Body::SessionEstablishmentRequest(request) = &message.body {
         sum += match &request.node_id {
             Some(NodeId::Fqdn(labels)) => octets(labels),
@@ -207,7 +207,7 @@ pub fn read(message: &Message<'_>) -> u64 {
 
 /// The IEs of a message, depth first, framed and not decoded: the length of each.
 pub fn frame(octets: &[u8]) -> u64 {
-    fn walk(ies: framing::Ies<'_>) -> u64 {
+    fn walk(ies: framing::Ies) -> u64 {
         let mut sum = 0;
         for ie in ies.flatten() {
             sum += u64::from(ie.length);

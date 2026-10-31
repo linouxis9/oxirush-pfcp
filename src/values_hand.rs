@@ -26,7 +26,7 @@ use crate::Error;
 use crate::check::{Check, Deviation};
 use crate::ie::{Codec, listed_value};
 use crate::macros::{pfcp_bits, pfcp_layout};
-use crate::octets::{IntoOwned, Octets};
+use crate::octets::Octets;
 use crate::enums::*;
 use crate::values::*;
 
@@ -455,7 +455,7 @@ pfcp_bits! {
 pub struct SecretLv8(pub Vec<u8>);
 
 impl fmt::Debug for SecretLv8 {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "SecretLv8({} octets)", self.0.len())
     }
 }
@@ -491,21 +491,21 @@ pfcp_fields! {
 
 /// HMAC Key (STAMP) (§8.2.274): a key, which `Debug` does not print.
 #[derive(Clone, Default, PartialEq, Eq)]
-pub struct HmacKeyStamp<'a>(pub Octets<'a>);
+pub struct HmacKeyStamp(pub Octets);
 
-impl fmt::Debug for HmacKeyStamp<'_> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl fmt::Debug for HmacKeyStamp {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "HmacKeyStamp({} octets)", self.0.len())
     }
 }
 
-impl HmacKeyStamp<'_> {
+impl HmacKeyStamp {
     /// The name of its field.
     pub const FIELDS: &'static [&'static str] = &["HMAC Key"];
 }
 
-impl<'a> Codec<'a> for HmacKeyStamp<'a> {
-    fn decode(octets: &'a [u8]) -> Option<Self> {
+impl Codec for HmacKeyStamp {
+    fn decode(octets: &[u8]) -> Option<Self> {
         Some(Self(Octets::wire(octets)))
     }
     fn encode(&self, out: &mut Vec<u8>) -> Result<(), Error> {
@@ -517,20 +517,13 @@ impl<'a> Codec<'a> for HmacKeyStamp<'a> {
     }
 }
 
-impl Check for HmacKeyStamp<'_> {}
-
-impl<'a> IntoOwned for HmacKeyStamp<'a> {
-    type Owned = HmacKeyStamp<'static>;
-    fn into_owned(self) -> HmacKeyStamp<'static> {
-        HmacKeyStamp(self.0.into_owned())
-    }
-}
+impl Check for HmacKeyStamp {}
 
 #[cfg(feature = "serde")]
-oxirush_utils::impl_serde!(HmacKeyStamp<'a>);
+oxirush_utils::impl_serde!(HmacKeyStamp);
 
 #[cfg(feature = "tree")]
-impl oxirush_utils::tree::Tree for HmacKeyStamp<'_> {
+impl oxirush_utils::tree::Tree for HmacKeyStamp {
     const NAME: &'static str = "HMAC Key (STAMP)";
     fn to_tree(&self) -> oxirush_utils::tree::Value {
         oxirush_utils::tree::octets(&self.0)
@@ -573,7 +566,7 @@ pfcp_fields! {
 /// Node-ID Type (0 an IPv4 address, 1 an IPv6 address, 2 MCC, MNC and a number), the
 /// identifiers, and the Node Type (Table 8.2.43-2) that a later release added.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct FqCsid<'a> {
+pub struct FqCsid {
     /// The Node-ID Type, bits 8 to 5 of octet 5.
     pub node_id_type: u8,
     /// The Node-Address: four octets, or sixteen for an IPv6 address.
@@ -584,10 +577,10 @@ pub struct FqCsid<'a> {
     /// of an earlier release.
     pub node_type: Option<NodeType>,
     /// The octets after them, which a later release adds.
-    pub extra: Octets<'a>,
+    pub extra: Octets,
 }
 
-impl FqCsid<'_> {
+impl FqCsid {
     /// The names of its fields.
     pub const FIELDS: &'static [&'static str] = &["FQ-CSID Node-ID Type", "Node-Address", "PDN Connection Set Identifiers", "Node Type"];
 
@@ -601,8 +594,8 @@ impl FqCsid<'_> {
     }
 }
 
-impl<'a> Codec<'a> for FqCsid<'a> {
-    fn decode(octets: &'a [u8]) -> Option<Self> {
+impl Codec for FqCsid {
+    fn decode(octets: &[u8]) -> Option<Self> {
         let (&first, rest) = octets.split_first()?;
         let node_id_type = first >> 4;
         let (address, mut rest) = rest.split_at_checked(Self::address_length(node_id_type)?)?;
@@ -636,8 +629,8 @@ impl<'a> Codec<'a> for FqCsid<'a> {
     }
 }
 
-impl Check for FqCsid<'_> {
-    fn check(&self, path: &crate::check::Path<'_>, found: &mut Vec<Deviation>) {
+impl Check for FqCsid {
+    fn check(&self, path: &crate::check::Path, found: &mut Vec<Deviation>) {
         if Self::address_length(self.node_id_type).is_none() {
             found.push(Deviation::new(path, "8.2.43", crate::check::DeviationKind::SpareValue { value: self.node_id_type.into() }));
         }
@@ -647,20 +640,13 @@ impl Check for FqCsid<'_> {
     }
 }
 
-impl<'a> IntoOwned for FqCsid<'a> {
-    type Owned = FqCsid<'static>;
-    fn into_owned(self) -> FqCsid<'static> {
-        FqCsid { node_id_type: self.node_id_type, node_address: self.node_address, csids: self.csids, node_type: self.node_type, extra: self.extra.into_owned() }
-    }
-}
-
 #[cfg(feature = "serde")]
-oxirush_utils::impl_serde!(FqCsid<'a>);
+oxirush_utils::impl_serde!(FqCsid);
 
 /// `{"FQ-CSID Node-ID Type": 0, "Node-Address": "10.0.0.1", "PDN Connection Set Identifiers": [1]}`:
 /// an IPv4 or IPv6 address as text, the other Node-Address as its octets.
 #[cfg(feature = "tree")]
-impl oxirush_utils::tree::Tree for FqCsid<'_> {
+impl oxirush_utils::tree::Tree for FqCsid {
     const NAME: &'static str = "FQ-CSID";
     fn to_tree(&self) -> oxirush_utils::tree::Value {
         use oxirush_utils::tree;
@@ -716,7 +702,7 @@ macro_rules! mac_addresses {
     ($($(#[$meta:meta])* $ty:ident $name:literal $clause:literal;)*) => {$(
         $(#[$meta])*
         #[derive(Debug, Clone, Default, PartialEq, Eq)]
-        pub struct $ty<'a> {
+        pub struct $ty {
             /// The MAC addresses.
             pub mac_addresses: Vec<Mac>,
             /// The C-TAG, after its length.
@@ -724,16 +710,16 @@ macro_rules! mac_addresses {
             /// The S-TAG, after its length.
             pub s_tag: Option<Lv8>,
             /// The octets after them, which a later release adds.
-            pub extra: Octets<'a>,
+            pub extra: Octets,
         }
 
-        impl $ty<'_> {
+        impl $ty {
             /// The names of its fields.
             pub const FIELDS: &'static [&'static str] = &["MAC address values", "C-TAG", "S-TAG"];
         }
 
-        impl<'a> Codec<'a> for $ty<'a> {
-            fn decode(octets: &'a [u8]) -> Option<Self> {
+        impl Codec for $ty {
+            fn decode(octets: &[u8]) -> Option<Self> {
                 let (&count, mut rest) = octets.split_first()?;
                 let mut mac_addresses = Vec::with_capacity(usize::from(count));
                 for _ in 0..count {
@@ -768,20 +754,13 @@ macro_rules! mac_addresses {
             }
         }
 
-        impl Check for $ty<'_> {}
-
-        impl<'a> IntoOwned for $ty<'a> {
-            type Owned = $ty<'static>;
-            fn into_owned(self) -> $ty<'static> {
-                $ty { mac_addresses: self.mac_addresses, c_tag: self.c_tag, s_tag: self.s_tag, extra: self.extra.into_owned() }
-            }
-        }
+        impl Check for $ty {}
 
         #[cfg(feature = "serde")]
-        oxirush_utils::impl_serde!($ty<'a>);
+        oxirush_utils::impl_serde!($ty);
 
         #[cfg(feature = "tree")]
-        impl oxirush_utils::tree::Tree for $ty<'_> {
+        impl oxirush_utils::tree::Tree for $ty {
             const NAME: &'static str = $name;
             fn to_tree(&self) -> oxirush_utils::tree::Value {
                 use oxirush_utils::tree;

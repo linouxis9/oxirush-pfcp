@@ -88,7 +88,7 @@ pub enum EndpointError {
 }
 
 impl core::fmt::Display for EndpointError {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         match self {
             Self::Timeout => write!(f, "no response after N1 retransmissions"),
             Self::Node(error) => write!(f, "not sent: {error}"),
@@ -103,7 +103,7 @@ impl std::error::Error for EndpointError {}
 #[derive(Debug)]
 pub struct Incoming {
     /// The request.
-    pub message: Message<'static>,
+    pub message: Message,
     /// Who sent it, and what the answer takes from it.
     pub request: Inbound,
     commands: mpsc::Sender<Command>,
@@ -115,22 +115,22 @@ impl Incoming {
     /// # Errors
     ///
     /// The task of the endpoint has ended.
-    pub async fn respond(self, body: impl Into<Body<'static>>) -> Result<(), EndpointError> {
+    pub async fn respond(self, body: impl Into<Body>) -> Result<(), EndpointError> {
         let command = Command::Respond { request: self.request, body: body.into() };
         self.commands.send(command).await.map_err(|_| EndpointError::Closed)
     }
 }
 
 enum Command {
-    Request { to: SocketAddr, message: Message<'static>, reply: oneshot::Sender<Result<Message<'static>, EndpointError>> },
-    SessionRequest { local_seid: u64, body: Body<'static>, reply: oneshot::Sender<Result<Message<'static>, EndpointError>> },
-    Respond { request: Inbound, body: Body<'static> },
+    Request { to: SocketAddr, message: Message, reply: oneshot::Sender<Result<Message, EndpointError>> },
+    SessionRequest { local_seid: u64, body: Body, reply: oneshot::Sender<Result<Message, EndpointError>> },
+    Respond { request: Inbound, body: Body },
     NewSession { peer: SocketAddr, reply: oneshot::Sender<u64> },
     SendRaw { to: SocketAddr, octets: Vec<u8> },
 }
 
 impl core::fmt::Debug for Command {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         f.write_str("Command")
     }
 }
@@ -199,7 +199,7 @@ impl Endpoint {
     ///
     /// No response after N1 retransmissions, a request that the node does not send
     /// (no association, throttled), and an endpoint that has ended.
-    pub async fn request(&self, to: SocketAddr, message: Message<'static>) -> Result<Message<'static>, EndpointError> {
+    pub async fn request(&self, to: SocketAddr, message: Message) -> Result<Message, EndpointError> {
         let (reply, response) = oneshot::channel();
         self.commands.send(Command::Request { to, message, reply }).await.map_err(|_| EndpointError::Closed)?;
         response.await.map_err(|_| EndpointError::Closed)?
@@ -210,7 +210,7 @@ impl Endpoint {
     /// # Errors
     ///
     /// As [`request`](Self::request), and a session that the node does not have.
-    pub async fn session_request(&self, local_seid: u64, body: impl Into<Body<'static>>) -> Result<Message<'static>, EndpointError> {
+    pub async fn session_request(&self, local_seid: u64, body: impl Into<Body>) -> Result<Message, EndpointError> {
         let (reply, response) = oneshot::channel();
         let command = Command::SessionRequest { local_seid, body: body.into(), reply };
         self.commands.send(command).await.map_err(|_| EndpointError::Closed)?;
@@ -253,7 +253,7 @@ impl Endpoint {
     }
 }
 
-type Reply = oneshot::Sender<Result<Message<'static>, EndpointError>>;
+type Reply = oneshot::Sender<Result<Message, EndpointError>>;
 
 struct Task {
     socket: UdpSocket,

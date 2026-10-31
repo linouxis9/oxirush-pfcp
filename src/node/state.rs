@@ -28,7 +28,7 @@ use crate::values::NodeId;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Association {
     /// The peer's Node ID, which identifies the association.
-    pub node_id: NodeId<'static>,
+    pub node_id: NodeId,
     /// Its address.
     pub peer: SocketAddr,
     pub(crate) key: Vec<u8>,

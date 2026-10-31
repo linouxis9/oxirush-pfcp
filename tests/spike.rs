@@ -10,7 +10,7 @@ use oxirush_utils::tree;
 
 /// A Session Establishment Request of an SMF: one uplink PDR whose F-TEID the UPF
 /// chooses, one downlink PDR to the UE's address.
-fn establishment() -> Message<'static> {
+fn establishment() -> Message {
     let uplink = CreatePdr::new(
         PdrId::new(1),
         Precedence::new(255),
@@ -42,7 +42,7 @@ fn a_built_message_is_in_the_order_of_its_table_and_decodes_back() {
     let message = establishment();
     let octets = message.encode().unwrap();
     let decoded = Message::decode(&octets).unwrap();
-    assert_eq!(decoded.clone().into_owned(), message);
+    assert_eq!(decoded.clone(), message);
     assert_eq!(decoded.encode().unwrap(), octets);
     let Body::SessionEstablishmentRequest(request) = &decoded.body else { panic!() };
     assert!(request.order.is_empty(), "a built message is in the order of its table");

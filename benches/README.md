@@ -29,7 +29,6 @@ sudo perf stat -e instructions:u taskset -c 3 target/release/measure decode ser-
 | `frame` | The IEs walked as slices (`framing`), without decoding |
 | `decode` | `Message::decode` |
 | `read` | `decode`, then each value that a program takes from the message read |
-| `owned` | `decode`, then `into_owned()` |
 | `encode` | `Message::encode` of a decoded message |
 | `check` | `Message::check` of a decoded message |
 | `to_tree`, `from_tree` | The tree of a decoded message, and the message of its tree |
@@ -51,11 +50,11 @@ length first, and `check` allocates nothing for a message without a deviation.
 ## Owned or borrowed
 
 `captures`, with `PFCP_CAPTURES` naming `tests/captures/messages.tsv`, decodes the 213
-messages of the lab runs in a round. Built with `--cfg pfcp_borrowed`, a decoded octet
-string borrows the datagram in place of being copied: that took 5.3% fewer instructions on
+messages of the lab runs in a round. At f0eea08, built with `--cfg pfcp_borrowed`, a
+decoded octet string borrowed the datagram in place of being copied: that took 5.3% fewer instructions on
 the captures (660,493 against 625,602 a round, both 425 allocations), 8.4% on go-pfcp's
-Session Establishment Request and 7.0% on ser-16, at f0eea08. The crate is owned: its
-values have no lifetime.
+Session Establishment Request and 7.0% on ser-16. The crate is owned since: its values
+have no lifetime.
 
 ## Against go-pfcp
 

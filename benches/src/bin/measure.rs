@@ -1,4 +1,4 @@
-//! `measure WORKLOAD MESSAGE ROUNDS`: a workload on a message (frame, decode, read, owned,
+//! `measure WORKLOAD MESSAGE ROUNDS`: a workload on a message (frame, decode, read,
 //! encode, check, and with the feature `tree` to_tree and from_tree), ROUNDS times, for `perf
 //! stat`, which counts the instructions; with the feature `heap`, the allocations of one
 //! round, by dhat. It prints the time of a round, which is a note and no measurement.
@@ -6,7 +6,7 @@
 use std::hint::black_box;
 use std::time::Instant;
 
-use oxirush_pfcp::{IntoOwned, Message};
+use oxirush_pfcp::Message;
 use oxirush_pfcp_benches::{frame, messages, read};
 
 #[cfg(feature = "heap")]
@@ -22,23 +22,18 @@ fn run(workload: &str, octets: &[u8]) -> u64 {
             0
         }
         "read" => read(&Message::decode(black_box(octets)).unwrap()),
-        "owned" => {
-            let message = Message::decode(black_box(octets)).unwrap().into_owned();
-            black_box(&message);
-            0
-        }
         "encode" | "check" | "to_tree" | "from_tree" => unreachable!(),
         "sizes" => {
             use oxirush_pfcp::*;
             use std::mem::size_of;
             println!(
                 "Octets {}, FTeid {}, Pdi {}, CreatePdr {}, SessionEstablishmentRequest {}, Message {}",
-                size_of::<Octets<'_>>(),
-                size_of::<FTeid<'_>>(),
-                size_of::<Pdi<'_>>(),
-                size_of::<CreatePdr<'_>>(),
-                size_of::<SessionEstablishmentRequest<'_>>(),
-                size_of::<Message<'_>>()
+                size_of::<Octets>(),
+                size_of::<FTeid>(),
+                size_of::<Pdi>(),
+                size_of::<CreatePdr>(),
+                size_of::<SessionEstablishmentRequest>(),
+                size_of::<Message>()
             );
             0
         }

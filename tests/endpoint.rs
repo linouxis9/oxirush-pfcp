@@ -31,7 +31,7 @@ fn config(function: Function) -> NodeConfig {
     NodeConfig { t1: Duration::from_millis(100), n1: 2, heartbeat: None, ..NodeConfig::new(NodeId::Ipv4(Ipv4Addr::LOCALHOST), function, 7) }
 }
 
-fn accepted() -> Cause<'static> {
+fn accepted() -> Cause {
     Cause::new(CauseValue::RequestAccepted)
 }
 

@@ -288,7 +288,7 @@ impl fmt::Display for Path<'_> {
 
 /// Check a value of a row of a scope: itself, its length against Table 8.1.2-1, and a
 /// reserved value of a mandatory IE, which the receiver answers.
-pub(crate) fn check_field<'a, T: Check + crate::ie::Codec<'a> + crate::ie::IeType>(
+pub(crate) fn check_field<T: Check + crate::ie::Codec + crate::ie::IeType>(
     value: &T,
     path: &Path<'_>,
     presence: Presence,
@@ -314,7 +314,7 @@ pub(crate) fn check_field<'a, T: Check + crate::ie::Codec<'a> + crate::ie::IeTyp
 
 /// Check the values of a row: the row, then each value.
 #[inline(always)]
-pub(crate) fn check_field_values<'a, T: Check + crate::ie::Codec<'a> + crate::ie::IeType, F: crate::table::FieldValues<T>>(
+pub(crate) fn check_field_values<T: Check + crate::ie::Codec + crate::ie::IeType, F: crate::table::FieldValues<T>>(
     table: &'static Table,
     at: usize,
     field: &F,
@@ -402,7 +402,7 @@ fn row_deviations(table: &'static str, row: &Row, [rejected, off, over]: [bool; 
 /// Check a scope against its table: its mandatory IEs on the interface, the IEs that it
 /// keeps as octets (repeated, incorrect, of no row of the table, of no release), then
 /// each row that has values, and each value.
-pub(crate) fn check_scope<'a, S: Scope<'a> + Checked>(scope: &S, path: &Path<'_>, context: Context, found: &mut Vec<Deviation>) {
+pub(crate) fn check_scope<S: Scope + Checked>(scope: &S, path: &Path<'_>, context: Context, found: &mut Vec<Deviation>) {
     let table = S::table();
     let missing = |row: &Row| {
         let needed = mandatory(row, context);
