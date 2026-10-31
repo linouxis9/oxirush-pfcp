@@ -26,13 +26,17 @@ serde = ["tree", "oxirush-utils/serde"]
 # A PFCP entity without I/O: delivery, heartbeat, associations, sessions, load and
 # overload control.
 node = []
+# A node on a Tokio UDP socket, run by a task of its own.
+endpoint = ["node", "std", "dep:tokio"]
 
 [dependencies]
 pastey = "0.2"
+tokio = { version = "1.38", features = ["macros", "net", "rt", "sync", "time"], optional = true }
 oxirush-utils = { version = "0.1.0", default-features = false, features = ["alloc"] }
 
 [dev-dependencies]
 hex = "0.4.3"
+tokio = { version = "1.38", features = ["macros", "net", "rt", "sync", "time"] }
 serde_json = "1.0.154"
 
 [[test]]
@@ -49,6 +53,10 @@ required-features = ["serde"]
 [[test]]
 name = "node"
 required-features = ["node"]
+
+[[test]]
+name = "endpoint"
+required-features = ["endpoint"]
 
 # `pfcp_borrowed`: decoded values borrow their octets, for the measurement of the two
 # forms. cargo-fuzz sets `fuzzing`, and docs.rs `docsrs`.

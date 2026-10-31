@@ -46,6 +46,8 @@ mod list;
 mod message;
 #[cfg(feature = "node")]
 pub mod node;
+#[cfg(feature = "endpoint")]
+pub mod endpoint;
 mod octets;
 pub mod framing;
 mod registry;
