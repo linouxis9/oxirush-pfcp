@@ -12,9 +12,6 @@ categories = ["network-programming", "encoding", "parser-implementations", "no-s
 readme = "README.md"
 publish = false
 
-# The crate builds alone, outside any workspace that it sits in.
-[workspace]
-
 [features]
 default = ["std"]
 # The standard library. Without it the crate is `no_std` and needs an allocator.
