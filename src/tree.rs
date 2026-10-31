@@ -16,9 +16,14 @@
 */
 
 //! The tree of a message, on the engine of oxirush-utils: a scope is an object whose
-//! members are its IEs by the names of its table, in the order in which they first come;
-//! a row that is a list is a list. An IE that the scope keeps as octets is
+//! members are its IEs by the names of its table, in the order of the table; a row that
+//! is a list is a list, in the order of the wire. An IE that the scope keeps as octets is
 //! `{"octets": ...}` under the name of its row, of its type, or its number.
+//!
+//! A tree is the message in the order of its tables: a message whose IEs came in another
+//! order (§8.1.2 has a receiver take them in any order) has the same tree as one in the
+//! order of its tables, and from the tree the crate encodes the latter. The octets keep
+//! the order of the wire: decoding and encoding them is byte-exact.
 
 use alloc::string::String;
 use alloc::vec::Vec;
@@ -62,47 +67,60 @@ fn raw_tree(ie: &RawIe<'_>) -> Value {
     members.finish()
 }
 
-/// The tree of a scope.
+/// The tree of a scope, in the order of its table. The values of a row, and the IEs of
+/// its type that the scope keeps as octets, keep the order of the wire among themselves
+/// (§7.6.10); the IEs of no row come last, in the order of the wire.
 pub(crate) fn scope_to_tree<'a, S: Scope<'a> + TreeScope>(scope: &S) -> Value {
     let table = S::table();
+    let raws = scope.raw();
+    let order = scope.order();
+    // The kept IEs that the order places; those after them were added since.
+    let ordered = order.iter().filter(|placed| matches!(placed, Placed::Raw)).count().min(raws.len());
     let mut members = Map::new();
-    let mut nth = [0usize; 64];
-    let mut raw = scope.raw().iter();
-    let field = |members: &mut Map, at: usize, nth: &mut [usize; 64]| -> bool {
-        let row = &table.rows[at];
-        match scope.field_tree(row.ie_type, nth[at]) {
+    for row in table.rows {
+        let kept = raws.iter().any(|ie| ie.ie_type == row.ie_type);
+        if !kept && scope.count(row.ie_type) == 0 {
+            continue;
+        }
+        let list = row.repeat != Repeat::Once;
+        let mut nth = 0;
+        let field = |members: &mut Map, nth: &mut usize| match scope.field_tree(row.ie_type, *nth) {
             Some(value) => {
-                nth[at] += 1;
-                put(members, row.name.into(), row.repeat != Repeat::Once, value);
+                *nth += 1;
+                put(members, row.name.into(), list, value);
                 true
             }
             None => false,
-        }
-    };
-    for placed in scope.order() {
-        match placed {
-            Placed::Field(ie_type) => {
-                if let Some(at) = table.position_of(*ie_type) {
-                    field(&mut members, at, &mut nth);
+        };
+        let kept_from = match (kept, order.is_empty()) {
+            // The values and the kept IEs of the row, in the order of the wire.
+            (true, false) => {
+                let mut at = 0;
+                for placed in order {
+                    match placed {
+                        Placed::Field(ie_type) if *ie_type == row.ie_type => {
+                            field(&mut members, &mut nth);
+                        }
+                        Placed::Raw => {
+                            if let Some(ie) = raws.get(at).filter(|ie| ie.ie_type == row.ie_type) {
+                                put(&mut members, row.name.into(), list, raw_tree(ie));
+                            }
+                            at += 1;
+                        }
+                        Placed::Field(_) => {}
+                    }
                 }
+                ordered
             }
-            Placed::Raw => {
-                if let Some(ie) = raw.next() {
-                    let row = table.row_of(ie.ie_type);
-                    let list = row.is_some_and(|row| row.repeat != Repeat::Once);
-                    put(&mut members, crate::tree_name(ie.ie_type, Some(table)), list, raw_tree(ie));
-                }
-            }
+            _ => 0,
+        };
+        while field(&mut members, &mut nth) {}
+        for ie in raws[kept_from..].iter().filter(|ie| ie.ie_type == row.ie_type) {
+            put(&mut members, row.name.into(), list, raw_tree(ie));
         }
     }
-    // The values that are not in the order: those of a scope in the order of its table,
-    // and those added since.
-    for at in 0..table.rows.len() {
-        while field(&mut members, at, &mut nth) {}
-    }
-    for ie in raw {
-        let list = table.row_of(ie.ie_type).is_some_and(|row| row.repeat != Repeat::Once);
-        put(&mut members, crate::tree_name(ie.ie_type, Some(table)), list, raw_tree(ie));
+    for ie in raws.iter().filter(|ie| table.row_of(ie.ie_type).is_none()) {
+        put(&mut members, crate::tree_name(ie.ie_type, Some(table)), false, raw_tree(ie));
     }
     Value::Object(members)
 }

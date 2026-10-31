@@ -171,12 +171,13 @@ fn a_flag_that_disagrees_is_refused_where_it_is_written() {
 }
 
 /// The vectors of another implementation, when `PFCP_VECTORS` names their file: each
-/// decodes and encodes back to its octets, and so does its tree. A fourth column names the
+/// decodes and encodes back to its octets, and its tree, in the order of its tables,
+/// reads back to itself. A fourth column names the
 /// interface to check the message on; without it, on N4 with the IEs of any interface.
 #[test]
 fn other_vectors_round_trip() {
     let Ok(file) = std::env::var("PFCP_VECTORS") else { return };
-    let mut read = 0;
+    let (mut read, mut reordered) = (0, 0);
     for line in std::fs::read_to_string(file).unwrap().lines() {
         let fields: Vec<&str> = line.split('\t').collect();
         let octets = hex::decode(fields[2]).unwrap();
@@ -190,9 +191,18 @@ fn other_vectors_round_trip() {
         let mut again = Vec::new();
         for message in &messages {
             again.extend(message.encode().unwrap());
+            // The tree is the message in the order of its tables: it reads back to itself,
+            // and so do the octets that it encodes; they are the message's own when its IEs
+            // came in that order.
             let tree = message.to_tree();
             let back = Message::from_tree(&tree).unwrap();
-            assert_eq!(back.encode().unwrap(), message.encode().unwrap(), "{} {}", fields[0], fields[1]);
+            let encoded = back.encode().unwrap();
+            assert_eq!(back.to_tree(), tree, "{} {}", fields[0], fields[1]);
+            assert_eq!(Message::decode(&encoded).unwrap().to_tree(), tree, "{} {}", fields[0], fields[1]);
+            assert_eq!(encoded.len(), message.encode().unwrap().len(), "{} {}", fields[0], fields[1]);
+            if encoded != message.encode().unwrap() {
+                reordered += 1;
+            }
             if !matches!(message.body, Body::Other { .. }) {
                 read += 1;
                 println!("{} {}: {tree}", fields[0], fields[1]);
@@ -214,7 +224,7 @@ fn other_vectors_round_trip() {
         }
         assert_eq!(again, octets, "{} {}", fields[0], fields[1]);
     }
-    println!("{read} messages read by their tables");
+    println!("{read} messages read by their tables, {reordered} of them not in the order of their tables");
 }
 
 /// The IE types of a scope, depth first, by the forms of the registry: what a dissector
@@ -310,4 +320,31 @@ fn rough_times() {
         set(&mut tree, "/pfcp/Create PDR/1/PDI/UE IP address/0/IPv4 address", "10.45.0.3").unwrap();
         drop(black_box(Message::from_tree(&tree).unwrap().encode().unwrap()));
     });
+}
+
+/// A message whose IEs come in another order than their table's (§8.1.2 has a receiver
+/// take them in any order): its octets encode back as they came, and its tree is in the
+/// order of the table, as the tree of the message in that order is.
+#[test]
+fn a_tree_is_in_the_order_of_the_tables() {
+    let message = establishment();
+    let octets = message.encode().unwrap();
+    // The IEs of the message level.
+    let (_, _, ies) = oxirush_pfcp::framing::message_ies(&octets).unwrap();
+    let ies: Vec<Vec<u8>> = ies
+        .map(|ie| {
+            let ie = ie.unwrap();
+            [&ie.ie_type.to_be_bytes()[..], &ie.length.to_be_bytes(), ie.content()].concat()
+        })
+        .collect();
+    let header = octets.len() - ies.iter().map(Vec::len).sum::<usize>();
+    // Create FAR, the last IE, first: the two Create PDRs keep their order, as a list does.
+    let mut reordered = octets[..header].to_vec();
+    for ie in ies[ies.len() - 1..].iter().chain(&ies[..ies.len() - 1]) {
+        reordered.extend_from_slice(ie);
+    }
+    let decoded = Message::decode(&reordered).unwrap();
+    assert_eq!(decoded.encode().unwrap(), reordered, "the octets keep the order of the wire");
+    assert_eq!(decoded.to_tree(), message.to_tree(), "the tree has the order of the table");
+    assert_eq!(Message::from_tree(&decoded.to_tree()).unwrap().encode().unwrap(), octets);
 }
