@@ -318,8 +318,8 @@ pub enum Event {
         /// It replaces an association of the same Node ID (§6.2.6.2.2).
         replaced: bool,
         /// The local SEIDs of the sessions of the association that it replaces, which
-        /// end with it: those that the PFCP Session Retention Information of the request
-        /// does not keep (§6.2.6.2.2).
+        /// end with it on a UP function: those that the PFCP Session Retention Information
+        /// of the request does not keep (§6.2.6.2.2).
         sessions: Vec<u64>,
     },
     /// An association ended by a successful Association Release, or by
@@ -1915,7 +1915,10 @@ impl Node {
             (Body::AssociationSetupResponse(_), Effect::Setup(retained)) => {
                 if let Some(node_id) = &request.node_id {
                     let peer = self.request_address(request.from);
-                    self.associate(now, peer, node_id.clone(), Some(retained));
+                    // The retention of the sessions is the UP function's (§6.2.6.2.2): a
+                    // CP function stores the Node ID (§6.2.6.3.2).
+                    let retained = (self.config.function == Function::Up).then_some(retained);
+                    self.associate(now, peer, node_id.clone(), retained);
                 }
             }
             (Body::AssociationReleaseResponse(_), _) => {

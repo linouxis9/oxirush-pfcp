@@ -2105,6 +2105,35 @@ fn no_sequence_number_left() {
 
 // ── Associations and sessions, kept in step with the procedures ─────────────
 
+/// §6.2.6.3.2: a CP function that accepts the setup of a UP function that it has an
+/// association with keeps its sessions: the retention of §6.2.6.2.2 is the UP
+/// function's.
+#[test]
+fn a_cp_function_keeps_its_sessions_on_a_new_setup() {
+    let (mut smf, mut upf) = associated(at(0));
+    let (cp_seid, _) = established(&mut smf, &mut upf, at(0));
+    let setup = AssociationSetupRequest::new(node_id(UPF), RecoveryTimeStamp::new(1000));
+    upf.request(
+        at(1),
+        SMF,
+        Message {
+            header: Header::node(0),
+            body: setup.into(),
+        },
+    )
+    .unwrap();
+    pass(&mut upf, &mut smf, SMF, at(1));
+    let (inbound, _) = request(&mut smf);
+    let answer =
+        AssociationSetupResponse::new(node_id(SMF), accepted(), RecoveryTimeStamp::new(1000));
+    smf.respond(at(1), &inbound, answer).unwrap();
+    assert!(smf.session(cp_seid).is_some());
+    assert!(matches!(
+        &events(&mut smf)[..],
+        [Event::Associated { replaced: true, sessions, .. }] if sessions.is_empty()
+    ));
+}
+
 /// §6.2.6.2.2: a new association of a Node ID that has one ends the sessions of the old,
 /// but those that the PFCP Session Retention Information keeps.
 #[test]
