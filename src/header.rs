@@ -18,7 +18,6 @@
 //! The PFCP header (TS 29.244 §7.2.2): its flags, the SEID of a session message, the
 //! sequence number and the message priority.
 
-use alloc::vec::Vec;
 
 /// The length of the header of a node related message, and of a session related one.
 pub const NODE_HEADER: usize = 8;
@@ -88,8 +87,16 @@ impl Header {
         false
     }
 
-    /// Write the header of a message of `message_type` whose IEs have `body` octets.
-    pub(crate) fn encode(&self, message_type: u8, body: usize, out: &mut Vec<u8>) -> Option<()> {
+    /// Write the header of a message of `message_type` whose IEs have `body` octets, at
+    /// the start of `out`, which has room for it.
+    pub(crate) fn encode_into(&self, message_type: u8, body: usize, out: &mut [u8]) -> Option<()> {
+        let (octets, length) = self.octets(message_type, body)?;
+        out.get_mut(..length)?.copy_from_slice(&octets[..length]);
+        Some(())
+    }
+
+    /// The octets of the header, and how many there are.
+    fn octets(&self, message_type: u8, body: usize) -> Option<([u8; SESSION_HEADER], usize)> {
         let flags = (self.version & 7) << 5
             | (self.spare & 3) << 3
             | u8::from(self.follow_on) << 2
@@ -99,18 +106,21 @@ impl Header {
             Some(length) => length,
             None => u16::try_from(self.len() - 4 + body).ok()?,
         };
-        out.push(flags);
-        out.push(message_type);
-        out.extend_from_slice(&length.to_be_bytes());
+        let mut octets = [0; SESSION_HEADER];
+        octets[0] = flags;
+        octets[1] = message_type;
+        octets[2..4].copy_from_slice(&length.to_be_bytes());
+        let mut at = 4;
         if let Some(seid) = self.seid {
-            out.extend_from_slice(&seid.to_be_bytes());
+            octets[4..12].copy_from_slice(&seid.to_be_bytes());
+            at = 12;
         }
-        out.extend_from_slice(&self.sequence.to_be_bytes()[1..]);
-        out.push(match self.priority {
+        octets[at..at + 3].copy_from_slice(&self.sequence.to_be_bytes()[1..]);
+        octets[at + 3] = match self.priority {
             Some(priority) => priority << 4 | self.spare_last & 0x0f,
             None => self.spare_last,
-        });
-        Some(())
+        };
+        Some((octets, at + 4))
     }
 
     /// Read a header: the header, the message type and the Message Length. `None` for

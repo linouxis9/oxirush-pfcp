@@ -34,6 +34,8 @@ pub trait Field: Sized {
     fn read(octets: &mut &[u8]) -> Option<Self>;
     /// Write the field.
     fn write(&self, out: &mut Vec<u8>);
+    /// Its length.
+    fn size(&self) -> usize;
     /// Its tree.
     #[cfg(feature = "tree")]
     fn to_tree(&self) -> oxirush_utils::tree::Value;
@@ -60,6 +62,9 @@ macro_rules! number_field {
             fn write(&self, out: &mut Vec<u8>) {
                 out.extend_from_slice(&self.to_be_bytes());
             }
+            fn size(&self) -> usize {
+                core::mem::size_of::<$t>()
+            }
             #[cfg(feature = "tree")]
             fn to_tree(&self) -> oxirush_utils::tree::Value {
                 oxirush_utils::tree::unsigned((*self).into())
@@ -84,6 +89,9 @@ macro_rules! address_field {
             }
             fn write(&self, out: &mut Vec<u8>) {
                 out.extend_from_slice(&self.octets());
+            }
+            fn size(&self) -> usize {
+                $n
             }
             #[cfg(feature = "tree")]
             fn to_tree(&self) -> oxirush_utils::tree::Value {
@@ -118,6 +126,9 @@ impl<'a, const N: u16> Codec<'a> for Raw<'a, N> {
     fn encode(&self, out: &mut Vec<u8>) -> Result<(), Error> {
         out.extend_from_slice(&self.0);
         Ok(())
+    }
+    fn encoded_len(&self) -> usize {
+        self.0.len()
     }
 }
 
@@ -179,6 +190,9 @@ macro_rules! pfcp_number {
                 Field::write(&self.value, out);
                 out.extend_from_slice(&self.extra);
                 Ok(())
+            }
+            fn encoded_len(&self) -> usize {
+                core::mem::size_of::<$t>() + self.extra.len()
             }
         }
 
@@ -311,6 +325,9 @@ impl<'a> Codec<'a> for SourceInterface<'a> {
         out.push(self.spare << 4 | self.value.bits());
         out.extend_from_slice(&self.extra);
         Ok(())
+    }
+    fn encoded_len(&self) -> usize {
+        1 + self.extra.len()
     }
 }
 
@@ -523,6 +540,14 @@ impl<'a> Codec<'a> for NodeId<'a> {
             }
         }
         Ok(())
+    }
+    fn encoded_len(&self) -> usize {
+        1 + match self {
+            Self::Ipv4(_) => 4,
+            Self::Ipv6(_) => 16,
+            Self::Fqdn(labels) => labels.len(),
+            Self::Other(_, rest) => rest.len(),
+        }
     }
 }
 

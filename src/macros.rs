@@ -140,6 +140,10 @@ macro_rules! pfcp_layout {
                 out.extend_from_slice(&self.extra);
                 Ok(())
             }
+
+            fn encoded_len(&self) -> usize {
+                1 $( + self.$field.as_ref().map_or(0, crate::values::Field::size) )* + self.extra.len()
+            }
         }
 
         impl<'a> crate::octets::IntoOwned for $ty<'a> {
@@ -335,6 +339,26 @@ macro_rules! pfcp_table {
                 Ok(false)
             }
 
+            fn encoded_len(&self) -> usize {
+                let mut length = 0;
+                $( pfcp_table!(@each [$(* $($max)?)?] self.$field, |nth, value| {
+                    let _ = nth;
+                    length += 4 + crate::ie::Codec::encoded_len(value);
+                }); )*
+                for ie in &self.raw {
+                    length += 4 + 2 * usize::from(ie.enterprise_id.is_some()) + ie.octets.len();
+                }
+                length
+            }
+
+            fn encode_fields(&self, out: &mut alloc::vec::Vec<u8>) -> Result<(), crate::Error> {
+                $( pfcp_table!(@each [$(* $($max)?)?] self.$field, |nth, value| {
+                    let _ = nth;
+                    crate::ie::encode_value(value, out)?;
+                }); )*
+                Ok(())
+            }
+
             fn count(&self, ie_type: u16) -> usize {
                 $(
                     if ie_type == <pfcp_table!(@type $vty $($raw)?) as crate::ie::IeType>::IE_TYPE {
@@ -496,6 +520,10 @@ macro_rules! pfcp_table {
 
             fn encode(&self, out: &mut alloc::vec::Vec<u8>) -> Result<(), crate::Error> {
                 crate::table::encode_scope(self, out)
+            }
+
+            fn encoded_len(&self) -> usize {
+                crate::table::Scope::encoded_len(self)
             }
         }
 

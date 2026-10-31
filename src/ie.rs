@@ -67,6 +67,9 @@ pub trait Codec<'a>: Sized {
     ///
     /// A value whose fields disagree with what its flags say, as its clause has them.
     fn encode(&self, out: &mut Vec<u8>) -> Result<(), Error>;
+
+    /// How many octets [`encode`](Self::encode) writes.
+    fn encoded_len(&self) -> usize;
 }
 
 /// An IE that a scope keeps as its octets, in its place: one whose type the table of the

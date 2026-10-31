@@ -140,6 +140,10 @@ pub(crate) trait Scope<'a>: Default {
     fn place(&mut self, ie_type: u16, body: &'a [u8]) -> Placing;
     /// Write the `nth` value of the field of `ie_type`: `false` for one that is not there.
     fn emit(&self, ie_type: u16, nth: usize, out: &mut Vec<u8>) -> Result<bool, Error>;
+    /// How many octets the IEs of the scope have, their headers included.
+    fn encoded_len(&self) -> usize;
+    /// Write every field, in the order of the table.
+    fn encode_fields(&self, out: &mut Vec<u8>) -> Result<(), Error>;
     /// How many values the field of `ie_type` has.
     fn count(&self, ie_type: u16) -> usize;
     /// Whether `octets` decode as the value of the field of `ie_type`.
@@ -231,8 +235,15 @@ pub(crate) fn keep_order<'a, S: Scope<'a>>(scope: &mut S, order: Vec<Placed>) {
 /// Write `scope`: in the order that it keeps, with the values that were added since in
 /// the places of their rows, or in the order of its table.
 pub(crate) fn encode_scope<'a, S: Scope<'a>>(scope: &S, out: &mut Vec<u8>) -> Result<(), Error> {
-    let table = S::table();
     let order = scope.order();
+    if order.is_empty() {
+        scope.encode_fields(out)?;
+        for ie in scope.raw() {
+            ie.encode(out)?;
+        }
+        return Ok(());
+    }
+    let table = S::table();
     // How many values of each row the order has: those after are added.
     let mut ordered = [0usize; 64];
     for placed in order {

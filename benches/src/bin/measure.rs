@@ -54,8 +54,12 @@ fn main() {
     let _profiler = dhat::Profiler::builder().testing().build();
     #[cfg(feature = "heap")]
     {
+        let message = Message::decode(octets).unwrap();
         let before = dhat::HeapStats::get();
-        black_box(run(workload, octets));
+        match workload.as_str() {
+            "encode" => drop(black_box(message.encode().unwrap())),
+            _ => drop(black_box(run(workload, octets))),
+        }
         let after = dhat::HeapStats::get();
         println!(
             "{workload} {name} {} octets: {} allocations, {} octets allocated",

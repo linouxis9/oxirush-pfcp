@@ -94,6 +94,16 @@ impl<'a> Body<'a> {
         })
     }
 
+    fn encoded_len(&self) -> usize {
+        use crate::table::Scope;
+        match self {
+            Self::HeartbeatRequest(body) => body.encoded_len(),
+            Self::HeartbeatResponse(body) => body.encoded_len(),
+            Self::SessionEstablishmentRequest(body) => body.encoded_len(),
+            Self::Other { octets, .. } => octets.len(),
+        }
+    }
+
     fn encode(&self, out: &mut Vec<u8>) -> Result<(), Error> {
         match self {
             Self::HeartbeatRequest(body) => encode_scope(body, out),
@@ -176,14 +186,17 @@ impl<'a> Message<'a> {
     /// A value whose fields disagree with its flags, and an IE or a message longer than a
     /// Length can say.
     pub fn encode(&self) -> Result<Vec<u8>, Error> {
-        let mut body = Vec::new();
-        self.body.encode(&mut body)?;
-        let mut out = Vec::with_capacity(self.header.len() + body.len());
-        let message_type = self.body.message_type();
+        // The IEs after room for the header, which their length then completes.
+        let header = self.header.len();
+        let expected = self.body.encoded_len();
+        let mut out = Vec::with_capacity(header + expected);
+        out.resize(header, 0);
+        self.body.encode(&mut out)?;
+        let body = out.len() - header;
+        debug_assert_eq!(body, expected, "the encoded length of the IEs is the one computed first");
         self.header
-            .encode(message_type, body.len(), &mut out)
-            .ok_or(Error::TooLong { ie_type: 0, length: body.len() })?;
-        out.extend_from_slice(&body);
+            .encode_into(self.body.message_type(), body, &mut out)
+            .ok_or(Error::TooLong { ie_type: 0, length: body })?;
         Ok(out)
     }
 
