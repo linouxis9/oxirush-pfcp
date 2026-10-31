@@ -142,7 +142,7 @@ impl Message {
     pub fn decode_datagram(octets: &[u8]) -> Vec<Result<Self, Error>> {
         datagram_parts(octets)
             .into_iter()
-            .map(|(_, message)| message)
+            .map(Message::decode)
             .collect()
     }
 
@@ -304,24 +304,19 @@ impl Message {
     }
 }
 
-/// The messages of a datagram, as [`Message::decode_datagram`] has them, each with its
-/// octets.
-pub(crate) fn datagram_parts(mut octets: &[u8]) -> Vec<(&[u8], Result<Message, Error>)> {
+/// The octets of each message of a datagram, as [`Message::decode_datagram`] frames
+/// them, before they are decoded.
+pub(crate) fn datagram_parts(mut octets: &[u8]) -> Vec<&[u8]> {
     let mut messages = Vec::new();
     loop {
         let Some((header, _, length)) = Header::decode(octets) else {
-            messages.push((
-                octets,
-                Err(Error::TooShort {
-                    octets: octets.len(),
-                }),
-            ));
+            messages.push(octets);
             return messages;
         };
         let end = 4 + usize::from(length);
         let whole = header.follow_on && end <= octets.len() && end >= header.len();
         let this = if whole { &octets[..end] } else { octets };
-        messages.push((this, Message::decode(this)));
+        messages.push(this);
         if !whole {
             return messages;
         }
