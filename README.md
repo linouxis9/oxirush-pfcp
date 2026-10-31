@@ -321,7 +321,8 @@ PFCP Heartbeat Request (sequence 9): 2001000c0000090000600004e8754700
 
 A tree is in the order of the tables. A receiver takes the IEs of a message in
 any order (§8.1.2), so two messages that differ only in that order have the
-same tree, and a tree encodes in the order of the tables. The IEs of one type
+same tree, and a tree, in whatever order it writes them, encodes in the order of
+the tables. The IEs of one type
 keep their order, as a list does: the first DNS Server Address is the primary
 one. To send IEs out of order, write the octets.
 

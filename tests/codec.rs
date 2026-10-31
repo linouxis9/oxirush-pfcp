@@ -697,3 +697,46 @@ impl<T: Check> CheckKinds for T {
         found.into_iter().map(|deviation| deviation.kind).collect()
     }
 }
+
+/// A tree written in another order than its table's encodes in the table's order; within
+/// a row, its values and its octets keep the order written.
+#[test]
+fn a_tree_written_in_any_order_encodes_in_the_order_of_its_table() {
+    let written = tree!({
+        "message": "PFCP Association Setup Request",
+        "Sequence Number": 9,
+        "ies": {"Recovery Time Stamp": 3_900_000_000u32, "Node ID": "10.0.0.1"}
+    });
+    let octets = Message::from_tree(&written).unwrap().encode().unwrap();
+    assert_eq!(&octets[8..10], &[0, 60], "the Node ID first");
+    let in_order = tree!({
+        "message": "PFCP Association Setup Request",
+        "Sequence Number": 9,
+        "ies": {"Node ID": "10.0.0.1", "Recovery Time Stamp": 3_900_000_000u32}
+    });
+    assert_eq!(Message::from_tree(&in_order).unwrap().encode().unwrap(), octets);
+    // With octets of a row and an IE of no row
+    let written = tree!({
+        "message": "PFCP Association Setup Request",
+        "Sequence Number": 9,
+        "ies": {"Source IP Address": {"octets": "0a"}, "Recovery Time Stamp": [{"octets": "01"}, 3_900_000_000u32], "Node ID": "10.0.0.1"}
+    });
+    let message = Message::from_tree(&written).unwrap();
+    let types: Vec<u16> = framing::message_ies(&message.encode().unwrap()).unwrap().2.map(|ie| ie.unwrap().ie_type).collect();
+    assert_eq!(types, [60, 96, 96, 192]);
+}
+
+/// A row goes by its name: by the name of its IE type, or by the name of one of the rows
+/// that share it, a tree is refused with the name to write; and a row written twice is
+/// refused.
+#[test]
+fn a_row_goes_by_its_name() {
+    let response = |ies: tree::Value| tree!({"message": "PFCP Session Establishment Response", "SEID": 1, "Sequence Number": 1, "ies": ies});
+    let error = Message::from_tree(&response(tree!({"Node ID": "10.0.0.2", "Cause": 1, "F-SEID": {"V4": true, "SEID": 1, "IPv4 address": "10.0.0.2"}}))).unwrap_err().to_string();
+    assert!(error.contains("the IE type of the row UP F-SEID"), "{error}");
+    let request = tree!({"message": "PFCP Session Establishment Request", "SEID": 0, "Sequence Number": 1, "ies": {"SGW-C FQ-CSID": {"octets": "01"}}});
+    let error = Message::from_tree(&request).unwrap_err().to_string();
+    assert!(error.contains("written as FQ-CSID"), "{error}");
+    let error = Message::from_tree(&response(tree!({"Node ID": "10.0.0.2", "node_id": "10.0.0.3", "Cause": 1}))).unwrap_err().to_string();
+    assert!(error.contains("are both the row Node ID"), "{error}");
+}

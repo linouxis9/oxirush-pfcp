@@ -157,7 +157,8 @@ fn check_one_change_per_rule() {
     assert_eq!(kinds(&message, Interfaces::N4), [DeviationKind::RuleChangedTwice { rule: "PDR", id: 3 }]);
     let mut establishment = establishment();
     request_with(&mut establishment, |request| request.create_far.push(far(1)));
-    assert_eq!(kinds(&establishment, Interfaces::N4), [DeviationKind::RuleChangedTwice { rule: "FAR", id: 1 }]);
+    let found = establishment.check();
+    assert_eq!(found.iter().map(|deviation| (deviation.kind.clone(), deviation.clause)).collect::<Vec<_>>(), [(DeviationKind::RuleChangedTwice { rule: "FAR", id: 1 }, "5.2.1")]);
 }
 
 /// §8.2.34: a Metric is a percentage, and a receiver takes another value as 0.

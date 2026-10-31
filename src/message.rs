@@ -241,8 +241,12 @@ impl Message {
             rejected: rejection,
         };
         self.body.check(&crate::check::Path::Root("/pfcp"), context, &mut found);
+        // An establishment that creates a rule twice gives two rules one Rule ID, which
+        // identifies one rule of its type in the session (§5.2.1); a modification changes
+        // a rule once (§6.3.3.2).
+        let clause = if message_type == 50 { "5.2.1" } else { "6.3.3.2" };
         for (rule, id) in self.body.rules_changed_twice() {
-            found.push(Deviation::new("/pfcp", "6.3.3.2", DeviationKind::RuleChangedTwice { rule, id }));
+            found.push(Deviation::new("/pfcp", clause, DeviationKind::RuleChangedTwice { rule, id }));
         }
         found
     }
@@ -320,8 +324,8 @@ impl Body {
         cause.as_ref().map(|cause| cause.value)
     }
 
-    /// Each rule that the message creates, updates or removes more than once (§6.3.3.2),
-    /// by the name of its type and its ID.
+    /// Each rule that the message creates, updates or removes more than once (§5.2.1,
+    /// §6.3.3.2), by the name of its type and its ID.
     fn rules_changed_twice(&self) -> Vec<(&'static str, u32)> {
         fn ids<'b, T: 'b>(rules: impl IntoIterator<Item = &'b T>, id: impl Fn(&T) -> Option<u32>, out: &mut Ids) {
             for id in rules.into_iter().filter_map(id) {

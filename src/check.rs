@@ -117,7 +117,9 @@ pub enum DeviationKind {
         /// The message type.
         message_type: u8,
     },
-    /// A rule that one message creates, updates or removes more than once (§6.3.3.2).
+    /// A rule that one message creates, updates or removes more than once: two rules of one
+    /// Rule ID in an establishment (§5.2.1), two changes of one rule in a modification
+    /// (§6.3.3.2).
     RuleChangedTwice {
         /// The type of the rule: `PDR`, `FAR`, `URR`, `QER`, `BAR`, `MAR` or `SRR`.
         rule: &'static str,

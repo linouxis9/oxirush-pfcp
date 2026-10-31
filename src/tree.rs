@@ -22,8 +22,9 @@
 //!
 //! A tree is the message in the order of its tables: a message whose IEs came in another
 //! order (§8.1.2 has a receiver take them in any order) has the same tree as one in the
-//! order of its tables, and from the tree the crate encodes the latter. The octets keep
-//! the order of the wire: decoding and encoding them is byte-exact.
+//! order of its tables, and from any tree, in whatever order its rows are written, the
+//! crate encodes the latter. The octets keep the order of the wire: decoding and encoding
+//! them is byte-exact.
 
 use alloc::string::String;
 use alloc::vec::Vec;
@@ -172,7 +173,9 @@ fn type_of_name(name: &str) -> Option<u16> {
         .map(|info| info.ie_type)
 }
 
-/// A scope from its tree. The IEs are encoded in the order in which they are written.
+/// A scope from its tree, which encodes in the order of its table whatever the order in
+/// which the tree writes its rows: the values of a row, and the IEs of its type written
+/// as octets, in the order written; the IEs of no row last.
 pub(crate) fn scope_from_tree<S: Scope + TreeScope>(value: &Value, reading: &mut Reading) -> Result<S, Refused> {
     let Some(members) = value.as_object() else {
         return Err(reading.mismatch("an object of IEs", value));
@@ -180,18 +183,30 @@ pub(crate) fn scope_from_tree<S: Scope + TreeScope>(value: &Value, reading: &mut
     let table = S::table();
     let names: Vec<&str> = table.rows.iter().map(|row| row.name).collect();
     let mut scope = S::default();
-    let mut order = Vec::new();
+    // Each IE where its row puts it: the position of the row, or after them all.
+    let mut placed: Vec<(usize, Placed)> = Vec::new();
+    let mut kept: Vec<(usize, RawIe)> = Vec::new();
+    let mut rows_written: Vec<(usize, &str)> = Vec::new();
     for (written, held) in members {
-        let row = tree::named(&names, written).map(|at| &table.rows[at]);
+        let at = tree::named(&names, written);
+        let row = at.map(|at| &table.rows[at]);
         let Some(ie_type) = row.map(|row| row.ie_type).or_else(|| type_of_name(written)) else {
-            let near = tree::nearest(&names, written, 3);
-            let why = alloc::format!(
-                "{written:?} is no IE of {}{}",
-                table.name,
-                if near.is_empty() { String::new() } else { alloc::format!(": the nearest are {}", near.join(", ")) }
-            );
-            return Err(reading.refuse(ErrorKind::NoSuchMember, why));
+            return Err(reading.refuse(ErrorKind::NoSuchMember, no_such_ie(table, &names, written)));
         };
+        if let Some(at) = at {
+            if let Some((_, before)) = rows_written.iter().find(|(row, _)| *row == at) {
+                let why = alloc::format!("{written:?} and {before:?} are both the row {}", table.rows[at].name);
+                return Err(reading.refuse(ErrorKind::Value, why));
+            }
+            rows_written.push((at, written));
+        }
+        if row.is_none()
+            && let Some(row) = table.row_of(ie_type)
+        {
+            let why = alloc::format!("{written:?} is the IE type of the row {}, which goes by its name", row.name);
+            return Err(reading.refuse(ErrorKind::NoSuchMember, why));
+        }
+        let position = at.unwrap_or(usize::MAX);
         let label: &'static str = row.map_or("IE", |row| row.name);
         let list = row.is_some_and(|row| row.repeat != Repeat::Once);
         reading.within(label, held, |held, reading| {
@@ -200,8 +215,8 @@ pub(crate) fn scope_from_tree<S: Scope + TreeScope>(value: &Value, reading: &mut
             let mut valued = false;
             let mut entry = |value: &Value, reading: &mut Reading| -> Result<(), Refused> {
                 if is_octets(value) {
-                    scope.raw_mut().push(read_raw(ie_type, value, reading)?);
-                    order.push(Placed::Raw);
+                    kept.push((position, read_raw(ie_type, value, reading)?));
+                    placed.push((position, Placed::Raw));
                     return Ok(());
                 }
                 if row.is_none() {
@@ -218,7 +233,7 @@ pub(crate) fn scope_from_tree<S: Scope + TreeScope>(value: &Value, reading: &mut
                 }
                 valued = true;
                 scope.read_field(ie_type, value, reading)?;
-                order.push(Placed::Field(ie_type));
+                placed.push((position, Placed::Field(ie_type)));
                 Ok(())
             };
             match held {
@@ -231,8 +246,25 @@ pub(crate) fn scope_from_tree<S: Scope + TreeScope>(value: &Value, reading: &mut
             }
         })?;
     }
-    keep_order(&mut scope, order);
+    // The order of the table; within a row, and after the rows, the order written.
+    placed.sort_by_key(|(position, _)| *position);
+    kept.sort_by_key(|(position, _)| *position);
+    scope.raw_mut().extend(kept.into_iter().map(|(_, ie)| ie));
+    keep_order(&mut scope, placed.into_iter().map(|(_, placed)| placed).collect());
     Ok(scope)
+}
+
+/// Why a name is no IE of a table: the nearest names, or the row whose role it is.
+fn no_such_ie(table: &crate::table::Table, names: &[&str], written: &str) -> String {
+    if let Some(row) = table.rows.iter().find(|row| row.roles.iter().any(|role| tree::same_name(role.name, written))) {
+        return alloc::format!("{written:?} is a row that the wire does not tell apart from the others of {}: they are written as {}", row.name, row.name);
+    }
+    let near = tree::nearest(names, written, 3);
+    alloc::format!(
+        "{written:?} is no IE of {}{}",
+        table.name,
+        if near.is_empty() { String::new() } else { alloc::format!(": the nearest are {}", near.join(", ")) }
+    )
 }
 
 /// The rules of the paths of PFCP on the engine of oxirush-utils: `/pfcp` is short for
