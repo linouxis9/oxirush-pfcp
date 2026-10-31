@@ -63,6 +63,50 @@ jobs:
           workspaces: benches
       - run: cargo build --release --manifest-path benches/Cargo.toml --features tree
 
+  # tests/readme.rs is the test of the blocks of README.md that the README tool of
+  # oxirush-aper writes, at this revision: it must be the one of the README.
+  readme:
+    name: The test of the README
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: crate
+      - uses: actions/checkout@v4
+        with:
+          repository: linouxis9/oxirush-aper
+          ref: 478c2c2f673b374cb15c139c212c0b5a23881f38
+          path: oxirush-aper
+      - run: python3 ../oxirush-aper/protocols/tests/readme.py --check
+        working-directory: crate
+
+  # The fixtures of the test `spec`, as tests/spec/extract.py writes them from the
+  # document in the 3GPP archive, whose SHA-256 it checks.
+  fixtures:
+    name: The fixtures of the specification
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 tests/spec/extract.py --fetch
+      - run: git diff --exit-code tests/spec
+
+  # The test vectors of go-pfcp, at the version that tests/README.md names: each decodes,
+  # encodes back to its octets, and reads back from its tree.
+  vectors:
+    name: The vectors of go-pfcp
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: |
+          dir=$(go mod download -json github.com/wmnsk/go-pfcp@v0.0.24 | python3 -c 'import json, sys; print(json.load(sys.stdin)["Dir"])')
+          python3 tests/go-pfcp-vectors.py "$dir" "$RUNNER_TEMP/vectors.tsv"
+          PFCP_VECTORS="$RUNNER_TEMP/vectors.tsv" cargo test --all-features --test codec other_vectors -- --nocapture
+
   fuzz:
     name: Fuzz (a minute each)
     runs-on: ubuntu-latest
@@ -70,8 +114,14 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@nightly
       - run: cargo install cargo-fuzz --locked
+      # From the seeds of fuzz/seeds: the captured messages, and for the node each of
+      # them delivered to the SMF and the UPF.
       - run: |
           for target in decode tree node; do
+            seeds=messages
+            [ "$target" = node ] && seeds=node
+            mkdir -p "fuzz/corpus/$target"
+            cp fuzz/seeds/$seeds/* "fuzz/corpus/$target/"
             cargo fuzz run "$target" -- -max_total_time=60
           done
       # The input that failed, to reproduce it: `cargo fuzz run TARGET FILE`
