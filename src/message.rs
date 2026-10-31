@@ -22,99 +22,25 @@ use alloc::string::String;
 use alloc::vec::Vec;
 
 use crate::Error;
-use crate::check::{Deviation, DeviationKind, check_scope};
+use crate::check::{Deviation, DeviationKind};
 use crate::header::Header;
-use crate::octets::{IntoOwned, Octets};
-use crate::registry::{HeartbeatRequest, HeartbeatResponse, SessionEstablishmentRequest};
-use crate::table::{decode_scope, encode_scope};
+use crate::octets::IntoOwned;
+use crate::macros::pfcp_messages;
 
-/// The body of a message: one type of Table 7.3-1 each.
-#[derive(Debug, Clone, PartialEq, Eq)]
-#[non_exhaustive]
-pub enum Body<'a> {
-    /// PFCP Heartbeat Request (1).
-    HeartbeatRequest(HeartbeatRequest<'a>),
-    /// PFCP Heartbeat Response (2).
-    HeartbeatResponse(HeartbeatResponse<'a>),
-    /// PFCP Session Establishment Request (50).
-    SessionEstablishmentRequest(SessionEstablishmentRequest<'a>),
-    /// A message type that the crate does not read, with the octets after its header.
-    Other {
-        /// The message type.
-        message_type: u8,
-        /// The octets of its IEs.
-        octets: Octets<'a>,
-    },
+pfcp_messages! {
+    1 HeartbeatRequest, 2 HeartbeatResponse, 3 PfdManagementRequest, 4 PfdManagementResponse,
+    5 AssociationSetupRequest, 6 AssociationSetupResponse, 7 AssociationUpdateRequest,
+    8 AssociationUpdateResponse, 9 AssociationReleaseRequest, 10 AssociationReleaseResponse,
+    11 VersionNotSupportedResponse, 12 NodeReportRequest, 13 NodeReportResponse,
+    14 SessionSetDeletionRequest, 15 SessionSetDeletionResponse, 16 SessionSetModificationRequest,
+    17 SessionSetModificationResponse, 50 SessionEstablishmentRequest, 51 SessionEstablishmentResponse,
+    52 SessionModificationRequest, 53 SessionModificationResponse, 54 SessionDeletionRequest,
+    55 SessionDeletionResponse, 56 SessionReportRequest, 57 SessionReportResponse,
 }
 
 /// Whether a message type is one of a node related message (Table 7.3-1): from 1 to 49.
 pub fn is_node_related(message_type: u8) -> bool {
     (1..50).contains(&message_type)
-}
-
-impl<'a> IntoOwned for Body<'a> {
-    type Owned = Body<'static>;
-    fn into_owned(self) -> Body<'static> {
-        match self {
-            Self::HeartbeatRequest(body) => Body::HeartbeatRequest(body.into_owned()),
-            Self::HeartbeatResponse(body) => Body::HeartbeatResponse(body.into_owned()),
-            Self::SessionEstablishmentRequest(body) => Body::SessionEstablishmentRequest(body.into_owned()),
-            Self::Other { message_type, octets } => Body::Other { message_type, octets: octets.into_owned() },
-        }
-    }
-}
-
-impl<'a> Body<'a> {
-    /// The message type.
-    pub fn message_type(&self) -> u8 {
-        match self {
-            Self::HeartbeatRequest(_) => 1,
-            Self::HeartbeatResponse(_) => 2,
-            Self::SessionEstablishmentRequest(_) => 50,
-            Self::Other { message_type, .. } => *message_type,
-        }
-    }
-
-    /// The name that Table 7.3-1 gives the message.
-    pub fn name(&self) -> Option<&'static str> {
-        match self {
-            Self::HeartbeatRequest(_) => Some(HeartbeatRequest::table().name),
-            Self::HeartbeatResponse(_) => Some(HeartbeatResponse::table().name),
-            Self::SessionEstablishmentRequest(_) => Some(SessionEstablishmentRequest::table().name),
-            Self::Other { .. } => None,
-        }
-    }
-
-    fn decode(message_type: u8, octets: &'a [u8]) -> Result<Self, crate::ie::IeFault> {
-        Ok(match message_type {
-            1 => Self::HeartbeatRequest(decode_scope(octets)?),
-            2 => Self::HeartbeatResponse(decode_scope(octets)?),
-            50 => Self::SessionEstablishmentRequest(decode_scope(octets)?),
-            other => Self::Other { message_type: other, octets: Octets::wire(octets) },
-        })
-    }
-
-    fn encoded_len(&self) -> usize {
-        use crate::table::Scope;
-        match self {
-            Self::HeartbeatRequest(body) => body.encoded_len(),
-            Self::HeartbeatResponse(body) => body.encoded_len(),
-            Self::SessionEstablishmentRequest(body) => body.encoded_len(),
-            Self::Other { octets, .. } => octets.len(),
-        }
-    }
-
-    fn encode(&self, out: &mut Vec<u8>) -> Result<(), Error> {
-        match self {
-            Self::HeartbeatRequest(body) => encode_scope(body, out),
-            Self::HeartbeatResponse(body) => encode_scope(body, out),
-            Self::SessionEstablishmentRequest(body) => encode_scope(body, out),
-            Self::Other { octets, .. } => {
-                out.extend_from_slice(octets);
-                Ok(())
-            }
-        }
-    }
 }
 
 /// A PFCP message.
@@ -225,15 +151,7 @@ impl<'a> Message<'a> {
         if node && header.follow_on {
             found.push(Deviation::new(&path, "6.5", DeviationKind::Rule("a node related message is bundled")));
         }
-        let root = "/pfcp";
-        match &self.body {
-            Body::HeartbeatRequest(body) => check_scope(body, root, &mut found),
-            Body::HeartbeatResponse(body) => check_scope(body, root, &mut found),
-            Body::SessionEstablishmentRequest(body) => check_scope(body, root, &mut found),
-            Body::Other { .. } => {
-                found.push(Deviation::new("/message", "7.3", DeviationKind::Rule("a message type that the crate does not read yet")));
-            }
-        }
+        self.body.check("/pfcp", &mut found);
         found
     }
 }
@@ -244,8 +162,6 @@ mod forms {
 
     use super::{Body, Message};
     use crate::header::Header;
-    use crate::registry::{HeartbeatRequest, HeartbeatResponse, SessionEstablishmentRequest};
-    use crate::tree::{scope_from_tree, scope_to_tree};
 
     const NAMES: &[&str] = &[
         "message",
@@ -291,28 +207,15 @@ mod forms {
                 members.put("Spare octet", tree::unsigned(header.spare_last.into()));
             }
             members.put_optional("Message Length", header.length.map(|length| tree::unsigned(length.into())));
-            members.put(
-                "ies",
-                match &self.body {
-                    Body::HeartbeatRequest(body) => scope_to_tree(body),
-                    Body::HeartbeatResponse(body) => scope_to_tree(body),
-                    Body::SessionEstablishmentRequest(body) => scope_to_tree(body),
-                    Body::Other { octets, .. } => tree::alternative("octets", tree::octets(octets)),
-                },
-            );
+            members.put("ies", self.body.ies_tree());
             members.finish()
         }
 
         fn from_tree(value: &Value, reading: &mut Reading) -> Result<Self, Refused> {
             let read = reading.members(value, NAMES)?;
-            let kinds = [
-                HeartbeatRequest::table().name,
-                HeartbeatResponse::table().name,
-                SessionEstablishmentRequest::table().name,
-            ];
             let kind = reading.member(&read, 0, |value, reading| match value.is_number() {
-                true => Ok(reading.unsigned(value, 0, 255)? as usize + 100),
-                false => reading.named(value, &[kinds[0], kinds[1], kinds[2]]),
+                true => Ok(Err(reading.unsigned(value, 0, 255)? as u8)),
+                false => Ok(Ok(reading.named(value, &Body::names())?)),
             })?;
             let small = |reading: &mut Reading, at: usize, most: u64| {
                 reading.optional(&read, at, |value, reading| reading.unsigned(value, 0, most))
@@ -326,18 +229,7 @@ mod forms {
             let spare_last = small(reading, 7, 255)?.unwrap_or(0) as u8;
             let length = small(reading, 8, 65535)?.map(|length| length as u16);
             let header = Header { version, spare, follow_on, seid, sequence, priority, spare_last, length };
-            let body = reading.member(&read, 9, |value, reading| {
-                Ok(match kind {
-                    0 => Body::HeartbeatRequest(scope_from_tree(value, reading)?),
-                    1 => Body::HeartbeatResponse(scope_from_tree(value, reading)?),
-                    2 => Body::SessionEstablishmentRequest(scope_from_tree(value, reading)?),
-                    other => {
-                        let (_, octets) = reading.alternative(value, &["octets"])?;
-                        let octets = reading.within("octets", octets, |value, reading| reading.octets(value))?;
-                        Body::Other { message_type: (other - 100) as u8, octets: octets.into() }
-                    }
-                })
-            })?;
+            let body = reading.member(&read, 9, |value, reading| Body::from_ies_tree(kind, value, reading))?;
             Ok(Self { header, body })
         }
     }

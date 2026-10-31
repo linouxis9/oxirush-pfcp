@@ -405,6 +405,138 @@ macro_rules! pfcp_bits {
     };
 }
 
+/// The messages of Table 7.3-1, one each: their type and the struct of their table. It
+/// writes the body of a message, and what is done with it by its type.
+macro_rules! pfcp_messages {
+    ($( $code:literal $ty:ident ),* $(,)?) => {
+        /// The body of a message: one type of Table 7.3-1 each.
+        #[derive(Debug, Clone, PartialEq, Eq)]
+        #[non_exhaustive]
+        pub enum Body<'a> {
+            $(
+                #[doc = concat!("Message type ", stringify!($code), ".")]
+                $ty(crate::registry::$ty<'a>),
+            )*
+            /// A message type that Table 7.3-1 does not have, with the octets after its
+            /// header (§7.6.4).
+            Other {
+                /// The message type.
+                message_type: u8,
+                /// The octets of its IEs.
+                octets: crate::octets::Octets<'a>,
+            },
+        }
+
+        impl<'a> crate::octets::IntoOwned for Body<'a> {
+            type Owned = Body<'static>;
+            fn into_owned(self) -> Body<'static> {
+                match self {
+                    $( Self::$ty(body) => Body::$ty(body.into_owned()), )*
+                    Self::Other { message_type, octets } => Body::Other { message_type, octets: octets.into_owned() },
+                }
+            }
+        }
+
+        impl<'a> Body<'a> {
+            /// The message type.
+            pub fn message_type(&self) -> u8 {
+                match self {
+                    $( Self::$ty(_) => $code, )*
+                    Self::Other { message_type, .. } => *message_type,
+                }
+            }
+
+            /// The table of the message.
+            pub fn table(&self) -> Option<&'static crate::table::Table> {
+                match self {
+                    $( Self::$ty(_) => Some(crate::registry::$ty::table()), )*
+                    Self::Other { .. } => None,
+                }
+            }
+
+            /// The name that Table 7.3-1 gives the message.
+            pub fn name(&self) -> Option<&'static str> {
+                self.table().map(|table| table.name)
+            }
+
+            /// The names of the messages, in the order of their types.
+            #[allow(dead_code)]
+            pub(crate) fn names() -> [&'static str; [$($code),*].len()] {
+                [$( crate::registry::$ty::table().name ),*]
+            }
+
+            pub(crate) fn decode(message_type: u8, octets: &'a [u8]) -> Result<Self, crate::ie::IeFault> {
+                Ok(match message_type {
+                    $( $code => Self::$ty(crate::table::decode_scope(octets)?), )*
+                    other => Self::Other { message_type: other, octets: crate::octets::Octets::wire(octets) },
+                })
+            }
+
+            pub(crate) fn encode(&self, out: &mut alloc::vec::Vec<u8>) -> Result<(), crate::Error> {
+                match self {
+                    $( Self::$ty(body) => crate::table::encode_scope(body, out), )*
+                    Self::Other { octets, .. } => {
+                        out.extend_from_slice(octets);
+                        Ok(())
+                    }
+                }
+            }
+
+            pub(crate) fn encoded_len(&self) -> usize {
+                match self {
+                    $( Self::$ty(body) => crate::table::Scope::encoded_len(body), )*
+                    Self::Other { octets, .. } => octets.len(),
+                }
+            }
+
+            pub(crate) fn check(&self, path: &str, found: &mut alloc::vec::Vec<crate::check::Deviation>) {
+                match self {
+                    $( Self::$ty(body) => crate::check::check_scope(body, path, found), )*
+                    Self::Other { message_type, .. } => {
+                        let _ = message_type;
+                        found.push(crate::check::Deviation::new(
+                            "/message",
+                            "7.6.4",
+                            crate::check::DeviationKind::Rule("a message type that Table 7.3-1 does not have"),
+                        ));
+                    }
+                }
+            }
+
+            #[cfg(feature = "tree")]
+            pub(crate) fn ies_tree(&self) -> oxirush_utils::tree::Value {
+                match self {
+                    $( Self::$ty(body) => crate::tree::scope_to_tree(body), )*
+                    Self::Other { octets, .. } => oxirush_utils::tree::alternative("octets", oxirush_utils::tree::octets(octets)),
+                }
+            }
+
+            /// The body of the message of `kind`, a position among the names or a message
+            /// type that none has, from the tree of its IEs.
+            #[cfg(feature = "tree")]
+            pub(crate) fn from_ies_tree(
+                kind: Result<usize, u8>,
+                value: &oxirush_utils::tree::Value,
+                reading: &mut oxirush_utils::tree::Reading,
+            ) -> Result<Self, oxirush_utils::tree::Refused> {
+                const CODES: &[u8] = &[$($code),*];
+                let code = match kind {
+                    Ok(position) => CODES[position],
+                    Err(code) => code,
+                };
+                Ok(match code {
+                    $( $code if kind.is_ok() => Self::$ty(crate::tree::scope_from_tree(value, reading)?), )*
+                    other => {
+                        let (_, octets) = reading.alternative(value, &["octets"])?;
+                        let octets = reading.within("octets", octets, |value, reading| reading.octets(value))?;
+                        Self::Other { message_type: other, octets: octets.into() }
+                    }
+                })
+            }
+        }
+    };
+}
+
 /// A message or the content of a grouped IE, from its table of clause 7: a struct with a
 /// field for each row, `new()` with the mandatory IEs, a `with_` builder for each row,
 /// the codec, the check and the tree.
@@ -472,12 +604,14 @@ macro_rules! pfcp_table {
 
         pfcp_table!(@new $ty [] [] $( $field : $row $p $(* $($max)?)? $vty $($raw)? [$($interface)*] , )*);
 
+        // A table without rows leaves its arguments unused.
+        #[allow(unused_variables, unused_mut, unused_assignments)]
         impl<'a> crate::table::Scope<'a> for $ty<'a> {
             fn table() -> &'static crate::table::Table {
                 &[<$ty:snake:upper _TABLE>]
             }
 
-            #[allow(unused_assignments)]
+            #[allow(unused_assignments, unused_variables, unused_mut)]
             fn position(ie_type: u16) -> Option<usize> {
                 let mut at = 0;
                 $(
@@ -491,6 +625,7 @@ macro_rules! pfcp_table {
 
             const PRESIZE: bool = false $( || pfcp_table!(@large [$(* $($max)?)?] (pfcp_table!(@type_static $vty $($raw)?))) )*;
 
+            #[allow(unused_variables)]
             fn presize(&mut self, octets: &[u8]) {
                 $( let mut [<count_ $field>] = 0usize; )*
                 for ie in crate::framing::ies(octets).flatten() {
@@ -570,6 +705,8 @@ macro_rules! pfcp_table {
             fn order_mut(&mut self) -> &mut alloc::vec::Vec<crate::ie::Placed> { &mut self.order }
         }
 
+        // A table without rows leaves its arguments unused.
+        #[allow(unused_variables, unused_mut, unused_assignments)]
         impl crate::check::Checked for $ty<'_> {
             fn check_values(&self, path: &str, found: &mut alloc::vec::Vec<crate::check::Deviation>) {
                 $(
@@ -595,6 +732,8 @@ macro_rules! pfcp_table {
         pfcp_table!(@kind $kind $ty);
 
         #[cfg(feature = "tree")]
+        // A table without rows leaves its arguments unused.
+        #[allow(unused_variables, unused_mut, unused_assignments)]
         impl<'a> crate::tree::TreeScope for $ty<'a> {
             fn field_tree(&self, ie_type: u16, nth: usize) -> Option<oxirush_utils::tree::Value> {
                 $(
@@ -773,4 +912,4 @@ macro_rules! pfcp_table {
     };
 }
 
-pub(crate) use {pfcp_bits, pfcp_ies, pfcp_layout, pfcp_table};
+pub(crate) use {pfcp_bits, pfcp_ies, pfcp_layout, pfcp_messages, pfcp_table};
