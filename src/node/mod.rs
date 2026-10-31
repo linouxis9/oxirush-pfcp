@@ -83,11 +83,13 @@ pub struct NodeConfig {
     pub function: Function,
     /// When it started, as the Recovery Time Stamp has it (§8.2.65).
     pub recovery_time_stamp: u32,
-    /// T1, after which a request without a response is sent again (§6.4).
+    /// T1, after which a request without a response is sent again (§6.4): at least a
+    /// millisecond, which a shorter one is taken as.
     pub t1: Duration,
     /// N1, how many times a request is sent again (§6.4).
     pub n1: u8,
-    /// How often a Heartbeat Request goes to each associated peer: `None` for never.
+    /// How often a Heartbeat Request goes to each associated peer: `None` for never, and
+    /// at least every millisecond, which a shorter interval is taken as.
     pub heartbeat: Option<Duration>,
     /// How long an answered request is kept, to answer its retransmissions, and a
     /// finished request, to tell a duplicate or late response.
@@ -492,7 +494,11 @@ pub struct Node {
 
 impl Node {
     /// A node, with nothing outstanding.
-    pub fn new(config: NodeConfig) -> Self {
+    pub fn new(mut config: NodeConfig) -> Self {
+        // A time of zero would send each retransmission, or heartbeat, at once.
+        const LEAST: Duration = Duration::from_millis(1);
+        config.t1 = config.t1.max(LEAST);
+        config.heartbeat = config.heartbeat.map(|interval| interval.max(LEAST));
         Self {
             config,
             next_sequence: 1,

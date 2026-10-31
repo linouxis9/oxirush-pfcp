@@ -2064,6 +2064,29 @@ fn durations_at_their_limits() {
     smf.handle_timeout(Duration::MAX);
 }
 
+/// A T1 or a heartbeat interval of zero is one of a millisecond: a node does not send
+/// every retransmission at once, nor spin on its heartbeats.
+#[test]
+fn durations_of_zero() {
+    let mut smf = Node::new(NodeConfig {
+        t1: Duration::ZERO,
+        heartbeat: Some(Duration::ZERO),
+        ..config(SMF, Function::Cp)
+    });
+    smf.request(at(0), UPF, heartbeat()).unwrap();
+    smf.handle_timeout(at(0));
+    assert_eq!(sent(&mut smf).len(), 1);
+    let (mut smf, _) = associated_as(
+        NodeConfig {
+            heartbeat: Some(Duration::ZERO),
+            ..config(SMF, Function::Cp)
+        },
+        at(0),
+    );
+    smf.handle_timeout(at(1));
+    assert!(smf.poll_timeout().is_some_and(|next| next > at(1)));
+}
+
 /// What the node keeps of peers that send without an association is bounded by
 /// `capacity`: the oldest go first.
 #[test]
