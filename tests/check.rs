@@ -284,6 +284,49 @@ fn seid_0_only_where_the_peer_seid_is_not_known() {
     );
 }
 
+/// §7.2.2.4.2 bullet 4, §5.22.2 bullet 4, Table 7.5.8.1-1: a Session Report Request of
+/// SEID 0 moves the session to another SMF of the set and carries the Old CP F-SEID of
+/// the previous one; one of a known SEID has none.
+#[test]
+fn a_report_of_seid_0_carries_the_old_cp_f_seid() {
+    let old = FSeid {
+        v4: true,
+        seid: Some(0x1234),
+        ipv4: Some(SMF),
+        ..Default::default()
+    };
+    let report = |seid, with_old| {
+        let mut body = SessionReportRequest::new(ReportType {
+            uisr: true,
+            ..Default::default()
+        });
+        if with_old {
+            body = body.with_old_cp_f_seid(old.clone());
+        }
+        Message {
+            header: Header::session(seid, 9),
+            body: body.into(),
+        }
+    };
+    // A report of SEID 0 with the Old CP F-SEID, and one of a known SEID without it: fine.
+    assert!(report(0, true).check(Interfaces::N4).is_empty());
+    assert!(report(0x1001, false).check(Interfaces::N4).is_empty());
+    // SEID 0 without the Old CP F-SEID: a deviation.
+    assert!(
+        report(0, false)
+            .check(Interfaces::N4)
+            .iter()
+            .any(|deviation| deviation.clause == "7.2.2.4.2")
+    );
+    // A known SEID with the Old CP F-SEID: a deviation.
+    assert!(
+        report(0x1001, true)
+            .check(Interfaces::N4)
+            .iter()
+            .any(|deviation| deviation.clause == "7.2.2.4.2")
+    );
+}
+
 /// Table 7.3-1: PFD management is not on Sxa; a message type of no table is reported.
 #[test]
 fn a_message_type_of_the_interface() {
