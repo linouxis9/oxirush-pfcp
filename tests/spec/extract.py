@@ -20,6 +20,11 @@ script:
     conditions.tsv      the sentences of clause 8.2 that make a field there or not as a flag
                         is set or not: the flag, whether it is set, the field, whether it is
                         there
+    flag-sentences.tsv  the sentences of clause 8.2 that say which flags of an IE are set
+                        together: "at least one", "one and only one", "only one of", "may
+                        only be set", "shall not be set", "either ... shall be set" or
+                        "exclusive", by their clause and their number in it, which
+                        flag-rules.tsv lists with the rule that checks each
     value-tables.tsv    the tables of clause 8.2 that name values, or bits as octet/bit; a
                         value that a table reserves is named <reserved>
     read-as.tsv         the values of those tables that a receiver reads as another: the
@@ -132,7 +137,7 @@ def main():
     heading, caption = '', None
     message_types, ie_types, tables, layouts, values, clause6 = [], [], [], [], [], []
     read = []
-    figures, conditions = [], []
+    figures, conditions, flags = [], [], []
     # The fields of octets of the figure of the clause, by name and by their octets.
     fields, labels = [], {}
     for kind, block in blocks(body):
@@ -147,6 +152,9 @@ def main():
                 clause6[-1][2] += len(requirements(value))
             elif re.match(r'^8\.2\.\d+ ', heading):
                 conditions.extend([heading.split(' ', 1)[0]] + relation for relation in relations(value, fields, labels))
+                clause = heading.split(' ', 1)[0]
+                for phrase in flag_sentences(value):
+                    flags.append([clause, str(sum(row[0] == clause for row in flags) + 1), phrase])
             caption = value if style == 'TH' else None
             continue
         block, widths = block
@@ -196,6 +204,7 @@ def main():
     write('layouts.tsv', ['clause', 'type in the figure', 'fields'], layouts)
     write('figures.tsv', ['clause', 'octets', 'name', 'lowest bit', 'bits'], figures)
     write('conditions.tsv', ['clause', 'flag', 'set', 'field', 'there'], conditions)
+    write('flag-sentences.tsv', ['clause', 'n', 'phrase'], flags)
     write('value-tables.tsv', ['table', 'title', 'value', 'name'], values)
     write('read-as.tsv', ['table', 'values', 'read as'], read)
     write('clause-6.tsv', ['clause', 'title', 'requirements'], [[c, t, str(n)] for c, t, n in clause6])
@@ -294,6 +303,30 @@ def relations(paragraph, fields, labels):
                 rest = re.sub(pattern, ' ', rest)
         for name in named:
             out.extend([flag, state, name, 'absent' if absent else 'present'] for flag, state in flags)
+    return out
+
+
+# The words of a sentence of clause 8.2 that says which flags of an IE are set together,
+# the first that it has in this order. A sentence of who sets a bit ("shall only be set by
+# the CP function") is not of them; "sshall" is the document's.
+FLAG_PHRASES = [
+    ('one and only one', re.compile(r'(?i)\bone and only one\b')),
+    ('only one of', re.compile(r'(?i)\bonly one of\b')),
+    ('at least one', re.compile(r'(?i)\bat least one\b[^.]*?\b(?:bit|flag|of)\b')),
+    ('may only be set', re.compile(r'(?i)\bmay only be set\b')),
+    ('shall not be set', re.compile(r'(?i)\bs?shall not be set\b')),
+    ('either', re.compile(r'(?i)\beither\b[^.]*\b(?:bit|flag)s?\b[^.]*\bshall be set\b')),
+    ('exclusive', re.compile(r'(?i)\bexclusive\b')),
+]
+
+
+def flag_sentences(paragraph):
+    """The phrase of each sentence of a paragraph that says which flags are set together."""
+    out = []
+    for sentence in re.split(r'(?<!i\.e\.)(?<!e\.g\.)(?<=[.;:])\s+(?=[A-Z(-])', paragraph):
+        phrase = next((name for name, pattern in FLAG_PHRASES if pattern.search(sentence)), None)
+        if phrase:
+            out.append(phrase)
     return out
 
 

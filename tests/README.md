@@ -4,7 +4,7 @@
 
 | Test | What it checks |
 |---|---|
-| `spec` | The crate against TS 29.244 V19.6.0: every message type and IE type; every row of a table, with its presence, interfaces, IE type and repetition, and its bound; every flag and field of a figure, with its octet, bits, order and width, and the conditions that the sentences of its clause give; every table of values, and the values that a receiver reads as another; the constructors by interface; and the requirements of clause 6 (`spec/`) |
+| `spec` | The crate against TS 29.244 V19.6.0: every message type and IE type; every row of a table, with its presence, interfaces, IE type and repetition, and its bound; every flag and field of a figure, with its octet, bits, order and width, and the conditions that the sentences of its clause give; the sentences of clause 8.2 on which flags go together, each with the rule that checks it (`spec/flag-rules.tsv`); every table of values, and the values that a receiver reads as another; the constructors by interface; and the requirements of clause 6 (`spec/`) |
 | `captures` | The 213 messages of the lab runs (`captures/`): each decodes, encodes back byte for byte, has a tree that reads back, and is checked on its interface |
 | `check` | What `check()` finds on each interface, with the clause and the Cause of each |
 | `node` | The procedures of clause 6 on a `Node`: one test for each requirement of `spec/requirements.tsv` that names it |
@@ -96,6 +96,9 @@ test `codec` expects them (`other_vectors_round_trip`, with `--ignored` and
 - Session Report Requests with a SEID other than 0 in their header and an Old CP F-SEID,
   which §7.2.2.4.2 and Table 7.5.8.1-1 have only when the SEID is 0, to move the session
   to another SMF of the set.
+- QoS Monitoring Measurement has PLMF, a packet delay measurement failure, with the
+  three packet delays, which §8.2.171 has without them (`NewQoSMonitoringMeasurement(0x0f,
+  ...)` in `message/session-report-request_test.go`).
 - Session Modification Requests that create, update and remove one rule (§6.3.3.2), two
   Session Establishment Requests without Node ID, CP F-SEID, Create PDR and Create FAR,
   and a Heartbeat Request without its Recovery Time Stamp.

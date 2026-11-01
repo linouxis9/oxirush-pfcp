@@ -1,0 +1,69 @@
+# The sentences of clause 8.2 of TS 29.244 V19.6.0 that say which flags of an IE are set
+# together, as flag-sentences.tsv numbers them in their clauses: "at least one", "one and
+# only one", "only one of", "may only be set", "shall not be set", "either ... shall be
+# set" and "exclusive". A sentence of who sets a bit ("shall only be set by the CP
+# function") is not of them. Each row gives the rule of check() that checks the sentence,
+# in its words, with the octets of values of the IE of the clause that break it and that
+# keep it, or `none:` and why check() cannot:
+#
+#   rule     the words of the Rule deviation of the clause that check() gives a value
+#            that breaks the sentence
+#   breaks   values that break the sentence and nothing else: check() gives that
+#            deviation alone
+#   keeps    values that keep it: check() gives no deviation
+#
+# The test `flag_rules` fails on a sentence without its row, a row of no sentence, and a
+# value that check() does not answer as the row says.
+#
+# clause	n	phrase	rule	breaks	keeps
+8.2.3	1	may only be set	CHID is set and CH is not	09000000010a00000107	0d07
+8.2.3	2	at least one	neither V4 nor V6 is set	0000000001	01000000010a000001
+8.2.5	1	at least one	an (S)RTCP media identification has neither SSRC nor a Media Identification Tag	200001000210c8	20000100061100000001c8
+8.2.13	1	at least one	no bit is set	00	010000000000000400
+8.2.16	1	at least one	no bit is set	00	010000000000000400
+8.2.19	1	at least one	no bit is set	0000	0100
+8.2.21	1	at least one	no bit is set	00	02
+8.2.26	1	one and only one	none, or more than one, of DROP, FORW, BUFF, IPMA, IPMD, and FSSM or MBSU is set	00 03 0208	02 0018 0c 11
+8.2.26	2	may only be set	NOCP or BDPN is set and BUFF is not	0a 0202	0c 0402
+8.2.26	3	may only be set	DFRT is set and FORW is not	81	82
+8.2.31	1	shall not be set	SUMPC and RUMUC are both set	18	08 10
+8.2.37	1	at least one	neither V4 nor V6 is set	000000000000000001	0200000000000000010a000001
+8.2.40	1	at least one	no bit is set	00	02
+8.2.41	1	at least one	no bit is set	0000	0100
+8.2.44	1	at least one	no bit is set	00	010000000000000400
+8.2.50	1	at least one	no bit is set	00	010000000000000400
+8.2.56	1	at least one	no bit of the description is set	0000	0004 0100000000010a000001
+8.2.62	1	shall not be set	V6 and CHV6 are both set	21	0120010db8000000000000000000000001
+8.2.62	2	shall not be set	V4 and CHV4 are both set	12	020a000001
+8.2.62	3	shall not be set	V4 and CHV4 are both set	12	10
+8.2.62	4	shall not be set	V6 and CHV6 are both set	21	20
+8.2.63	1	at least one	no bit is set	00	0100000a
+8.2.68	1	at least one	no bit is set	00	01
+8.2.69	1	at least one	no bit is set	00	01
+8.2.70	1	either	neither V4 nor V6 is set	00	020a000001
+8.2.86	1	at least one	no bit is set	00	010000000000000400
+8.2.94	1	at least one	none of PCP, DEI and VID is set	000000	040064
+8.2.95	1	at least one	none of PCP, DEI and VID is set	000000	040064
+8.2.137	1	one and only one	none, or more than one, of V6, V4 and A is set	00	08
+8.2.145	1	at least one	no bit is set	00	01
+8.2.152	1	at least one	no bit is set	00	01
+8.2.167	1	at least one	no bit is set	00	01
+8.2.168	1	at least one	no bit is set	00 04	01
+8.2.169	1	at least one	no bit is set	00	010000000a
+8.2.171	1	at least one	no bit is set	00	08
+8.2.171	2	shall not be set	PLMF is set with a packet delay	090000000a	010000000a 08
+8.2.177	1	at least one	neither V4 nor V6 is set	00	01 03
+8.2.196	1	at least one	no bit is set	00	010064
+8.2.197	1	shall not be set	ALBI and UEAI are both set	03	01
+8.2.200	1	at least one	neither UMN6RS nor an IP address is set	00 041f90	010a000001 40
+8.2.209	1	only one of	neither or both of V4 and V6 are set	04 07	05 011f900a000001
+8.2.217	1	at least one	no bit is set	2a2a00 2a2a0000	2a2a01 2a2a0001
+8.2.225	1	at least one	no bit is set	00	01
+8.2.240	1	at least one	no bit is set	00	010064
+8.2.242	1	shall not be set	V4 and CHV4 are both set	03	020a000001 01
+8.2.246	1	one and only one	none: one protocol when the SMF names the one to use, several when the UPF lists those it supports, and no table of clause 7 says which of the SMF's IEs names the one to use (the Measurement Protocols of Table 7.4.4.1.4-1 may be several): the value does not say which it is	-	-
+8.2.248	1	either	neither V4 nor V6 is set	00	010a000001
+8.2.262	1	at least one	no bit is set	00	05
+8.2.262	2	exclusive	PER and EVT are both set	03	01 02 06
+8.2.268	1	at least one	no bit is set	0000	0100
+8.2.278	1	either	neither TRUE nor FALSE is set	00	01

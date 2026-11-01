@@ -1,0 +1,52 @@
+# clause	n	phrase
+8.2.3	1	may only be set
+8.2.3	2	at least one
+8.2.5	1	at least one
+8.2.13	1	at least one
+8.2.16	1	at least one
+8.2.19	1	at least one
+8.2.21	1	at least one
+8.2.26	1	one and only one
+8.2.26	2	may only be set
+8.2.26	3	may only be set
+8.2.31	1	shall not be set
+8.2.37	1	at least one
+8.2.40	1	at least one
+8.2.41	1	at least one
+8.2.44	1	at least one
+8.2.50	1	at least one
+8.2.56	1	at least one
+8.2.62	1	shall not be set
+8.2.62	2	shall not be set
+8.2.62	3	shall not be set
+8.2.62	4	shall not be set
+8.2.63	1	at least one
+8.2.68	1	at least one
+8.2.69	1	at least one
+8.2.70	1	either
+8.2.86	1	at least one
+8.2.94	1	at least one
+8.2.95	1	at least one
+8.2.137	1	one and only one
+8.2.145	1	at least one
+8.2.152	1	at least one
+8.2.167	1	at least one
+8.2.168	1	at least one
+8.2.169	1	at least one
+8.2.171	1	at least one
+8.2.171	2	shall not be set
+8.2.177	1	at least one
+8.2.196	1	at least one
+8.2.197	1	shall not be set
+8.2.200	1	at least one
+8.2.209	1	only one of
+8.2.217	1	at least one
+8.2.225	1	at least one
+8.2.240	1	at least one
+8.2.242	1	shall not be set
+8.2.246	1	one and only one
+8.2.248	1	either
+8.2.262	1	at least one
+8.2.262	2	exclusive
+8.2.268	1	at least one
+8.2.278	1	either

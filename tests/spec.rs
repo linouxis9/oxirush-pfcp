@@ -948,6 +948,150 @@ fn requirements() {
     report(problems);
 }
 
+/// The sentences of clause 8.2 that say which flags of an IE are set together: each has
+/// its row in `flag-rules.tsv`, in the order of `flag-sentences.tsv`, and check() answers
+/// the values of each row as it says, or the row says why it cannot.
+#[test]
+fn flag_rules() {
+    let sentences: Vec<(&str, &str, &str)> = records(include_str!("spec/flag-sentences.tsv"))
+        .into_iter()
+        .map(|cells| (cells[0], cells[1], cells[2]))
+        .collect();
+    let mut listed = Vec::new();
+    let mut problems = Vec::new();
+    for cells in records(include_str!("spec/flag-rules.tsv")) {
+        let [clause, n, phrase, rule, breaks, keeps] = cells[..] else {
+            problems.push(format!("flag-rules.tsv: {cells:?} has not six cells"));
+            continue;
+        };
+        listed.push((clause, n, phrase));
+        if let Some(reason) = rule.strip_prefix("none: ") {
+            if reason.is_empty() || breaks != "-" || keeps != "-" {
+                problems.push(format!("{clause}/{n}: a rule of none has its reason alone"));
+            }
+            continue;
+        }
+        let Some(info) = IE_TYPES.iter().find(|info| info.clause == clause) else {
+            problems.push(format!("{clause}/{n}: no IE type of the clause"));
+            continue;
+        };
+        let values = breaks.split(' ').map(|octets| (octets, true));
+        for (octets, broken) in values.chain(keeps.split(' ').map(|octets| (octets, false))) {
+            let Some(found) = hex::decode(octets)
+                .ok()
+                .and_then(|octets| flag_checked(info.ie_type, &octets))
+            else {
+                problems.push(format!(
+                    "{clause}/{n}: {octets} is no value of IE type {}",
+                    info.ie_type
+                ));
+                continue;
+            };
+            let expected = match broken {
+                true => vec![(clause, DeviationKind::Rule(rule))],
+                false => Vec::new(),
+            };
+            if found != expected {
+                problems.push(format!("{clause}/{n}: {octets} gives {found:?}"));
+            }
+        }
+    }
+    for sentence in &sentences {
+        if !listed.contains(sentence) {
+            problems.push(format!(
+                "flag-rules.tsv: no row of the sentence {sentence:?}"
+            ));
+        }
+    }
+    for row in &listed {
+        if !sentences.contains(row) {
+            problems.push(format!(
+                "flag-rules.tsv: {row:?} is no sentence of the document"
+            ));
+        }
+    }
+    if problems.is_empty() && listed != sentences {
+        problems.push("flag-rules.tsv: the rows are not in the order of the sentences".into());
+    }
+    report(problems);
+}
+
+/// The clauses and the kinds of what check() finds in a value of `ie_type` of `octets`,
+/// which encodes back to them: `None` for a type of no row of `flag-rules.tsv`, or octets
+/// that do not.
+fn flag_checked(ie_type: u16, octets: &[u8]) -> Option<Vec<(&'static str, DeviationKind)>> {
+    fn of<T: Codec + Check>(octets: &[u8]) -> Option<Vec<(&'static str, DeviationKind)>> {
+        let value = T::decode(octets)?;
+        let mut again = Vec::new();
+        value.encode(&mut again).ok()?;
+        if again != octets {
+            return None;
+        }
+        let mut found = Vec::new();
+        value.check(&Path::Root("/value"), &mut found);
+        Some(
+            found
+                .into_iter()
+                .map(|deviation| (deviation.clause, deviation.kind))
+                .collect(),
+        )
+    }
+    macro_rules! of_types {
+        ($($ty:ident),* $(,)?) => {
+            $(
+                if ie_type == <$ty as IeType>::IE_TYPE {
+                    return of::<$ty>(octets);
+                }
+            )*
+        };
+    }
+    of_types!(
+        FTeid,
+        SdfFilter,
+        VolumeThreshold,
+        SubsequentVolumeThreshold,
+        ReportingTriggers,
+        ReportType,
+        ApplyAction,
+        PFCPSMReqFlags,
+        FSeid,
+        MeasurementMethod,
+        UsageReportTrigger,
+        VolumeMeasurement,
+        VolumeQuota,
+        OuterHeaderCreation,
+        UeIpAddress,
+        PacketRate,
+        MeasurementInformation,
+        NodeReportType,
+        RemoteGtpUPeer,
+        SubsequentVolumeQuota,
+        CTag,
+        STag,
+        IpMulticastAddress,
+        RequestedClockDriftInformation,
+        RequestedAccessAvailabilityInformation,
+        RequestedQoSMonitoring,
+        ReportingFrequency,
+        PacketDelayThresholds,
+        QoSMonitoringMeasurement,
+        IpVersion,
+        Thresholds,
+        SteeringModeIndicator,
+        IpAddressAndPortNumberReplacement,
+        LocalIngressTunnel,
+        VendorSpecificNodeReportType,
+        MpquicControlInformation,
+        ReportingThresholds,
+        MappedN6IpAddress,
+        MeasurementEndpointAddress,
+        MeasurementReportingType,
+        PduSetImportance,
+        ExpeditedTransferIndication,
+    );
+    None
+}
+
 /// The sources of the tests of the crate: its tests and its modules.
 fn test_sources() -> Vec<String> {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
@@ -1369,6 +1513,11 @@ fn the_readme_counts() {
             .filter(|cells| cells[3].starts_with(kind))
             .count()
     };
+    let flags = records(include_str!("spec/flag-rules.tsv"));
+    let unchecked = flags
+        .iter()
+        .filter(|cells| cells[3].starts_with("none: "))
+        .count();
     let captures = records(include_str!("captures/messages.tsv")).len();
     let mut problems = Vec::new();
     for (text, said) in [
@@ -1386,6 +1535,14 @@ fn the_readme_counts() {
                 requirements.len(),
                 by("test "),
                 by("application:")
+            ),
+        ),
+        (
+            &readme,
+            format!(
+                "has the {} sentences of clause 8.2 that say which flags of an IE go together: {} with the rule of `check()` that checks it, and {unchecked} that a value does not show alone",
+                flags.len(),
+                flags.len() - unchecked
             ),
         ),
         (&readme, format!("has {captures} messages")),

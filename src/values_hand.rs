@@ -45,6 +45,14 @@ pfcp_layout! {
         sdf_filter_id "SDF Filter ID": u32 if bid,
         rtp_multiplexed_media "(S)RTP Multiplexed Media Identification Information": Counted<Lv16> if smmii,
     }
+    check(this, path, found) {
+        // An (S)RTP Multiplexed Media Identification Information of the RTCP Packet Type is of
+        // (S)RTCP traffic only (NOTE 4), and has the SSRC or the Media Identification Tag
+        // (SSRCPI, MIDPI and RPTPI of its octet of flags, bits 1, 3 and 5).
+        let rtcp = |media: &Lv16| media.0.first().is_some_and(|flags| flags & 0x10 != 0 && flags & 0x05 == 0);
+        let media = this.rtp_multiplexed_media.as_ref().map_or(&[][..], |media| &media.0[..]);
+        flag_rule(media.iter().any(rtcp), path, "8.2.5", "an (S)RTCP media identification has neither SSRC nor a Media Identification Tag", found);
+    }
 }
 
 pfcp_layout! {
@@ -108,6 +116,9 @@ pfcp_layout! {
         additional_maximum_uplink_packet_rate "Additional Maximum Uplink Packet Rate": u16 if aprc && ulpr,
         additional_downlink_time_unit "Additional Downlink Time Unit": Narrow<TimeUnit> if aprc && dlpr,
         additional_maximum_downlink_packet_rate "Additional Maximum Downlink Packet Rate": u16 if aprc && dlpr,
+    }
+    check(this, path, found) {
+        flag_rule(!(this.ulpr || this.dlpr || this.aprc), path, "8.2.63", "no bit is set", found);
     }
 }
 
@@ -244,6 +255,8 @@ pfcp_layout! {
         if replacement.umn6rs && (replacement.dipv4 || replacement.dipv6 || replacement.dpn || replacement.sipv4 || replacement.sipv6 || replacement.spn) {
             found.push(Deviation::new(path, "8.2.200", crate::check::DeviationKind::Rule("UMN6RS with an address or a port to replace")));
         }
+        let address = replacement.dipv4 || replacement.dipv6 || replacement.sipv4 || replacement.sipv6;
+        flag_rule(!replacement.umn6rs && !address, path, "8.2.200", "neither UMN6RS nor an IP address is set", found);
     }
 }
 
@@ -321,6 +334,9 @@ pfcp_layout! {
         ipv4_address "IPv4 address": Ipv4Addr if v4 && !ch,
         ipv6_address "IPv6 address": Ipv6Addr if v6 && !ch,
     }
+    check(this, path, found) {
+        flag_rule(this.v4 == this.v6, path, "8.2.209", "neither or both of V4 and V6 are set", found);
+    }
 }
 
 pfcp_layout! {
@@ -379,6 +395,9 @@ pfcp_layout! {
         dl_data_rate_threshold "DL Data Rate threshold": U40 if dldr,
         ul_data_rate_threshold "UL Data Rate threshold": U40 if uldr,
     }
+    check(this, path, found) {
+        flag_rule(!(this.dlci || this.ulci || this.dldr || this.uldr), path, "8.2.240", "no bit is set", found);
+    }
 }
 
 pfcp_layout! {
@@ -412,6 +431,11 @@ pfcp_fields! {
     /// Vendor-Specific Node Report Type (§8.2.217): the Enterprise ID and its octet of
     /// flags, which the vendor defines.
     pub struct VendorSpecificNodeReportType "8.2.217" { enterprise_id "Enterprise ID": u16, flags "Flags": u8 }
+    check(this, path, found) {
+        // Octet 7 and the octets after it are its bits.
+        let none = this.flags == 0 && this.extra.iter().all(|octet| *octet == 0);
+        flag_rule(none, path, "8.2.217", "no bit is set", found);
+    }
     /// UE Level Measurements Configuration (§8.2.245): the Job Type (Table 8.2.245-1), the
     /// Measurement Types after their number (Table 8.2.245-2), and the Time Period, in
     /// seconds.
@@ -462,6 +486,9 @@ pfcp_bits! {
         pcp "PCP": 0 1 1, dei "DEI": 0 2 1, vid "VID": 0 3 1,
         pcp_value "PCP value": 1 1 3, dei_flag "DEI Flag": 1 4 1, cvid "C-VID value": 1 5 4 + 2 1 8,
     }
+    check(this, path, found) {
+        flag_rule(!(this.pcp || this.dei || this.vid), path, "8.2.94", "none of PCP, DEI and VID is set", found);
+    }
 }
 
 pfcp_bits! {
@@ -469,6 +496,9 @@ pfcp_bits! {
     pub struct STag "8.2.95" octets 3 min 3 {
         pcp "PCP": 0 1 1, dei "DEI": 0 2 1, vid "VID": 0 3 1,
         pcp_value "PCP value": 1 1 3, dei_flag "DEI Flag": 1 4 1, svid "S-VID value": 1 5 4 + 2 1 8,
+    }
+    check(this, path, found) {
+        flag_rule(!(this.pcp || this.dei || this.vid), path, "8.2.95", "none of PCP, DEI and VID is set", found);
     }
 }
 
