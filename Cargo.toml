@@ -11,6 +11,15 @@ keywords = ["pfcp", "5g", "lte", "n4", "3gpp"]
 categories = ["network-programming", "encoding", "parser-implementations", "no-std"]
 readme = "README.md"
 publish = false
+include = [
+    "src/**/*.rs",
+    "tests/**/*.rs",
+    "tests/**/*.tsv",
+    "README.md",
+    "CHANGELOG.md",
+    "SECURITY.md",
+    "LICENSE",
+]
 
 [features]
 default = ["std"]
