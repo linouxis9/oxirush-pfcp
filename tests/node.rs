@@ -3355,6 +3355,85 @@ fn a_seid_of_zero_is_of_no_session() {
     assert_eq!(violations(&mut upf), [ViolationKind::UnknownSeid]);
 }
 
+/// §7.2.2.4.2 on the UP side: a CP F-SEID of SEID 0 is of no session. An establishment
+/// of it is answered "Mandatory IE incorrect", and a modification or a report's response
+/// that gives it changes no peer's SEID.
+#[test]
+fn a_peer_seid_of_zero_is_kept_by_no_session() {
+    let (mut smf, mut upf) = associated(at(0));
+    let zero = FSeid {
+        v4: true,
+        seid: Some(0),
+        ipv4: Some(Ipv4Addr::new(10, 0, 0, 1)),
+        ..Default::default()
+    };
+    let pdr = CreatePdr::new_n4(
+        PdrId::new(1),
+        Precedence::new(1),
+        Pdi::new(SourceInterface::new(SourceInterfaceValue::Access)),
+    );
+    let far = CreateFar::new(
+        FarId::new(1),
+        ApplyAction {
+            forw: true,
+            ..Default::default()
+        },
+    );
+    let establishment = Message {
+        header: Header::session(0, 40),
+        body: SessionEstablishmentRequest::new_n4(node_id(SMF), zero.clone(), pdr, far).into(),
+    };
+    upf.handle_datagram(at(1), SMF, &establishment.encode().unwrap());
+    assert_eq!(violations(&mut upf), [ViolationKind::SeidZero]);
+    let Body::SessionEstablishmentResponse(answer) = decoded(&sent(&mut upf)[0]).body else {
+        panic!()
+    };
+    assert_eq!(
+        (
+            answer.cause.map(|cause| cause.value),
+            answer.offending_ie.map(|ie| ie.value)
+        ),
+        (Some(CauseValue::MandatoryIeIncorrect), Some(57))
+    );
+    // A modification that moves the session to SEID 0
+    let (cp_seid, up_seid) = established(&mut smf, &mut upf, at(2));
+    let modification = Message {
+        header: Header::session(up_seid, 41),
+        body: SessionModificationRequest::default()
+            .with_cp_f_seid(zero)
+            .into(),
+    };
+    upf.handle_datagram(at(3), SMF, &modification.encode().unwrap());
+    let got = events(&mut upf);
+    assert!(
+        got.iter().any(|event| matches!(
+            event,
+            Event::Violation {
+                kind: ViolationKind::SeidZero,
+                ..
+            }
+        )),
+        "{got:?}"
+    );
+    let inbound = got
+        .into_iter()
+        .find_map(|event| match event {
+            Event::Request { request, .. } => Some(request),
+            _ => None,
+        })
+        .unwrap();
+    upf.respond(
+        at(3),
+        &inbound,
+        SessionModificationResponse::new(accepted()),
+    )
+    .unwrap();
+    assert_eq!(
+        upf.session(up_seid).and_then(|session| session.peer_seid),
+        Some(cp_seid)
+    );
+}
+
 /// The UP function's answer that gives the local SEID of another session is not sent.
 #[test]
 fn an_answer_of_a_seid_in_use_is_refused() {
