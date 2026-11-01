@@ -2686,6 +2686,81 @@ fn a_second_answer_has_no_effect() {
     assert!(upf.session(up_seid).is_some());
 }
 
+/// A probe's later answers change nothing, also once the first has left the node, past
+/// `keep` or evicted: the first answer of a request is a fact that the node keeps.
+#[test]
+fn a_later_answer_has_no_effect_after_keep_or_eviction() {
+    for evicted in [false, true] {
+        let mut upf = Node::new(NodeConfig {
+            capacity: 3,
+            ..config(UPF, Function::Up)
+        });
+        let mut smf = node(SMF, Function::Cp);
+        let setup = AssociationSetupRequest::new(node_id(SMF), RecoveryTimeStamp::new(1000));
+        smf.request(
+            at(0),
+            UPF,
+            Message {
+                header: Header::node(0),
+                body: setup.into(),
+            },
+        )
+        .unwrap();
+        pass(&mut smf, &mut upf, UPF, at(0));
+        let (inbound, _) = request(&mut upf);
+        upf.respond(at(0), &inbound, setup_answer()).unwrap();
+        pass(&mut upf, &mut smf, SMF, at(0));
+        events(&mut smf);
+        events(&mut upf);
+        let (_, up_seid) = established(&mut smf, &mut upf, at(1));
+        let now = match evicted {
+            // Requests of others take the place of the answer
+            true => {
+                for i in 1..=3u8 {
+                    let from = SocketAddr::new(Ipv4Addr::new(10, 9, 0, i).into(), 8805);
+                    upf.handle_datagram(at(2), from, &setup_of(from, 1, 1000));
+                    let (other, _) = request(&mut upf);
+                    upf.respond(at(2), &other, setup_answer()).unwrap();
+                }
+                assert!(upf.counters().evicted > 0);
+                at(2)
+            }
+            false => at(30),
+        };
+        upf.handle_timeout(now);
+        events(&mut upf);
+        let again = Message {
+            header: Header::node(inbound.sequence),
+            body: setup_answer().into(),
+        };
+        upf.respond_message(now, &inbound, again, Delivery::CacheOnly)
+            .unwrap();
+        assert!(events(&mut upf).is_empty(), "evicted {evicted}");
+        assert!(upf.session(up_seid).is_some(), "evicted {evicted}");
+        assert_eq!(
+            upf.respond(now, &inbound, setup_answer()),
+            Err(NodeError::Answered)
+        );
+    }
+}
+
+/// A request that waits for its answer stays past `keep`: its retransmission is no new
+/// request, and the late answer has its effect.
+#[test]
+fn a_request_waits_past_keep() {
+    let mut upf = Node::new(NodeConfig {
+        keep: Duration::from_secs(5),
+        ..config(UPF, Function::Up)
+    });
+    let setup = setup_of(SMF, 1, 1000);
+    upf.handle_datagram(at(0), SMF, &setup);
+    let (inbound, _) = request(&mut upf);
+    upf.handle_datagram(at(6), SMF, &setup);
+    assert_eq!(requests_of(&events(&mut upf)), 0);
+    upf.respond(at(7), &inbound, setup_answer()).unwrap();
+    assert!(upf.association(SMF).is_some());
+}
+
 // ── §4.2.2: the port of the requests ───────────────────────────────────────
 
 /// §4.2.2: a request goes to port 8805, whatever port the peer sends its own from, and

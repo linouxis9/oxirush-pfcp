@@ -103,10 +103,11 @@ pub struct NodeConfig {
     pub priority_up_to: Option<u8>,
     /// How many requests of the peers the node keeps for their retransmissions, and how
     /// many Recovery Time Stamps of peers without an association, so that a flood of
-    /// datagrams bounds what the node holds. A request that waits for its answer stays;
-    /// beyond it, a rejection of the node's own goes first, then the oldest answer, and a
-    /// request that finds every place waiting is dropped: [`Node::counters`] counts both.
-    /// A Heartbeat Request is answered from the state, and not kept.
+    /// datagrams bounds what the node holds. A request that waits for its answer stays
+    /// until the caller answers or forgets it ([`Node::forget`]); beyond it, a rejection of
+    /// the node's own goes first, then the oldest answer, and a request that finds every
+    /// place waiting is dropped: [`Node::counters`] counts both. A Heartbeat Request is
+    /// answered from the state, and not kept.
     pub capacity: usize,
     /// The UDP port of the requests that the node sends to a peer of its own accord, a
     /// heartbeat or a session request: 8805 (§4.2.2), whatever port the peer sends its
@@ -189,6 +190,8 @@ pub struct Inbound {
     pub node_id: Option<NodeId>,
     /// What an answer that accepts it changes.
     pub(crate) effect: Effect,
+    /// The request, of all that the node gave the caller.
+    pub(crate) id: u64,
 }
 
 /// How a response goes, for a probe that breaks §6.4 on purpose.
@@ -387,7 +390,7 @@ pub enum NodeError {
     WrongDirection,
     /// Every sequence number is outstanding, reserved or recent.
     NoSequence,
-    /// An answer to a request that has one already (§6.4).
+    /// An answer to a request that has one already (§6.4), or that the caller forgot.
     Answered,
     /// An answer of another type than the response of the request.
     WrongResponse,
@@ -471,6 +474,7 @@ pub struct Node {
     next_sequence: u32,
     next_request: u64,
     next_seid: u64,
+    next_inbound: u64,
     reserved: BTreeSet<u32>,
     outstanding: BTreeMap<u32, Outstanding>,
     /// The retransmissions, by when they are due.
@@ -503,6 +507,7 @@ impl Node {
             next_sequence: 1,
             next_request: 1,
             next_seid: 1,
+            next_inbound: 1,
             reserved: BTreeSet::new(),
             outstanding: BTreeMap::new(),
             deadlines: BTreeSet::new(),
@@ -868,8 +873,8 @@ impl Node {
     ///
     /// # Errors
     ///
-    /// A body of another type than the response of the request, a request answered
-    /// already, an establishment's answer of the local SEID of another session, and a
+    /// A body of another type than the response of the request, a request answered or
+    /// forgotten already, an establishment's answer of the local SEID of another session, and a
     /// body that does not encode.
     pub fn respond(
         &mut self,
@@ -881,10 +886,9 @@ impl Node {
         if body.message_type() != request.message_type + 1 {
             return Err(NodeError::WrongResponse);
         }
-        if self
+        if !self
             .answers
-            .get(&(request.from, request.sequence))
-            .is_some_and(|answered| answered.response.is_some())
+            .waits(&(request.from, request.sequence), request.id)
         {
             return Err(NodeError::Answered);
         }
@@ -900,7 +904,6 @@ impl Node {
             self.response_header(request),
             body,
             Delivery::Send,
-            false,
         )
     }
 
@@ -925,7 +928,9 @@ impl Node {
     }
 
     /// Answer a request with a message as it is, delivered as `delivery` says: a probe,
-    /// which may answer any number of times, and with anything.
+    /// which may answer any number of times, and with anything. Its first answer alone
+    /// changes the node, whenever the others come; a later one replaces the answer kept
+    /// for the retransmissions while the node keeps it.
     ///
     /// # Errors
     ///
@@ -937,11 +942,12 @@ impl Node {
         message: Message,
         delivery: Delivery,
     ) -> Result<(), NodeError> {
-        self.respond_with(now, request, message.header, message.body, delivery, false)
+        self.respond_with(now, request, message.header, message.body, delivery)
     }
 
-    /// Answer a request, and keep the answer for its retransmissions: `rejection` for a
-    /// rejection of the node's own, which goes first when the node is full.
+    /// Answer a request, and keep the answer for its retransmissions. Its first answer
+    /// alone, which the node knows by the request that waits for it, changes the node: a
+    /// probe may answer again, past `keep` too.
     fn respond_with(
         &mut self,
         now: Duration,
@@ -949,23 +955,20 @@ impl Node {
         header: Header,
         body: Body,
         delivery: Delivery,
-        rejection: bool,
     ) -> Result<(), NodeError> {
         let message = Message { header, body };
         let octets = message.encode()?;
         let key = (request.from, request.sequence);
         if delivery == Delivery::Forget {
             // A responder that lost its state: no answer kept, and nothing changed.
-            self.answers.remove(&key);
+            self.answers.forget(&key, request.id);
             return Ok(());
         }
         let expires = now.saturating_add(self.config.keep);
-        let capacity = self.config.capacity;
         if self
             .answers
-            .answer(key, octets.clone(), expires, capacity, rejection)
+            .answer(key, request.id, octets.clone(), expires)
         {
-            // The first answer alone changes the node: a probe may answer again.
             self.answered_effects(now, request, &message);
         }
         if delivery == Delivery::Send {
@@ -982,12 +985,8 @@ impl Node {
     /// retransmission of it comes again as a request.
     pub fn forget(&mut self, request: &Inbound) {
         let key = (request.from, request.sequence);
-        if self
-            .answers
-            .get(&key)
-            .is_some_and(|answered| answered.response.is_none())
-        {
-            self.answers.remove(&key);
+        if self.answers.waits(&key, request.id) {
+            self.answers.forget(&key, request.id);
         }
     }
 
@@ -1215,6 +1214,7 @@ impl Node {
             peer_seid,
             node_id,
             effect: Effect::Nothing,
+            id: 0,
         };
         if let Some(body) = rejection_body(message_type, cause, None, &self.config.node_id) {
             let mut header = self.response_header(&inbound);
@@ -1227,7 +1227,18 @@ impl Node {
                     0
                 });
             }
-            let _ = self.respond_with(now, &inbound, header, body, Delivery::Send, true);
+            if let Ok(response) = (Message { header, body }).encode() {
+                let expires = now.saturating_add(self.config.keep);
+                let key = (from, sequence);
+                let capacity = self.config.capacity;
+                self.answers
+                    .reject(key, octets.to_vec(), response.clone(), expires, capacity);
+                self.queue(Transmit {
+                    to: from,
+                    priority,
+                    octets: response,
+                });
+            }
         }
         true
     }
@@ -1424,7 +1435,9 @@ impl Node {
             },
             node_id: node_id_of(&message.body),
             effect,
+            id: self.next_inbound,
         };
+        self.next_inbound += 1;
         if message_type == 1 {
             // Answered from the state, the same each time: not kept.
             let message = Message {
@@ -1443,11 +1456,10 @@ impl Node {
             }
             return;
         }
-        let expires = now.saturating_add(self.config.keep);
         if !self.answers.wait(
             (from, sequence),
             octets.to_vec(),
-            expires,
+            inbound.id,
             self.config.capacity,
         ) {
             // Full of requests that wait for their answer: the peer sends it again.

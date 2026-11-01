@@ -235,6 +235,22 @@ async fn a_request_refused_by_a_full_node_is_counted() {
     drop(first);
 }
 
+/// A request whose Incoming the caller drops unanswered is forgotten: its retransmission
+/// comes again.
+#[tokio::test]
+async fn a_dropped_incoming_is_forgotten() {
+    let mut upf = Endpoint::bind(ANY, config(Function::Up)).await.unwrap();
+    let peer = tokio::net::UdpSocket::bind(ANY).await.unwrap();
+    peer.send_to(&setup(9), upf.local_addr()).await.unwrap();
+    drop(upf.incoming().await.unwrap());
+    peer.send_to(&setup(9), upf.local_addr()).await.unwrap();
+    let again = tokio::time::timeout(Duration::from_millis(500), upf.incoming())
+        .await
+        .expect("the retransmission, as a new request")
+        .unwrap();
+    assert_eq!(again.request.sequence, 9);
+}
+
 /// An answer that does not encode, or that is not the request's response, is an error
 /// of `respond`.
 #[tokio::test]
