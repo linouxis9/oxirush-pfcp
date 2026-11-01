@@ -816,7 +816,8 @@ pub struct FqCsid {
     /// The octet of the Node Type, bits 4 to 1, and four spare bits: absent from a sender
     /// of an earlier release.
     pub node_type: Option<Narrow<NodeType>>,
-    /// The octets after them, which a later release adds.
+    /// The octets after them, which a later release adds: the unknown octets of §8.1.2,
+    /// `"unknown octets"` in a tree.
     pub extra: Octets,
 }
 
@@ -1009,7 +1010,7 @@ impl oxirush_utils::tree::Tree for FqCsid {
         if fq_csid.node_type.is_none() && !fq_csid.extra.is_empty() {
             return Err(reading.refuse(
                 oxirush_utils::tree::ErrorKind::Value,
-                "extra octets after a Node Type only (8.2.43)",
+                "unknown octets after a Node Type only (8.2.43)",
             ));
         }
         if fq_csid.csids.len() > 15
