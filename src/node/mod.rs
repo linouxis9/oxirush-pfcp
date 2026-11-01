@@ -2346,6 +2346,11 @@ impl Node {
 
     /// What an answer of the caller changes: the association, the session.
     fn answered_effects(&mut self, now: Duration, request: &Inbound, message: &Message) {
+        // A probe's answer of another type than the request's response is discarded by
+        // the peer (§7.6.5), so it changes nothing here either.
+        if message.body.message_type() != request.message_type + 1 {
+            return;
+        }
         let accepted = accepts(&message.body);
         if !accepted {
             return;
