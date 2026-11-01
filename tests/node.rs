@@ -2763,7 +2763,7 @@ fn a_later_answer_has_no_effect_after_keep_or_eviction() {
         assert!(upf.session(up_seid).is_some(), "evicted {evicted}");
         assert_eq!(
             upf.respond(now, &inbound, setup_answer()),
-            Err(NodeError::Answered)
+            Err(NodeError::Forgotten)
         );
     }
 }
@@ -2788,7 +2788,7 @@ fn a_request_that_waits_past_keep_is_forgotten() {
     let (again, _) = request(&mut upf);
     assert_eq!(
         upf.respond(at(7), &first, setup_answer()),
-        Err(NodeError::Answered)
+        Err(NodeError::Forgotten)
     );
     assert!(upf.association(SMF).is_none());
     upf.respond(at(7), &again, setup_answer()).unwrap();
@@ -4359,6 +4359,46 @@ fn mpas_a_release_leaves_a_taken_over_session_with_its_smf() {
     // The session stays B's: it is kept, and still not of the set for B.
     assert!(upf.session(up_seid).is_some());
     assert_eq!(taken(&mut upf, b, bs(10)), Ok(false));
+}
+
+/// §6.4: an answer to a request that is no longer waiting, because it expired past keep
+/// or the caller forgot it, says it is no longer waiting, not that it has its answer
+/// (which it does not).
+#[test]
+fn an_answer_to_a_request_no_longer_waiting_says_so() {
+    let answer =
+        || AssociationSetupResponse::new(node_id(UPF), accepted(), RecoveryTimeStamp::new(1000));
+    let setup = || Message {
+        header: Header::node(1),
+        body: AssociationSetupRequest::new(node_id(SMF), RecoveryTimeStamp::new(1000)).into(),
+    };
+    // Forgotten by the caller.
+    let mut upf = node(UPF, Function::Up);
+    upf.handle_datagram(at(0), SMF, &setup().encode().unwrap());
+    let (inbound, _) = request(&mut upf);
+    upf.forget(&inbound);
+    assert_eq!(
+        upf.respond(at(0), &inbound, answer()),
+        Err(NodeError::Forgotten)
+    );
+    // Expired past keep (24 s).
+    let mut upf = node(UPF, Function::Up);
+    upf.handle_datagram(at(0), SMF, &setup().encode().unwrap());
+    let (inbound, _) = request(&mut upf);
+    upf.handle_timeout(at(25));
+    assert_eq!(
+        upf.respond(at(25), &inbound, answer()),
+        Err(NodeError::Forgotten)
+    );
+    // Answered already stays Answered.
+    let mut upf = node(UPF, Function::Up);
+    upf.handle_datagram(at(0), SMF, &setup().encode().unwrap());
+    let (inbound, _) = request(&mut upf);
+    upf.respond(at(0), &inbound, answer()).unwrap();
+    assert_eq!(
+        upf.respond(at(0), &inbound, answer()),
+        Err(NodeError::Answered)
+    );
 }
 
 /// §7.2.2.4.2 bullet 3: the response to a request of header SEID 0 has SEID 0. A UPF
