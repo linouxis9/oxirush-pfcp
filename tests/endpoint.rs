@@ -64,7 +64,7 @@ async fn an_smf_and_a_upf_set_up_an_association_and_a_session() {
                     incoming.respond(response).await.unwrap();
                 }
                 Body::SessionEstablishmentRequest(_) => {
-                    let seid = upf_handle.new_session(incoming.request.from).await.unwrap();
+                    let seid = upf_handle.new_session().await.unwrap();
                     let f_seid = FSeid {
                         v4: true,
                         seid: Some(seid),
@@ -98,7 +98,7 @@ async fn an_smf_and_a_upf_set_up_an_association_and_a_session() {
         .unwrap();
     assert_eq!(response.body.cause(), Some(CauseValue::RequestAccepted));
 
-    let seid = smf.new_session(upf_address).await.unwrap();
+    let seid = smf.new_session().await.unwrap();
     let f_seid = FSeid {
         v4: true,
         seid: Some(seid),
@@ -168,7 +168,7 @@ async fn answer(handle: &Handle, incoming: Incoming) {
                 .await
         }
         Body::SessionEstablishmentRequest(_) => {
-            let seid = handle.new_session(incoming.request.from).await.unwrap();
+            let seid = handle.new_session().await.unwrap();
             let f_seid = FSeid {
                 v4: true,
                 seid: Some(seid),
@@ -226,7 +226,7 @@ async fn both_ways_at_once() {
             body: report.into(),
         },
     );
-    let seid = smf_handle.new_session(upf_address).await.unwrap();
+    let seid = smf_handle.new_session().await.unwrap();
     let f_seid = FSeid {
         v4: true,
         seid: Some(seid),

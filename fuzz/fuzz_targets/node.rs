@@ -168,7 +168,7 @@ fn answer(node: &mut Node, now: Duration, how: u8, kept: &mut Vec<Inbound>) {
         kept.truncate(16);
         let mut request = request;
         if request.of_smf_set && how & 8 != 0 {
-            let local = node.new_session(request.from);
+            let local = node.new_session();
             node.end_session(local);
             if node.adopt_session(local, request.from, 0x77).is_ok() {
                 request.seid = Some(local);
@@ -191,7 +191,7 @@ fn answer(node: &mut Node, now: Duration, how: u8, kept: &mut Vec<Inbound>) {
                 AssociationReleaseResponse::new(own.clone(), cause.clone()).into()
             }
             Body::SessionEstablishmentRequest(_) => {
-                let seid = node.new_session(request.from);
+                let seid = node.new_session();
                 SessionEstablishmentResponse::new(own.clone(), cause.clone())
                     .with_up_f_seid(FSeid {
                         v4: true,
@@ -284,7 +284,7 @@ fuzz_target!(|octets: &[u8]| {
         }
     }
     settle(&mut upf, &mut smf, now, accepting, &mut kept);
-    let cp_seid = smf.new_session(UPF);
+    let cp_seid = smf.new_session();
     let _ = smf.request(now, UPF, establishment(SMFS[0], cp_seid));
     settle(&mut upf, &mut smf, now, accepting, &mut kept);
     for node in [&mut upf, &mut smf] {
@@ -410,7 +410,7 @@ fuzz_target!(|octets: &[u8]| {
                 // The SMF moves its session to a new SEID, or to one of the arguments.
                 8 => {
                     let new = match extra & 1 {
-                        0 => smf.new_session(UPF),
+                        0 => smf.new_session(),
                         _ => u64::from(extra >> 1),
                     };
                     let f_seid = FSeid {
