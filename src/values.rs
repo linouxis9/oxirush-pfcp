@@ -1531,7 +1531,8 @@ pfcp_layout! {
         s_tag "S-TAG field": VlanTag if s_tag_header,
     }
     check(creation, path, found) {
-        if !(creation.gtpu_udp_ipv4 || creation.gtpu_udp_ipv6 || creation.udp_ipv4 || creation.udp_ipv6 || creation.ipv4_header || creation.ipv6_header || creation.c_tag_header || creation.s_tag_header) {
+        // Of its octets 5 and 6: 6/3 alone is an MB-UPF's FSSM FAR (Table 7.5.2.3-5).
+        if !(creation.gtpu_udp_ipv4 || creation.gtpu_udp_ipv6 || creation.udp_ipv4 || creation.udp_ipv6 || creation.ipv4_header || creation.ipv6_header || creation.c_tag_header || creation.s_tag_header || creation.n19_indication || creation.n6_indication || creation.low_layer_ssm_and_c_teid) {
             found.push(Deviation::new(path, "8.2.56", DeviationKind::Rule("no bit of the description is set")));
         }
     }
