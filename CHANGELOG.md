@@ -18,7 +18,8 @@ The first version, of TS 29.244 V19.6.0 (2026-06).
 - `tree` and `serde`: a message as a tree, read and edited by path, and as
   JSON.
 - `node`: a PFCP entity without I/O, for an SMF, a UPF or a test tool:
-  reliable delivery (§6.4), heartbeat, associations, sessions, load and
+  reliable delivery (§6.4), with the peers' retransmissions of the requests
+  that it holds as events, heartbeat, associations, sessions, load and
   overload control and message priority, and what a peer does wrong as an
   event. What it keeps of its peers is bounded, and what it drops counted.
   With `SmfSet`, the requests that the SMF sets of §5.22 let come from another
