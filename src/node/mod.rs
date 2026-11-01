@@ -558,6 +558,7 @@ pub struct Node {
     next_request: u64,
     next_seid: u64,
     next_inbound: u64,
+    next_mark: u64,
     reserved: BTreeSet<u32>,
     outstanding: BTreeMap<u32, Outstanding>,
     /// The sequence number of each outstanding request, and the peers that have a
@@ -598,6 +599,7 @@ impl Node {
             next_request: 1,
             next_seid: 1,
             next_inbound: 1,
+            next_mark: 1,
             reserved: BTreeSet::new(),
             outstanding: BTreeMap::new(),
             ids: BTreeMap::new(),
@@ -621,6 +623,13 @@ impl Node {
     /// What the node is.
     pub fn config(&self) -> &NodeConfig {
         &self.config
+    }
+
+    /// A fresh mark for a session the node creates.
+    fn mark(&mut self) -> u64 {
+        let mark = self.next_mark;
+        self.next_mark = self.next_mark.wrapping_add(1);
+        mark
     }
 
     /// What the node dropped to bound what it keeps.
@@ -839,6 +848,7 @@ impl Node {
                     peer_seid: None,
                     node,
                     reserved: false,
+                    mark: self.mark(),
                 };
                 self.sessions.insert(seid, session);
             }
@@ -925,6 +935,7 @@ impl Node {
             .association_of(peer)
             .map(|association| association.key.clone())
             .unwrap_or_default();
+        let mark = self.mark();
         self.sessions.insert(
             seid,
             Session {
@@ -932,6 +943,7 @@ impl Node {
                 peer_seid: None,
                 node,
                 reserved: false,
+                mark,
             },
         );
         seid
@@ -966,6 +978,7 @@ impl Node {
             peer_seid: Some(peer_seid),
             node,
             reserved: false,
+            mark: self.mark(),
         };
         self.sessions.insert(local_seid, session);
         Ok(())
@@ -1798,6 +1811,10 @@ impl Node {
         if heartbeat {
             self.beating.insert(to);
         }
+        // Which session the request is of, so that its response acts on that session only.
+        let mark = local_seid
+            .and_then(|seid| self.sessions.get(&seid))
+            .map(|session| session.mark);
         self.outstanding.insert(
             sequence,
             Outstanding {
@@ -1810,6 +1827,7 @@ impl Node {
                 priority,
                 heartbeat,
                 local_seid,
+                mark,
                 change,
             },
         );
@@ -2275,6 +2293,7 @@ impl Node {
                                 .association_of(from)
                                 .map(|association| association.key.clone())
                                 .unwrap_or_default();
+                            let mark = self.mark();
                             self.sessions.insert(
                                 local,
                                 Session {
@@ -2282,6 +2301,7 @@ impl Node {
                                     peer_seid: f_seid.seid,
                                     node,
                                     reserved: false,
+                                    mark,
                                 },
                             );
                         }
@@ -2289,9 +2309,12 @@ impl Node {
                     }
                 }
             }
-            // The session of the request, whatever SEID the header of the response has.
+            // The session of the request, whatever SEID the header of the response has,
+            // and only if it is still that session (not one that reused its SEID).
             _ if accepted && request.change == Change::Ends => {
-                if let Some(local) = request.local_seid {
+                if let Some(local) = request.local_seid
+                    && self.sessions.get(&local).map(|session| session.mark) == request.mark
+                {
                     self.sessions.remove(&local);
                 }
             }
@@ -2301,6 +2324,9 @@ impl Node {
                 };
                 let moved = request
                     .local_seid
+                    .filter(|local| {
+                        self.sessions.get(local).map(|session| session.mark) == request.mark
+                    })
                     .and_then(|local| self.sessions.remove(&local).map(|session| (local, session)));
                 match moved {
                     Some((local, session)) => {
@@ -2405,6 +2431,7 @@ impl Node {
                         _ => request.from,
                     };
                     let peer = self.request_address(peer);
+                    let mark = self.mark();
                     self.sessions.insert(
                         local,
                         Session {
@@ -2412,6 +2439,7 @@ impl Node {
                             peer_seid: request.peer_seid,
                             node,
                             reserved: false,
+                            mark,
                         },
                     );
                 }

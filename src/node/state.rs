@@ -75,6 +75,10 @@ pub struct Session {
     /// An establishment of the node's, or a move of a session to it, is outstanding for
     /// it: no other may take it.
     pub(crate) reserved: bool,
+    /// Which session it is: a fresh value at each session created, kept through a move or
+    /// a change of its peer. A request's outstanding carries the mark of its session, so
+    /// its response acts on that session, not on another that reused its local SEID.
+    pub(crate) mark: u64,
 }
 
 /// The sessions of the node by their local SEIDs, with the peer's SEID of each and the
@@ -249,6 +253,9 @@ pub(crate) struct Outstanding {
     pub(crate) heartbeat: bool,
     /// The local SEID of the session of a session request.
     pub(crate) local_seid: Option<u64>,
+    /// The mark of the session when the request was sent, so its response acts on that
+    /// session only.
+    pub(crate) mark: Option<u64>,
     pub(crate) change: Change,
 }
 
