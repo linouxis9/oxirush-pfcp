@@ -1,4 +1,4 @@
-# table|row|same	table	name, or the name of the row	heading, or presence	IE type, or interfaces	IE type
+# table|row|same	table	name, or the name of the row	heading, or presence	IE type, or interfaces	IE type	once, several, or how many
 table	7.4.2.1-1	Information Elements in Heartbeat Request	7.4.2.1 Heartbeat Request	
 row	7.4.2.1-1	Recovery Time Stamp	M	Sxa Sxb Sxc N4 N4mb	Recovery Time Stamp	once
 row	7.4.2.1-1	Source IP Address	O	Sxa Sxb Sxc N4 N4mb	Source IP Address	once
@@ -285,7 +285,7 @@ row	7.5.2.2-1	Deactivation Time	O	Sxb Sxc N4	Deactivation Time	once
 row	7.5.2.2-1	MAR ID	C	N4	MAR ID	once
 row	7.5.2.2-1	Packet Replication and Detection Carry-On Information	C	N4	Packet Replication and Detection Carry-On Information	once
 row	7.5.2.2-1	IP Multicast Addressing Info	O	N4	IP Multicast Addressing Info	several
-row	7.5.2.2-1	UE IP address Pool Identity	O	Sxb N4	UE IP address Pool Identity	several
+row	7.5.2.2-1	UE IP address Pool Identity	O	Sxb N4	UE IP address Pool Identity	2
 row	7.5.2.2-1	Multipath Applicable Indication	C	N4	Multipath Applicable Indication	once
 row	7.5.2.2-1	Transport Delay Reporting	C	N4	Transport Delay Reporting	once
 row	7.5.2.2-1	RAT Type	O	N4	RAT Type	once
@@ -318,7 +318,7 @@ row	7.5.2.2-2	Expedited Transfer Indication	O	N4	Expedited Transfer Indication	o
 table	7.5.2.2-3	Ethernet Packet Filter IE within PFCP Session Establishment Request	7.5.2.2 Create PDR IE within PFCP Session Establishment Request	132
 row	7.5.2.2-3	Ethernet Filter ID	C	N4	Ethernet Filter ID	once
 row	7.5.2.2-3	Ethernet Filter Properties	C	N4	Ethernet Filter Properties	once
-row	7.5.2.2-3	MAC address	O	N4	MAC address	several
+row	7.5.2.2-3	MAC address	O	N4	MAC address	16
 row	7.5.2.2-3	Ethertype	O	N4	Ethertype	once
 row	7.5.2.2-3	C-TAG	O	N4	C-TAG	once
 row	7.5.2.2-3	S-TAG	O	N4	S-TAG	once
@@ -637,7 +637,7 @@ table	7.5.3.7-4	PMF Parameters IE within PFCP Session Establishment Response	7.5
 row	7.5.3.7-4	PMF Address Information	M	N4	PMF Address Information	once
 row	7.5.3.7-4	QoS flow identifier	O	N4	QFI	once
 table	7.5.3.7-5	MPQUIC Parameters IE within PFCP Session Establishment Response	7.5.3.7 ATSSS Control Parameters IE within PFCP Session Establishment Response	331
-row	7.5.3.7-5	MPQUIC Address Information	M	N4	MPQUIC Address Information	several
+row	7.5.3.7-5	MPQUIC Address Information	M	N4	MPQUIC Address Information	2
 row	7.5.3.7-5	MPQUIC Link-Specific IP Address	M	N4	Link-Specific Multipath IP Address	once
 table	7.5.4.1-1	Information Elements in a PFCP Session Modification Request	7.5.4.1 General	
 row	7.5.4.1-1	CP F-SEID	C	Sxa Sxb Sxc N4 N4mb	F-SEID	once
@@ -679,7 +679,7 @@ row	7.5.4.1-1	Create SRR	C	N4	Create SRR	several
 row	7.5.4.1-1	Update SRR	C	N4	Update SRR	several
 row	7.5.4.1-1	Provide ATSSS Control Information	C	N4	Provide ATSSS Control Information	once
 row	7.5.4.1-1	Ethernet Context Information	C	N4	Ethernet Context Information	once
-row	7.5.4.1-1	Access Availability Information	O	N4	Access Availability Information	several
+row	7.5.4.1-1	Access Availability Information	O	N4	Access Availability Information	2
 row	7.5.4.1-1	Query Packet Rate Status	C	Sxb N4	Query Packet Rate Status	several
 row	7.5.4.1-1	S-NSSAI	O	N4 N4mb	S-NSSAI	once
 row	7.5.4.1-1	HPLMN S-NSSAI	C	N4	HPLMN S-NSSAI	once
@@ -1008,7 +1008,7 @@ row	7.5.8.6-1	Access Availability Report	C	N4	Access Availability Report	once
 row	7.5.8.6-1	QoS Monitoring Report	C	N4	QoS Monitoring Report	several
 row	7.5.8.6-1	Traffic Parameter Measurement Report	C	N4	Traffic Parameter Measurement Report	several
 table	7.5.8.6-2	Access Availability Report IE	7.5.8.6 Session Report IE within PFCP Session Report Request	218
-row	7.5.8.6-2	Access Availability Information	M	N4	Access Availability Information	several
+row	7.5.8.6-2	Access Availability Information	M	N4	Access Availability Information	2
 table	7.5.8.6-3	QoS Monitoring Report IE	7.5.8.6 Session Report IE within PFCP Session Report Request	247
 row	7.5.8.6-3	QFI	M	N4	QFI	once
 row	7.5.8.6-3	QoS Monitoring Measurement	M	N4	QoS Monitoring Measurement	once

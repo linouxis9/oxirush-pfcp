@@ -11,7 +11,8 @@ script:
     message-types.tsv   Table 7.3-1: the message types and the interfaces that have them
     ie-types.tsv        Table 8.1.2-1: the IE types, their references and their lengths
     tables.tsv          the tables of clause 7, one row each, and whether the comment of a
-                        row says that several IEs of it may be there
+                        row says that several IEs of it may be there, and how many when it
+                        says
     layouts.tsv         the figures of clause 8.2: their clause, the type that they say, and
                         the names of their flags and fields, in order
     figures.tsv         the place of each flag and field of those figures: the octets of its
@@ -171,7 +172,7 @@ def main():
                 elif re.match(r'Same IEs', row[0]):
                     tables.append(['same', number, re.search(r'Table (7\.[\d.]+-\d+)', row[0]).group(1)])
                 elif len(row) >= 9 and row[1] in ('M', 'C', 'O'):
-                    several = 'several' if SEVERAL.search(row[2]) else 'once'
+                    several = repetition(row[2])
                     tables.append(['row', number, without_notes(row[0]), row[1], interfaces(row[3:8]), without_notes(row[8]), several])
         elif title and re.match(r'Table 8\.2\.\d+[.-]\d+', title):
             number = re.match(r'Table (8\.2\.\d+[.-]\d+)', title).group(1)
@@ -186,13 +187,29 @@ def main():
                 labels = {re.sub(r'\s+', '', octets): name for octets, name, _, bits in found if bits == '8'}
     write('message-types.tsv', ['value', 'name', 'interfaces'], message_types)
     write('ie-types.tsv', ['type', 'name', 'reference', 'length'], ie_types)
-    write('tables.tsv', ['table|row|same', 'table', 'name, or the name of the row', 'heading, or presence', 'IE type, or interfaces', 'IE type'], tables)
+    write('tables.tsv', ['table|row|same', 'table', 'name, or the name of the row', 'heading, or presence', 'IE type, or interfaces', 'IE type', 'once, several, or how many'], tables)
     write('layouts.tsv', ['clause', 'type in the figure', 'fields'], layouts)
     write('figures.tsv', ['clause', 'octets', 'name', 'lowest bit', 'bits'], figures)
     write('conditions.tsv', ['clause', 'flag', 'set', 'field', 'there'], conditions)
     write('value-tables.tsv', ['table', 'title', 'value', 'name'], values)
     write('clause-6.tsv', ['clause', 'title', 'requirements'], [[c, t, str(n)] for c, t, n in clause6])
 
+
+def repetition(comment):
+    """Whether a comment lets several IEs of its row be there, and how many when it says:
+    "up to 16 times", "Two IEs with the same IE type"."""
+    if not SEVERAL.search(comment):
+        return 'once'
+    found = BOUND.search(comment)
+    if found:
+        word = (found.group(1) or found.group(2)).lower()
+        return str(NUMBERS.get(word) or int(word))
+    return 'several'
+
+
+# The number of IEs of a row that its comment says.
+BOUND = re.compile(r'(?i)\bup to (\d+|two|three|four) (?:IEs|times)\b|\b(two|three|four) IEs with the same\b')
+NUMBERS = {'two': 2, 'three': 3, 'four': 4}
 
 # The words of a comment that let several IEs of a row be there.
 SEVERAL = re.compile(r'(?i:several IEs?\b|several .{0,30}IEs|represent a list|two IEs|more than one IE|IEs? with the same (?:IE )?type|may be repeated|up to \d+ (?:IEs|times)|several instances|for each PDR\b|list of all)')
