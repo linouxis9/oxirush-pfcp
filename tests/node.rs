@@ -3942,6 +3942,66 @@ fn sset_an_smf_without_the_association_controls_a_session() {
     assert_eq!(decoded(&sent(&mut smf)[0]).header.seid, Some(0x77));
 }
 
+/// §5.22.3 bullets 1 and 3: with MPAS, a session that another SMF of the set took over
+/// (a modification with its Node ID) is that SMF's. The release of the association that
+/// no longer controls the session must leave it with its SMF, not hand it to a third SMF
+/// of the set because that one's Node ID sorts first.
+#[test]
+fn mpas_a_release_leaves_a_taken_over_session_with_its_smf() {
+    let a = SMF;
+    let b: SocketAddr = Ipv4Addr::new(10, 0, 0, 30).into_socket(8805);
+    let c: SocketAddr = Ipv4Addr::new(10, 0, 0, 10).into_socket(8805);
+    let smfs = [
+        (a, node_id(a), mpas(), Some("set")),
+        (b, node_id(b), mpas(), Some("set")),
+        (c, node_id(c), mpas(), Some("set")),
+    ];
+    let mpas = SmfSet {
+        mpas: true,
+        ..SmfSet::default()
+    };
+    let (mut upf, up_seid) = upf_of_set(mpas, &smfs);
+    // B takes the session over, with its Node ID and no new CP F-SEID.
+    let takeover = Message {
+        header: Header::session(up_seid, 7),
+        body: SessionModificationRequest::default()
+            .with_node_id(node_id(b))
+            .into(),
+    };
+    upf.handle_datagram(at(1), b, &takeover.encode().unwrap());
+    let (inbound, _) = request(&mut upf);
+    assert!(inbound.of_smf_set);
+    upf.respond(
+        at(1),
+        &inbound,
+        SessionModificationResponse::new(accepted()),
+    )
+    .unwrap();
+    let bs = |seq| Message {
+        header: Header::session(up_seid, seq),
+        body: SessionModificationRequest::default().into(),
+    };
+    // The session is B's now: B's own modification is not of the set.
+    assert_eq!(taken(&mut upf, b, bs(8)), Ok(false));
+    // A releases its association.
+    let release = Message {
+        header: Header::node(9),
+        body: AssociationReleaseRequest::new(node_id(a)).into(),
+    };
+    upf.handle_datagram(at(2), a, &release.encode().unwrap());
+    let (inbound, _) = request(&mut upf);
+    upf.respond(
+        at(2),
+        &inbound,
+        AssociationReleaseResponse::new(node_id(UPF), accepted()),
+    )
+    .unwrap();
+    events(&mut upf);
+    // The session stays B's: it is kept, and still not of the set for B.
+    assert!(upf.session(up_seid).is_some());
+    assert_eq!(taken(&mut upf, b, bs(10)), Ok(false));
+}
+
 /// §7.2.2.4.2 bullet 3: the response to a request of header SEID 0 has SEID 0. A UPF
 /// without an association sends a Session Report Request of SEID 0 with the Old CP F-SEID
 /// of a previous SMF; the rejection must not carry that SMF-assigned SEID in its header.
