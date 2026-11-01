@@ -313,7 +313,7 @@ pfcp_ies! {
     211 "Remove SRR" grouped "7.5.4.19-1" => RemoveSrr;
     212 "Create SRR" grouped "7.5.2.9-1" => CreateSrr;
     213 "Update SRR" grouped "7.5.4.20-1" => UpdateSrr;
-    214 "Session Report" grouped "7.5.7.3-1" => SessionReportDeletion, SessionReport;
+    214 "Session Report" grouped "7.5.8.6-1" => SessionReportDeletion, SessionReport;
     215 "SRR ID" extendable(1) "8.2.151" => SrrId;
     216 "Access Availability Control Information" grouped "7.5.2.9-2" => AccessAvailabilityControlInformation;
     217 "Requested Access Availability Information" extendable(1) "8.2.152" => RequestedAccessAvailabilityInformation;
