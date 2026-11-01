@@ -1646,8 +1646,17 @@ impl Node {
                         });
                 Effect::Setup(retained, set)
             }
-            Body::AssociationUpdateRequest(request) if request.smf_set_id.is_some() => {
-                Effect::Update(request.smf_set_id.as_ref().map(|id| id.fqdn.0.clone()))
+            // The set features of the peer's function and the SMF Set ID that an update
+            // carries (§5.22.3 bullet 1).
+            Body::AssociationUpdateRequest(request) => {
+                let features = self.features_of(
+                    request.cp_function_features.as_ref(),
+                    request.up_function_features.as_ref(),
+                );
+                match (features, request.smf_set_id.as_ref()) {
+                    (None, None) => Effect::Nothing,
+                    (features, id) => Effect::Update(features, id.map(|id| id.fqdn.0.clone())),
+                }
             }
             Body::SessionEstablishmentRequest(request) => match request.cp_f_seid.as_ref() {
                 Some(f_seid) => {
@@ -2351,14 +2360,21 @@ impl Node {
                     self.associate(now, peer, node_id.clone(), retained, set);
                 }
             }
-            // A new SMF Set ID of the SMF, which keeps its sessions (§5.22.3, bullet 1).
-            (Body::AssociationUpdateResponse(_), Effect::Update(id)) => {
+            // The peer's new set features and SMF Set ID (§5.22.3, bullet 1): each taken if
+            // the update carried it, the rest of the set kept.
+            (Body::AssociationUpdateResponse(_), Effect::Update(features, id)) => {
                 if let Some(association) = request
                     .node_id
                     .as_ref()
                     .and_then(|node_id| self.associations.get_mut(&key_of(node_id)))
                 {
-                    association.set.id = id;
+                    if let Some((sset, mpas)) = features {
+                        association.set.sset = sset;
+                        association.set.mpas = mpas;
+                    }
+                    if let Some(id) = id {
+                        association.set.id = Some(id);
+                    }
                 }
             }
             (Body::AssociationReleaseResponse(_), _) => {

@@ -262,8 +262,10 @@ pub(crate) enum Effect {
     /// Information, and an empty list for all of them (§6.2.6.2.2); and the SMF set that
     /// the CP function says.
     Setup(Option<Vec<IpAddr>>, SetOf),
-    /// An association update of a new SMF Set ID (§5.22.3).
-    Update(Option<Vec<u8>>),
+    /// An association update (§5.22.3): the set features of the peer's new function
+    /// features, `None` for none in the update, and the FQDN of a new SMF Set ID, `None`
+    /// for none.
+    Update(Option<(bool, bool)>, Option<Vec<u8>>),
     /// The peer's F-SEID of an establishment, or the new CP F-SEID of a modification.
     PeerFSeid(u64, IpAddr),
     /// A report of a session that the UP function deleted (PSDBU, §5.18).
