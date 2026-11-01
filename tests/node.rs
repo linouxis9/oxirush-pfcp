@@ -3942,6 +3942,44 @@ fn sset_an_smf_without_the_association_controls_a_session() {
     assert_eq!(decoded(&sent(&mut smf)[0]).header.seid, Some(0x77));
 }
 
+/// A probe may answer with anything, but a response of another type than the request's
+/// changes nothing: the peer discards such a response (§7.6.5), so the two sides agree. A
+/// modification answered with a deletion response does not end the session, and a setup
+/// answered with a release response does not release the association.
+#[test]
+fn a_probe_answer_of_another_type_changes_nothing() {
+    let (mut smf, mut upf) = associated(at(0));
+    let (cp_seid, up_seid) = established(&mut smf, &mut upf, at(0));
+    smf.session_request(at(1), cp_seid, SessionModificationRequest::default())
+        .unwrap();
+    pass(&mut smf, &mut upf, UPF, at(1));
+    let (inbound, _) = request(&mut upf);
+    let wrong = Message {
+        header: Header::session(cp_seid, inbound.sequence),
+        body: SessionDeletionResponse::new(accepted()).into(),
+    };
+    upf.respond_message(at(1), &inbound, wrong, Delivery::Send)
+        .unwrap();
+    assert!(upf.session(up_seid).is_some());
+
+    // A setup answered with a release response: the association is not formed.
+    let mut fresh = node(UPF, Function::Up);
+    let setup = Message {
+        header: Header::node(1),
+        body: AssociationSetupRequest::new(node_id(SMF), RecoveryTimeStamp::new(1000)).into(),
+    };
+    fresh.handle_datagram(at(0), SMF, &setup.encode().unwrap());
+    let (inbound, _) = request(&mut fresh);
+    let wrong = Message {
+        header: Header::node(inbound.sequence),
+        body: AssociationReleaseResponse::new(node_id(UPF), accepted()).into(),
+    };
+    fresh
+        .respond_message(at(0), &inbound, wrong, Delivery::Send)
+        .unwrap();
+    assert!(fresh.association(SMF).is_none());
+}
+
 /// Table 7.4.4.3-1, §5.22.3: an Association Update carries the supported features, which
 /// the node must take, not only a new SMF Set ID. An SMF that turns MPAS off in an update
 /// no longer shares its sessions with the set.
