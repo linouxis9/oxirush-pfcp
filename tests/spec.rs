@@ -91,17 +91,18 @@ impl Errata {
     }
 }
 
-fn interfaces(names: &str) -> Interfaces {
-    Interfaces(names.split_whitespace().fold(0, |bits, name| {
+/// The bits of the interfaces that `names` names: 0 for none.
+fn interfaces(names: &str) -> u8 {
+    names.split_whitespace().fold(0, |bits, name| {
         bits | match name {
-            "Sxa" => Interfaces::SXA.0,
-            "Sxb" => Interfaces::SXB.0,
-            "Sxc" => Interfaces::SXC.0,
-            "N4" => Interfaces::N4.0,
-            "N4mb" => Interfaces::N4MB.0,
+            "Sxa" => Interfaces::SXA.bits(),
+            "Sxb" => Interfaces::SXB.bits(),
+            "Sxc" => Interfaces::SXC.bits(),
+            "N4" => Interfaces::N4.bits(),
+            "N4mb" => Interfaces::N4MB.bits(),
             other => panic!("no interface {other}"),
         }
-    }))
+    })
 }
 
 fn presence(letter: &str) -> Presence {
@@ -142,7 +143,7 @@ fn message_types() {
                 info.name()
             ));
         }
-        if info.interfaces != interfaces(cells[2]) {
+        if info.interfaces.bits() != interfaces(cells[2]) {
             problems.push(format!(
                 "message type {value}: interfaces {:?}, {} in the document",
                 info.interfaces, cells[2]
@@ -437,7 +438,7 @@ fn tables() {
                     entry.2
                 ));
             }
-            if entry.3 != interfaces(ifs) {
+            if entry.3.bits() != interfaces(ifs) {
                 problems.push(format!("Table {id}, row {name:?}: interfaces {:?} in the crate, {ifs:?} in the document", entry.3));
             }
             // A field that rows share is a list of their IEs; another is a list where its
@@ -920,10 +921,10 @@ fn test_sources() -> Vec<String> {
 
 /// The interfaces on which each table is: of a message, the Appl. columns of Table 7.3-1;
 /// of a grouped IE, those of the rows of its type, on which their scopes are.
-fn applicable() -> BTreeMap<&'static str, Interfaces> {
-    let mut on: BTreeMap<&'static str, Interfaces> = MESSAGE_TYPES
+fn applicable() -> BTreeMap<&'static str, u8> {
+    let mut on: BTreeMap<&'static str, u8> = MESSAGE_TYPES
         .iter()
-        .map(|info| (info.table.id, info.interfaces))
+        .map(|info| (info.table.id, info.interfaces.bits()))
         .collect();
     let tables: Vec<&'static Table> = MESSAGE_TYPES
         .iter()
@@ -941,8 +942,8 @@ fn applicable() -> BTreeMap<&'static str, Interfaces> {
                     continue;
                 };
                 for inner in info.tables {
-                    let here = on.entry(inner.id).or_insert(Interfaces(0));
-                    let more = Interfaces(here.0 | (scope.0 & row.interfaces.0));
+                    let here = on.entry(inner.id).or_insert(0);
+                    let more = *here | (scope & row.interfaces.bits());
                     if more != *here {
                         *here = more;
                         changed = true;
@@ -968,7 +969,7 @@ fn constructors_by_interface() {
         .chain(IE_TYPES.iter().flat_map(|info| info.tables.iter().copied()))
         .collect();
     for table in tables {
-        let scope = on.get(table.id).copied().unwrap_or(Interfaces(0));
+        let scope = on.get(table.id).copied().unwrap_or(0);
         let each: Vec<Interfaces> = [
             Interfaces::SXA,
             Interfaces::SXB,
@@ -977,7 +978,7 @@ fn constructors_by_interface() {
             Interfaces::N4MB,
         ]
         .into_iter()
-        .filter(|interface| scope.has(*interface))
+        .filter(|interface| scope & interface.bits() != 0)
         .collect();
         let mandatory = |interface: Interfaces| -> Vec<&str> {
             table
@@ -990,8 +991,8 @@ fn constructors_by_interface() {
         let differ = each
             .windows(2)
             .any(|pair| mandatory(pair[0]) != mandatory(pair[1]));
-        let expected = if differ { scope } else { Interfaces(0) };
-        if table.constructors != expected {
+        let expected = if differ { scope } else { 0 };
+        if table.constructors.bits() != expected {
             problems.push(format!(
                 "{} {}: constructors {:?}, and its interfaces {:?} need {:?}",
                 table.id, table.name, table.constructors, scope, expected

@@ -46,9 +46,16 @@ pub enum Repeat {
     AtMost(u8),
 }
 
-/// The interfaces of a row: its Appl. columns.
+/// The interfaces of a row: its Appl. columns. One of them, or a set of them that
+/// [`BitOr`](core::ops::BitOr) makes; of a row, the set may be empty (none for
+/// [`Row::mandatory`] of a row mandatory on none).
+///
+/// ```compile_fail
+/// // Not of bits of the caller's own: from_bits() refuses those of no interface.
+/// let _ = oxirush_pfcp::Interfaces(0);
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Interfaces(pub u8);
+pub struct Interfaces(pub(crate) u8);
 
 impl Interfaces {
     /// Sxa, between SGW-C and SGW-U.
@@ -66,6 +73,20 @@ impl Interfaces {
     pub const SXA_SXB: Self = Self(1 | 2);
     /// Every interface: a message may have the IEs of any, and needs those that all need.
     pub const ALL: Self = Self(31);
+
+    /// The set of `bits`, those of the constants: `None` for none, and for a bit of no
+    /// interface.
+    pub const fn from_bits(bits: u8) -> Option<Self> {
+        match bits != 0 && bits & !Self::ALL.0 == 0 {
+            true => Some(Self(bits)),
+            false => None,
+        }
+    }
+
+    /// Its bits, those of the constants: 0 for none.
+    pub const fn bits(self) -> u8 {
+        self.0
+    }
 
     /// Whether the row has `interface`, or one of a set of them.
     pub const fn has(self, interface: Self) -> bool {
