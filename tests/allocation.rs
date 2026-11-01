@@ -114,3 +114,29 @@ fn what_is_rejected_unread_costs_little() {
     }
     let _ = UPF;
 }
+
+/// An Association Setup Request of a host without an association, when `strangers` of
+/// them wait already, is dropped before it is decoded.
+#[test]
+fn a_setup_beyond_the_strangers_costs_little() {
+    let mut upf = Node::new(NodeConfig {
+        strangers: 1,
+        ..NodeConfig::new(NodeId::Ipv4(Ipv4Addr::new(10, 0, 0, 2)), Function::Up, 1)
+    });
+    let node_id = [0, 60, 0, 5, 0, 10, 9, 9, 8];
+    let stamp = [0, 96, 0, 4, 0, 0, 0, 1];
+    let waiting: SocketAddr = "10.9.9.8:8805".parse().unwrap();
+    // One that waits: its header, of a Message Length of 21, its Node ID and its stamp
+    let header = [0x20, 5, 0, 21, 0, 0, 1, 0];
+    let octets = [header.as_slice(), &node_id, &stamp].concat();
+    upf.handle_datagram(Duration::ZERO, waiting, &octets);
+    assert!(matches!(upf.poll_event(), Some(Event::Request { .. })));
+    let flood = flooded(5, None, &[node_id.as_slice(), &stamp].concat());
+    let cost = allocated(|| {
+        upf.handle_datagram(Duration::ZERO, HOST, &flood);
+        while upf.poll_transmit().is_some() {}
+        while upf.poll_event().is_some() {}
+    });
+    assert!(cost < 4 * flood.len(), "{cost} octets for {}", flood.len());
+    assert_eq!(upf.counters().refused, 1);
+}

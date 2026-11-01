@@ -116,12 +116,17 @@ pub struct NodeConfig {
     /// then of its address and its port. Its association, its sessions, its Recovery Time
     /// Stamp and its load and overload are of the peer so told apart.
     pub request_port: Option<u16>,
+    /// How many requests of hosts without an association, Association Setup Requests,
+    /// wait for their answer at once: beyond, one is dropped before it is decoded, as
+    /// [`Counters::refused`] counts, and its sender sends it again.
+    pub strangers: usize,
 }
 
 impl NodeConfig {
     /// A node of `node_id`: T1 of 3 s, N1 of 3, a heartbeat every 60 s, answers kept for
     /// 24 s, default priority 8, throttling on, no priority spared, room for 65,536
-    /// requests of the peers, and requests to port 8805.
+    /// requests of the peers and 16 of hosts without an association, and requests to
+    /// port 8805.
     pub fn new(node_id: NodeId, function: Function, recovery_time_stamp: u32) -> Self {
         Self {
             node_id,
@@ -136,6 +141,7 @@ impl NodeConfig {
             priority_up_to: None,
             capacity: 65_536,
             request_port: Some(PORT),
+            strangers: 16,
         }
     }
 }
@@ -255,13 +261,15 @@ pub enum ViolationKind {
     /// establishment: discarded (§7.6.5).
     WrongDirection,
     /// A session request, or a node related request of a node, from a peer without an
-    /// association (§6.2.6): answered with "No established PFCP Association".
+    /// association, or that names the Node ID of another's (§6.2.6): answered with "No
+    /// established PFCP Association".
     SessionWithoutAssociation,
-    /// A session request of a SEID that the node does not have: answered with "Session
-    /// context not found" (§7.2.2.4.2).
+    /// A session request of a SEID that is of no established session of the peer:
+    /// answered with "Session context not found" (§7.2.2.4.2).
     UnknownSeid,
     /// An association update or release of a Node ID that the node has no association
-    /// with: answered with "No established PFCP Association" (§6.2.7, §6.2.8).
+    /// with, or whose association is not the peer's: answered with "No established PFCP
+    /// Association" (§6.2.7, §6.2.8).
     UnknownNode,
     /// Load control information of a sequence number that the node has, with other
     /// values, or of a new one with the same values (§6.2.3.3.2).
@@ -1215,10 +1223,24 @@ impl Node {
             7 | 9 | 12 | 14 | 16 | 50 => names(octets),
             _ => (None, None),
         };
+        // Of the host's association: the Node ID that a request names is of it.
+        let association = self
+            .association_of(from)
+            .map(|association| association.key.clone());
         let known_node = match &node_id {
-            Some(node_id) => self.associations.contains_key(&key_of(node_id)),
-            None => self.association_of(from).is_some(),
+            Some(node_id) => association.as_ref() == Some(&key_of(node_id)),
+            None => association.is_some(),
         };
+        // A session request is of an established session of the host: of its
+        // association, or of the address of its F-SEID.
+        let session = header
+            .seid
+            .and_then(|seid| self.sessions.resolve(seid))
+            .and_then(|seid| self.sessions.get(&seid))
+            .filter(|session| session.peer_seid.is_some());
+        let of_host = session.is_some_and(|session| {
+            self.same_peer(session.peer, from) || association.as_ref() == Some(&session.node)
+        });
         let rejection = match message_type {
             7 | 9 if !known_node => Some((
                 CauseValue::NoEstablishedPfcpAssociation,
@@ -1228,20 +1250,26 @@ impl Node {
                 CauseValue::NoEstablishedPfcpAssociation,
                 ViolationKind::SessionWithoutAssociation,
             )),
-            52 | 54 | 56
-                if header
-                    .seid
-                    .and_then(|seid| self.sessions.resolve(seid))
-                    .is_none() =>
-            {
-                Some((
-                    CauseValue::SessionContextNotFound,
-                    ViolationKind::UnknownSeid,
-                ))
-            }
+            52 | 54 | 56 if association.is_none() && !of_host => Some((
+                CauseValue::NoEstablishedPfcpAssociation,
+                ViolationKind::SessionWithoutAssociation,
+            )),
+            52 | 54 | 56 if !of_host => Some((
+                CauseValue::SessionContextNotFound,
+                ViolationKind::UnknownSeid,
+            )),
             _ => None,
         };
         let Some((cause, kind)) = rejection else {
+            // A host without an association has only so many requests waiting; its
+            // heartbeat, answered from the state, waits for nothing.
+            if message_type != 1
+                && association.is_none()
+                && self.answers.strangers() >= self.config.strangers
+            {
+                self.answers.refuse();
+                return true;
+            }
             return false;
         };
         self.violation(from, kind, octets);
@@ -1501,11 +1529,13 @@ impl Node {
             }
             return;
         }
+        let stranger = self.association_of(from).is_none();
         if !self.answers.wait(
             (from, sequence),
             octets.to_vec(),
             inbound.id,
             self.config.capacity,
+            stranger,
         ) {
             // Full of requests that wait for their answer: the peer sends it again.
             return;

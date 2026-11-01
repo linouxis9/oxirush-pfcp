@@ -2299,7 +2299,9 @@ fn a_replaced_association_heartbeats_its_new_address() {
     );
 }
 
-/// §6.2.8: a release ends the association that it names, whoever sends it.
+/// §6.2.8: a release ends the association between its sender and the node, which it
+/// names: one that names the association of another is answered "No established PFCP
+/// Association".
 #[test]
 fn a_release_ends_the_association_that_it_names() {
     let mut upf = node(UPF, Function::Up);
@@ -2323,6 +2325,8 @@ fn a_release_ends_the_association_that_it_names() {
         body: AssociationReleaseRequest::new(node_id(SMF)).into(),
     };
     upf.handle_datagram(at(1), OTHER, &release.encode().unwrap());
+    assert_eq!(violations(&mut upf), [ViolationKind::UnknownNode]);
+    upf.handle_datagram(at(1), SMF, &release.encode().unwrap());
     let (inbound, _) = request(&mut upf);
     upf.respond(
         at(1),
@@ -2759,6 +2763,78 @@ fn a_request_waits_past_keep() {
     assert_eq!(requests_of(&events(&mut upf)), 0);
     upf.respond(at(7), &inbound, setup_answer()).unwrap();
     assert!(upf.association(SMF).is_some());
+}
+
+/// A request of a host is of an association that is the host's: a host that names the
+/// Node ID of another's is answered "No established PFCP Association".
+#[test]
+fn a_request_of_another_peers_node_id() {
+    let (_, mut upf) = associated(at(0));
+    upf.handle_datagram(at(1), OTHER, &establishment(9).encode().unwrap());
+    assert_eq!(
+        violations(&mut upf),
+        [ViolationKind::SessionWithoutAssociation]
+    );
+    let release = Message {
+        header: Header::node(4),
+        body: AssociationReleaseRequest::new(node_id(SMF)).into(),
+    };
+    upf.handle_datagram(at(1), OTHER, &release.encode().unwrap());
+    assert_eq!(violations(&mut upf), [ViolationKind::UnknownNode]);
+    assert!(upf.association(SMF).is_some());
+}
+
+/// A session request is of a session of the host's, which is established: one of a host
+/// without an association is answered "No established PFCP Association", and one of a
+/// session of another or of one not established yet "Session context not found".
+#[test]
+fn a_session_request_of_a_session_of_the_host() {
+    let (mut smf, mut upf) = associated(at(0));
+    let (_, up_seid) = established(&mut smf, &mut upf, at(0));
+    let deletion = |seid| {
+        Message {
+            header: Header::session(seid, 9),
+            body: SessionDeletionRequest::default().into(),
+        }
+        .encode()
+        .unwrap()
+    };
+    let stranger: SocketAddr = "10.0.0.66:8805".parse().unwrap();
+    upf.handle_datagram(at(1), stranger, &deletion(up_seid));
+    assert_eq!(
+        violations(&mut upf),
+        [ViolationKind::SessionWithoutAssociation]
+    );
+    assert_eq!(
+        decoded(&sent(&mut upf)[0]).body.cause(),
+        Some(CauseValue::NoEstablishedPfcpAssociation)
+    );
+    let allocated = upf.new_session(SMF);
+    upf.handle_datagram(at(1), SMF, &deletion(allocated));
+    assert_eq!(violations(&mut upf), [ViolationKind::UnknownSeid]);
+    upf.handle_datagram(at(1), OTHER, &setup_of(OTHER, 1, 1000));
+    let (inbound, _) = request(&mut upf);
+    upf.respond(at(1), &inbound, setup_answer()).unwrap();
+    sent(&mut upf);
+    upf.handle_datagram(at(2), OTHER, &deletion(up_seid));
+    assert_eq!(violations(&mut upf), [ViolationKind::UnknownSeid]);
+    assert!(upf.session(up_seid).is_some());
+}
+
+/// The requests of hosts without an association that wait for their answer are at most
+/// `strangers`: beyond, one is dropped before it is decoded, and counted.
+#[test]
+fn the_requests_of_strangers_are_bounded() {
+    let mut upf = Node::new(NodeConfig {
+        strangers: 2,
+        ..config(UPF, Function::Up)
+    });
+    for i in 1..=3u8 {
+        let from = SocketAddr::new(Ipv4Addr::new(10, 9, 1, i).into(), 8805);
+        upf.handle_datagram(at(0), from, &setup_of(from, 1, 1000));
+    }
+    assert_eq!(requests_of(&events(&mut upf)), 2);
+    assert_eq!(upf.counters().refused, 1);
 }
 
 // ── §4.2.2: the port of the requests ───────────────────────────────────────

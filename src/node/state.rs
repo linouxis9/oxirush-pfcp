@@ -244,6 +244,8 @@ pub(crate) struct Answered {
     expires: Duration,
     /// Its response is a rejection of the node's own.
     rejection: bool,
+    /// Of a host without an association.
+    stranger: bool,
 }
 
 impl core::fmt::Debug for Answered {
@@ -273,6 +275,8 @@ pub(crate) struct Answers {
     /// The rejections of the node and the other answers, by when they go.
     rejections: BTreeSet<(Duration, SocketAddr, u32)>,
     answers: BTreeSet<(Duration, SocketAddr, u32)>,
+    /// How many requests of hosts without an association wait for their answer.
+    strangers: usize,
     pub(crate) evicted: u64,
     pub(crate) refused: u64,
 }
@@ -299,17 +303,35 @@ impl Answers {
 
     pub(crate) fn remove(&mut self, key: &(SocketAddr, u32)) -> Option<Answered> {
         let entry = self.entries.remove(key)?;
-        if let Some(index) = self.index(&entry) {
-            index.remove(&(entry.expires, key.0, key.1));
+        match self.index(&entry) {
+            Some(index) => {
+                index.remove(&(entry.expires, key.0, key.1));
+            }
+            None if entry.stranger => self.strangers -= 1,
+            None => {}
         }
         Some(entry)
     }
 
     fn insert(&mut self, key: (SocketAddr, u32), entry: Answered) {
-        if let Some(index) = self.index(&entry) {
-            index.insert((entry.expires, key.0, key.1));
+        match self.index(&entry) {
+            Some(index) => {
+                index.insert((entry.expires, key.0, key.1));
+            }
+            None if entry.stranger => self.strangers += 1,
+            None => {}
         }
         self.entries.insert(key, entry);
+    }
+
+    /// How many requests of hosts without an association wait for their answer.
+    pub(crate) fn strangers(&self) -> usize {
+        self.strangers
+    }
+
+    /// A request dropped for a full node.
+    pub(crate) fn refuse(&mut self) {
+        self.refused += 1;
     }
 
     /// Room for one more: a rejection goes, else the oldest answer. `false` when every
@@ -333,14 +355,15 @@ impl Answers {
         true
     }
 
-    /// Keep the request `id` until its answer: `false`, and counted, when there is no
-    /// room.
+    /// Keep the request `id` until its answer, of a `stranger` without an association or
+    /// not: `false`, and counted, when there is no room.
     pub(crate) fn wait(
         &mut self,
         key: (SocketAddr, u32),
         request: Vec<u8>,
         id: u64,
         capacity: usize,
+        stranger: bool,
     ) -> bool {
         self.remove(&key);
         if !self.room(capacity, false) {
@@ -353,6 +376,7 @@ impl Answers {
             id,
             expires: Duration::ZERO,
             rejection: false,
+            stranger,
         };
         self.insert(key, entry);
         true
@@ -398,6 +422,7 @@ impl Answers {
                 id: 0,
                 expires,
                 rejection: true,
+                stranger: false,
             };
             self.insert(key, entry);
         }
