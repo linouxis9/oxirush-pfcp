@@ -150,10 +150,12 @@ still does what the clause says.
 
 ## Run a node on a socket
 
-An `Endpoint` runs a node on a UDP socket, in a task of its own: a request is
-a future of its response, and a request of a peer comes through `incoming()`
-with what answers it. Its queues are bounded, and `statistics()` counts what
-they drop. A program that batches its datagrams (`recvmmsg`, `sendmmsg`)
+An `Endpoint` runs a node on a UDP socket, in a task of its own: a request of
+a peer comes through `incoming()` with what answers it. A `Handle`, which
+`handle()` gives and which clones, sends the node's requests, each a future of
+its response, and reaches the node's state, from any task and while the
+endpoint takes the peers' requests. Its queues are bounded, and
+`statistics()` counts what they drop. A program that batches its datagrams (`recvmmsg`, `sendmmsg`)
 drives a `Node` itself. A node sends its own requests to port 8805, and tells
 its peers apart by their addresses; with `request_port: None`, for peers on
 ports of their own, it sends them to the port that its peer sent from, and
@@ -176,7 +178,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         // The UPF's node answers a heartbeat itself
         let heartbeat = HeartbeatRequest::new(RecoveryTimeStamp::new(3_900_000_000));
         let message = Message { header: Header::node(0), body: heartbeat.into() };
-        let response = smf.request(upf.local_addr(), message).await?;
+        let response = smf.handle().request(upf.local_addr(), message).await?;
         println!("{response}");
         Ok(())
     })

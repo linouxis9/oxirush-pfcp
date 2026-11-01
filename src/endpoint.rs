@@ -15,23 +15,42 @@
    limitations under the License.
 */
 
-//! A [`Node`] on a Tokio UDP socket: one task that owns both, which the [`Endpoint`]
-//! drives through bounded channels. A request is a future of its response; the requests
-//! of the peers come in through [`Endpoint::incoming`], each with what answers it; the
-//! other events through [`Endpoint::events`].
+//! A [`Node`] on a Tokio UDP socket: one task that owns both. The [`Endpoint`] owns the
+//! task and takes what comes: the requests of the peers through
+//! [`incoming`](Endpoint::incoming), each with what answers it, and the other events
+//! through [`event`](Endpoint::event). A [`Handle`], which it gives and which clones,
+//! sends the node's requests and reaches its state, from any task and while the
+//! endpoint takes the peers' requests:
+//!
+//! ```no_run
+//! # use oxirush_pfcp::{endpoint::Endpoint, node::{Function, NodeConfig}, *};
+//! # async fn run(mut endpoint: Endpoint, smf: std::net::SocketAddr, seid: u64) {
+//! let handle = endpoint.handle();
+//! let report = handle.session_request(seid, SessionReportRequest::default());
+//! tokio::pin!(report);
+//! loop {
+//!     tokio::select! {
+//!         response = &mut report => break,
+//!         Some(incoming) = endpoint.incoming() => { /* answer it */ }
+//!     }
+//! }
+//! # }
+//! ```
 //!
 //! A queue that is full drops what comes, and counts it in [`Statistics`]: a request of a
 //! peer that the caller does not take is forgotten by the node, so that its
-//! retransmission comes in again when the caller has room. A request whose future the
-//! caller drops is cancelled at the next retransmission that is due. A caller that
-//! batches its datagrams (`recvmmsg`, `sendmmsg`) drives a [`Node`] itself.
+//! retransmission comes in again when the caller has room, and so is one whose
+//! [`Incoming`] the caller drops unanswered. A request whose future the caller drops is
+//! cancelled ([`Node::cancel`]). A caller that batches its datagrams (`recvmmsg`,
+//! `sendmmsg`) drives a [`Node`] itself.
 
+use std::boxed::Box;
 use std::collections::BTreeMap;
 use std::io;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 use std::vec;
 use std::vec::Vec;
 
@@ -40,7 +59,10 @@ use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
 
 use crate::message::{Body, Message};
-use crate::node::{Event, Failure, Inbound, Node, NodeConfig, NodeError, RequestId};
+use crate::node::{
+    Association, Counters, Delivery, Event, Failure, Inbound, LoadControl, Node, NodeConfig,
+    NodeError, OverloadControl, RequestId, Session,
+};
 
 /// The largest datagram that the endpoint takes.
 const DATAGRAM: usize = 65_535;
@@ -138,24 +160,56 @@ impl Drop for Incoming {
 }
 
 impl Incoming {
-    /// Answer the request, once: its sequence number, priority and SEID come from it.
+    /// Answer the request, once: its sequence number, priority and SEID come from it
+    /// ([`Node::respond`]).
     ///
     /// # Errors
     ///
     /// A body that is not the response of the request or that does not encode, and an
     /// endpoint that has ended.
     pub async fn respond(mut self, body: impl Into<Body>) -> Result<(), EndpointError> {
-        let commands = self.commands.upgrade().ok_or(EndpointError::Closed)?;
-        let (reply, done) = oneshot::channel();
+        let request = self.request.clone();
+        let body = body.into();
         // Answered: the task forgets it if the answer fails.
         self.answered = true;
-        let command = Command::Respond {
-            request: self.request.clone(),
-            body: body.into(),
+        self.command(move |reply| Command::Respond {
+            request,
+            body,
             reply,
-        };
+        })
+        .await
+    }
+
+    /// Answer the request with a message as it is, for a probe, any number of times
+    /// ([`Node::respond_message`]): the first alone changes the node.
+    ///
+    /// # Errors
+    ///
+    /// A message that does not encode, and an endpoint that has ended.
+    pub async fn respond_message(
+        &mut self,
+        message: Message,
+        delivery: Delivery,
+    ) -> Result<(), EndpointError> {
+        let request = self.request.clone();
+        self.answered = true;
+        self.command(move |reply| Command::RespondMessage {
+            request,
+            message,
+            delivery,
+            reply,
+        })
+        .await
+    }
+
+    async fn command(
+        &self,
+        command: impl FnOnce(oneshot::Sender<Result<(), NodeError>>) -> Command,
+    ) -> Result<(), EndpointError> {
+        let commands = self.commands.upgrade().ok_or(EndpointError::Closed)?;
+        let (reply, done) = oneshot::channel();
         commands
-            .send(command)
+            .send(command(reply))
             .await
             .map_err(|_| EndpointError::Closed)?;
         drop(commands);
@@ -165,30 +219,36 @@ impl Incoming {
     }
 }
 
+type Reply = oneshot::Sender<Result<Message, EndpointError>>;
+
+/// What the node does for a [`Handle`], on its state.
+type OnNode = Box<dyn FnOnce(&mut Node, Duration) + Send>;
+
 enum Command {
     Request {
         to: SocketAddr,
         message: Message,
-        reply: oneshot::Sender<Result<Message, EndpointError>>,
+        token: u64,
+        reply: Reply,
     },
     SessionRequest {
         local_seid: u64,
         body: Body,
-        reply: oneshot::Sender<Result<Message, EndpointError>>,
+        token: u64,
+        reply: Reply,
     },
     Respond {
         request: Inbound,
         body: Body,
         reply: oneshot::Sender<Result<(), NodeError>>,
     },
-    NewSession {
-        peer: SocketAddr,
-        reply: oneshot::Sender<u64>,
+    RespondMessage {
+        request: Inbound,
+        message: Message,
+        delivery: Delivery,
+        reply: oneshot::Sender<Result<(), NodeError>>,
     },
-    SendRaw {
-        to: SocketAddr,
-        octets: Vec<u8>,
-    },
+    On(OnNode),
 }
 
 impl core::fmt::Debug for Command {
@@ -197,16 +257,29 @@ impl core::fmt::Debug for Command {
     }
 }
 
-/// A node on a UDP socket, run by a task of its own. Dropping it ends the task soon
-/// after; [`close`](Self::close) ends it, and frees its socket, before it returns.
+/// A node on a UDP socket, run by a task of its own, which the endpoint owns: dropping
+/// it ends the task soon after, and [`close`](Self::close) ends it, and frees its socket,
+/// before it returns. A [`Handle`] reaches the node meanwhile.
 #[derive(Debug)]
 pub struct Endpoint {
-    local: SocketAddr,
-    commands: mpsc::Sender<Command>,
+    handle: Handle,
     incoming: mpsc::Receiver<Incoming>,
     events: mpsc::Receiver<Event>,
-    statistics: Arc<Statistics>,
+    /// Dropped, it ends the task.
+    stop: oneshot::Sender<()>,
     task: JoinHandle<()>,
+}
+
+/// What reaches the node of an [`Endpoint`]: its requests and its state, from any task.
+/// It clones, and does not keep the endpoint running: once the endpoint has ended, each
+/// method gives [`EndpointError::Closed`].
+#[derive(Debug, Clone)]
+pub struct Handle {
+    local: SocketAddr,
+    commands: mpsc::Sender<Command>,
+    cancels: mpsc::UnboundedSender<u64>,
+    tokens: Arc<AtomicU64>,
+    statistics: Arc<Statistics>,
 }
 
 impl Endpoint {
@@ -235,8 +308,10 @@ impl Endpoint {
         let (commands, command_rx) = mpsc::channel(queues.commands);
         let (incoming_tx, incoming) = mpsc::channel(queues.incoming);
         let (events_tx, events) = mpsc::channel(queues.events);
-        let statistics = Arc::new(Statistics::default());
         let (forgetting, forgets) = mpsc::unbounded_channel();
+        let (cancels, cancelled) = mpsc::unbounded_channel();
+        let (stop, stopped) = oneshot::channel();
+        let statistics = Arc::new(Statistics::default());
         let task = Task {
             socket,
             node: Node::new(config),
@@ -245,113 +320,53 @@ impl Endpoint {
             responder: commands.downgrade(),
             forgets,
             forgetting,
+            cancelled,
             incoming: incoming_tx,
             events: events_tx,
             pending: BTreeMap::new(),
+            tokens: BTreeMap::new(),
             statistics: statistics.clone(),
         };
-        let task = tokio::spawn(task.run());
-        Ok(Self {
+        let task = tokio::spawn(task.run(stopped));
+        let handle = Handle {
             local,
             commands,
+            cancels,
+            tokens: Arc::new(AtomicU64::new(0)),
+            statistics,
+        };
+        Ok(Self {
+            handle,
             incoming,
             events,
-            statistics,
+            stop,
             task,
         })
     }
 
     /// End the task of the endpoint, and wait until it has freed its socket. A request of
-    /// the endpoint borrows it, so that none waits for its response then; the answer of
-    /// an [`Incoming`] that comes after ends with [`EndpointError::Closed`].
+    /// a [`Handle`] that waits for its response, and the answer of an [`Incoming`], end
+    /// with [`EndpointError::Closed`].
     pub async fn close(self) {
-        let Self {
-            commands,
-            incoming,
-            events,
-            task,
-            ..
-        } = self;
-        drop((commands, incoming, events));
+        let Self { stop, task, .. } = self;
+        drop(stop);
         let _ = task.await;
+    }
+
+    /// What reaches the node: its requests and its state, beside the requests of the
+    /// peers that the endpoint takes.
+    pub fn handle(&self) -> Handle {
+        self.handle.clone()
     }
 
     /// The address of the socket.
     pub fn local_addr(&self) -> SocketAddr {
-        self.local
+        self.handle.local
     }
 
     /// What the endpoint dropped and sent.
     pub fn statistics(&self) -> &Statistics {
-        &self.statistics
-    }
-
-    /// Send a request to `to`, and wait for its response.
-    ///
-    /// # Errors
-    ///
-    /// No response after N1 retransmissions, a request that the node does not send
-    /// (no association, throttled), and an endpoint that has ended.
-    pub async fn request(
-        &self,
-        to: SocketAddr,
-        message: Message,
-    ) -> Result<Message, EndpointError> {
-        let (reply, response) = oneshot::channel();
-        self.commands
-            .send(Command::Request { to, message, reply })
-            .await
-            .map_err(|_| EndpointError::Closed)?;
-        response.await.map_err(|_| EndpointError::Closed)?
-    }
-
-    /// Send a session request to the session of `local_seid`, and wait for its response.
-    ///
-    /// # Errors
-    ///
-    /// As [`request`](Self::request), and a session that the node does not have.
-    pub async fn session_request(
-        &self,
-        local_seid: u64,
-        body: impl Into<Body>,
-    ) -> Result<Message, EndpointError> {
-        let (reply, response) = oneshot::channel();
-        let command = Command::SessionRequest {
-            local_seid,
-            body: body.into(),
-            reply,
-        };
-        self.commands
-            .send(command)
-            .await
-            .map_err(|_| EndpointError::Closed)?;
-        response.await.map_err(|_| EndpointError::Closed)?
-    }
-
-    /// A new local SEID for a session with `peer` (see [`Node::new_session`]).
-    ///
-    /// # Errors
-    ///
-    /// The endpoint has ended.
-    pub async fn new_session(&self, peer: SocketAddr) -> Result<u64, EndpointError> {
-        let (reply, seid) = oneshot::channel();
-        self.commands
-            .send(Command::NewSession { peer, reply })
-            .await
-            .map_err(|_| EndpointError::Closed)?;
-        seid.await.map_err(|_| EndpointError::Closed)
-    }
-
-    /// Send octets as they are, for a probe (see [`Node::send_raw`]).
-    ///
-    /// # Errors
-    ///
-    /// The endpoint has ended.
-    pub async fn send_raw(&self, to: SocketAddr, octets: Vec<u8>) -> Result<(), EndpointError> {
-        self.commands
-            .send(Command::SendRaw { to, octets })
-            .await
-            .map_err(|_| EndpointError::Closed)
+        &self.handle.statistics
     }
 
     /// The next request of a peer: `None` once the endpoint has ended.
@@ -370,26 +385,251 @@ impl Endpoint {
     }
 }
 
-type Reply = oneshot::Sender<Result<Message, EndpointError>>;
+/// Cancels the request of its token when the future of the request is dropped before its
+/// response.
+struct Cancel<'a> {
+    token: u64,
+    cancels: &'a mpsc::UnboundedSender<u64>,
+    done: bool,
+}
+
+impl Drop for Cancel<'_> {
+    fn drop(&mut self) {
+        if !self.done {
+            let _ = self.cancels.send(self.token);
+        }
+    }
+}
+
+impl Handle {
+    /// The address of the socket.
+    pub fn local_addr(&self) -> SocketAddr {
+        self.local
+    }
+
+    /// What the endpoint dropped and sent.
+    pub fn statistics(&self) -> &Statistics {
+        &self.statistics
+    }
+
+    /// Send a request to `to`, and wait for its response ([`Node::request`]). Dropping
+    /// the future cancels the request: it is sent no more.
+    ///
+    /// # Errors
+    ///
+    /// No response after N1 retransmissions, a request that ends without its response,
+    /// a request that the node does not send (no association, throttled), and an
+    /// endpoint that has ended.
+    pub async fn request(
+        &self,
+        to: SocketAddr,
+        message: Message,
+    ) -> Result<Message, EndpointError> {
+        self.send_request(|token, reply| Command::Request {
+            to,
+            message,
+            token,
+            reply,
+        })
+        .await
+    }
+
+    /// Send a session request to the session of `local_seid`, and wait for its response
+    /// ([`Node::session_request`]). Dropping the future cancels the request.
+    ///
+    /// # Errors
+    ///
+    /// As [`request`](Self::request), and a session that the node does not have.
+    pub async fn session_request(
+        &self,
+        local_seid: u64,
+        body: impl Into<Body>,
+    ) -> Result<Message, EndpointError> {
+        let body = body.into();
+        self.send_request(|token, reply| Command::SessionRequest {
+            local_seid,
+            body,
+            token,
+            reply,
+        })
+        .await
+    }
+
+    async fn send_request(
+        &self,
+        command: impl FnOnce(u64, Reply) -> Command,
+    ) -> Result<Message, EndpointError> {
+        let token = self.tokens.fetch_add(1, Ordering::Relaxed);
+        let (reply, response) = oneshot::channel();
+        let mut cancel = Cancel {
+            token,
+            cancels: &self.cancels,
+            done: false,
+        };
+        self.commands
+            .send(command(token, reply))
+            .await
+            .map_err(|_| EndpointError::Closed)?;
+        let response = response.await.map_err(|_| EndpointError::Closed);
+        cancel.done = true;
+        response?
+    }
+
+    /// What the node does with its state, as the caller asks.
+    async fn on<T: Send + 'static>(
+        &self,
+        on: impl FnOnce(&mut Node, Duration) -> T + Send + 'static,
+    ) -> Result<T, EndpointError> {
+        let (reply, answer) = oneshot::channel();
+        let command = Command::On(Box::new(move |node, now| {
+            let _ = reply.send(on(node, now));
+        }));
+        self.commands
+            .send(command)
+            .await
+            .map_err(|_| EndpointError::Closed)?;
+        answer.await.map_err(|_| EndpointError::Closed)
+    }
+
+    /// A new local SEID for a session with `peer` ([`Node::new_session`]).
+    ///
+    /// # Errors
+    ///
+    /// The endpoint has ended.
+    pub async fn new_session(&self, peer: SocketAddr) -> Result<u64, EndpointError> {
+        self.on(move |node, _| node.new_session(peer)).await
+    }
+
+    /// Send octets as they are, for a probe ([`Node::send_raw`]).
+    ///
+    /// # Errors
+    ///
+    /// The endpoint has ended.
+    pub async fn send_raw(&self, to: SocketAddr, octets: Vec<u8>) -> Result<(), EndpointError> {
+        self.on(move |node, _| node.send_raw(to, 0, octets)).await
+    }
+
+    /// A sequence number that the node will not give, for a probe that sends its own
+    /// ([`Node::reserve_sequence`]).
+    ///
+    /// # Errors
+    ///
+    /// Every sequence number is taken, and the endpoint has ended.
+    pub async fn reserve_sequence(&self) -> Result<u32, EndpointError> {
+        self.on(|node, _| node.reserve_sequence())
+            .await?
+            .map_err(EndpointError::Node)
+    }
+
+    /// The association with a peer ([`Node::association`]).
+    ///
+    /// # Errors
+    ///
+    /// The endpoint has ended.
+    pub async fn association(
+        &self,
+        peer: SocketAddr,
+    ) -> Result<Option<Association>, EndpointError> {
+        self.on(move |node, _| node.association(peer).cloned())
+            .await
+    }
+
+    /// The session of a local SEID ([`Node::session`]).
+    ///
+    /// # Errors
+    ///
+    /// The endpoint has ended.
+    pub async fn session(&self, local_seid: u64) -> Result<Option<Session>, EndpointError> {
+        self.on(move |node, _| node.session(local_seid).cloned())
+            .await
+    }
+
+    /// End a session without a procedure ([`Node::end_session`]).
+    ///
+    /// # Errors
+    ///
+    /// The endpoint has ended.
+    pub async fn end_session(&self, local_seid: u64) -> Result<Option<Session>, EndpointError> {
+        self.on(move |node, _| node.end_session(local_seid)).await
+    }
+
+    /// End every session with `peer`, as after its restart ([`Node::end_sessions_of`]).
+    ///
+    /// # Errors
+    ///
+    /// The endpoint has ended.
+    pub async fn end_sessions_of(&self, peer: SocketAddr) -> Result<Vec<u64>, EndpointError> {
+        self.on(move |node, _| node.end_sessions_of(peer)).await
+    }
+
+    /// End the association with `peer` without a procedure, as after a peer that is down
+    /// ([`Node::end_association`]).
+    ///
+    /// # Errors
+    ///
+    /// The endpoint has ended.
+    pub async fn end_association(&self, peer: SocketAddr) -> Result<bool, EndpointError> {
+        self.on(move |node, _| node.end_association(peer)).await
+    }
+
+    /// The latest load control information of a peer ([`Node::load_control`]).
+    ///
+    /// # Errors
+    ///
+    /// The endpoint has ended.
+    pub async fn load_control(
+        &self,
+        peer: SocketAddr,
+    ) -> Result<Option<LoadControl>, EndpointError> {
+        self.on(move |node, _| node.load_control(peer)).await
+    }
+
+    /// The overload control information that holds for a peer
+    /// ([`Node::overload_control`]).
+    ///
+    /// # Errors
+    ///
+    /// The endpoint has ended.
+    pub async fn overload_control(
+        &self,
+        peer: SocketAddr,
+    ) -> Result<Option<OverloadControl>, EndpointError> {
+        self.on(move |node, _| node.overload_control(peer)).await
+    }
+
+    /// What the node dropped to bound what it keeps ([`Node::counters`]).
+    ///
+    /// # Errors
+    ///
+    /// The endpoint has ended.
+    pub async fn counters(&self) -> Result<Counters, EndpointError> {
+        self.on(|node, _| node.counters()).await
+    }
+}
 
 struct Task {
     socket: UdpSocket,
     node: Node,
     start: Instant,
     commands: mpsc::Receiver<Command>,
-    /// The commands of the answers: weak, so that the task ends with the endpoint.
+    /// The commands of the answers: weak, so that they do not keep the task.
     responder: mpsc::WeakSender<Command>,
     /// The requests whose Incoming the caller dropped unanswered.
     forgets: mpsc::UnboundedReceiver<Inbound>,
     forgetting: mpsc::UnboundedSender<Inbound>,
+    /// The tokens of the requests whose futures the caller dropped.
+    cancelled: mpsc::UnboundedReceiver<u64>,
     incoming: mpsc::Sender<Incoming>,
     events: mpsc::Sender<Event>,
-    pending: BTreeMap<RequestId, Reply>,
+    /// The requests that wait for their responses, with their tokens, and the requests of
+    /// the tokens.
+    pending: BTreeMap<RequestId, (Reply, u64)>,
+    tokens: BTreeMap<u64, RequestId>,
     statistics: Arc<Statistics>,
 }
 
 impl Task {
-    async fn run(mut self) {
+    async fn run(mut self, mut stopped: oneshot::Receiver<()>) {
         let mut buffer = vec![0; DATAGRAM];
         loop {
             self.flush().await;
@@ -399,6 +639,8 @@ impl Task {
                 .poll_timeout()
                 .and_then(|at| self.start.checked_add(at));
             tokio::select! {
+                // The endpoint ended: so does the task.
+                _ = &mut stopped => return,
                 received = self.socket.recv_from(&mut buffer) => {
                     match received {
                         Ok((length, from)) => {
@@ -415,22 +657,17 @@ impl Task {
                     }
                 }
                 Some(request) = self.forgets.recv() => self.node.forget(&request),
+                Some(token) = self.cancelled.recv() => {
+                    if let Some(id) = self.tokens.remove(&token) {
+                        self.pending.remove(&id);
+                        self.node.cancel(self.start.elapsed(), id);
+                    }
+                }
                 command = self.commands.recv() => {
-                    // The endpoint ended: so does the task.
                     let Some(command) = command else { return };
                     self.command(command);
                 }
-                () = sleep_until(wake) => {
-                    let now = self.start.elapsed();
-                    // The requests whose futures the caller dropped go before their
-                    // retransmissions.
-                    let dropped: Vec<RequestId> = self.pending.iter().filter(|(_, reply)| reply.is_closed()).map(|(id, _)| *id).collect();
-                    for id in dropped {
-                        self.pending.remove(&id);
-                        self.node.cancel(now, id);
-                    }
-                    self.node.handle_timeout(now);
-                }
+                () = sleep_until(wake) => self.node.handle_timeout(self.start.elapsed()),
             }
         }
     }
@@ -438,26 +675,24 @@ impl Task {
     fn command(&mut self, command: Command) {
         let now = self.start.elapsed();
         match command {
-            Command::Request { to, message, reply } => match self.node.request(now, to, message) {
-                Ok(id) => {
-                    self.pending.insert(id, reply);
-                }
-                Err(error) => {
-                    let _ = reply.send(Err(EndpointError::Node(error)));
-                }
-            },
+            Command::Request {
+                to,
+                message,
+                token,
+                reply,
+            } => {
+                let sent = self.node.request(now, to, message);
+                self.pending_or(sent, token, reply);
+            }
             Command::SessionRequest {
                 local_seid,
                 body,
+                token,
                 reply,
-            } => match self.node.session_request(now, local_seid, body) {
-                Ok(id) => {
-                    self.pending.insert(id, reply);
-                }
-                Err(error) => {
-                    let _ = reply.send(Err(EndpointError::Node(error)));
-                }
-            },
+            } => {
+                let sent = self.node.session_request(now, local_seid, body);
+                self.pending_or(sent, token, reply);
+            }
             Command::Respond {
                 request,
                 body,
@@ -470,11 +705,37 @@ impl Task {
                 }
                 let _ = reply.send(result);
             }
-            Command::NewSession { peer, reply } => {
-                let _ = reply.send(self.node.new_session(peer));
+            Command::RespondMessage {
+                request,
+                message,
+                delivery,
+                reply,
+            } => {
+                let _ = reply.send(self.node.respond_message(now, &request, message, delivery));
             }
-            Command::SendRaw { to, octets } => self.node.send_raw(to, 0, octets),
+            Command::On(on) => on(&mut self.node, now),
         }
+    }
+
+    /// A request that the node sent waits for its response; one that it did not has its
+    /// error.
+    fn pending_or(&mut self, sent: Result<RequestId, NodeError>, token: u64, reply: Reply) {
+        match sent {
+            Ok(id) => {
+                self.pending.insert(id, (reply, token));
+                self.tokens.insert(token, id);
+            }
+            Err(error) => {
+                let _ = reply.send(Err(EndpointError::Node(error)));
+            }
+        }
+    }
+
+    /// The reply of a request that ends, which no cancel finds after.
+    fn reply(&mut self, id: RequestId) -> Option<Reply> {
+        let (reply, token) = self.pending.remove(&id)?;
+        self.tokens.remove(&token);
+        Some(reply)
     }
 
     /// Send what the node has to send, and give its events out.
@@ -488,19 +749,19 @@ impl Task {
         while let Some(event) = self.node.poll_event() {
             match event {
                 Event::Response { request, message } => {
-                    if let Some(reply) = self.pending.remove(&request) {
+                    if let Some(reply) = self.reply(request) {
                         let _ = reply.send(Ok(message));
                     }
                 }
                 Event::Timeout { request, .. } => {
-                    if let Some(reply) = self.pending.remove(&request) {
+                    if let Some(reply) = self.reply(request) {
                         let _ = reply.send(Err(EndpointError::Timeout));
                     }
                 }
                 Event::Failed {
                     request, failure, ..
                 } => {
-                    if let Some(reply) = self.pending.remove(&request) {
+                    if let Some(reply) = self.reply(request) {
                         let _ = reply.send(Err(EndpointError::Failed(failure)));
                     }
                 }
@@ -513,12 +774,8 @@ impl Task {
                         answered: false,
                     };
                     if let Err(dropped) = self.incoming.try_send(incoming) {
-                        // Its retransmission comes in again.
-                        let dropped = match dropped {
-                            mpsc::error::TrySendError::Full(dropped)
-                            | mpsc::error::TrySendError::Closed(dropped) => dropped,
-                        };
-                        self.node.forget(&dropped.request);
+                        // Its retransmission comes in again: the Incoming forgets it.
+                        let _ = dropped;
                         self.statistics
                             .incoming_dropped
                             .fetch_add(1, Ordering::Relaxed);

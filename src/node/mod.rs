@@ -517,6 +517,10 @@ pub struct Node {
     next_inbound: u64,
     reserved: BTreeSet<u32>,
     outstanding: BTreeMap<u32, Outstanding>,
+    /// The sequence number of each outstanding request, and the peers that have a
+    /// heartbeat of the node's outstanding.
+    ids: BTreeMap<RequestId, u32>,
+    beating: BTreeSet<SocketAddr>,
     /// The retransmissions, by when they are due.
     deadlines: BTreeSet<(Duration, u32)>,
     /// The requests that had their response, or that the node gave up, until `keep`:
@@ -551,6 +555,8 @@ impl Node {
             next_inbound: 1,
             reserved: BTreeSet::new(),
             outstanding: BTreeMap::new(),
+            ids: BTreeMap::new(),
+            beating: BTreeSet::new(),
             deadlines: BTreeSet::new(),
             finished: BTreeMap::new(),
             finishing: BTreeSet::new(),
@@ -627,7 +633,7 @@ impl Node {
                 self.queue(transmit);
                 continue;
             }
-            let request = self.outstanding.remove(&sequence).expect("due");
+            let request = self.take(sequence).expect("due");
             self.finish(now, sequence, request.to, true);
             match request.heartbeat {
                 true => self.events.push_back(Event::PeerDown { peer: request.to }),
@@ -649,11 +655,7 @@ impl Node {
         for peer in beats {
             let interval = self.config.heartbeat.unwrap_or(Duration::MAX);
             self.heartbeats.insert(peer, now.saturating_add(interval));
-            if !self
-                .outstanding
-                .values()
-                .any(|request| request.heartbeat && request.to == peer)
-            {
+            if !self.beating.contains(&peer) {
                 let request =
                     HeartbeatRequest::new(RecoveryTimeStamp::new(self.config.recovery_time_stamp));
                 let message = Message {
@@ -848,14 +850,10 @@ impl Node {
     /// Stop sending a request again, and forget it: a response that comes after is late.
     /// `false` for a request that is not outstanding.
     pub fn cancel(&mut self, now: Duration, request: RequestId) -> bool {
-        let Some((&sequence, _)) = self
-            .outstanding
-            .iter()
-            .find(|(_, outstanding)| outstanding.id == request)
-        else {
+        let Some(&sequence) = self.ids.get(&request) else {
             return false;
         };
-        let outstanding = self.outstanding.remove(&sequence).expect("outstanding");
+        let outstanding = self.take(sequence).expect("outstanding");
         self.deadlines.remove(&(outstanding.deadline, sequence));
         self.finish(now, sequence, outstanding.to, true);
         self.abandon(&outstanding);
@@ -1441,7 +1439,7 @@ impl Node {
         {
             return;
         }
-        let request = self.outstanding.remove(&sequence).expect("outstanding");
+        let request = self.take(sequence).expect("outstanding");
         let (id, deadline, heartbeat) = (request.id, request.deadline, request.heartbeat);
         self.deadlines.remove(&(deadline, sequence));
         self.finish(now, sequence, from, false);
@@ -1581,7 +1579,7 @@ impl Node {
         message: Message,
     ) {
         let sequence = message.header.sequence;
-        let request = self.outstanding.remove(&sequence).expect("outstanding");
+        let request = self.take(sequence).expect("outstanding");
         self.deadlines.remove(&(request.deadline, sequence));
         self.finish(now, sequence, from, false);
         self.note_recovery(now, from, &message.body);
@@ -1616,6 +1614,10 @@ impl Node {
         let message_type = message.body.message_type();
         let deadline = now.saturating_add(self.config.t1);
         self.deadlines.insert((deadline, sequence));
+        self.ids.insert(id, sequence);
+        if heartbeat {
+            self.beating.insert(to);
+        }
         self.outstanding.insert(
             sequence,
             Outstanding {
@@ -1637,6 +1639,16 @@ impl Node {
             octets: octets.into(),
         });
         Ok(id)
+    }
+
+    /// The outstanding request of `sequence`, which is no longer.
+    fn take(&mut self, sequence: u32) -> Option<Outstanding> {
+        let request = self.outstanding.remove(&sequence)?;
+        self.ids.remove(&request.id);
+        if request.heartbeat {
+            self.beating.remove(&request.to);
+        }
+        Some(request)
     }
 
     /// The next sequence number of no outstanding, reserved or recent request.
