@@ -44,7 +44,7 @@
 8.2.86	1	at least one	no bit is set	00	010000000000000400
 8.2.94	1	at least one	none of PCP, DEI and VID is set	000000	040064
 8.2.95	1	at least one	none of PCP, DEI and VID is set	000000	040064
-8.2.137	1	one and only one	none, or more than one, of V6, V4 and A is set	00	08
+8.2.137	1	one and only one	none, or more than one, of V6, V4 and A is set	00 0ae0000001	08 02e0000001 06e0000001e00000ff
 8.2.145	1	at least one	no bit is set	00	01
 8.2.152	1	at least one	no bit is set	00	01
 8.2.167	1	at least one	no bit is set	00	01

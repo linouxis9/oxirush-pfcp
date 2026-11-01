@@ -1044,8 +1044,8 @@ pfcp_layout! {
         flags(u8) { a "A": 4, r "R": 3, v4 "V4": 2, v6 "V6": 1 }
         ipv4_address "(start) IPv4 address": Ipv4Addr if v4,
         ipv6_address "(start) IPv6 address": Ipv6Addr if v6,
-        ipv4_address_2 "(end) IPv4 address": Ipv4Addr if v4,
-        ipv6_address_2 "(end) IPv6 address": Ipv6Addr if v6,
+        ipv4_address_2 "(end) IPv4 address": Ipv4Addr if v4 && r,
+        ipv6_address_2 "(end) IPv6 address": Ipv6Addr if v6 && r,
     }
     check(this, path, found) {
         let one = [this.v6, this.v4, this.a].iter().filter(|set| **set).count() == 1;
