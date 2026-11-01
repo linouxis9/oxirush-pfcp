@@ -1342,3 +1342,18 @@ fn a_row_goes_by_its_name() {
     .to_string();
     assert!(error.contains("are both the row Node ID"), "{error}");
 }
+
+/// §8.2.137: the (end) addresses of an IP Multicast Address are there with R alone, a range;
+/// a single address is its (start) address.
+#[test]
+fn an_ip_multicast_address_has_its_end_with_a_range() {
+    let single = IpMulticastAddress::decode(&[0x02, 224, 0, 0, 1]).unwrap();
+    assert_eq!(single.ipv4_address, Some(Ipv4Addr::new(224, 0, 0, 1)));
+    assert_eq!(single.ipv4_address_2, None);
+    assert!(single.extra.is_empty());
+    let range = IpMulticastAddress::decode(&[0x06, 224, 0, 0, 1, 224, 0, 0, 255]).unwrap();
+    assert_eq!(range.ipv4_address_2, Some(Ipv4Addr::new(224, 0, 0, 255)));
+    let mut octets = Vec::new();
+    single.encode(&mut octets).unwrap();
+    assert_eq!(octets, [0x02, 224, 0, 0, 1]);
+}
