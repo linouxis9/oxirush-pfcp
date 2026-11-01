@@ -465,10 +465,10 @@ impl Handle {
         command: impl FnOnce(u64, Reply) -> Command,
     ) -> Result<Message, EndpointError> {
         let token = self.tokens.fetch_add(1, Ordering::Relaxed);
-        // The cancel guard is declared before the oneshot, so that if the future is
-        // dropped while it sends the command, the reply is closed (the receiver dropped)
-        // before the cancel is queued. Whenever the task sees the cancel, the command's
-        // `reply.is_closed()` is then true, and the request is not sent.
+        // A future dropped once its command is queued is dropped in the await of its
+        // response, whose receiver, the awaited future, drops before the guard: the reply
+        // is closed before the cancel is queued. Whenever the task sees the cancel, the
+        // command's `reply.is_closed()` is then true, and the request is not sent.
         let mut cancel = Cancel {
             token,
             cancels: &self.cancels,
@@ -822,5 +822,76 @@ async fn sleep_until(wake: Option<Instant>) {
     match wake {
         Some(wake) => tokio::time::sleep_until(wake.into()).await,
         None => std::future::pending().await,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Mutex;
+    use std::task::{Context, Wake, Waker};
+
+    use super::*;
+    use crate::{HeartbeatRequest, RecoveryTimeStamp};
+
+    /// What the receiver of the cancels sees when a cancel comes: whether the reply of the
+    /// request is closed then. Its waker runs in the send of the cancel.
+    struct Probe {
+        reply: Mutex<Option<Reply>>,
+        closed: Mutex<Option<bool>>,
+    }
+
+    impl Wake for Probe {
+        fn wake(self: Arc<Self>) {
+            self.wake_by_ref();
+        }
+
+        fn wake_by_ref(self: &Arc<Self>) {
+            let closed = self.reply.lock().unwrap().as_ref().map(Reply::is_closed);
+            *self.closed.lock().unwrap() = closed;
+        }
+    }
+
+    /// A request whose future is dropped after it queued its command closes its reply
+    /// before its cancel goes: whenever the task sees the cancel, the command that it
+    /// takes after has a closed reply, and is not sent.
+    #[test]
+    fn a_dropped_request_closes_its_reply_before_it_cancels() {
+        let (commands, mut queued) = mpsc::channel(1);
+        let (cancels, mut cancelled) = mpsc::unbounded_channel();
+        let handle = Handle {
+            local: SocketAddr::from(([127, 0, 0, 1], 0)),
+            commands,
+            cancels,
+            tokens: Arc::new(AtomicU64::new(0)),
+            statistics: Arc::new(Statistics::default()),
+        };
+        let heartbeat = Message {
+            header: crate::Header::node(0),
+            body: HeartbeatRequest::new(RecoveryTimeStamp::new(7)).into(),
+        };
+        let to = SocketAddr::from(([127, 0, 0, 1], 8805));
+        let mut request = Box::pin(handle.request(to, heartbeat));
+        let mut context = Context::from_waker(Waker::noop());
+        assert!(request.as_mut().poll(&mut context).is_pending());
+        let Ok(Command::Request { reply, .. }) = queued.try_recv() else {
+            panic!("no request queued");
+        };
+        let probe = Arc::new(Probe {
+            reply: Mutex::new(Some(reply)),
+            closed: Mutex::new(None),
+        });
+        let waker = Waker::from(probe.clone());
+        assert!(
+            cancelled
+                .poll_recv(&mut Context::from_waker(&waker))
+                .is_pending()
+        );
+        drop(request);
+        assert_eq!(cancelled.try_recv(), Ok(0));
+        assert_eq!(
+            *probe.closed.lock().unwrap(),
+            Some(true),
+            "the reply was open when the cancel came"
+        );
     }
 }
