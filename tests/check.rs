@@ -116,6 +116,19 @@ fn a_grouped_ie_on_its_own_needs_what_its_interfaces_need() {
     );
 }
 
+/// A set of interfaces is of the bits of the constants, and not empty.
+#[test]
+fn interfaces_of_their_bits() {
+    assert_eq!(Interfaces::from_bits(8), Some(Interfaces::N4));
+    assert_eq!(
+        Interfaces::from_bits(3),
+        Some(Interfaces::SXA | Interfaces::SXB)
+    );
+    assert_eq!(Interfaces::from_bits(0), None);
+    assert_eq!(Interfaces::from_bits(32), None);
+    assert_eq!(Interfaces::ALL.bits(), 31);
+}
+
 fn request_with(message: &mut Message, change: impl FnOnce(&mut SessionEstablishmentRequest)) {
     let Body::SessionEstablishmentRequest(request) = &mut message.body else {
         panic!()
