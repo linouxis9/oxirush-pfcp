@@ -3083,6 +3083,119 @@ fn an_establishment_of_a_seid_in_use_is_refused() {
     );
 }
 
+/// A move of a session holds its new SEID until it ends: another move or an
+/// establishment to it is refused, and a rejected move frees it.
+#[test]
+fn a_move_holds_its_new_seid() {
+    let (mut smf, mut upf) = associated(at(0));
+    let (first, _) = established(&mut smf, &mut upf, at(0));
+    let (second, _) = established(&mut smf, &mut upf, at(0));
+    let target = 0x9999;
+    let to_target = || {
+        let moved = FSeid {
+            v4: true,
+            seid: Some(target),
+            ipv4: Some(Ipv4Addr::new(10, 0, 0, 1)),
+            ..Default::default()
+        };
+        SessionModificationRequest::default().with_cp_f_seid(moved)
+    };
+    smf.session_request(at(1), first, to_target()).unwrap();
+    assert_eq!(
+        smf.session_request(at(1), second, to_target()),
+        Err(NodeError::SeidInUse)
+    );
+    assert_eq!(
+        smf.request(at(1), UPF, establishment(target)),
+        Err(NodeError::SeidInUse)
+    );
+    pass(&mut smf, &mut upf, UPF, at(1));
+    let (inbound, _) = request(&mut upf);
+    let rejected = SessionModificationResponse::new(Cause::new(CauseValue::RequestRejected));
+    upf.respond(at(1), &inbound, rejected).unwrap();
+    pass(&mut upf, &mut smf, SMF, at(1));
+    assert!(smf.session(first).is_some() && smf.session(target).is_none());
+    smf.session_request(at(2), second, to_target()).unwrap();
+    pass(&mut smf, &mut upf, UPF, at(2));
+    let (inbound, _) = request(&mut upf);
+    upf.respond(
+        at(2),
+        &inbound,
+        SessionModificationResponse::new(accepted()),
+    )
+    .unwrap();
+    pass(&mut upf, &mut smf, SMF, at(2));
+    assert!(smf.session(first).is_some() && smf.session(target).is_some());
+    assert!(smf.session(second).is_none());
+}
+
+/// Table 7.5.4.1-1 NOTE 2: after a change of its CP F-SEID, the CP function takes the
+/// session messages of the UP function to the previous SEID for longer than twice N1 x
+/// T1, as of the session.
+#[test]
+fn the_previous_seid_of_a_moved_session() {
+    let (mut smf, mut upf) = associated(at(0));
+    let (cp_seid, _) = established(&mut smf, &mut upf, at(0));
+    let fresh = smf.new_session(UPF);
+    let moved = FSeid {
+        v4: true,
+        seid: Some(fresh),
+        ipv4: Some(Ipv4Addr::new(10, 0, 0, 1)),
+        ..Default::default()
+    };
+    let modification = SessionModificationRequest::default().with_cp_f_seid(moved);
+    smf.session_request(at(1), cp_seid, modification).unwrap();
+    pass(&mut smf, &mut upf, UPF, at(1));
+    let (inbound, _) = request(&mut upf);
+    upf.respond(
+        at(1),
+        &inbound,
+        SessionModificationResponse::new(accepted()),
+    )
+    .unwrap();
+    pass(&mut upf, &mut smf, SMF, at(1));
+    events(&mut smf);
+    let report = |sequence| Message {
+        header: Header::session(cp_seid, sequence),
+        body: SessionReportRequest::new(ReportType {
+            upir: true,
+            ..Default::default()
+        })
+        .into(),
+    };
+    // 2 x N1 x T1 is 18 s: at 20 s, the previous SEID is of the session still
+    smf.handle_datagram(at(20), UPF, &report(900).encode().unwrap());
+    let (inbound, _) = request(&mut smf);
+    assert_eq!(inbound.seid, Some(fresh));
+    assert_eq!(
+        smf.request(at(20), UPF, establishment(cp_seid)),
+        Err(NodeError::SeidInUse)
+    );
+    smf.handle_datagram(at(60), UPF, &report(901).encode().unwrap());
+    assert_eq!(violations(&mut smf), [ViolationKind::UnknownSeid]);
+}
+
+/// §7.2.2.4.1 NOTE: a session request is of the session of its SEID, sent to the address
+/// of the association or to that of the session's F-SEID.
+#[test]
+fn a_session_request_by_its_seid_whatever_its_address() {
+    let (mut smf, mut upf) = associated(at(0));
+    let (cp_seid, up_seid) = established_on(&mut smf, &mut upf, at(0), Ipv4Addr::new(10, 0, 0, 22));
+    let deletion = Message {
+        header: Header::session(up_seid, 0),
+        body: SessionDeletionRequest::default().into(),
+    };
+    smf.request(at(1), UPF, deletion).unwrap();
+    for transmit in sent(&mut smf) {
+        upf.handle_datagram(at(1), SMF, &transmit.octets);
+    }
+    let (inbound, _) = request(&mut upf);
+    upf.respond(at(1), &inbound, SessionDeletionResponse::new(accepted()))
+        .unwrap();
+    pass(&mut upf, &mut smf, SMF, at(1));
+    assert!(smf.session(cp_seid).is_none());
+}
+
 /// The UP function's answer that gives the local SEID of another session is not sent.
 #[test]
 fn an_answer_of_a_seid_in_use_is_refused() {

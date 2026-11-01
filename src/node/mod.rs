@@ -62,7 +62,7 @@ use crate::registry::*;
 use crate::values::*;
 use crate::values_gen::*;
 
-use state::{Answers, Change, Effect, Outstanding, Scope};
+use state::{Answers, Change, Effect, Outstanding, Scope, Sessions};
 pub use state::{Association, LoadControl, OverloadControl, Session};
 
 /// The function of the node: it sets up sessions, or it has them set up.
@@ -487,7 +487,7 @@ pub struct Node {
     finishing: BTreeSet<(Duration, u32, SocketAddr)>,
     answers: Answers,
     associations: BTreeMap<Vec<u8>, Association>,
-    sessions: BTreeMap<u64, Session>,
+    sessions: Sessions,
     /// The Recovery Time Stamp of each peer, as [`Node::same_peer`] tells them apart, and
     /// when the node last had it.
     recovery: BTreeMap<SocketAddr, (u32, Duration)>,
@@ -518,7 +518,7 @@ impl Node {
             finishing: BTreeSet::new(),
             answers: Answers::default(),
             associations: BTreeMap::new(),
-            sessions: BTreeMap::new(),
+            sessions: Sessions::default(),
             recovery: BTreeMap::new(),
             heartbeats: BTreeMap::new(),
             load: BTreeMap::new(),
@@ -727,41 +727,55 @@ impl Node {
                 _ => Change::Nothing,
             };
         }
+        // The SEID of an establishment, even one of the caller's own, and the new SEID of a
+        // move, are theirs until they end.
+        let held = match change {
+            Change::Moves(new) => Some(new),
+            _ => local_seid.filter(|_| establishment),
+        };
         let id = self.send(now, to, message, false, local_seid, change)?;
-        // The SEID is the establishment's until it ends, even one of the caller's own.
-        if establishment && let Some(seid) = local_seid {
-            let node = self
-                .association_of(to)
-                .map(|association| association.key.clone())
-                .unwrap_or_default();
-            let session = self.sessions.entry(seid).or_insert(Session {
-                peer: to,
-                peer_seid: None,
-                node,
-                establishing: false,
-            });
-            session.establishing = true;
+        if let Some(seid) = held {
+            if !self.sessions.contains_key(&seid) {
+                let node = self
+                    .association_of(to)
+                    .map(|association| association.key.clone())
+                    .unwrap_or_default();
+                let session = Session {
+                    peer: to,
+                    peer_seid: None,
+                    node,
+                    reserved: false,
+                };
+                self.sessions.insert(seid, session);
+            }
+            self.sessions.reserve(seid, true);
         }
         Ok(id)
     }
 
-    /// Whether a local SEID is of a session, or of an outstanding establishment.
+    /// Whether a local SEID is of a session, of an outstanding establishment or move, or
+    /// the previous one of a session that moved.
     fn in_use(&self, seid: u64) -> bool {
         self.sessions
             .get(&seid)
-            .is_some_and(|session| session.peer_seid.is_some() || session.establishing)
+            .is_some_and(|session| session.peer_seid.is_some() || session.reserved)
+            || self.sessions.is_alias(seid)
     }
 
-    /// A request that ends without its response: an establishment leaves no session.
+    /// A request that ends without its response, or with a rejection: an establishment
+    /// leaves no session, and a move frees its new SEID.
     fn abandon(&mut self, request: &Outstanding) {
-        if request.message_type == 50
-            && let Some(local) = request.local_seid
+        let held = match request.change {
+            Change::Moves(new) => Some(new),
+            _ => request.local_seid.filter(|_| request.message_type == 50),
+        };
+        if let Some(seid) = held
             && self
                 .sessions
-                .get(&local)
+                .get(&seid)
                 .is_some_and(|session| session.peer_seid.is_none())
         {
-            self.sessions.remove(&local);
+            self.sessions.remove(&seid);
         }
     }
 
@@ -809,7 +823,10 @@ impl Node {
     /// A new local SEID, non-zero and of no other session, for a session with `peer`:
     /// the SEID of the F-SEID that the caller then sends.
     pub fn new_session(&mut self, peer: SocketAddr) -> u64 {
-        while self.next_seid == 0 || self.sessions.contains_key(&self.next_seid) {
+        while self.next_seid == 0
+            || self.sessions.contains_key(&self.next_seid)
+            || self.sessions.is_alias(self.next_seid)
+        {
             self.next_seid = self.next_seid.wrapping_add(1);
         }
         let seid = self.next_seid;
@@ -824,7 +841,7 @@ impl Node {
                 peer,
                 peer_seid: None,
                 node,
-                establishing: false,
+                reserved: false,
             },
         );
         seid
@@ -1088,7 +1105,11 @@ impl Node {
                 self.violation(from, ViolationKind::BundledNodeMessage, this);
                 continue;
             }
-            if bundled && let Some(session) = header.seid.and_then(|seid| self.sessions.get(&seid))
+            if bundled
+                && let Some(session) = header
+                    .seid
+                    .and_then(|seid| self.sessions.resolve(seid))
+                    .and_then(|seid| self.sessions.get(&seid))
             {
                 peers.insert(self.peer_key(session.peer));
                 if peers.len() > 1 {
@@ -1196,7 +1217,8 @@ impl Node {
             52 | 54 | 56
                 if header
                     .seid
-                    .is_none_or(|seid| !self.sessions.contains_key(&seid)) =>
+                    .and_then(|seid| self.sessions.resolve(seid))
+                    .is_none() =>
             {
                 Some((
                     CauseValue::SessionContextNotFound,
@@ -1431,7 +1453,11 @@ impl Node {
                 .priority
                 .unwrap_or(self.config.default_priority),
             prioritized: message.header.priority.is_some(),
-            seid: message.header.seid,
+            // The session's, also by the SEID that it had before it moved.
+            seid: message
+                .header
+                .seid
+                .map(|seid| self.sessions.resolve(seid).unwrap_or(seid)),
             peer_seid: match &message.body {
                 Body::SessionEstablishmentRequest(request) => {
                     request.cp_f_seid.as_ref().and_then(|f_seid| f_seid.seid)
@@ -1470,7 +1496,7 @@ impl Node {
             // Full of requests that wait for their answer: the peer sends it again.
             return;
         }
-        self.note_controls(now, from, octets, &message.body, message.header.seid);
+        self.note_controls(now, from, octets, &message.body, inbound.seid);
         self.events.push_back(Event::Request {
             request: inbound,
             message,
@@ -1576,14 +1602,17 @@ impl Node {
         sends(peer, message_type)
     }
 
-    /// The local SEID of the session with `peer` whose peer's SEID is `peer_seid`.
+    /// The local SEID of the session whose peer's SEID is `peer_seid`, of `peer`: of its
+    /// association, or of the address of its F-SEID (§7.2.2.4.1 NOTE).
     fn local_seid_of(&self, peer: SocketAddr, peer_seid: u64) -> Option<u64> {
-        self.sessions
-            .iter()
-            .find(|(_, session)| {
-                self.same_peer(session.peer, peer) && session.peer_seid == Some(peer_seid)
+        let node = self
+            .association_of(peer)
+            .map(|association| association.key.as_slice());
+        self.sessions.of_peer_seid(peer_seid).find(|local| {
+            self.sessions.get(local).is_some_and(|session| {
+                self.same_peer(session.peer, peer) || node == Some(session.node.as_slice())
             })
-            .map(|(seid, _)| *seid)
+        })
     }
 
     fn queue(&mut self, transmit: Transmit) {
@@ -1617,6 +1646,7 @@ impl Node {
             self.finished.remove(&(sequence, peer));
         }
         self.answers.prune(now);
+        self.sessions.prune(now);
     }
 
     /// The association of `peer` (§4.2.2): of its address, or of its address and port for
@@ -1949,7 +1979,7 @@ impl Node {
                                     peer: fseid_peer(from, f_seid),
                                     peer_seid: f_seid.seid,
                                     node,
-                                    establishing: false,
+                                    reserved: false,
                                 },
                             );
                         }
@@ -1968,16 +1998,25 @@ impl Node {
                     && let Some(session) = self.sessions.remove(&local)
                 {
                     self.sessions.insert(new, session);
+                    // The UP function may still send to the previous SEID, for longer than
+                    // twice N1 x T1 (Table 7.5.4.1-1, NOTE 2).
+                    let window = self
+                        .config
+                        .t1
+                        .saturating_mul(2 * (u32::from(self.config.n1) + 1));
+                    self.sessions.alias(local, new, now.saturating_add(window));
                 }
             }
+            Body::SessionModificationResponse(_) => self.abandon(request),
             // A new CP F-SEID for the session, of another SMF (§5.22).
             Body::SessionReportResponse(response) if accepted => {
                 if let (Some(f_seid), Some(local)) =
                     (response.cp_f_seid.as_ref(), request.local_seid)
-                    && let Some(session) = self.sessions.get_mut(&local)
+                    && let Some(session) = self.sessions.get(&local)
                 {
-                    session.peer = fseid_peer(from, f_seid);
-                    session.peer_seid = f_seid.seid.or(session.peer_seid);
+                    let peer_seid = f_seid.seid.or(session.peer_seid);
+                    self.sessions
+                        .set_peer(local, fseid_peer(from, f_seid), peer_seid);
                 }
             }
             _ => {}
@@ -2028,16 +2067,15 @@ impl Node {
                             peer,
                             peer_seid: request.peer_seid,
                             node,
-                            establishing: false,
+                            reserved: false,
                         },
                     );
                 }
             }
             (Body::SessionModificationResponse(_), Effect::PeerFSeid(seid, address)) => {
                 let peer = self.request_address(SocketAddr::new(address, request.from.port()));
-                if let Some(session) = request.seid.and_then(|seid| self.sessions.get_mut(&seid)) {
-                    session.peer = peer;
-                    session.peer_seid = Some(seid);
+                if let Some(local) = request.seid {
+                    self.sessions.set_peer(local, peer, Some(seid));
                 }
             }
             (Body::SessionDeletionResponse(_), _)
