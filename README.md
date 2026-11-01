@@ -288,7 +288,10 @@ IE missing", as §7.2.3.2 says.
 
 With `tree`, a message is a tree that prints as JSON, with the names of the
 specification, and a tree is read back into a message. An IE that the crate
-keeps as octets is `{"octets": ...}`.
+keeps as octets is `{"octets": ...}`. The tree, and serde's JSON, carry the
+keys and passwords of a message in hexadecimal, as the Tunnel Password, the HMAC
+Key of STAMP and the Shared Secret of OWAMP and TWAMP, which `Debug` hides: do
+not log them.
 
 ```rust
 use oxirush_pfcp::Message;
