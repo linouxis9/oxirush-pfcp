@@ -3942,6 +3942,201 @@ fn sset_an_smf_without_the_association_controls_a_session() {
     assert_eq!(decoded(&sent(&mut smf)[0]).header.seid, Some(0x77));
 }
 
+/// §6.2.8.2: a CP function keeps the sessions of a released association only when the
+/// MPAS feature is used, which the UPF must support too. The CP reads the UPF's MPAS from
+/// the UP Function Features of the Association Setup Response; a UPF that did not announce
+/// it means the CP ends the sessions on release.
+#[test]
+fn a_cp_keeps_released_sessions_only_with_an_mpas_upf() {
+    let outcome = |up_mpas: bool| {
+        let mut smf = Node::new(NodeConfig {
+            smf_set: SmfSet {
+                mpas: true,
+                ..SmfSet::default()
+            },
+            ..config(SMF, Function::Cp)
+        });
+        let mut upf = node(UPF, Function::Up);
+        smf.request(
+            at(0),
+            UPF,
+            Message {
+                header: Header::node(0),
+                body: AssociationSetupRequest::new(node_id(SMF), RecoveryTimeStamp::new(1000))
+                    .into(),
+            },
+        )
+        .unwrap();
+        pass(&mut smf, &mut upf, UPF, at(0));
+        let (inbound, _) = request(&mut upf);
+        let mut answer =
+            AssociationSetupResponse::new(node_id(UPF), accepted(), RecoveryTimeStamp::new(1000));
+        if up_mpas {
+            answer = answer.with_up_function_features(UpFunctionFeatures {
+                mpas: true,
+                ..Default::default()
+            });
+        }
+        upf.respond(at(0), &inbound, answer).unwrap();
+        pass(&mut upf, &mut smf, SMF, at(0));
+        events(&mut smf);
+        let (cp_seid, _) = established(&mut smf, &mut upf, at(0));
+        assert!(smf.end_association(UPF));
+        let released = events(&mut smf)
+            .into_iter()
+            .find_map(|event| match event {
+                Event::Released { sessions, kept, .. } => Some((sessions, kept)),
+                _ => None,
+            })
+            .unwrap();
+        (released, smf.session(cp_seid).is_some())
+    };
+    // A UPF that did not announce MPAS: the CP ends the sessions.
+    let ((sessions, kept), still) = outcome(false);
+    assert!(!still);
+    assert_eq!(kept, Vec::<u64>::new());
+    assert!(!sessions.is_empty());
+    // A UPF that announced MPAS: the CP keeps them for its caller to decide.
+    let ((sessions, kept), still) = outcome(true);
+    assert!(still);
+    assert_eq!(sessions, Vec::<u64>::new());
+    assert!(!kept.is_empty());
+}
+
+/// §5.22.3 bullet 1, §6.2.6.3: a UPF may set the associations up itself; each SMF of the
+/// set then says its MPAS and its SMF Set ID in its Association Setup Response, which the
+/// UPF takes, so another SMF of the set may modify a session.
+#[test]
+fn mpas_of_associations_that_the_upf_sets_up() {
+    let smf_b = Ipv4Addr::new(10, 0, 0, 5).into_socket(8805);
+    let mut upf = Node::new(NodeConfig {
+        smf_set: SmfSet {
+            mpas: true,
+            ..SmfSet::default()
+        },
+        ..config(UPF, Function::Up)
+    });
+    for smf in [SMF, smf_b] {
+        let setup = AssociationSetupRequest::new(node_id(UPF), RecoveryTimeStamp::new(1000));
+        upf.request(
+            at(0),
+            smf,
+            Message {
+                header: Header::node(0),
+                body: setup.into(),
+            },
+        )
+        .unwrap();
+        let sequence = decoded(&sent(&mut upf)[0]).header.sequence;
+        let response =
+            AssociationSetupResponse::new(node_id(smf), accepted(), RecoveryTimeStamp::new(1000))
+                .with_cp_function_features(mpas())
+                .with_smf_set_id(SmfSetId {
+                    fqdn: Rest(b"set".to_vec()),
+                    ..Default::default()
+                });
+        let response = Message {
+            header: Header::node(sequence),
+            body: response.into(),
+        };
+        upf.handle_datagram(at(0), smf, &response.encode().unwrap());
+    }
+    events(&mut upf);
+    upf.handle_datagram(at(0), SMF, &establishment(0x51).encode().unwrap());
+    let (inbound, _) = request(&mut upf);
+    let up_seid = upf.new_session(SMF);
+    let up_f_seid = FSeid {
+        v4: true,
+        seid: Some(up_seid),
+        ipv4: Some(Ipv4Addr::new(10, 0, 0, 2)),
+        ..Default::default()
+    };
+    upf.respond(
+        at(0),
+        &inbound,
+        SessionEstablishmentResponse::new(node_id(UPF), accepted()).with_up_f_seid(up_f_seid),
+    )
+    .unwrap();
+    sent(&mut upf);
+    let modification = Message {
+        header: Header::session(up_seid, 7),
+        body: SessionModificationRequest::default().into(),
+    };
+    assert_eq!(taken(&mut upf, smf_b, modification), Ok(true));
+}
+
+/// A CP function of MPAS that a UPF sets an association up with, announcing MPAS, then
+/// updating its UP Function Features to `update`; whether a release then keeps a session.
+fn cp_keeps_with_a_upf_that_sets_up(update: Option<bool>) -> bool {
+    let mut smf = Node::new(NodeConfig {
+        smf_set: SmfSet {
+            mpas: true,
+            ..SmfSet::default()
+        },
+        ..config(SMF, Function::Cp)
+    });
+    let mut upf = node(UPF, Function::Up);
+    let up_mpas = |mpas| UpFunctionFeatures {
+        mpas,
+        ..Default::default()
+    };
+    let setup = AssociationSetupRequest::new(node_id(UPF), RecoveryTimeStamp::new(1000))
+        .with_up_function_features(up_mpas(true));
+    upf.request(
+        at(0),
+        SMF,
+        Message {
+            header: Header::node(0),
+            body: setup.into(),
+        },
+    )
+    .unwrap();
+    pass(&mut upf, &mut smf, SMF, at(0));
+    let (inbound, _) = request(&mut smf);
+    let answer =
+        AssociationSetupResponse::new(node_id(SMF), accepted(), RecoveryTimeStamp::new(1000))
+            .with_cp_function_features(mpas());
+    smf.respond(at(0), &inbound, answer).unwrap();
+    pass(&mut smf, &mut upf, UPF, at(0));
+    events(&mut upf);
+    events(&mut smf);
+    if let Some(mpas) = update {
+        let update =
+            AssociationUpdateRequest::new(node_id(UPF)).with_up_function_features(up_mpas(mpas));
+        upf.request(
+            at(0),
+            SMF,
+            Message {
+                header: Header::node(0),
+                body: update.into(),
+            },
+        )
+        .unwrap();
+        pass(&mut upf, &mut smf, SMF, at(0));
+        let (inbound, _) = request(&mut smf);
+        smf.respond(
+            at(0),
+            &inbound,
+            AssociationUpdateResponse::new(node_id(SMF), accepted()),
+        )
+        .unwrap();
+        pass(&mut smf, &mut upf, UPF, at(0));
+        events(&mut upf);
+    }
+    let (cp_seid, _) = established(&mut smf, &mut upf, at(0));
+    assert!(smf.end_association(UPF));
+    events(&mut smf)
+        .into_iter()
+        .any(|event| matches!(event, Event::Released { ref kept, .. } if kept == &[cp_seid]))
+}
+
+/// §6.2.6.3, §6.2.8.2: a CP function that a UPF sets an association up with takes the
+/// UPF's MPAS from the UP Function Features of its request: a release keeps the sessions.
+#[test]
+fn a_cp_takes_the_mpas_of_a_upf_that_sets_up() {
+    assert!(cp_keeps_with_a_upf_that_sets_up(None));
+}
+
 /// §5.22.3 bullets 1 and 3: with MPAS, a session that another SMF of the set took over
 /// (a modification with its Node ID) is that SMF's. The release of the association that
 /// no longer controls the session must leave it with its SMF, not hand it to a third SMF
