@@ -279,6 +279,30 @@ impl Message {
                 DeviationKind::Rule("SEID 0 where the peer's SEID is known"),
             ));
         }
+        // A Session Report Request of SEID 0 moves the session to another SMF of the set
+        // and carries the Old CP F-SEID of the previous one; one of a known SEID has none
+        // (§7.2.2.4.2 bullet 4, §5.22.2 bullet 4, Table 7.5.8.1-1).
+        if let Body::SessionReportRequest(request) = &self.body {
+            let old = request.old_cp_f_seid.is_some();
+            if header.seid == Some(0) && !old {
+                found.push(Deviation::new(
+                    path,
+                    "7.2.2.4.2",
+                    DeviationKind::Rule(
+                        "a Session Report Request of SEID 0 without the Old CP F-SEID",
+                    ),
+                ));
+            }
+            if header.seid.is_some_and(|seid| seid != 0) && old {
+                found.push(Deviation::new(
+                    path,
+                    "7.2.2.4.2",
+                    DeviationKind::Rule(
+                        "a Session Report Request of a SEID other than 0 with the Old CP F-SEID",
+                    ),
+                ));
+            }
+        }
         match message_type_info(message_type) {
             Some(info) if !info.interfaces.has(interface) => {
                 found.push(Deviation::new(
