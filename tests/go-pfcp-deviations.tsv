@@ -110,3 +110,5 @@ generic_test.go	Normal	a Session Establishment Request of a SEID other than 0 (T
 header_test.go	Session	a Session Establishment Request of a SEID other than 0 (TS 29.244 7.2.2.4.2), at /header
 session-establishment-request_test.go	Multiple IEs	a Session Establishment Request of a SEID other than 0 (TS 29.244 7.2.2.4.2), at /header
 session-establishment-request_test.go	Single IE	a Session Establishment Request of a SEID other than 0 (TS 29.244 7.2.2.4.2), at /header
+session-report-request_test.go	Single IE	a Session Report Request of a SEID other than 0 with the Old CP F-SEID (TS 29.244 7.2.2.4.2), at /header
+session-report-request_test.go	Multiple IEs	a Session Report Request of a SEID other than 0 with the Old CP F-SEID (TS 29.244 7.2.2.4.2), at /header

@@ -92,6 +92,9 @@ test `codec` expects them (`other_vectors_round_trip`, with `--ignored` and
 - Access Type 3, which Table 8.2.153-1 has as spare.
 - Session Establishment Requests with a SEID other than 0 in their header, where the
   peer's SEID is not known yet (§7.2.2.4.2).
+- Session Report Requests with a SEID other than 0 in their header and an Old CP F-SEID,
+  which §7.2.2.4.2 and Table 7.5.8.1-1 have only when the SEID is 0, to move the session
+  to another SMF of the set.
 - Session Modification Requests that create, update and remove one rule (§6.3.3.2), two
   Session Establishment Requests without Node ID, CP F-SEID, Create PDR and Create FAR,
   and a Heartbeat Request without its Recovery Time Stamp.
