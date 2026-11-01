@@ -423,6 +423,10 @@ pub(crate) fn keep_order<S: Scope>(scope: &mut S, order: Vec<Placed>) {
     *scope.order_mut() = if in_table_order { Vec::new() } else { order };
 }
 
+/// More than the rows of a table, which the table macro asserts: the counts of each row
+/// that the encoder keeps on the stack.
+pub(crate) const MAX_ROWS: usize = 64;
+
 /// Write `scope`: in the order that it keeps, with the values that were added since in
 /// the places of their rows, or in the order of its table.
 pub(crate) fn encode_scope<S: Scope>(scope: &S, out: &mut Vec<u8>) -> Result<(), Error> {
@@ -436,7 +440,7 @@ pub(crate) fn encode_scope<S: Scope>(scope: &S, out: &mut Vec<u8>) -> Result<(),
     }
     let table = S::table();
     // How many values of each row the order has: those after are added.
-    let mut ordered = [0usize; 64];
+    let mut ordered = [0usize; MAX_ROWS];
     for placed in order {
         if let Placed::Field(ie_type) = placed
             && let Some(at) = S::position(*ie_type)
@@ -456,7 +460,7 @@ pub(crate) fn encode_scope<S: Scope>(scope: &S, out: &mut Vec<u8>) -> Result<(),
         }
         Ok(())
     };
-    let mut emitted = [0usize; 64];
+    let mut emitted = [0usize; MAX_ROWS];
     let mut raw = scope.raw().iter();
     for placed in order {
         match placed {

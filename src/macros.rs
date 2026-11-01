@@ -814,6 +814,11 @@ macro_rules! pfcp_table {
             pub order: alloc::vec::Vec<crate::ie::Placed>,
         }
 
+        const _: () = assert!(
+            <[&str]>::len(&[$($row),*]) < crate::table::MAX_ROWS,
+            "a table of more rows than the encoder counts"
+        );
+
         pub(crate) static [<$ty:snake:upper _TABLE>]: crate::table::Table = crate::table::Table {
             id: $id,
             name: $name,
