@@ -1000,6 +1000,10 @@ pfcp_layout! {
         if fteid.chid && !fteid.ch {
             found.push(Deviation::new(path, "8.2.3", DeviationKind::Rule("CHID is set and CH is not")));
         }
+        // With CH, no TEID and no address: Release 19 has no octet after the CHOOSE ID.
+        if fteid.ch && !fteid.extra.is_empty() {
+            found.push(Deviation::new(path, "8.2.3", DeviationKind::Rule("CH is set, and octets of a TEID or an address follow")));
+        }
     }
 }
 
@@ -1037,6 +1041,16 @@ pfcp_layout! {
         }
         if address.v6 && address.chv6 {
             found.push(Deviation::new(path, "8.2.62", DeviationKind::Rule("V6 and CHV6 are both set")));
+        }
+        // IPv6D and IP6PL are of an IPv6 address or prefix, and IP6PL of one without IPv6D.
+        if address.ipv6d && !address.v6 && !address.chv6 {
+            found.push(Deviation::new(path, "8.2.62", DeviationKind::Rule("IPv6D is set and neither V6 nor CHV6 is")));
+        }
+        if address.ip6pl && !address.v6 && !address.chv6 {
+            found.push(Deviation::new(path, "8.2.62", DeviationKind::Rule("IP6PL is set and neither V6 nor CHV6 is")));
+        }
+        if address.ip6pl && address.ipv6d {
+            found.push(Deviation::new(path, "8.2.62", DeviationKind::Rule("IP6PL and IPv6D are both set")));
         }
     }
 }

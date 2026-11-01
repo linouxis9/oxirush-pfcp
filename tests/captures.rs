@@ -24,6 +24,14 @@ use oxirush_pfcp::*;
 /// What the check finds in the captures, each a finding of the peer that sent it: the
 /// run, the number of the message, and the deviation as it is displayed.
 const EXPECTED: &[(&str, &str, &str)] = &[
+    // Open5GS 157f611a: the SMF that restores a session to a UPF that restarted (RESTI)
+    // gives the header of its establishment the SEID of the UPF from before the restart,
+    // where the UPF has none: SEID 0 (§7.2.2.4.2, src/smf/pfcp-path.c).
+    (
+        "open5gs-5gs-upf-restart",
+        "43",
+        "a Session Establishment Request of a SEID other than 0 (TS 29.244 7.2.2.4.2), at /header",
+    ),
     // Open5GS 157f611a: the SMF as PGW-C sends Create BAR on Sxb, which Table 7.5.2.1-1
     // has on Sxa and N4 only (src/smf/n4-build.c).
     (

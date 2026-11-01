@@ -1179,3 +1179,50 @@ fn messages_of_each_interface() {
         [DeviationKind::Repeated { ie_type: 65 }]
     );
 }
+
+/// What the flags of a UE IP Address (§8.2.62) and an F-TEID (§8.2.3), and the SEID of an
+/// establishment (§7.2.2.4.2), do not let a message have.
+#[test]
+fn flags_and_seids_that_do_not_go_together() {
+    let establishment = |seid, pdi: Vec<u8>| {
+        let pdr = ie(
+            1,
+            &[ie(56, &[0, 1]), ie(29, &[0, 0, 0, 255]), ie(2, &pdi)].concat(),
+        );
+        let far = ie(3, &[ie(108, &[0, 0, 0, 1]), ie(44, &[1, 0])].concat());
+        let node = ie(60, &[0, 10, 0, 0, 1]);
+        let f_seid = ie(57, &[2, 0, 0, 0, 0, 0, 0, 0, 1, 10, 0, 0, 1]);
+        session_message(50, seid, &[node, f_seid, pdr, far])
+    };
+    let rules = |octets: &[u8]| -> Vec<&'static str> {
+        found(octets)
+            .into_iter()
+            .filter_map(|(kind, ..)| match kind {
+                DeviationKind::Rule(rule) => Some(rule),
+                _ => None,
+            })
+            .collect()
+    };
+    let source = ie(20, &[0]);
+    // IP6PL and IPv6D, without V6 or CHV6
+    let ue_ip = ie(93, &[0x48, 4, 64]);
+    assert_eq!(
+        rules(&establishment(0, [source.clone(), ue_ip].concat())),
+        [
+            "IPv6D is set and neither V6 nor CHV6 is",
+            "IP6PL is set and neither V6 nor CHV6 is",
+            "IP6PL and IPv6D are both set",
+        ]
+    );
+    // CH with a TEID after the flags
+    let f_teid = ie(21, &[0x05, 0, 0, 0, 1]);
+    assert_eq!(
+        rules(&establishment(0, [source.clone(), f_teid].concat())),
+        ["CH is set, and octets of a TEID or an address follow"]
+    );
+    // An establishment of SEID 5
+    assert_eq!(
+        rules(&establishment(5, source)),
+        ["a Session Establishment Request of a SEID other than 0"]
+    );
+}

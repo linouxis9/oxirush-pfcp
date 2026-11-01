@@ -63,7 +63,11 @@ Each of these is against TS 29.244 V19.6.0, at the version named.
 Session Establishment Request; Table 7.5.2.1-1 has Create BAR on Sxa and N4 only.
 `smf_sess_add_by_apn()` (`src/smf/context.c`) gives each session a BAR, and
 `smf_n4_build_session_establishment_request()` (`src/smf/n4-build.c`) sends it whatever
-the interface. The test `captures` expects it.
+the interface. The SMF that restores a session to a UPF that restarted, with the RESTI
+flag, gives the header of its Session Establishment Request the UPF's SEID from before
+the restart, which the UPF no longer has, where §7.2.2.4.2 has SEID 0:
+`smf_5gc_pfcp_send_session_establishment_request()` (`src/smf/pfcp-path.c`) sets
+`h.seid = sess->upf_n4_seid`. The test `captures` expects both.
 
 **go-pfcp v0.0.24**, in its test vectors, which `go-pfcp-deviations.tsv` lists as the
 test `codec` expects them (`other_vectors_round_trip`, with `--ignored` and
