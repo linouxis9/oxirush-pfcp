@@ -508,3 +508,106 @@ impl Answers {
         }
     }
 }
+
+/// When each associated peer is due a heartbeat, and the peers by when.
+#[derive(Debug, Default)]
+pub(crate) struct Heartbeats {
+    at: BTreeMap<SocketAddr, Duration>,
+    due: BTreeSet<(Duration, SocketAddr)>,
+}
+
+impl Heartbeats {
+    pub(crate) fn insert(&mut self, peer: SocketAddr, at: Duration) {
+        if let Some(before) = self.at.insert(peer, at) {
+            self.due.remove(&(before, peer));
+        }
+        self.due.insert((at, peer));
+    }
+
+    pub(crate) fn remove(&mut self, peer: &SocketAddr) {
+        if let Some(before) = self.at.remove(peer) {
+            self.due.remove(&(before, *peer));
+        }
+    }
+
+    /// When the first is due.
+    pub(crate) fn first(&self) -> Option<Duration> {
+        self.due.first().map(|(at, _)| *at)
+    }
+
+    /// The peers due at `now`.
+    pub(crate) fn due(&self, now: Duration) -> Vec<SocketAddr> {
+        self.due
+            .iter()
+            .take_while(|(at, _)| *at <= now)
+            .map(|(_, peer)| *peer)
+            .collect()
+    }
+}
+
+/// The overload control information of the peers, by its scope, and the scopes by when
+/// their period of validity ends.
+#[derive(Debug, Default)]
+pub(crate) struct Overloads {
+    by_scope: BTreeMap<Scope, OverloadControl>,
+    ending: BTreeSet<(Duration, Scope)>,
+}
+
+impl Overloads {
+    pub(crate) fn get(&self, scope: &Scope) -> Option<&OverloadControl> {
+        self.by_scope.get(scope)
+    }
+
+    pub(crate) fn contains_key(&self, scope: &Scope) -> bool {
+        self.by_scope.contains_key(scope)
+    }
+
+    /// What the "Loss" algorithm owes of a scope.
+    pub(crate) fn credit(&mut self, scope: &Scope) -> Option<&mut u32> {
+        self.by_scope
+            .get_mut(scope)
+            .map(|overload| &mut overload.credit)
+    }
+
+    pub(crate) fn insert(&mut self, scope: Scope, overload: OverloadControl) {
+        self.remove(&scope);
+        if let Some(until) = overload.until {
+            self.ending.insert((until, scope.clone()));
+        }
+        self.by_scope.insert(scope, overload);
+    }
+
+    pub(crate) fn remove(&mut self, scope: &Scope) -> Option<OverloadControl> {
+        let overload = self.by_scope.remove(scope)?;
+        if let Some(until) = overload.until {
+            self.ending.remove(&(until, scope.clone()));
+        }
+        Some(overload)
+    }
+
+    pub(crate) fn retain(&mut self, keep: impl Fn(&Scope, &OverloadControl) -> bool) {
+        let gone: Vec<Scope> = self
+            .by_scope
+            .iter()
+            .filter(|(scope, overload)| !keep(scope, overload))
+            .map(|(scope, _)| scope.clone())
+            .collect();
+        for scope in gone {
+            self.remove(&scope);
+        }
+    }
+
+    /// When the first period of validity ends.
+    pub(crate) fn first_end(&self) -> Option<Duration> {
+        self.ending.first().map(|(until, _)| *until)
+    }
+
+    /// The scopes whose period of validity has ended at `now`.
+    pub(crate) fn ended(&self, now: Duration) -> Vec<Scope> {
+        self.ending
+            .iter()
+            .take_while(|(until, _)| *until <= now)
+            .map(|(_, scope)| scope.clone())
+            .collect()
+    }
+}

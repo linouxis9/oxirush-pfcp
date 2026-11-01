@@ -67,7 +67,9 @@ use crate::registry::*;
 use crate::values::*;
 use crate::values_gen::*;
 
-use state::{Answers, Change, Digest, Effect, Outstanding, Scope, Sessions, SetOf};
+use state::{
+    Answers, Change, Digest, Effect, Heartbeats, Outstanding, Overloads, Scope, Sessions, SetOf,
+};
 pub use state::{Association, LoadControl, OverloadControl, Session};
 
 /// The function of the node: it sets up sessions, or it has them set up.
@@ -566,13 +568,15 @@ pub struct Node {
     finishing: BTreeSet<(Duration, u32, SocketAddr)>,
     answers: Answers,
     associations: BTreeMap<Vec<u8>, Association>,
+    /// The association of each peer, as [`Node::same_peer`] tells them apart.
+    by_peer: BTreeMap<SocketAddr, Vec<u8>>,
     sessions: Sessions,
     /// The Recovery Time Stamp of each peer, as [`Node::same_peer`] tells them apart, and
     /// when the node last had it.
     recovery: BTreeMap<SocketAddr, (u32, Duration)>,
-    heartbeats: BTreeMap<SocketAddr, Duration>,
+    heartbeats: Heartbeats,
     load: BTreeMap<Scope, LoadControl>,
-    overload: BTreeMap<Scope, OverloadControl>,
+    overload: Overloads,
     transmits: [VecDeque<Transmit>; 16],
     events: VecDeque<Event>,
 }
@@ -599,11 +603,12 @@ impl Node {
             finishing: BTreeSet::new(),
             answers: Answers::default(),
             associations: BTreeMap::new(),
+            by_peer: BTreeMap::new(),
             sessions: Sessions::default(),
             recovery: BTreeMap::new(),
-            heartbeats: BTreeMap::new(),
+            heartbeats: Heartbeats::default(),
             load: BTreeMap::new(),
-            overload: BTreeMap::new(),
+            overload: Overloads::default(),
             transmits: Default::default(),
             events: VecDeque::new(),
         }
@@ -636,12 +641,8 @@ impl Node {
     /// heartbeat, or the end of an overload.
     pub fn poll_timeout(&self) -> Option<Duration> {
         let retransmission = self.deadlines.first().map(|(deadline, _)| *deadline);
-        let heartbeat = self.heartbeats.values().copied().min();
-        let overload = self
-            .overload
-            .values()
-            .filter_map(|overload| overload.until)
-            .min();
+        let heartbeat = self.heartbeats.first();
+        let overload = self.overload.first_end();
         [retransmission, heartbeat, overload]
             .into_iter()
             .flatten()
@@ -683,13 +684,7 @@ impl Node {
                 }
             }
         }
-        let beats: Vec<SocketAddr> = self
-            .heartbeats
-            .iter()
-            .filter(|(_, at)| **at <= now)
-            .map(|(peer, _)| *peer)
-            .collect();
-        for peer in beats {
+        for peer in self.heartbeats.due(now) {
             let interval = self.config.heartbeat.unwrap_or(Duration::MAX);
             self.heartbeats.insert(peer, now.saturating_add(interval));
             if !self.beating.contains(&peer) {
@@ -702,13 +697,7 @@ impl Node {
                 let _ = self.send(now, peer, message, true, None, Change::Nothing);
             }
         }
-        let ended: Vec<Scope> = self
-            .overload
-            .iter()
-            .filter(|(_, overload)| overload.until.is_some_and(|until| until <= now))
-            .map(|(scope, _)| scope.clone())
-            .collect();
-        for scope in ended {
+        for scope in self.overload.ended(now) {
             if let Some(overload) = self.overload.remove(&scope) {
                 self.events.push_back(Event::OverloadEnded {
                     peer: overload.peer,
@@ -1901,9 +1890,9 @@ impl Node {
     /// The association of `peer` (§4.2.2): of its address, or of its address and port for
     /// a node without `request_port`.
     fn association_of(&self, peer: SocketAddr) -> Option<&Association> {
-        self.associations
-            .values()
-            .find(|association| self.same_peer(association.peer, peer))
+        self.by_peer
+            .get(&self.peer_key(peer))
+            .and_then(|key| self.associations.get(key))
     }
 
     /// Whether two addresses are of one peer: of one IP address when the node sends its
@@ -2180,12 +2169,16 @@ impl Node {
             .config
             .priority_up_to
             .is_some_and(|up_to| priority <= up_to);
-        let overload = self.overload.get_mut(&scope).expect("overload");
-        overload.credit += u32::from(overload.metric);
+        let metric = self
+            .overload
+            .get(&scope)
+            .map_or(0, |overload| overload.metric);
+        let credit = self.overload.credit(&scope).expect("overload");
+        *credit += u32::from(metric);
         // A spared request is dropped only when the others could not make the reduction.
         let owed = if spared { 200 } else { 100 };
-        if overload.credit >= owed {
-            overload.credit -= 100;
+        if *credit >= owed {
+            *credit -= 100;
             return true;
         }
         false
@@ -2401,13 +2394,12 @@ impl Node {
         let key = key_of(&node_id);
         // A peer, as the node tells peers apart, has one association: that of another
         // Node ID ends.
-        let others: Vec<Vec<u8>> = self
-            .associations
-            .values()
-            .filter(|association| association.key != key && self.same_peer(association.peer, peer))
-            .map(|association| association.key.clone())
-            .collect();
-        for other in others {
+        if let Some(other) = self
+            .by_peer
+            .get(&self.peer_key(peer))
+            .filter(|other| **other != key)
+            .cloned()
+        {
             self.release(&other);
         }
         let replaced = self.associations.insert(
@@ -2419,14 +2411,15 @@ impl Node {
                 set,
             },
         );
+        if let Some(old) = &replaced
+            && self.by_peer.get(&self.peer_key(old.peer)) == Some(&key)
+        {
+            self.by_peer.remove(&self.peer_key(old.peer));
+        }
+        self.by_peer.insert(self.peer_key(peer), key.clone());
         let mut ended = Vec::new();
         if let Some(old) = &replaced {
-            if old.peer != peer
-                && !self
-                    .associations
-                    .values()
-                    .any(|association| association.peer == old.peer)
-            {
+            if old.peer != peer && !self.by_peer.contains_key(&self.peer_key(old.peer)) {
                 self.heartbeats.remove(&old.peer);
             }
             if let Some(retained) = retained {
@@ -2463,6 +2456,9 @@ impl Node {
             return;
         };
         let peer = association.peer;
+        if self.by_peer.get(&self.peer_key(peer)).map(Vec::as_slice) == Some(key) {
+            self.by_peer.remove(&self.peer_key(peer));
+        }
         let of_it: Vec<u64> = self
             .sessions
             .iter()
@@ -2495,11 +2491,7 @@ impl Node {
                 self.sessions.set_node(*seid, heir.clone());
             }
         }
-        if !self
-            .associations
-            .values()
-            .any(|association| association.peer == peer)
-        {
+        if !self.by_peer.contains_key(&self.peer_key(peer)) {
             self.heartbeats.remove(&peer);
         }
         self.events.push_back(Event::Released {
