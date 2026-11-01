@@ -2828,7 +2828,7 @@ fn an_establishment_of_a_seid_in_use_is_refused() {
     assert!(smf.session(own).is_none());
     assert!(smf.session(cp_seid).is_some());
     // Nor does a session move to the SEID of another
-    let other = smf.new_session(UPF);
+    let (other, _) = established(&mut smf, &mut upf, at(2));
     let moved = FSeid {
         v4: true,
         seid: Some(other),
@@ -2839,6 +2839,30 @@ fn an_establishment_of_a_seid_in_use_is_refused() {
     assert_eq!(
         smf.session_request(at(2), cp_seid, modification),
         Err(NodeError::SeidInUse)
+    );
+    // But to one that new_session gave for it
+    let fresh = smf.new_session(UPF);
+    let moved = FSeid {
+        v4: true,
+        seid: Some(fresh),
+        ipv4: Some(Ipv4Addr::new(10, 0, 0, 1)),
+        ..Default::default()
+    };
+    let modification = SessionModificationRequest::default().with_cp_f_seid(moved);
+    smf.session_request(at(2), cp_seid, modification).unwrap();
+    pass(&mut smf, &mut upf, UPF, at(2));
+    let (inbound, _) = request(&mut upf);
+    upf.respond(
+        at(2),
+        &inbound,
+        SessionModificationResponse::new(accepted()),
+    )
+    .unwrap();
+    pass(&mut upf, &mut smf, SMF, at(2));
+    assert!(smf.session(cp_seid).is_none());
+    assert!(
+        smf.session(fresh)
+            .is_some_and(|session| session.peer_seid.is_some())
     );
 }
 

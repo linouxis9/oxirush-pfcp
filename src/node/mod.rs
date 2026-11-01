@@ -294,8 +294,7 @@ pub enum Event {
         message: Message,
     },
     /// A request of the caller without a response after N1 retransmissions (§6.4). An
-    /// establishment that ends without its response, so, failed or cancelled, takes its
-    /// local SEID with it.
+    /// establishment that times out, fails or is cancelled takes its local SEID with it.
     Timeout {
         /// The request.
         request: RequestId,
@@ -709,9 +708,8 @@ impl Node {
                 }
                 Body::SessionModificationRequest(request) => {
                     match request.cp_f_seid.as_ref().and_then(|f_seid| f_seid.seid) {
-                        Some(seid)
-                            if self.sessions.contains_key(&seid) && Some(seid) != local_seid =>
-                        {
+                        // Not to the SEID of another session; to one of new_session, yes.
+                        Some(seid) if self.in_use(seid) && Some(seid) != local_seid => {
                             return Err(NodeError::SeidInUse);
                         }
                         Some(seid) if Some(seid) != local_seid => Change::Moves(seid),

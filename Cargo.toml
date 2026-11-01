@@ -68,6 +68,10 @@ required-features = ["node"]
 name = "endpoint"
 required-features = ["endpoint"]
 
+[[test]]
+name = "allocation"
+required-features = ["node"]
+
 # The Rust blocks of README.md, which tests/readme.rs runs.
 [[test]]
 name = "readme"
