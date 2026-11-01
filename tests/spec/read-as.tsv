@@ -1,0 +1,11 @@
+# table	values	read as
+8.2.1-1	93 to 255	an unspecified rejection cause
+8.2.7-1	2, 3	the value "1"
+8.2.7-2	2, 3	the value "1"
+8.2.29.1	other values	multiples of 1 minute
+8.2.35.1	other values	multiples of 1 minute
+8.2.61-1	4 to 7	the value "0"
+8.2.63.1	other values	000
+8.2.78.1	other values	multiples of 1 minute
+8.2.80-1	7 to 31	the value "1"
+8.2.263-1	4 to 255	an unspecified failure cause

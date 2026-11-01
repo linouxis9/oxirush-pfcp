@@ -1309,6 +1309,9 @@ macro_rules! pfcp_enum {
             /// The values that the tables reserve: a receiver takes the IE as incorrect
             /// (§7.6.8), where it ignores a spare one.
             pub const RESERVED: &'static [u8] = &[$($($reserved),*)?];
+            /// The values that a sender does not send and a receiver reads as another, as
+            /// the tables say: from, to, and the value that they are read as.
+            pub const READ_AS: &'static [(u8, u8, u8)] = &[$($(($from, $to, $target)),+)?];
 
             /// The variant of a number.
             pub const fn from_value(value: u8) -> Self {

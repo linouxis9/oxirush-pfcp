@@ -78,6 +78,20 @@ impl Errata {
         value
     }
 
+    /// The errata of `kind` that add what the document does not say: where, and what the
+    /// crate takes.
+    fn of(&self, kind: &str) -> Vec<(&'static str, &'static str)> {
+        self.list
+            .iter()
+            .zip(&self.used)
+            .filter(|((_, k, ..), _)| *k == kind)
+            .map(|((_, _, at, _, taken), used)| {
+                used.set(true);
+                (*at, *taken)
+            })
+            .collect()
+    }
+
     /// The errata that found nothing to apply to.
     fn unused(&self, kinds: &[&str]) -> Vec<String> {
         self.list
@@ -528,156 +542,66 @@ fn tables() {
     report(problems);
 }
 
-/// An enumeration of the crate: its tables, the values that they name, and those that
-/// they reserve.
-type Enumeration = (&'static str, &'static [(u8, &'static str)], &'static [u8]);
+/// An enumeration of the crate: its tables, the values that they name, those that they
+/// reserve, those that a receiver reads as another, and its width.
+type Enumeration = (
+    &'static str,
+    &'static [(u8, &'static str)],
+    &'static [u8],
+    &'static [(u8, u8, u8)],
+    u32,
+);
+
+macro_rules! enumerations {
+    ($($ty:ident),* $(,)?) => {
+        &[$(($ty::TABLE, $ty::NAMES, $ty::RESERVED, $ty::READ_AS, $ty::BITS)),*]
+    };
+}
+
+/// The enumerations of the crate.
+const ENUMERATIONS: &[Enumeration] = enumerations![
+    CauseValue,
+    SourceInterfaceValue,
+    Gate,
+    RedirectAddressType,
+    DestinationInterfaceValue,
+    TimerUnit,
+    NodeIdType,
+    NodeType,
+    FlowDirection,
+    TimeUnit,
+    OuterHeaderRemovalDescription,
+    HeaderType,
+    PdnTypeValue,
+    RuleIdType,
+    BaseTimeIntervalType,
+    InterfaceTypeValue,
+    SteeringFunctionalityValue,
+    SteeringModeValue,
+    PriorityValue,
+    AccessType,
+    AvailabilityStatus,
+    RatTypeValue,
+    TransportModeValue,
+    ReportingUrgencyValue,
+    MediaTransportProtocolValue,
+    RtpHeaderExtensionTypeValue,
+    PayloadFormat,
+    FormatField,
+    JobType,
+    MeasurementType,
+    ActionValue,
+    ConditionValue,
+    SignalingMethod,
+    FailureCause,
+    TransferringMethod,
+    RemainingDataReportingIndicationValue,
+];
 
 /// The tables of clause 8.2 that name values: each is an enumeration of the crate with
 /// the same values and names; and those of bits name flags of their IE type.
 #[test]
 fn value_tables() {
-    let enumerations: &[Enumeration] = &[
-        (CauseValue::TABLE, CauseValue::NAMES, CauseValue::RESERVED),
-        (
-            SourceInterfaceValue::TABLE,
-            SourceInterfaceValue::NAMES,
-            SourceInterfaceValue::RESERVED,
-        ),
-        (Gate::TABLE, Gate::NAMES, Gate::RESERVED),
-        (
-            RedirectAddressType::TABLE,
-            RedirectAddressType::NAMES,
-            RedirectAddressType::RESERVED,
-        ),
-        (
-            DestinationInterfaceValue::TABLE,
-            DestinationInterfaceValue::NAMES,
-            DestinationInterfaceValue::RESERVED,
-        ),
-        (TimerUnit::TABLE, TimerUnit::NAMES, TimerUnit::RESERVED),
-        (NodeIdType::TABLE, NodeIdType::NAMES, NodeIdType::RESERVED),
-        (NodeType::TABLE, NodeType::NAMES, NodeType::RESERVED),
-        (
-            FlowDirection::TABLE,
-            FlowDirection::NAMES,
-            FlowDirection::RESERVED,
-        ),
-        (TimeUnit::TABLE, TimeUnit::NAMES, TimeUnit::RESERVED),
-        (
-            OuterHeaderRemovalDescription::TABLE,
-            OuterHeaderRemovalDescription::NAMES,
-            OuterHeaderRemovalDescription::RESERVED,
-        ),
-        (HeaderType::TABLE, HeaderType::NAMES, HeaderType::RESERVED),
-        (
-            PdnTypeValue::TABLE,
-            PdnTypeValue::NAMES,
-            PdnTypeValue::RESERVED,
-        ),
-        (RuleIdType::TABLE, RuleIdType::NAMES, RuleIdType::RESERVED),
-        (
-            BaseTimeIntervalType::TABLE,
-            BaseTimeIntervalType::NAMES,
-            BaseTimeIntervalType::RESERVED,
-        ),
-        (
-            InterfaceTypeValue::TABLE,
-            InterfaceTypeValue::NAMES,
-            InterfaceTypeValue::RESERVED,
-        ),
-        (
-            SteeringFunctionalityValue::TABLE,
-            SteeringFunctionalityValue::NAMES,
-            SteeringFunctionalityValue::RESERVED,
-        ),
-        (
-            SteeringModeValue::TABLE,
-            SteeringModeValue::NAMES,
-            SteeringModeValue::RESERVED,
-        ),
-        (
-            PriorityValue::TABLE,
-            PriorityValue::NAMES,
-            PriorityValue::RESERVED,
-        ),
-        (AccessType::TABLE, AccessType::NAMES, AccessType::RESERVED),
-        (
-            AvailabilityStatus::TABLE,
-            AvailabilityStatus::NAMES,
-            AvailabilityStatus::RESERVED,
-        ),
-        (
-            RatTypeValue::TABLE,
-            RatTypeValue::NAMES,
-            RatTypeValue::RESERVED,
-        ),
-        (
-            TransportModeValue::TABLE,
-            TransportModeValue::NAMES,
-            TransportModeValue::RESERVED,
-        ),
-        (
-            ReportingUrgencyValue::TABLE,
-            ReportingUrgencyValue::NAMES,
-            ReportingUrgencyValue::RESERVED,
-        ),
-        (
-            MediaTransportProtocolValue::TABLE,
-            MediaTransportProtocolValue::NAMES,
-            MediaTransportProtocolValue::RESERVED,
-        ),
-        (
-            RtpHeaderExtensionTypeValue::TABLE,
-            RtpHeaderExtensionTypeValue::NAMES,
-            RtpHeaderExtensionTypeValue::RESERVED,
-        ),
-        (
-            PayloadFormat::TABLE,
-            PayloadFormat::NAMES,
-            PayloadFormat::RESERVED,
-        ),
-        (
-            FormatField::TABLE,
-            FormatField::NAMES,
-            FormatField::RESERVED,
-        ),
-        (JobType::TABLE, JobType::NAMES, JobType::RESERVED),
-        (
-            MeasurementType::TABLE,
-            MeasurementType::NAMES,
-            MeasurementType::RESERVED,
-        ),
-        (
-            ActionValue::TABLE,
-            ActionValue::NAMES,
-            ActionValue::RESERVED,
-        ),
-        (
-            ConditionValue::TABLE,
-            ConditionValue::NAMES,
-            ConditionValue::RESERVED,
-        ),
-        (
-            SignalingMethod::TABLE,
-            SignalingMethod::NAMES,
-            SignalingMethod::RESERVED,
-        ),
-        (
-            FailureCause::TABLE,
-            FailureCause::NAMES,
-            FailureCause::RESERVED,
-        ),
-        (
-            TransferringMethod::TABLE,
-            TransferringMethod::NAMES,
-            TransferringMethod::RESERVED,
-        ),
-        (
-            RemainingDataReportingIndicationValue::TABLE,
-            RemainingDataReportingIndicationValue::NAMES,
-            RemainingDataReportingIndicationValue::RESERVED,
-        ),
-    ];
     let mut document: BTreeMap<&str, Vec<(&str, &str)>> = BTreeMap::new();
     for cells in records(include_str!("spec/value-tables.tsv")) {
         document
@@ -687,7 +611,7 @@ fn value_tables() {
     }
     let mut problems = Vec::new();
     let mut covered = BTreeSet::new();
-    for (tables, names, reserved) in enumerations {
+    for (tables, names, reserved, _, _) in ENUMERATIONS {
         for table in tables.split(" and ") {
             let table = table.strip_prefix("Table ").unwrap();
             covered.insert(table);
@@ -750,6 +674,85 @@ fn value_tables() {
             }
         }
     }
+    report(problems);
+}
+
+/// The values of each enumeration that a sender does not send and a receiver reads as
+/// another (§7.6.8), as the tables of its values say them (`read-as.tsv`): `read` of the
+/// enumeration, which `effective()` gives.
+#[test]
+fn read_as() {
+    let errata = Errata::new();
+    let mut problems = Vec::new();
+    let mut document: BTreeMap<&str, Vec<(&str, &str)>> = BTreeMap::new();
+    for cells in records(include_str!("spec/read-as.tsv")) {
+        let place = format!("{}/{}", cells[0], cells[1]);
+        let read = errata.apply("read-as", &place, cells[2]);
+        document.entry(cells[0]).or_default().push((cells[1], read));
+    }
+    for (place, read) in errata.of("read-as-row") {
+        let (table, values) = place.split_once('/').unwrap();
+        document.entry(table).or_default().push((values, read));
+    }
+    for (tables, names, _, read_as, bits) in ENUMERATIONS {
+        let value_of = |name: &str| {
+            names
+                .iter()
+                .find(|(_, named)| *named == name)
+                .map(|(value, _)| *value)
+        };
+        let mut expected = BTreeMap::new();
+        for table in tables.split(" and ") {
+            let table = table.strip_prefix("Table ").unwrap();
+            for (values, read) in document.get(table).into_iter().flatten() {
+                let target = match read
+                    .strip_prefix("the value \"")
+                    .and_then(|rest| rest.strip_suffix('"'))
+                {
+                    Some(number) => number.parse().ok(),
+                    None if read.chars().all(|c| c == '0' || c == '1') => {
+                        u8::from_str_radix(read, 2).ok()
+                    }
+                    None => read
+                        .strip_prefix("multiples of ")
+                        .and_then(value_of)
+                        .or(read.parse().ok()),
+                };
+                let Some(target) = target else {
+                    problems.push(format!("Table {table}: no value of the crate for {read:?}"));
+                    continue;
+                };
+                let range: Vec<u8> = match values.split_once(" to ") {
+                    _ if *values == "other values" => (0..1u16 << bits)
+                        .map(|value| value as u8)
+                        .filter(|value| names.iter().all(|(named, _)| named != value))
+                        .collect(),
+                    Some((from, to)) => (from.parse().unwrap()..=to.parse().unwrap()).collect(),
+                    None => values
+                        .split(", ")
+                        .map(|value| value.parse().unwrap())
+                        .collect(),
+                };
+                for value in range {
+                    expected.insert(value, target);
+                }
+            }
+        }
+        // As ranges of values read as one: from, to, as.
+        let mut ranges: Vec<(u8, u8, u8)> = Vec::new();
+        for (value, target) in expected {
+            match ranges.last_mut() {
+                Some((_, to, read)) if *to + 1 == value && *read == target => *to = value,
+                _ => ranges.push((value, value, target)),
+            }
+        }
+        if ranges != *read_as {
+            problems.push(format!(
+                "{tables}: read {read_as:?} in the crate, and {ranges:?} in the document"
+            ));
+        }
+    }
+    problems.extend(errata.unused(&["read-as", "read-as-row"]));
     report(problems);
 }
 

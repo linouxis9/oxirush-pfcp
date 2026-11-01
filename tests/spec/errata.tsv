@@ -4,7 +4,9 @@
 # `notes` checks those that no fixture holds as the document has them: a caption of a
 # table (`table-caption`, the table is found), a heading without its style (`heading`,
 # the figures of the clauses are found), the table that the comment of a row names
-# (`row-table`, the crate's row is of the table that the erratum gives).
+# (`row-table`, the crate's row is of the table that the erratum gives). A reading of
+# values as another that names no value of the table is given its value (`read-as`), and
+# one that the document leaves to a note that no row names is added (`read-as-row`).
 #
 # name	kind	where	the document	the crate
 modifcation	message-name	17	PFCP Session Set Modifcation Response	PFCP Session Set Modification Response
@@ -50,3 +52,6 @@ session-report-request-prsr-reference	row-table	7.5.8.1-1/Packet Rate Status Rep
 link-specific-multipath-ipv6	figure-octets	8.2.158/s to (s+3)	s to (s+3)	s to (s+15)
 ip-address-and-port-number-replacement-flags	figure-octets	8.2.200/5 to 6	5 to 6	5
 unstyled-headings	heading	8.2.220 8.2.221 8.2.222 8.2.224	headings written as plain paragraphs	clauses of their own
+unspecified-rejection-cause	read-as	8.2.1-1/93 to 255	an unspecified rejection cause	64
+unspecified-acceptance-cause	read-as-row	8.2.1-1/4 to 63	Spare (NOTE 1, an unspecified acceptance cause, is of no row)	1
+unspecified-failure-cause	read-as	8.2.263-1/4 to 255	an unspecified failure cause	0
