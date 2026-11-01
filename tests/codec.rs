@@ -384,13 +384,14 @@ fn ie_types(mut octets: &[u8], out: &mut Vec<u16>) {
     }
 }
 
-/// For a comparison with a dissector, when `PFCP_DUMP` names a file: each message of
-/// `PFCP_VECTORS` and of this file, its IE types depth first, and values by their paths.
+/// For a comparison with a dissector, into the file that `PFCP_DUMP` names: each message
+/// of `PFCP_VECTORS` and of this file, its IE types depth first, and values by their
+/// paths. It writes, and checks nothing: run it with `--ignored`.
 #[test]
+#[ignore = "writes the dump for a dissector, of PFCP_VECTORS into PFCP_DUMP"]
 fn dump_for_a_dissector() {
-    let (Ok(file), Ok(dump)) = (std::env::var("PFCP_VECTORS"), std::env::var("PFCP_DUMP")) else {
-        return;
-    };
+    let file = std::env::var("PFCP_VECTORS").expect("PFCP_VECTORS names the file of the vectors");
+    let dump = std::env::var("PFCP_DUMP").expect("PFCP_DUMP names the file to write");
     let mut messages: Vec<(String, Vec<u8>)> = std::fs::read_to_string(file)
         .unwrap()
         .lines()
