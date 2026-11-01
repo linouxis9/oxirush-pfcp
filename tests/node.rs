@@ -868,6 +868,25 @@ fn controls_of_a_peer_without_an_association_are_not_kept() {
         .unwrap();
 }
 
+/// §8.2.34: a Metric above 100 is read as 0: an Overload Reduction Metric of 200 throttles
+/// nothing, and a Load Metric of 250 is a load of 0.
+#[test]
+fn a_metric_above_100_is_read_as_0() {
+    let (mut smf, cp_seid) = overloaded(config(SMF, Function::Cp), 200);
+    assert_eq!(
+        smf.overload_control(UPF).map(|overload| overload.metric),
+        Some(0)
+    );
+    for _ in 0..100 {
+        smf.session_request(at(2), cp_seid, SessionModificationRequest::default())
+            .unwrap();
+    }
+    let (mut smf, mut upf) = associated(at(0));
+    let (cp_seid, _) = established(&mut smf, &mut upf, at(0));
+    modified(&mut smf, &mut upf, cp_seid, at(1), with_load(1, 250));
+    assert_eq!(smf.load_control(UPF).map(|load| load.metric), Some(0));
+}
+
 #[test]
 fn throttling_loss_algorithm() {
     let (mut smf, cp_seid) = overloaded(config(SMF, Function::Cp), 30);

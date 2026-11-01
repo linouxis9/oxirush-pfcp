@@ -54,7 +54,7 @@ pub struct Session {
 pub struct LoadControl {
     /// Its Load Control Sequence Number.
     pub sequence: u32,
-    /// Its Load Metric, a percentage.
+    /// Its Load Metric, a percentage: of 0 to 100, a value above read as 0 (§8.2.34).
     pub metric: u8,
 }
 
@@ -65,7 +65,8 @@ pub struct OverloadControl {
     pub peer: SocketAddr,
     /// Its Overload Control Sequence Number.
     pub sequence: u32,
-    /// Its Overload Reduction Metric: the percentage of the requests to throttle.
+    /// Its Overload Reduction Metric: the percentage of the requests to throttle, of 0 to
+    /// 100, a value above read as 0 (§8.2.34).
     pub metric: u8,
     /// Its Period of Validity: `None` for an infinite one.
     pub validity: Option<Duration>,
