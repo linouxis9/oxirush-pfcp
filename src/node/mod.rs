@@ -129,7 +129,7 @@ pub struct NodeConfig {
     pub request_port: Option<u16>,
     /// How many requests of hosts without an association wait for their answer at once:
     /// Association Setup Requests, the session requests of a host of a session's F-SEID
-    /// address, with SSET those of an SMF of the set, and on an SMF of a set a UP
+    /// address, with SSET those of an SMF of the set, and on an SMF of SSET a UP
     /// function's report of SEID 0 that hands a session over. Beyond, one is dropped
     /// before it is decoded, as [`Counters::refused`] counts, and its sender sends it
     /// again.
@@ -331,7 +331,8 @@ pub enum ViolationKind {
     /// association, or that names the Node ID of another's (§6.2.6): answered with "No
     /// established PFCP Association". A host without an association is taken for the
     /// sessions whose F-SEID has its address, with SSET as an SMF of the set, and, by an
-    /// SMF of a set, for a report of SEID 0 that hands a session over (§5.22.2).
+    /// SMF of SSET, for a report of SEID 0 that hands a session over (§5.22.2): with
+    /// MPAS alone, the UP function that hands it over has an association (§5.22.3).
     SessionWithoutAssociation,
     /// A session request of a SEID that is of no established session of the peer:
     /// answered with "Session context not found" (§7.2.2.4.2).
@@ -1439,8 +1440,13 @@ impl Node {
             // A UP function's request of SEID 0 with the CP F-SEID of the previous SMF,
             // which hands the session over (§5.22.2 and §5.22.3, bullet 5). With SSET the
             // set has one association, which another SMF of the set holds, so the taking
-            // SMF needs none of its own.
-            56 => (set.sset || set.mpas) && header.seid == Some(0) && peer_seid.is_some(),
+            // SMF needs none of its own; with MPAS, the UP function hands it to an SMF of
+            // the set that it has an association with (§5.22.3 bullet 6).
+            56 => {
+                (set.sset || set.mpas && association.is_some())
+                    && header.seid == Some(0)
+                    && peer_seid.is_some()
+            }
             _ => false,
         };
         let rejection = match message_type {

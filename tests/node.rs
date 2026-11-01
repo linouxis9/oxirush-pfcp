@@ -4676,6 +4676,45 @@ fn a_probe_answer_of_another_type_leaves_the_next_one_its_effect() {
     assert_eq!(inbound.seid, Some(up_seid));
 }
 
+/// §5.22.3 bullet 6: with MPAS, a UPF hands a session over to an SMF of the set with which
+/// it has an association. An SMF of MPAS alone answers a report of SEID 0 of a UPF without
+/// one with "No established PFCP Association"; only SSET lets the taking SMF have none.
+#[test]
+fn mpas_a_handover_report_needs_an_association() {
+    let report = || Message {
+        header: Header::session(0, 9),
+        body: SessionReportRequest::new(ReportType {
+            uisr: true,
+            ..Default::default()
+        })
+        .with_old_cp_f_seid(FSeid {
+            v4: true,
+            seid: Some(0x1234),
+            ipv4: Some(Ipv4Addr::new(10, 0, 0, 9)),
+            ..Default::default()
+        })
+        .into(),
+    };
+    let of = |mpas, sset| {
+        Node::new(NodeConfig {
+            smf_set: SmfSet { sset, mpas },
+            ..config(SMF, Function::Cp)
+        })
+    };
+    let mut smf = of(true, false);
+    assert_eq!(
+        taken(&mut smf, UPF, report()),
+        Err(vec![ViolationKind::SessionWithoutAssociation])
+    );
+    let rejection = decoded(&sent(&mut smf)[0]);
+    assert_eq!(
+        rejection.body.cause(),
+        Some(CauseValue::NoEstablishedPfcpAssociation)
+    );
+    assert_eq!(taken(&mut of(false, true), UPF, report()), Ok(true));
+    assert_eq!(taken(&mut of(true, true), UPF, report()), Ok(true));
+}
+
 trait IntoSocket {
     fn into_socket(self, port: u16) -> SocketAddr;
 }
