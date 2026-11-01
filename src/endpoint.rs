@@ -521,6 +521,17 @@ impl Handle {
             .map_err(EndpointError::Node)
     }
 
+    /// Give back a sequence number of [`reserve_sequence`](Self::reserve_sequence)
+    /// ([`Node::release_sequence`]): `false` for one that is not reserved.
+    ///
+    /// # Errors
+    ///
+    /// The endpoint has ended.
+    pub async fn release_sequence(&self, sequence: u32) -> Result<bool, EndpointError> {
+        self.on(move |node, _| node.release_sequence(sequence))
+            .await
+    }
+
     /// The association with a peer ([`Node::association`]).
     ///
     /// # Errors

@@ -1057,7 +1057,8 @@ impl Node {
         }
     }
 
-    /// A sequence number that the node will not give, for a probe that sends its own.
+    /// A sequence number that the node will not give, for a probe that sends its own,
+    /// until [`release_sequence`](Self::release_sequence) gives it back.
     ///
     /// # Errors
     ///
@@ -1066,6 +1067,12 @@ impl Node {
         let sequence = self.next_free_sequence()?;
         self.reserved.insert(sequence);
         Ok(sequence)
+    }
+
+    /// Give back a sequence number of [`reserve_sequence`](Self::reserve_sequence): the
+    /// node gives it again. `false` for one that is not reserved.
+    pub fn release_sequence(&mut self, sequence: u32) -> bool {
+        self.reserved.remove(&sequence)
     }
 
     /// Send octets as they are: no sequence number, no retransmission, no matching. A
