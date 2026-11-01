@@ -233,11 +233,36 @@ pub(crate) enum Effect {
     Deleted,
 }
 
-/// A request that the node received: its octets, its response once given, and when the
+/// What tells a retransmission of a request from another request of its sequence number
+/// (§6.4): its length and a hash of its octets, the FO flag aside, as a retransmission
+/// need not be bundled as the first one was (§6.5 NOTE 3). A request kept for its
+/// retransmissions costs no more than this, whatever its length.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct Digest {
+    length: usize,
+    hash: u64,
+}
+
+impl Digest {
+    /// The digest of a request: FNV-1a of its octets.
+    pub(crate) fn of(octets: &[u8]) -> Self {
+        let mut hash = 0xcbf2_9ce4_8422_2325u64;
+        for (at, octet) in octets.iter().enumerate() {
+            let octet = if at == 0 { octet & !4 } else { *octet };
+            hash = (hash ^ u64::from(octet)).wrapping_mul(0x0100_0000_01b3);
+        }
+        Self {
+            length: octets.len(),
+            hash,
+        }
+    }
+}
+
+/// A request that the node received: its digest, its response once given, and when the
 /// response goes.
 #[derive(Clone)]
 pub(crate) struct Answered {
-    pub(crate) request: Vec<u8>,
+    pub(crate) request: Digest,
     pub(crate) response: Option<Vec<u8>>,
     /// The request, as the node gave it to the caller: an answer of another is not its.
     id: u64,
@@ -252,7 +277,7 @@ impl core::fmt::Debug for Answered {
     /// Their lengths only: a request or its answer may hold a key.
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         f.debug_struct("Answered")
-            .field("request", &format_args!("{} octets", self.request.len()))
+            .field("request", &self.request)
             .field(
                 "response",
                 &self.response.as_ref().map(|response| response.len()),
@@ -360,7 +385,7 @@ impl Answers {
     pub(crate) fn wait(
         &mut self,
         key: (SocketAddr, u32),
-        request: Vec<u8>,
+        request: Digest,
         id: u64,
         capacity: usize,
         stranger: bool,
@@ -409,7 +434,7 @@ impl Answers {
     pub(crate) fn reject(
         &mut self,
         key: (SocketAddr, u32),
-        request: Vec<u8>,
+        request: Digest,
         response: Vec<u8>,
         expires: Duration,
         capacity: usize,

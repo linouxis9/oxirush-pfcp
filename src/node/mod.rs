@@ -62,7 +62,7 @@ use crate::registry::*;
 use crate::values::*;
 use crate::values_gen::*;
 
-use state::{Answers, Change, Effect, Outstanding, Scope, Sessions};
+use state::{Answers, Change, Digest, Effect, Outstanding, Scope, Sessions};
 pub use state::{Association, LoadControl, OverloadControl, Session};
 
 /// The function of the node: it sets up sessions, or it has them set up.
@@ -499,14 +499,6 @@ fn fseid_peer(from: SocketAddr, fseid: &FSeid) -> SocketAddr {
         IpAddr::V6(_) => fseid.ipv6.map(IpAddr::V6),
     };
     SocketAddr::new(address.unwrap_or(from.ip()), from.port())
-}
-
-/// Whether two requests are the same message: a retransmission need not be bundled as
-/// the first one was (§6.5 NOTE 3), so the FO flag does not count.
-fn same_request(first: &[u8], again: &[u8]) -> bool {
-    first.len() == again.len()
-        && first.first().map(|flags| flags & !4) == again.first().map(|flags| flags & !4)
-        && first[1..] == again[1..]
 }
 
 /// A PFCP entity on one local endpoint.
@@ -1227,7 +1219,7 @@ impl Node {
         }
         let priority = header.priority.unwrap_or(self.config.default_priority);
         if let Some(answered) = self.answers.get(&(from, sequence)) {
-            match (same_request(&answered.request, octets), &answered.response) {
+            match (answered.request == Digest::of(octets), &answered.response) {
                 (true, Some(response)) => {
                     let transmit = Transmit {
                         to: from,
@@ -1337,7 +1329,7 @@ impl Node {
                 let key = (from, sequence);
                 let capacity = self.config.capacity;
                 self.answers
-                    .reject(key, octets.to_vec(), response.clone(), expires, capacity);
+                    .reject(key, Digest::of(octets), response.clone(), expires, capacity);
                 self.queue(Transmit {
                     to: from,
                     priority,
@@ -1574,7 +1566,7 @@ impl Node {
         let stranger = self.association_of(from).is_none();
         if !self.answers.wait(
             (from, sequence),
-            octets.to_vec(),
+            Digest::of(octets),
             inbound.id,
             self.config.capacity,
             stranger,
