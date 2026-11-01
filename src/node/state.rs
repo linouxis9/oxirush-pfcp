@@ -38,8 +38,8 @@ pub struct Association {
     pub(crate) set: SetOf,
 }
 
-/// What a CP function says of its SMF set in an Association Setup (§5.22): its
-/// features SSET and MPAS, and its SMF Set ID.
+/// What a peer says of its SMF set in an Association Setup (§5.22): the SSET and MPAS
+/// of the features of its function, and its SMF Set ID.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct SetOf {
     pub(crate) sset: bool,
@@ -48,14 +48,16 @@ pub(crate) struct SetOf {
 }
 
 impl SetOf {
-    /// What a setup or its response of a CP function says.
-    pub(crate) fn of(
-        features: Option<&crate::values_hand::CpFunctionFeatures>,
+    /// A peer's SMF set: the SSET and MPAS of the features of its function, and the FQDN
+    /// of its SMF Set ID.
+    pub(crate) fn new(
+        features: Option<(bool, bool)>,
         id: Option<&crate::values_hand::SmfSetId>,
     ) -> Self {
+        let (sset, mpas) = features.unwrap_or_default();
         Self {
-            sset: features.is_some_and(|features| features.sset),
-            mpas: features.is_some_and(|features| features.mpas),
+            sset,
+            mpas,
             id: id.map(|id| id.fqdn.0.clone()),
         }
     }

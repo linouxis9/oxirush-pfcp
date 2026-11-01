@@ -417,8 +417,9 @@ pub enum Event {
         sessions: Vec<u64>,
         /// The local SEIDs of its sessions that its SMF set keeps, with MPAS (§6.2.8): on a
         /// UP function those that another association of the set takes, on a CP function
-        /// all of them, which the caller ends unless another association of the set with
-        /// the UP function remains.
+        /// all of them when the UP function announced MPAS in its UP Function Features,
+        /// which the caller ends unless another association of the set with the UP
+        /// function remains.
         kept: Vec<u64>,
     },
     /// A peer whose Recovery Time Stamp changed: it restarted, and what the node kept of
@@ -1613,15 +1614,17 @@ impl Node {
                         .iter()
                         .any(|ie| ie.ie_type == 183 && ie.is_null()) =>
             {
-                let set = SetOf::of(
+                let set = self.set_of(
                     request.cp_function_features.as_ref(),
+                    request.up_function_features.as_ref(),
                     request.smf_set_id.as_ref(),
                 );
                 Effect::Setup(Some(Vec::new()), set)
             }
             Body::AssociationSetupRequest(request) => {
-                let set = SetOf::of(
+                let set = self.set_of(
                     request.cp_function_features.as_ref(),
+                    request.up_function_features.as_ref(),
                     request.smf_set_id.as_ref(),
                 );
                 let retained =
@@ -1923,6 +1926,30 @@ impl Node {
         SocketAddr::new(from.ip(), self.config.request_port.unwrap_or(from.port()))
     }
 
+    /// The SSET and MPAS that a peer says of itself: in its CP Function Features
+    /// (§8.2.58) to a UP function, and in its UP Function Features (§8.2.25) to a CP
+    /// function. `None` when it says none.
+    fn features_of(
+        &self,
+        cp: Option<&crate::CpFunctionFeatures>,
+        up: Option<&crate::UpFunctionFeatures>,
+    ) -> Option<(bool, bool)> {
+        match self.config.function {
+            Function::Up => cp.map(|features| (features.sset, features.mpas)),
+            Function::Cp => up.map(|features| (features.sset, features.mpas)),
+        }
+    }
+
+    /// The SMF set that a peer says it is of in its Association Setup Request or Response.
+    fn set_of(
+        &self,
+        cp: Option<&crate::CpFunctionFeatures>,
+        up: Option<&crate::UpFunctionFeatures>,
+        id: Option<&crate::SmfSetId>,
+    ) -> SetOf {
+        SetOf::new(self.features_of(cp, up), id)
+    }
+
     /// Answer a request that does not decode, when its header says that it is one:
     /// "Invalid length" (§7.6.3, §7.6.7), with the IE when the node knows it. A header
     /// of the node's own, which copies none of the faults of the request's.
@@ -2207,9 +2234,13 @@ impl Node {
         match &message.body {
             Body::AssociationSetupResponse(response) if accepted => {
                 if let Some(node_id) = &response.node_id {
-                    // Of the set that a CP function says in its answer (§5.22.3, bullet 1).
-                    let set = SetOf::of(
+                    // The set that the peer answers with (§5.22): an SMF's CP Function
+                    // Features and SMF Set ID to a UPF that sets the association up (§5.22.3
+                    // bullet 1), a UPF's UP Function Features to an SMF, whose MPAS says
+                    // whether a release keeps the sessions on the CP side (§6.2.8.2).
+                    let set = self.set_of(
                         response.cp_function_features.as_ref(),
+                        response.up_function_features.as_ref(),
                         response.smf_set_id.as_ref(),
                     );
                     self.associate(now, from, node_id.clone(), None, set);
@@ -2495,7 +2526,11 @@ impl Node {
                 .map(|other| other.key.clone()),
             _ => None,
         };
-        let keeps = heir.is_some() || (mpas && self.config.function == Function::Cp);
+        // A CP function sees only its own association with the UPF, so it keeps the
+        // sessions when both it and the UPF use MPAS, for its caller to end when no other
+        // association of the set remains; a UPF that did not announce MPAS means no set.
+        let keeps = heir.is_some()
+            || (mpas && self.config.function == Function::Cp && association.set.mpas);
         let (kept, ended) = match keeps {
             true => (of_it, Vec::new()),
             false => (Vec::new(), of_it),
