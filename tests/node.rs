@@ -2765,21 +2765,33 @@ fn a_later_answer_has_no_effect_after_keep_or_eviction() {
     }
 }
 
-/// A request that waits for its answer stays past `keep`: its retransmission is no new
-/// request, and the late answer has its effect.
+/// A request that waits for its answer more than `keep` is forgotten, by when its peer
+/// has given it up: its retransmission comes again as a new request, the late answer of
+/// the first is refused and has no effect, and the place of a host without an
+/// association is free again.
 #[test]
-fn a_request_waits_past_keep() {
+fn a_request_that_waits_past_keep_is_forgotten() {
     let mut upf = Node::new(NodeConfig {
         keep: Duration::from_secs(5),
+        strangers: 1,
         ..config(UPF, Function::Up)
     });
     let setup = setup_of(SMF, 1, 1000);
     upf.handle_datagram(at(0), SMF, &setup);
-    let (inbound, _) = request(&mut upf);
+    let (first, _) = request(&mut upf);
+    upf.handle_datagram(at(1), OTHER, &setup_of(OTHER, 1, 1000));
+    assert_eq!(requests_of(&events(&mut upf)), 0, "no place for another");
     upf.handle_datagram(at(6), SMF, &setup);
-    assert_eq!(requests_of(&events(&mut upf)), 0);
-    upf.respond(at(7), &inbound, setup_answer()).unwrap();
+    let (again, _) = request(&mut upf);
+    assert_eq!(
+        upf.respond(at(7), &first, setup_answer()),
+        Err(NodeError::Answered)
+    );
+    assert!(upf.association(SMF).is_none());
+    upf.respond(at(7), &again, setup_answer()).unwrap();
     assert!(upf.association(SMF).is_some());
+    upf.handle_datagram(at(7), OTHER, &setup_of(OTHER, 2, 1000));
+    assert_eq!(requests_of(&events(&mut upf)), 1, "the place is free again");
 }
 
 /// A request of a host is of an association that is the host's: a host that names the

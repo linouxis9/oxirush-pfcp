@@ -91,8 +91,10 @@ pub struct NodeConfig {
     /// How often a Heartbeat Request goes to each associated peer: `None` for never, and
     /// at least every millisecond, which a shorter interval is taken as.
     pub heartbeat: Option<Duration>,
-    /// How long an answered request is kept, to answer its retransmissions, and a
-    /// finished request, to tell a duplicate or late response.
+    /// How long an answered request is kept, to answer its retransmissions, a request
+    /// waits for the caller's answer, past which the node forgets it, and a finished
+    /// request is kept, to tell a duplicate or late response. Its peer has given the
+    /// request up after (N1 + 1) x T1 of its own.
     pub keep: Duration,
     /// The priority of a request that has none (§6.2.4.5.2): 0 the highest, to 15.
     pub default_priority: u8,
@@ -104,7 +106,8 @@ pub struct NodeConfig {
     /// How many requests of the peers the node keeps for their retransmissions, and how
     /// many Recovery Time Stamps of peers without an association, so that a flood of
     /// datagrams bounds what the node holds. A request that waits for its answer stays
-    /// until the caller answers or forgets it ([`Node::forget`]); beyond it, a rejection of
+    /// until the caller answers or forgets it ([`Node::forget`]), or `keep` has passed;
+    /// beyond it, a rejection of
     /// the node's own goes first, then the oldest answer, and a request that finds every
     /// place waiting is dropped: [`Node::counters`] counts both. A Heartbeat Request is
     /// answered from the state, and not kept.
@@ -1568,6 +1571,7 @@ impl Node {
             (from, sequence),
             Digest::of(octets),
             inbound.id,
+            now.saturating_add(self.config.keep),
             self.config.capacity,
             stranger,
         ) {

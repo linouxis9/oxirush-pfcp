@@ -139,6 +139,19 @@ async fn an_smf_and_a_upf_set_up_an_association_and_a_session() {
     );
 }
 
+/// Poll a future once, and drop it: a caller that cancels it before the task of the
+/// endpoint runs.
+async fn once<F: std::future::Future>(future: F) -> Option<F::Output> {
+    let mut future = std::pin::pin!(future);
+    std::future::poll_fn(|context| {
+        std::task::Poll::Ready(match future.as_mut().poll(context) {
+            std::task::Poll::Ready(output) => Some(output),
+            std::task::Poll::Pending => None,
+        })
+    })
+    .await
+}
+
 /// Answer an Association Setup Request, a Node Report Request and a Session
 /// Establishment Request of the peer.
 async fn answer(handle: &Handle, incoming: Incoming) {
@@ -421,6 +434,58 @@ async fn a_dropped_incoming_is_forgotten() {
         .expect("the retransmission, as a new request")
         .unwrap();
     assert_eq!(again.request.sequence, 9);
+}
+
+/// An answer that the caller cancels while it waits for room, or that a probe sends in
+/// vain, leaves its request unanswered: the Incoming dropped, its retransmission comes
+/// again.
+#[tokio::test]
+async fn an_answer_in_vain_leaves_its_request_unanswered() {
+    let queues = Queues {
+        commands: 1,
+        incoming: 16,
+        events: 16,
+    };
+    let mut upf = Endpoint::bind_with(ANY, config(Function::Up), queues)
+        .await
+        .unwrap();
+    let handle = upf.handle();
+    let peer = tokio::net::UdpSocket::bind(ANY).await.unwrap();
+    let answer = || {
+        AssociationSetupResponse::new(
+            NodeId::Ipv4(Ipv4Addr::LOCALHOST),
+            accepted(),
+            RecoveryTimeStamp::new(7),
+        )
+    };
+    peer.send_to(&setup(1), upf.local_addr()).await.unwrap();
+    let incoming = upf.incoming().await.unwrap();
+    // A command that fills the queue, which the task has not taken yet, and the answer,
+    // which waits for room, cancelled
+    assert!(once(handle.counters()).await.is_none());
+    assert!(once(incoming.respond(answer())).await.is_none());
+    peer.send_to(&setup(1), upf.local_addr()).await.unwrap();
+    let mut again = tokio::time::timeout(Duration::from_millis(500), upf.incoming())
+        .await
+        .expect("the retransmission, as a request")
+        .unwrap();
+    assert_eq!(again.request.sequence, 1);
+    // A probe's answer that does not encode: a priority of more than 4 bits
+    let broken = Message {
+        header: Header {
+            priority: Some(16),
+            ..Header::node(1)
+        },
+        body: answer().into(),
+    };
+    assert!(again.respond_message(broken, Delivery::Send).await.is_err());
+    drop(again);
+    peer.send_to(&setup(1), upf.local_addr()).await.unwrap();
+    let last = tokio::time::timeout(Duration::from_millis(500), upf.incoming())
+        .await
+        .expect("the retransmission, again")
+        .unwrap();
+    last.respond(answer()).await.unwrap();
 }
 
 /// An answer that does not encode, or that is not the request's response, is an error
