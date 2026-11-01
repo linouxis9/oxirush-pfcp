@@ -287,7 +287,8 @@ fn other_vectors_round_trip() {
     let file = std::env::var("PFCP_VECTORS").expect("PFCP_VECTORS names the file of the vectors");
     let (mut read, mut reordered) = (0, 0);
     let mut found = Vec::new();
-    for line in std::fs::read_to_string(file).unwrap().lines() {
+    let vectors = std::fs::read_to_string(file).unwrap();
+    for line in vectors.lines() {
         let fields: Vec<&str> = line.split('\t').collect();
         let octets = hex::decode(fields[2]).unwrap();
         let messages: Vec<Message> = Message::decode_datagram(&octets)
@@ -346,6 +347,23 @@ fn other_vectors_round_trip() {
         "{read} messages read by their tables, {reordered} of them not in the order of their tables"
     );
     assert!(read > 0, "no vector in the file");
+    // What tests/README.md says of them
+    let said = include_str!("README.md")
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    for count in [
+        format!(
+            "the {} vectors of go-pfcp's message tests",
+            vectors.lines().count()
+        ),
+        format!("{reordered} of them have their IEs in another order"),
+    ] {
+        assert!(
+            said.contains(&count),
+            "tests/README.md does not say: {count}"
+        );
+    }
     let mut expected: Vec<&str> = include_str!("go-pfcp-deviations.tsv")
         .lines()
         .filter(|line| !line.starts_with('#') && !line.is_empty())
@@ -958,7 +976,10 @@ fn the_unknown_octets_of_an_ie() {
     let mut precedence = Precedence::new(1);
     precedence.extra = Octets::copied(&[0xaa]);
     let tree = tree::Tree::to_tree(&precedence);
-    assert_eq!(tree.to_string(), r#"{"Precedence value":1,"unknown octets":"aa"}"#);
+    assert_eq!(
+        tree.to_string(),
+        r#"{"Precedence value":1,"unknown octets":"aa"}"#
+    );
     assert_eq!(tree::from_value::<Precedence>(&tree).unwrap(), precedence);
 }
 
