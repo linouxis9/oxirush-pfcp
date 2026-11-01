@@ -254,10 +254,11 @@ impl Message {
                 DeviationKind::Rule("a node related message is bundled"),
             ));
         }
-        // An establishment has SEID 0, the peer's SEID being not known yet, but on N4mb.
+        // An establishment has SEID 0, the peer's SEID being not known yet, but on N4mb,
+        // which a set of interfaces with it allows.
         if message_type == 50
             && header.seid.is_some_and(|seid| seid != 0)
-            && !Interfaces::N4MB.has_all(interface)
+            && !interface.has(Interfaces::N4MB)
         {
             found.push(Deviation::new(
                 path,

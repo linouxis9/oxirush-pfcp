@@ -1226,3 +1226,53 @@ fn flags_and_seids_that_do_not_go_together() {
         ["a Session Establishment Request of a SEID other than 0"]
     );
 }
+
+/// Unknown octets after an Extendable IE pass (§8.1.2), but those of a TEID and the
+/// addresses after an F-TEID with CH; and an establishment's SEID other than 0 is of
+/// N4mb, on N4mb or on a set with it.
+#[test]
+fn what_the_new_rules_let_pass() {
+    let rules = |octets: &[u8], interface: Interfaces| -> Vec<&'static str> {
+        let message = Message::decode(octets).unwrap();
+        message
+            .check(interface)
+            .into_iter()
+            .filter_map(|deviation| match deviation.kind {
+                DeviationKind::Rule(rule) => Some(rule),
+                _ => None,
+            })
+            .collect()
+    };
+    let establishment = |seid, pdi: Vec<u8>| {
+        let pdr = ie(
+            1,
+            &[ie(56, &[0, 1]), ie(29, &[0, 0, 0, 255]), ie(2, &pdi)].concat(),
+        );
+        let far = ie(3, &[ie(108, &[0, 0, 0, 1]), ie(44, &[1, 0])].concat());
+        let node = ie(60, &[0, 10, 0, 0, 1]);
+        let f_seid = ie(57, &[2, 0, 0, 0, 0, 0, 0, 0, 1, 10, 0, 0, 1]);
+        session_message(50, seid, &[node, f_seid, pdr, far])
+    };
+    let source = ie(20, &[0]);
+    // CH, CHID and its CHOOSE ID, then an octet of a later release
+    let later = ie(21, &[0x0d, 7, 0xaa]);
+    assert!(
+        rules(
+            &establishment(0, [source.clone(), later].concat()),
+            Interfaces::N4
+        )
+        .is_empty()
+    );
+    // CH and V4, then a TEID and an IPv4 address
+    let teid = ie(21, &[0x05, 0, 0, 0, 1, 10, 0, 0, 2]);
+    assert_eq!(
+        rules(
+            &establishment(0, [source.clone(), teid].concat()),
+            Interfaces::N4
+        ),
+        ["CH is set, and octets of a TEID or an address follow"]
+    );
+    for interface in [Interfaces::N4MB, Interfaces::N4 | Interfaces::N4MB] {
+        assert!(rules(&establishment(5, source.clone()), interface).is_empty());
+    }
+}
