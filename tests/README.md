@@ -49,7 +49,7 @@ committed, for `PFCP_VECTORS`:
 
 ```sh
 python3 tests/go-pfcp-vectors.py "$(go mod download -json github.com/wmnsk/go-pfcp@v0.0.24 | jq -r .Dir)" /tmp/vectors.tsv
-PFCP_VECTORS=/tmp/vectors.tsv cargo test --all-features --test codec other_vectors -- --nocapture
+PFCP_VECTORS=/tmp/vectors.tsv cargo test --all-features --test codec other_vectors -- --ignored --nocapture
 ```
 
 Each decodes and encodes back byte for byte, and its tree reads back. 16 of them have
@@ -65,7 +65,9 @@ Session Establishment Request; Table 7.5.2.1-1 has Create BAR on Sxa and N4 only
 `smf_n4_build_session_establishment_request()` (`src/smf/n4-build.c`) sends it whatever
 the interface. The test `captures` expects it.
 
-**go-pfcp v0.0.24**, in its test vectors:
+**go-pfcp v0.0.24**, in its test vectors, which `go-pfcp-deviations.tsv` lists as the
+test `codec` expects them (`other_vectors_round_trip`, with `--ignored` and
+`PFCP_VECTORS`):
 
 - The UE IP address Pool Identity has a length of one octet, and §8.2.128 has two: the
   IE does not decode, in UE IP address Pool Information, Create PDR and UE IP Address

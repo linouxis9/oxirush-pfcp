@@ -1,0 +1,108 @@
+# What check() finds in the vectors of go-pfcp v0.0.24, which the test other_vectors_round_trip
+# of tests/codec.rs expects, one line each: the file of the vector, its name, and the
+# deviation. README.md, "What the crate finds in others", says why each is one.
+association-setup-request_test.go	Single IEs	spare bits are not zero (TS 29.244 8.1.2), at /pfcp/SMF Set ID
+association-setup-request_test.go	Single IEs	the mandatory UE IP address Pool Identity does not decode (TS 29.244 7.4.4.1-3), at /pfcp/UE IP address Pool Information/0/UE IP address Pool Identity
+association-setup-request_test.go	Single IEs	Measurement Method is no IE of this table (TS 29.244 7.6.9), at /pfcp/GTP-U Path QoS Control Information/0/Measurement Method
+association-setup-request_test.go	Multiple IEs	IE type 116 is in no table of Release 19 (TS 29.244 8.1.2), at /pfcp/116
+association-setup-request_test.go	Multiple IEs	IE type 116 is in no table of Release 19 (TS 29.244 8.1.2), at /pfcp/116
+association-setup-request_test.go	Multiple IEs	spare bits are not zero (TS 29.244 8.1.2), at /pfcp/SMF Set ID
+association-setup-request_test.go	Multiple IEs	the mandatory UE IP address Pool Identity does not decode (TS 29.244 7.4.4.1-3), at /pfcp/UE IP address Pool Information/0/UE IP address Pool Identity
+association-setup-request_test.go	Multiple IEs	the mandatory UE IP address Pool Identity does not decode (TS 29.244 7.4.4.1-3), at /pfcp/UE IP address Pool Information/1/UE IP address Pool Identity
+association-setup-request_test.go	Multiple IEs	Measurement Method is no IE of this table (TS 29.244 7.6.9), at /pfcp/GTP-U Path QoS Control Information/0/Measurement Method
+association-setup-request_test.go	Multiple IEs	Measurement Method is no IE of this table (TS 29.244 7.6.9), at /pfcp/GTP-U Path QoS Control Information/1/Measurement Method
+association-setup-response_test.go	Single IE	the mandatory UE IP address Pool Identity does not decode (TS 29.244 7.4.4.1-3), at /pfcp/UE IP address Pool Information/0/UE IP address Pool Identity
+association-setup-response_test.go	Single IE	Measurement Method is no IE of this table (TS 29.244 7.6.9), at /pfcp/GTP-U Path QoS Control Information/0/Measurement Method
+association-setup-response_test.go	Multiple IEs	the mandatory UE IP address Pool Identity does not decode (TS 29.244 7.4.4.1-3), at /pfcp/UE IP address Pool Information/0/UE IP address Pool Identity
+association-setup-response_test.go	Multiple IEs	the mandatory UE IP address Pool Identity does not decode (TS 29.244 7.4.4.1-3), at /pfcp/UE IP address Pool Information/1/UE IP address Pool Identity
+association-setup-response_test.go	Multiple IEs	Measurement Method is no IE of this table (TS 29.244 7.6.9), at /pfcp/GTP-U Path QoS Control Information/0/Measurement Method
+association-setup-response_test.go	Multiple IEs	Measurement Method is no IE of this table (TS 29.244 7.6.9), at /pfcp/GTP-U Path QoS Control Information/1/Measurement Method
+association-update-request_test.go	Single IE	the mandatory UE IP address Pool Identity does not decode (TS 29.244 7.4.4.1-3), at /pfcp/UE IP address Pool Information/0/UE IP address Pool Identity
+association-update-request_test.go	Single IE	Measurement Method is no IE of this table (TS 29.244 7.6.9), at /pfcp/GTP-U Path QoS Control Information/0/Measurement Method
+association-update-request_test.go	Single IE	UE IP address Pool Identity does not decode, and is taken as absent (TS 29.244 7.6.8), at /pfcp/UE IP Address Usage Information/0/UE IP Address Pool Id
+association-update-request_test.go	Multiple IEs	the mandatory UE IP address Pool Identity does not decode (TS 29.244 7.4.4.1-3), at /pfcp/UE IP address Pool Information/0/UE IP address Pool Identity
+association-update-request_test.go	Multiple IEs	the mandatory UE IP address Pool Identity does not decode (TS 29.244 7.4.4.1-3), at /pfcp/UE IP address Pool Information/1/UE IP address Pool Identity
+association-update-request_test.go	Multiple IEs	Measurement Method is no IE of this table (TS 29.244 7.6.9), at /pfcp/GTP-U Path QoS Control Information/0/Measurement Method
+association-update-request_test.go	Multiple IEs	Measurement Method is no IE of this table (TS 29.244 7.6.9), at /pfcp/GTP-U Path QoS Control Information/1/Measurement Method
+association-update-request_test.go	Multiple IEs	UE IP address Pool Identity does not decode, and is taken as absent (TS 29.244 7.6.8), at /pfcp/UE IP Address Usage Information/0/UE IP Address Pool Id
+generic_test.go	Normal	the mandatory Node ID is missing (TS 29.244 7.5.2.1-1), at /pfcp/Node ID: the answer is "Mandatory IE missing"
+generic_test.go	Normal	the mandatory F-SEID is missing (TS 29.244 7.5.2.1-1), at /pfcp/CP F-SEID: the answer is "Mandatory IE missing"
+generic_test.go	Normal	the mandatory Create PDR is missing (TS 29.244 7.5.2.1-1), at /pfcp/Create PDR: the answer is "Mandatory IE missing"
+generic_test.go	Normal	the mandatory Create FAR is missing (TS 29.244 7.5.2.1-1), at /pfcp/Create FAR: the answer is "Mandatory IE missing"
+generic_test.go	Normal	Application ID is no IE of this table (TS 29.244 7.6.9), at /pfcp/Application ID
+generic_test.go	No-SEID	the mandatory Recovery Time Stamp is missing (TS 29.244 7.4.2.1-1), at /pfcp/Recovery Time Stamp
+generic_test.go	No-SEID	Application ID is no IE of this table (TS 29.244 7.6.9), at /pfcp/Application ID
+header_test.go	Session	the mandatory Node ID is missing (TS 29.244 7.5.2.1-1), at /pfcp/Node ID: the answer is "Mandatory IE missing"
+header_test.go	Session	the mandatory F-SEID is missing (TS 29.244 7.5.2.1-1), at /pfcp/CP F-SEID: the answer is "Mandatory IE missing"
+header_test.go	Session	the mandatory Create PDR is missing (TS 29.244 7.5.2.1-1), at /pfcp/Create PDR: the answer is "Mandatory IE missing"
+header_test.go	Session	the mandatory Create FAR is missing (TS 29.244 7.5.2.1-1), at /pfcp/Create FAR: the answer is "Mandatory IE missing"
+header_test.go	Session	Application ID is no IE of this table (TS 29.244 7.6.9), at /pfcp/Application ID
+node-report-request_test.go	Single IE	Time Offset Threshold is no IE of this table (TS 29.244 7.6.9), at /pfcp/Clock Drift Report/0/Time Offset Threshold
+node-report-request_test.go	Single IE	Cumulative rateRatio Threshold is no IE of this table (TS 29.244 7.6.9), at /pfcp/Clock Drift Report/0/Cumulative rateRatio Threshold
+node-report-request_test.go	Multiple IEs	Time Offset Threshold is no IE of this table (TS 29.244 7.6.9), at /pfcp/Clock Drift Report/0/Time Offset Threshold
+node-report-request_test.go	Multiple IEs	Cumulative rateRatio Threshold is no IE of this table (TS 29.244 7.6.9), at /pfcp/Clock Drift Report/0/Cumulative rateRatio Threshold
+node-report-request_test.go	Multiple IEs	Time Offset Threshold is no IE of this table (TS 29.244 7.6.9), at /pfcp/Clock Drift Report/1/Time Offset Threshold
+node-report-request_test.go	Multiple IEs	Cumulative rateRatio Threshold is no IE of this table (TS 29.244 7.6.9), at /pfcp/Clock Drift Report/1/Cumulative rateRatio Threshold
+session-deletion-response_test.go	Single IE	spare bits are not zero (TS 29.244 8.1.2), at /pfcp/Usage Report/0/Usage Report Trigger
+session-deletion-response_test.go	Multiple IEs	spare bits are not zero (TS 29.244 8.1.2), at /pfcp/Usage Report/0/Usage Report Trigger
+session-deletion-response_test.go	Multiple IEs	spare bits are not zero (TS 29.244 8.1.2), at /pfcp/Usage Report/1/Usage Report Trigger
+session-establishment-request_test.go	Single IE	UE IP address Pool Identity does not decode, and is taken as absent (TS 29.244 7.6.8), at /pfcp/Create PDR/0/UE IP address Pool Identity
+session-establishment-request_test.go	Single IE	spare bits are not zero (TS 29.244 8.1.2), at /pfcp/Create PDR/0/Outer Header Removal
+session-establishment-request_test.go	Single IE	Redundant Transmission Parameters is no IE of this table (TS 29.244 7.6.9), at /pfcp/Create FAR/0/Redundant Transmission Parameters
+session-establishment-request_test.go	Single IE	spare bits are not zero (TS 29.244 8.1.2), at /pfcp/Create QER/0/QER Control Indications
+session-establishment-request_test.go	Multiple IEs	UE IP address Pool Identity does not decode, and is taken as absent (TS 29.244 7.6.8), at /pfcp/Create PDR/0/UE IP address Pool Identity
+session-establishment-request_test.go	Multiple IEs	spare bits are not zero (TS 29.244 8.1.2), at /pfcp/Create PDR/0/Outer Header Removal
+session-establishment-request_test.go	Multiple IEs	UE IP address Pool Identity does not decode, and is taken as absent (TS 29.244 7.6.8), at /pfcp/Create PDR/1/UE IP address Pool Identity
+session-establishment-request_test.go	Multiple IEs	spare bits are not zero (TS 29.244 8.1.2), at /pfcp/Create PDR/1/Outer Header Removal
+session-establishment-request_test.go	Multiple IEs	Redundant Transmission Parameters is no IE of this table (TS 29.244 7.6.9), at /pfcp/Create FAR/0/Redundant Transmission Parameters
+session-establishment-request_test.go	Multiple IEs	spare bits are not zero (TS 29.244 8.1.2), at /pfcp/Create QER/0/QER Control Indications
+session-establishment-response_test.go	Single IE	Provide ATSSS Control Information is no IE of this table (TS 29.244 7.6.9), at /pfcp/Provide ATSSS Control Information
+session-establishment-response_test.go	Single IE	NW-TT Port Number is no IE of this table (TS 29.244 7.6.9), at /pfcp/Created Bridge/Router Info/NW-TT Port Number
+session-establishment-response_test.go	Single IE	5GS User Plane Node ID does not decode, and is taken as absent (TS 29.244 7.6.8), at /pfcp/Created Bridge/Router Info/5GS User Plane Node ID
+session-establishment-response_test.go	Multiple IEs	Provide ATSSS Control Information is no IE of this table (TS 29.244 7.6.9), at /pfcp/Provide ATSSS Control Information
+session-establishment-response_test.go	Multiple IEs	NW-TT Port Number is no IE of this table (TS 29.244 7.6.9), at /pfcp/Created Bridge/Router Info/NW-TT Port Number
+session-modification-request_test.go	Single IE	UE IP address Pool Identity does not decode, and is taken as absent (TS 29.244 7.6.8), at /pfcp/Create PDR/0/UE IP address Pool Identity
+session-modification-request_test.go	Single IE	spare bits are not zero (TS 29.244 8.1.2), at /pfcp/Create PDR/0/Outer Header Removal
+session-modification-request_test.go	Single IE	Redundant Transmission Parameters is no IE of this table (TS 29.244 7.6.9), at /pfcp/Create FAR/0/Redundant Transmission Parameters
+session-modification-request_test.go	Single IE	spare bits are not zero (TS 29.244 8.1.2), at /pfcp/Create QER/0/QER Control Indications
+session-modification-request_test.go	Single IE	spare bits are not zero (TS 29.244 8.1.2), at /pfcp/Update PDR/0/Outer Header Removal
+session-modification-request_test.go	Single IE	Redundant Transmission Parameters is no IE of this table (TS 29.244 7.6.9), at /pfcp/Update FAR/0/Redundant Transmission Parameters
+session-modification-request_test.go	Single IE	Packet Rate Status is no IE of this table (TS 29.244 7.6.9), at /pfcp/Update QER/0/Packet Rate Status
+session-modification-request_test.go	Single IE	spare bits are not zero (TS 29.244 8.1.2), at /pfcp/Update QER/0/QER Control Indications
+session-modification-request_test.go	Single IE	3 is a spare value (TS 29.244 8.2.153), at /pfcp/Access Availability Information/0
+session-modification-request_test.go	Single IE	3 is a spare value (TS 29.244 8.2.153), at /pfcp/Access Availability Information/0
+session-modification-request_test.go	Single IE	the message changes PDR 65535 more than once (TS 29.244 6.3.3.2), at /pfcp
+session-modification-request_test.go	Single IE	the message changes FAR 4294967295 more than once (TS 29.244 6.3.3.2), at /pfcp
+session-modification-request_test.go	Single IE	the message changes URR 4294967295 more than once (TS 29.244 6.3.3.2), at /pfcp
+session-modification-request_test.go	Single IE	the message changes QER 4294967295 more than once (TS 29.244 6.3.3.2), at /pfcp
+session-modification-request_test.go	Single IE	the message changes BAR 255 more than once (TS 29.244 6.3.3.2), at /pfcp
+session-modification-request_test.go	Single IE	the message changes MAR 4369 more than once (TS 29.244 6.3.3.2), at /pfcp
+session-modification-request_test.go	Single IE	the message changes SRR 255 more than once (TS 29.244 6.3.3.2), at /pfcp
+session-modification-request_test.go	Multiple IEs	UE IP address Pool Identity does not decode, and is taken as absent (TS 29.244 7.6.8), at /pfcp/Create PDR/0/UE IP address Pool Identity
+session-modification-request_test.go	Multiple IEs	spare bits are not zero (TS 29.244 8.1.2), at /pfcp/Create PDR/0/Outer Header Removal
+session-modification-request_test.go	Multiple IEs	UE IP address Pool Identity does not decode, and is taken as absent (TS 29.244 7.6.8), at /pfcp/Create PDR/1/UE IP address Pool Identity
+session-modification-request_test.go	Multiple IEs	spare bits are not zero (TS 29.244 8.1.2), at /pfcp/Create PDR/1/Outer Header Removal
+session-modification-request_test.go	Multiple IEs	Redundant Transmission Parameters is no IE of this table (TS 29.244 7.6.9), at /pfcp/Create FAR/0/Redundant Transmission Parameters
+session-modification-request_test.go	Multiple IEs	spare bits are not zero (TS 29.244 8.1.2), at /pfcp/Create QER/0/QER Control Indications
+session-modification-request_test.go	Multiple IEs	spare bits are not zero (TS 29.244 8.1.2), at /pfcp/Update PDR/0/Outer Header Removal
+session-modification-request_test.go	Multiple IEs	Redundant Transmission Parameters is no IE of this table (TS 29.244 7.6.9), at /pfcp/Update FAR/0/Redundant Transmission Parameters
+session-modification-request_test.go	Multiple IEs	Packet Rate Status is no IE of this table (TS 29.244 7.6.9), at /pfcp/Update QER/0/Packet Rate Status
+session-modification-request_test.go	Multiple IEs	spare bits are not zero (TS 29.244 8.1.2), at /pfcp/Update QER/0/QER Control Indications
+session-modification-request_test.go	Multiple IEs	3 is a spare value (TS 29.244 8.2.153), at /pfcp/Access Availability Information/0
+session-modification-request_test.go	Multiple IEs	3 is a spare value (TS 29.244 8.2.153), at /pfcp/Access Availability Information/0
+session-modification-request_test.go	Multiple IEs	the message changes PDR 65535 more than once (TS 29.244 6.3.3.2), at /pfcp
+session-modification-request_test.go	Multiple IEs	the message changes FAR 4294967295 more than once (TS 29.244 6.3.3.2), at /pfcp
+session-modification-request_test.go	Multiple IEs	the message changes URR 4294967295 more than once (TS 29.244 6.3.3.2), at /pfcp
+session-modification-request_test.go	Multiple IEs	the message changes QER 4294967295 more than once (TS 29.244 6.3.3.2), at /pfcp
+session-modification-request_test.go	Multiple IEs	the message changes BAR 255 more than once (TS 29.244 6.3.3.2), at /pfcp
+session-modification-request_test.go	Multiple IEs	the message changes MAR 4369 more than once (TS 29.244 6.3.3.2), at /pfcp
+session-modification-request_test.go	Multiple IEs	the message changes SRR 255 more than once (TS 29.244 6.3.3.2), at /pfcp
+session-modification-response_test.go	Single IE	Created Bridge/Router Info is no IE of this table (TS 29.244 7.6.9), at /pfcp/Created Bridge/Router Info
+session-modification-response_test.go	Single IE	spare bits are not zero (TS 29.244 8.1.2), at /pfcp/Usage Report/0/Usage Report Trigger
+session-modification-response_test.go	Multiple IEs	Created Bridge/Router Info is no IE of this table (TS 29.244 7.6.9), at /pfcp/Created Bridge/Router Info
+session-modification-response_test.go	Multiple IEs	spare bits are not zero (TS 29.244 8.1.2), at /pfcp/Usage Report/0/Usage Report Trigger
+session-report-request_test.go	Single IE	spare bits are not zero (TS 29.244 8.1.2), at /pfcp/Usage Report/0/Usage Report Trigger
+session-report-request_test.go	Single IE	Access Availability Control Information is no IE of this table (TS 29.244 7.6.9), at /pfcp/Session Report/0/Access Availability Control Information
+session-report-request_test.go	Multiple IEs	spare bits are not zero (TS 29.244 8.1.2), at /pfcp/Usage Report/0/Usage Report Trigger
+session-report-request_test.go	Multiple IEs	Access Availability Control Information is no IE of this table (TS 29.244 7.6.9), at /pfcp/Session Report/0/Access Availability Control Information
+session-report-request_test.go	Multiple IEs	Access Availability Control Information is no IE of this table (TS 29.244 7.6.9), at /pfcp/Session Report/1/Access Availability Control Information
