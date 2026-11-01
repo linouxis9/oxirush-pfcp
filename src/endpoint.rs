@@ -245,8 +245,9 @@ impl Endpoint {
         })
     }
 
-    /// End the task of the endpoint, and wait until it has freed its socket. The
-    /// requests that wait for their responses end with [`EndpointError::Closed`].
+    /// End the task of the endpoint, and wait until it has freed its socket. A request of
+    /// the endpoint borrows it, so that none waits for its response then; the answer of
+    /// an [`Incoming`] that comes after ends with [`EndpointError::Closed`].
     pub async fn close(self) {
         let Self {
             commands,
