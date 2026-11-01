@@ -91,6 +91,15 @@ impl Errata {
     }
 }
 
+/// How many IEs of a row may be there, as tables.tsv has it: once, several, or a number.
+fn repetition(cell: &str) -> Repeat {
+    match cell {
+        "once" => Repeat::Once,
+        "several" => Repeat::Any,
+        number => Repeat::AtMost(number.parse().expect("once, several or a number")),
+    }
+}
+
 /// The bits of the interfaces that `names` names: 0 for none.
 fn interfaces(names: &str) -> u8 {
     names.split_whitespace().fold(0, |bits, name| {
@@ -307,9 +316,10 @@ type DocumentTable = (
 /// and whether a row of the document is it.
 type CrateRow = (usize, &'static str, Presence, Interfaces, u16, Cell<bool>);
 
-/// The tables of clause 7: each row, with its name, its presence, its interfaces and its
-/// IE type, in the order of the table; a field that rows of one IE type share has them
-/// as its roles.
+/// The tables of clause 7: each row, with its name, its presence, its interfaces, its IE
+/// type and how many IEs of it may be there, in the order of the table; a field that
+/// rows of one IE type share has them as its roles, the strongest of their presences and
+/// as many IEs as they are.
 #[test]
 fn tables() {
     let errata = Errata::new();
@@ -440,6 +450,7 @@ fn tables() {
             }
         }
         let mut first_of_field = vec![usize::MAX; table.rows.len()];
+        let mut shared: BTreeMap<usize, Vec<&str>> = BTreeMap::new();
         for (at, (name, p, ifs, ie_type, several)) in rows.iter().enumerate() {
             let Some(entry) = entries
                 .iter()
@@ -459,10 +470,13 @@ fn tables() {
             if entry.3.bits() != interfaces(ifs) {
                 problems.push(format!("Table {id}, row {name:?}: interfaces {:?} in the crate, {ifs:?} in the document", entry.3));
             }
-            // A field that rows share is a list of their IEs; another is a list where its
-            // comment lets several IEs be there.
+            // A field that rows share is a list of their IEs, as many as they are; another
+            // is a list where its comment lets several IEs be there, of the number that
+            // it says.
             let field = &table.rows[entry.0];
-            if field.roles.is_empty() && (field.repeat != Repeat::Once) != (*several == "several") {
+            if !field.roles.is_empty() {
+                shared.entry(entry.0).or_default().push(*several);
+            } else if field.repeat != repetition(several) {
                 problems.push(format!(
                     "Table {id}, row {name:?}: {:?} in the crate, {several} in the document",
                     field.repeat
@@ -481,6 +495,18 @@ fn tables() {
                 "Table {id}, row {:?}: not in the document",
                 entry.1
             ));
+        }
+        for (field, cells) in shared {
+            let expected = match cells.iter().all(|cell| *cell == "once") {
+                true => Repeat::AtMost(cells.len() as u8),
+                false => Repeat::Any,
+            };
+            if table.rows[field].repeat != expected {
+                problems.push(format!(
+                    "Table {id}, field {:?}: {:?} in the crate, and its rows are {cells:?}",
+                    table.rows[field].name, table.rows[field].repeat
+                ));
+            }
         }
         let found: Vec<usize> = first_of_field
             .into_iter()
