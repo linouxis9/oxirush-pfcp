@@ -908,6 +908,27 @@ fn a_list_is_sized_for_its_values() {
     }
 }
 
+/// A message longer than its Message Length can say is refused as a message, of its
+/// type and length.
+#[test]
+fn a_message_too_long_for_its_length() {
+    let mut request = HeartbeatRequest::new(RecoveryTimeStamp::new(1));
+    for _ in 0..2 {
+        request.raw.push(RawIe::new(1000, vec![0; 40_000]));
+    }
+    let message = Message {
+        header: Header::node(1),
+        body: request.into(),
+    };
+    assert_eq!(
+        message.encode(),
+        Err(Error::MessageTooLong {
+            message_type: 1,
+            length: 4 + 8 + 2 * 40_004,
+        })
+    );
+}
+
 /// A list is equal to another of the same values, however it holds them: a message
 /// read back from its tree is equal to the one decoded.
 #[test]
