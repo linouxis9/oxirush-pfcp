@@ -102,7 +102,8 @@ macro_rules! pfcp_layout {
                 #[doc = concat!("The ", $field_name, " field.")]
                 pub $field: Option<$kind $(<$param>)?>,
             )*
-            /// The octets after the fields, which a later release adds.
+            /// The octets after the fields, which a later release adds: the unknown octets
+            /// of §8.1.2, `"unknown octets"` in a tree.
             pub extra: crate::octets::Octets,
         }
 
@@ -260,7 +261,7 @@ macro_rules! pfcp_layout {
                     }
                 )*
                 if !self.extra.is_empty() {
-                    members.put("extra", oxirush_utils::tree::octets(&self.extra));
+                    members.put(crate::ie::UNKNOWN_OCTETS, oxirush_utils::tree::octets(&self.extra));
                 }
                 members.finish()
             }
@@ -269,7 +270,7 @@ macro_rules! pfcp_layout {
                 value: &oxirush_utils::tree::Value,
                 reading: &mut oxirush_utils::tree::Reading,
             ) -> Result<Self, oxirush_utils::tree::Refused> {
-                const NAMES: &[&str] = &[$($($head_name,)*)? $($flag_name,)* "Spare", $($field_name,)* "extra"];
+                const NAMES: &[&str] = &[$($($head_name,)*)? $($flag_name,)* "Spare", $($field_name,)* crate::ie::UNKNOWN_OCTETS];
                 let read = reading.members(value, NAMES)?;
                 let mut at = 0;
                 $($(
@@ -385,7 +386,8 @@ macro_rules! pfcp_bits {
             /// How many of the octets of the fields the value has: the first ones of a
             /// later release are absent from a sender of an earlier one.
             pub present: u8,
-            /// The octets after them, which a later release adds.
+            /// The octets after them, which a later release adds: the unknown octets of
+            /// §8.1.2, `"unknown octets"` in a tree.
             pub extra: crate::octets::Octets,
         }
 
@@ -521,7 +523,7 @@ macro_rules! pfcp_bits {
                     members.put("length", oxirush_utils::tree::unsigned(self.present.into()));
                 }
                 if !self.extra.is_empty() {
-                    members.put("extra", oxirush_utils::tree::octets(&self.extra));
+                    members.put(crate::ie::UNKNOWN_OCTETS, oxirush_utils::tree::octets(&self.extra));
                 }
                 members.finish()
             }
@@ -530,7 +532,7 @@ macro_rules! pfcp_bits {
                 value: &oxirush_utils::tree::Value,
                 reading: &mut oxirush_utils::tree::Reading,
             ) -> Result<Self, oxirush_utils::tree::Refused> {
-                const NAMES: &[&str] = &[$($name,)* "Spare", "length", "extra"];
+                const NAMES: &[&str] = &[$($name,)* "Spare", "length", crate::ie::UNKNOWN_OCTETS];
                 let mut bits = Self::default();
                 if Self::BARE && !value.is_object() {
                     $( bits.$field = pfcp_bits!(@get $width [$($kind)? $(+ $octet2 $low2 $width2)?] value, reading)?; )*
