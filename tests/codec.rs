@@ -950,6 +950,17 @@ fn a_message_too_long_for_its_length() {
     );
 }
 
+/// The octets after the fields of an IE, of a later release, are "the unknown octets" of
+/// §8.1.2 in a tree.
+#[test]
+fn the_unknown_octets_of_an_ie() {
+    let mut precedence = Precedence::new(1);
+    precedence.extra = Octets::copied(&[0xaa]);
+    let tree = tree::Tree::to_tree(&precedence);
+    assert_eq!(tree.to_string(), r#"{"Precedence value":1,"unknown octets":"aa"}"#);
+    assert_eq!(tree::from_value::<Precedence>(&tree).unwrap(), precedence);
+}
+
 /// A list is equal to another of the same values, however it holds them: a message
 /// read back from its tree is equal to the one decoded.
 #[test]

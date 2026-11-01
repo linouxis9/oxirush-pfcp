@@ -868,7 +868,8 @@ macro_rules! pfcp_number {
         pub struct $ty {
             #[doc = concat!("The ", $field, ".")]
             pub value: $t,
-            /// The octets after it, which a later release adds.
+            /// The octets after it, which a later release adds: the unknown octets of
+            /// §8.1.2, `"unknown octets"` in a tree.
             pub extra: Octets,
         }
 
@@ -912,8 +913,8 @@ macro_rules! pfcp_number {
         #[cfg(feature = "serde")]
         oxirush_utils::impl_serde!($ty);
 
-        /// The number alone, or `{"Rule ID": 1, "extra": "00"}` with the octets of a later
-        /// release.
+        /// The number alone, or `{"Rule ID": 1, "unknown octets": "00"}` with the octets of a
+        /// later release (§8.1.2).
         #[cfg(feature = "tree")]
         impl oxirush_utils::tree::Tree for $ty {
             const NAME: &'static str = <$ty as crate::ie::IeType>::TYPE_NAME;
@@ -923,7 +924,7 @@ macro_rules! pfcp_number {
                 }
                 let mut members = oxirush_utils::tree::Members::new();
                 members.put($field, Field::to_tree(&self.value));
-                members.put("extra", oxirush_utils::tree::octets(&self.extra));
+                members.put(crate::ie::UNKNOWN_OCTETS, oxirush_utils::tree::octets(&self.extra));
                 members.finish()
             }
             fn from_tree(
@@ -933,7 +934,7 @@ macro_rules! pfcp_number {
                 if !value.is_object() {
                     return Ok(Self::new(<$t as Field>::from_tree(value, reading)?));
                 }
-                let read = reading.members(value, &[$field, "extra"])?;
+                let read = reading.members(value, &[$field, crate::ie::UNKNOWN_OCTETS])?;
                 Ok(Self {
                     value: reading.member(&read, 0, <$t as Field>::from_tree)?,
                     extra: reading.optional(&read, 1, |value, reading| reading.octets(value))?.map(Octets::from).unwrap_or_default(),
@@ -1449,7 +1450,7 @@ macro_rules! pfcp_fields {
                 let mut members = oxirush_utils::tree::Members::new();
                 $( members.put($name, Field::to_tree(&self.$field)); )*
                 if !self.extra.is_empty() {
-                    members.put("extra", oxirush_utils::tree::octets(&self.extra));
+                    members.put(crate::ie::UNKNOWN_OCTETS, oxirush_utils::tree::octets(&self.extra));
                 }
                 members.finish()
             }
@@ -1457,7 +1458,7 @@ macro_rules! pfcp_fields {
                 value: &oxirush_utils::tree::Value,
                 reading: &mut oxirush_utils::tree::Reading,
             ) -> Result<Self, oxirush_utils::tree::Refused> {
-                let read = reading.members(value, &[$($name,)* "extra"])?;
+                let read = reading.members(value, &[$($name,)* crate::ie::UNKNOWN_OCTETS])?;
                 let mut at = 0;
                 $(
                     let $field = reading.member(&read, at, <$kind as Field>::from_tree)?;

@@ -958,7 +958,7 @@ impl oxirush_utils::tree::Tree for FqCsid {
             members.put("Node Type", Field::to_tree(&node_type));
         }
         if !self.extra.is_empty() {
-            members.put("extra", tree::octets(&self.extra));
+            members.put(crate::ie::UNKNOWN_OCTETS, tree::octets(&self.extra));
         }
         members.finish()
     }
@@ -973,7 +973,7 @@ impl oxirush_utils::tree::Tree for FqCsid {
                 "Node-Address",
                 "PDN Connection Set Identifiers",
                 "Node Type",
-                "extra",
+                crate::ie::UNKNOWN_OCTETS,
             ],
         )?;
         let node_id_type =
@@ -1097,7 +1097,7 @@ macro_rules! mac_addresses {
                 members.put_optional("C-TAG", self.c_tag.as_ref().map(Field::to_tree));
                 members.put_optional("S-TAG", self.s_tag.as_ref().map(Field::to_tree));
                 if !self.extra.is_empty() {
-                    members.put("extra", tree::octets(&self.extra));
+                    members.put(crate::ie::UNKNOWN_OCTETS, tree::octets(&self.extra));
                 }
                 members.finish()
             }
@@ -1105,7 +1105,7 @@ macro_rules! mac_addresses {
                 value: &oxirush_utils::tree::Value,
                 reading: &mut oxirush_utils::tree::Reading,
             ) -> Result<Self, oxirush_utils::tree::Refused> {
-                let read = reading.members(value, &["MAC address values", "C-TAG", "S-TAG", "extra"])?;
+                let read = reading.members(value, &["MAC address values", "C-TAG", "S-TAG", crate::ie::UNKNOWN_OCTETS])?;
                 let mac_addresses = reading.member(&read, 0, |value, reading| reading.list(value, |value, reading| reading.octet_array::<6>(value)))?;
                 let c_tag = reading.optional(&read, 1, Lv8::from_tree)?;
                 let s_tag = reading.optional(&read, 2, Lv8::from_tree)?;
