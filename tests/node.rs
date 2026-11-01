@@ -3245,6 +3245,49 @@ fn a_move_holds_its_new_seid() {
     assert!(smf.session(second).is_none());
 }
 
+/// A move that is accepted when its session has ended, or of a session that the node
+/// does not know, frees its new SEID.
+#[test]
+fn a_move_of_no_session_frees_its_new_seid() {
+    let (mut smf, mut upf) = associated(at(0));
+    let (cp_seid, up_seid) = established(&mut smf, &mut upf, at(0));
+    let to = |seid| {
+        let moved = FSeid {
+            v4: true,
+            seid: Some(seid),
+            ipv4: Some(Ipv4Addr::new(10, 0, 0, 1)),
+            ..Default::default()
+        };
+        SessionModificationRequest::default().with_cp_f_seid(moved)
+    };
+    let new = smf.new_session(UPF);
+    smf.session_request(at(1), cp_seid, to(new)).unwrap();
+    pass(&mut smf, &mut upf, UPF, at(1));
+    let (inbound, _) = request(&mut upf);
+    smf.end_session(cp_seid);
+    upf.respond(
+        at(1),
+        &inbound,
+        SessionModificationResponse::new(accepted()),
+    )
+    .unwrap();
+    pass(&mut upf, &mut smf, SMF, at(1));
+    assert!(smf.session(new).is_none());
+    // A modification that request() sends with the SEID of no session of the node
+    let modification = Message {
+        header: Header::session(up_seid + 1000, 0),
+        body: to(0x4242).into(),
+    };
+    smf.request(at(2), UPF, modification).unwrap();
+    let sequence = decoded(&sent(&mut smf)[0]).header.sequence;
+    let response = Message {
+        header: Header::session(1, sequence),
+        body: SessionModificationResponse::new(accepted()).into(),
+    };
+    smf.handle_datagram(at(2), UPF, &response.encode().unwrap());
+    assert!(smf.session(0x4242).is_none());
+}
+
 /// Table 7.5.4.1-1 NOTE 2: after a change of its CP F-SEID, the CP function takes the
 /// session messages of the UP function to the previous SEID for longer than twice N1 x
 /// T1, as of the session.
