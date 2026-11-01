@@ -360,12 +360,14 @@ macro_rules! pfcp_layout {
 /// A value of octets of bits: flags of one bit and fields of a few, each at its octet
 /// (from 0), its lowest bit (from 1) and its width, in at most `N` octets of which the
 /// first `MIN` are always there; then the octets that a later release adds. The other
-/// bits are spare and kept, and so is how many of the `N` octets a decoded value had.
+/// bits are spare and kept, and so is how many of the `N` octets a decoded value had. The
+/// rules of its clause on which flags go together follow it.
 ///
 /// ```text
 /// pub struct ApplyAction "8.2.26" octets 2 min 1 {
 ///     drop "DROP": 0 1 1, forw "FORW": 0 2 1, edrt "EDRT": 1 1 1,
 /// }
+/// check(action, path, found) { ... }
 /// ```
 macro_rules! pfcp_bits {
     (
@@ -373,6 +375,7 @@ macro_rules! pfcp_bits {
         pub struct $ty:ident $clause:literal octets $n:literal min $min:literal {
             $( $field:ident $name:literal : $octet:literal $low:literal $width:tt $(+ $octet2:literal $low2:literal $width2:tt)? $(as $kind:ident)? ),* $(,)?
         }
+        $( check($this:ident, $path:ident, $found:ident) $rules:block )?
     ) => {
         $(#[$meta])*
         #[derive(Debug, Clone, PartialEq, Eq)]
@@ -420,6 +423,14 @@ macro_rules! pfcp_bits {
                 $( pfcp_bits!(@mask masks, $octet, $low, $width [$($kind)? $(+ $octet2 $low2 $width2)?]); )*
                 masks
             };
+
+            /// Whether no bit of a field is set: "at least one bit shall be set to 1" of a
+            /// value of flags alone.
+            #[allow(dead_code)]
+            fn none_set(&self) -> bool {
+                let (octets, _) = self.octets();
+                octets.iter().zip(Self::MASKS).all(|(octet, mask)| octet & mask == 0)
+            }
 
             /// The octets of the fields, and how many are written.
             fn octets(&self) -> ([u8; $n], usize) {
@@ -497,6 +508,10 @@ macro_rules! pfcp_bits {
                     found.push(crate::check::Deviation::new(path, "8.1.2", crate::check::DeviationKind::SpareBits));
                 }
                 $( pfcp_bits!(@check [$($kind)? $(+ $octet2 $low2 $width2)?] self.$field, path, found); )*
+                $(
+                    let ($this, $path, $found) = (self, path, found);
+                    $rules
+                )?
             }
         }
 

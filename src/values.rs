@@ -101,6 +101,21 @@ pub struct Member {
     pub condition: &'static str,
 }
 
+/// A rule of clause 8.2 on which flags of a value go together, which `broken` breaks:
+/// `rule` says how, in words (`tests/spec/flag-rules.tsv` lists them).
+#[inline]
+pub(crate) fn flag_rule(
+    broken: bool,
+    path: &crate::check::Path,
+    clause: &'static str,
+    rule: &'static str,
+    found: &mut Vec<Deviation>,
+) {
+    if broken {
+        found.push(Deviation::new(path, clause, DeviationKind::Rule(rule)));
+    }
+}
+
 /// The octets of a field whose octets are fixed, or 0.
 pub(crate) const fn octets_of(octets: Option<usize>) -> usize {
     match octets {
@@ -1394,7 +1409,7 @@ impl oxirush_utils::tree::Tree for NetworkInstance {
 
 /// A value of fixed fields without flags, then the octets that a later release adds.
 macro_rules! pfcp_fields {
-    ($( $(#[$meta:meta])* pub struct $ty:ident $clause:literal { $( $field:ident $name:literal : $kind:ty ),* $(,)? } )*) => {$(
+    ($( $(#[$meta:meta])* pub struct $ty:ident $clause:literal { $( $field:ident $name:literal : $kind:ty ),* $(,)? } $( check($this:ident, $path:ident, $found:ident) $rules:block )? )*) => {$(
         $(#[$meta])*
         #[derive(Debug, Clone, Default, PartialEq, Eq)]
         pub struct $ty {
@@ -1441,6 +1456,10 @@ macro_rules! pfcp_fields {
             #[allow(unused_variables)]
             fn check(&self, path: &crate::check::Path, found: &mut Vec<crate::check::Deviation>) {
                 $( Field::check(&self.$field, path, $clause, found); )*
+                $(
+                    let ($this, $path, $found) = (self, path, found);
+                    $rules
+                )?
             }
         }
 
@@ -1490,6 +1509,9 @@ pfcp_layout! {
         uplink_volume "Uplink Volume": u64 if ulvol,
         downlink_volume "Downlink Volume": u64 if dlvol,
     }
+    check(volume, path, found) {
+        flag_rule(!(volume.tovol || volume.ulvol || volume.dlvol), path, "8.2.13", "no bit is set", found);
+    }
 }
 
 pfcp_layout! {
@@ -1500,6 +1522,9 @@ pfcp_layout! {
         uplink_volume "Uplink Volume": u64 if ulvol,
         downlink_volume "Downlink Volume": u64 if dlvol,
     }
+    check(volume, path, found) {
+        flag_rule(!(volume.tovol || volume.ulvol || volume.dlvol), path, "8.2.50", "no bit is set", found);
+    }
 }
 
 pfcp_layout! {
@@ -1509,6 +1534,9 @@ pfcp_layout! {
         total_volume "Total Volume": u64 if tovol,
         uplink_volume "Uplink Volume": u64 if ulvol,
         downlink_volume "Downlink Volume": u64 if dlvol,
+    }
+    check(volume, path, found) {
+        flag_rule(!(volume.tovol || volume.ulvol || volume.dlvol), path, "8.2.16", "no bit is set", found);
     }
 }
 
@@ -1545,6 +1573,14 @@ pfcp_bits! {
         dupl "DUPL": 0 5 1, ipma "IPMA": 0 6 1, ipmd "IPMD": 0 7 1, dfrt "DFRT": 0 8 1,
         edrt "EDRT": 1 1 1, bdpn "BDPN": 1 2 1, ddpn "DDPN": 1 3 1, fssm "FSSM": 1 4 1, mbsu "MBSU": 1 5 1,
     }
+    check(action, path, found) {
+        // FSSM and MBSU, alone or together, are one.
+        let actions = [action.drop, action.forw, action.buff, action.ipma, action.ipmd, action.fssm || action.mbsu];
+        let one = actions.iter().filter(|set| **set).count() == 1;
+        flag_rule(!one, path, "8.2.26", "none, or more than one, of DROP, FORW, BUFF, IPMA, IPMD, and FSSM or MBSU is set", found);
+        flag_rule((action.nocp || action.bdpn) && !action.buff, path, "8.2.26", "NOCP or BDPN is set and BUFF is not", found);
+        flag_rule(action.dfrt && !action.forw, path, "8.2.26", "DFRT is set and FORW is not", found);
+    }
 }
 
 pfcp_bits! {
@@ -1568,6 +1604,9 @@ pfcp_bits! {
     pub struct MeasurementMethod "8.2.40" octets 1 min 1 {
         durat "DURAT": 0 1 1, volum "VOLUM": 0 2 1, event "EVENT": 0 3 1,
     }
+    check(method, path, found) {
+        flag_rule(method.none_set(), path, "8.2.40", "no bit is set", found);
+    }
 }
 
 pfcp_bits! {
@@ -1578,6 +1617,9 @@ pfcp_bits! {
         volqu "VOLQU": 1 1 1, timqu "TIMQU": 1 2 1, envcl "ENVCL": 1 3 1, macar "MACAR": 1 4 1,
         eveth "EVETH": 1 5 1, evequ "EVEQU": 1 6 1, ipmjl "IPMJL": 1 7 1, quvti "QUVTI": 1 8 1,
         reemr "REEMR": 2 1 1, upint "UPINT": 2 2 1,
+    }
+    check(triggers, path, found) {
+        flag_rule(triggers.none_set(), path, "8.2.19", "no bit is set", found);
     }
 }
 

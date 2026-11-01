@@ -182,6 +182,9 @@ pfcp_bits! {
     pub struct ReportType "8.2.21" octets 1 min 1 {
         uisr "UISR": 0 7 1, sesr "SESR": 0 6 1, tmir "TMIR": 0 5 1, upir "UPIR": 0 4 1, erir "ERIR": 0 3 1, usar "USAR": 0 2 1, dldr "DLDR": 0 1 1,
     }
+    check(this, path, found) {
+        flag_rule(this.none_set(), path, "8.2.21", "no bit is set", found);
+    }
 }
 
 pfcp_bits! {
@@ -195,6 +198,9 @@ pfcp_bits! {
     /// PFCPSMReq-Flags (§8.2.31).
     pub struct PFCPSMReqFlags "8.2.31" octets 1 min 1 {
         hrsbom "HRSBOM": 0 7 1, deteid "DETEID": 0 6 1, rumuc "RUMUC": 0 5 1, sumpc "SUMPC": 0 4 1, qaurr "QAURR": 0 3 1, sndem "SNDEM": 0 2 1, drobu "DROBU": 0 1 1,
+    }
+    check(this, path, found) {
+        flag_rule(this.sumpc && this.rumuc, path, "8.2.31", "SUMPC and RUMUC are both set", found);
     }
 }
 
@@ -217,6 +223,9 @@ pfcp_bits! {
     pub struct UsageReportTrigger "8.2.41" octets 3 min 2 {
         immer "IMMER": 0 8 1, droth "DROTH": 0 7 1, stopt "STOPT": 0 6 1, start "START": 0 5 1, quhti "QUHTI": 0 4 1, timth "TIMTH": 0 3 1, volth "VOLTH": 0 2 1, perio "PERIO": 0 1 1, eveth "EVETH": 1 8 1, macar "MACAR": 1 7 1, envcl "ENVCL": 1 6 1, monit "MONIT": 1 5 1, termr "TERMR": 1 4 1, liusa "LIUSA": 1 3 1, timqu "TIMQU": 1 2 1, volqu "VOLQU": 1 1 1, upint "UPINT": 2 6 1, emrre "EMRRE": 2 5 1, quvti "QUVTI": 2 4 1, ipmjl "IPMJL": 2 3 1, tebur "TEBUR": 2 2 1, evequ "EVEQU": 2 1 1,
     }
+    check(this, path, found) {
+        flag_rule(this.none_set(), path, "8.2.41", "no bit is set", found);
+    }
 }
 
 pfcp_bits! {
@@ -231,12 +240,18 @@ pfcp_bits! {
     pub struct MeasurementInformation "8.2.68" octets 1 min 1 {
         ciam "CIAM": 0 8 1, aspoc "ASPOC": 0 7 1, sspoc "SSPOC": 0 6 1, mnop "MNOP": 0 5 1, istm "ISTM": 0 4 1, radi "RADI": 0 3 1, inam "INAM": 0 2 1, mbqe "MBQE": 0 1 1,
     }
+    check(this, path, found) {
+        flag_rule(this.none_set(), path, "8.2.68", "no bit is set", found);
+    }
 }
 
 pfcp_bits! {
     /// Node Report Type (§8.2.69).
     pub struct NodeReportType "8.2.69" octets 1 min 1 {
         n6dr "N6DR": 0 7 1, vsr "VSR": 0 6 1, purr "PURR": 0 5 1, gpqr "GPQR": 0 4 1, ckdr "CKDR": 0 3 1, uprr "UPRR": 0 2 1, upfr "UPFR": 0 1 1,
+    }
+    check(this, path, found) {
+        flag_rule(this.none_set(), path, "8.2.69", "no bit is set", found);
     }
 }
 
@@ -357,12 +372,18 @@ pfcp_bits! {
     pub struct RequestedClockDriftInformation "8.2.145" octets 1 min 1 {
         rrcr "RRCR": 0 2 1, rrto "RRTO": 0 1 1,
     }
+    check(this, path, found) {
+        flag_rule(this.none_set(), path, "8.2.145", "no bit is set", found);
+    }
 }
 
 pfcp_bits! {
     /// Requested Access Availability Information (§8.2.152).
     pub struct RequestedAccessAvailabilityInformation "8.2.152" octets 1 min 1 {
         rrca "RRCA": 0 1 1,
+    }
+    check(this, path, found) {
+        flag_rule(this.none_set(), path, "8.2.152", "no bit is set", found);
     }
 }
 
@@ -413,12 +434,19 @@ pfcp_bits! {
     pub struct RequestedQoSMonitoring "8.2.167" octets 2 min 1 {
         uldr "ULDR": 0 8 1, dldr "DLDR": 0 7 1, ulci "ULCI": 0 6 1, dlci "DLCI": 0 5 1, gtpupm "GTPUPM": 0 4 1, rppd "RPPD": 0 3 1, ulpd "ULPD": 0 2 1, dlpd "DLPD": 0 1 1, ulab "ULAB": 1 2 1, dlab "DLAB": 1 1 1,
     }
+    check(this, path, found) {
+        flag_rule(this.none_set(), path, "8.2.167", "no bit is set", found);
+    }
 }
 
 pfcp_bits! {
     /// Reporting Frequency (§8.2.168).
     pub struct ReportingFrequency "8.2.168" octets 1 min 1 {
         reserved "Reserved": 0 3 1, perio "PERIO": 0 2 1, evett "EVETT": 0 1 1,
+    }
+    check(this, path, found) {
+        // Bit 3 is reserved, and ignored by the receiver.
+        flag_rule(!(this.evett || this.perio), path, "8.2.168", "no bit is set", found);
     }
 }
 
@@ -440,6 +468,9 @@ pfcp_bits! {
     /// IP version (§8.2.177).
     pub struct IpVersion "8.2.177" octets 1 min 1 {
         v6 "V6": 0 2 1, v4 "V4": 0 1 1,
+    }
+    check(this, path, found) {
+        flag_rule(!(this.v4 || this.v6), path, "8.2.177", "neither V4 nor V6 is set", found);
     }
 }
 
@@ -482,6 +513,9 @@ pfcp_bits! {
     /// Steering Mode Indicator (§8.2.197).
     pub struct SteeringModeIndicator "8.2.197" octets 1 min 1 {
         ueai "UEAI": 0 2 1, albi "ALBI": 0 1 1,
+    }
+    check(this, path, found) {
+        flag_rule(this.albi && this.ueai, path, "8.2.197", "ALBI and UEAI are both set", found);
     }
 }
 
@@ -538,6 +572,9 @@ pfcp_bits! {
     /// MPQUIC Control Information (§8.2.225).
     pub struct MpquicControlInformation "8.2.225" octets 1 min 1 {
         ceth "CETH": 0 3 1, cip "CIP": 0 2 1, cudp "CUDP": 0 1 1,
+    }
+    check(this, path, found) {
+        flag_rule(this.none_set(), path, "8.2.225", "no bit is set", found);
     }
 }
 
@@ -616,6 +653,10 @@ pfcp_bits! {
     pub struct MeasurementReportingType "8.2.262" octets 1 min 1 {
         ire "IRE": 0 3 1, evt "EVT": 0 2 1, per "PER": 0 1 1,
     }
+    check(this, path, found) {
+        flag_rule(this.none_set(), path, "8.2.262", "no bit is set", found);
+        flag_rule(this.per && this.evt, path, "8.2.262", "PER and EVT are both set", found);
+    }
 }
 
 pfcp_bits! {
@@ -636,6 +677,9 @@ pfcp_bits! {
     /// PDU Set Importance (§8.2.268).
     pub struct PduSetImportance "8.2.268" octets 2 min 2 {
         psi7 "PSI7": 0 8 1, psi6 "PSI6": 0 7 1, psi5 "PSI5": 0 6 1, psi4 "PSI4": 0 5 1, psi3 "PSI3": 0 4 1, psi2 "PSI2": 0 3 1, psi1 "PSI1": 0 2 1, psi0 "PSI0": 0 1 1, psi15 "PSI15": 1 8 1, psi14 "PSI14": 1 7 1, psi13 "PSI13": 1 6 1, psi12 "PSI12": 1 5 1, psi11 "PSI11": 1 4 1, psi10 "PSI10": 1 3 1, psi9 "PSI9": 1 2 1, psi8 "PSI8": 1 1 1,
+    }
+    check(this, path, found) {
+        flag_rule(this.none_set(), path, "8.2.268", "no bit is set", found);
     }
 }
 
@@ -678,6 +722,9 @@ pfcp_bits! {
     /// Expedited Transfer Indication (§8.2.278).
     pub struct ExpeditedTransferIndication "8.2.278" octets 1 min 1 {
         false_field "FALSE": 0 2 1, true_field "TRUE": 0 1 1,
+    }
+    check(this, path, found) {
+        flag_rule(!(this.true_field || this.false_field), path, "8.2.278", "neither TRUE nor FALSE is set", found);
     }
 }
 
@@ -916,6 +963,9 @@ pfcp_layout! {
         uplink_number_of_packets "Uplink Number of Packets": u64 if ulnop,
         downlink_number_of_packets "Downlink Number of Packets": u64 if dlnop,
     }
+    check(this, path, found) {
+        flag_rule(!(this.tovol || this.ulvol || this.dlvol || this.tonop || this.ulnop || this.dlnop), path, "8.2.44", "no bit is set", found);
+    }
 }
 
 pfcp_layout! {
@@ -946,6 +996,9 @@ pfcp_layout! {
         network_instance_field "Network Instance field": Lv16 if ni,
         recovery_timestamp "Recovery Timestamp": u32 if rts,
     }
+    check(this, path, found) {
+        flag_rule(!(this.v4 || this.v6), path, "8.2.70", "neither V4 nor V6 is set", found);
+    }
 }
 
 pfcp_layout! {
@@ -955,6 +1008,9 @@ pfcp_layout! {
         total_volume "Total Volume": u64 if tovol,
         uplink_volume "Uplink Volume": u64 if ulvol,
         downlink_volume "Downlink Volume": u64 if dlvol,
+    }
+    check(this, path, found) {
+        flag_rule(!(this.tovol || this.ulvol || this.dlvol), path, "8.2.86", "no bit is set", found);
     }
 }
 
@@ -991,6 +1047,10 @@ pfcp_layout! {
         ipv4_address_2 "(end) IPv4 address": Ipv4Addr if v4,
         ipv6_address_2 "(end) IPv6 address": Ipv6Addr if v6,
     }
+    check(this, path, found) {
+        let one = [this.v6, this.v4, this.a].iter().filter(|set| **set).count() == 1;
+        flag_rule(!one, path, "8.2.137", "none, or more than one, of V6, V4 and A is set", found);
+    }
 }
 
 pfcp_layout! {
@@ -1009,6 +1069,9 @@ pfcp_layout! {
         uplink_packet_delay_threshold "Uplink packet delay threshold": u32 if ul,
         round_trip_packet_delay_threshold "Round trip packet delay threshold": u32 if rp,
     }
+    check(this, path, found) {
+        flag_rule(!(this.dl || this.ul || this.rp), path, "8.2.169", "no bit is set", found);
+    }
 }
 
 pfcp_layout! {
@@ -1022,6 +1085,10 @@ pfcp_layout! {
         uplink_congestion_information "Uplink Congestion information": u16 if ulci,
         average_downlink_data_rate "Average downlink data rate": U40 if dldr,
         average_uplink_data_rate "Average uplink data rate": U40 if uldr,
+    }
+    check(this, path, found) {
+        flag_rule(!(this.dlpd || this.ulpd || this.rppd || this.plmf || this.dlci || this.ulci || this.dldr || this.uldr), path, "8.2.171", "no bit is set", found);
+        flag_rule(this.plmf && (this.rppd || this.ulpd || this.dlpd), path, "8.2.171", "PLMF is set with a packet delay", found);
     }
 }
 
@@ -1040,6 +1107,9 @@ pfcp_layout! {
         flags(u8) { plr "PLR": 2, rtt "RTT": 1 }
         rtt_value "RTT value": u16 if rtt,
         packet_loss_rate_value "Packet Loss Rate value": Percent if plr,
+    }
+    check(this, path, found) {
+        flag_rule(!(this.rtt || this.plr), path, "8.2.196", "no bit is set", found);
     }
 }
 
@@ -1094,6 +1164,9 @@ pfcp_layout! {
         flags(u8) { v6 "V6": 2, v4 "V4": 1 }
         ipv4_address "IPv4 Address": Ipv4Addr if v4,
         ipv6_address "IPv6 Address": Ipv6Addr if v6,
+    }
+    check(this, path, found) {
+        flag_rule(!(this.v4 || this.v6), path, "8.2.248", "neither V4 nor V6 is set", found);
     }
 }
 

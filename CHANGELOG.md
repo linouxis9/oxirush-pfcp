@@ -13,7 +13,8 @@ The first version, of TS 29.244 V19.6.0 (2026-06).
   `new_n4mb()` where the mandatory IEs of the interfaces differ, and
   `with_*()`.
 - `check(interface)`: what a message breaks of its tables and of its values,
-  on an interface or a set of them, with the clause, and the Cause and the
+  the rules of clause 8.2 on which flags go together among them, on an
+  interface or a set of them, with the clause, and the Cause and the
   Offending IE that its receiver answers with (§7.6).
 - `tree` and `serde`: a message as a tree, read and edited by path, and as
   JSON.

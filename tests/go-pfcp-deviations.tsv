@@ -112,3 +112,6 @@ session-establishment-request_test.go	Multiple IEs	a Session Establishment Reque
 session-establishment-request_test.go	Single IE	a Session Establishment Request of a SEID other than 0 (TS 29.244 7.2.2.4.2), at /header
 session-report-request_test.go	Single IE	a Session Report Request of a SEID other than 0 with the Old CP F-SEID (TS 29.244 7.2.2.4.2), at /header
 session-report-request_test.go	Multiple IEs	a Session Report Request of a SEID other than 0 with the Old CP F-SEID (TS 29.244 7.2.2.4.2), at /header
+session-report-request_test.go	Multiple IEs	PLMF is set with a packet delay (TS 29.244 8.2.171), at /pfcp/Session Report/0/QoS Monitoring Report/0/QoS Monitoring Measurement: the answer is "Mandatory IE incorrect"
+session-report-request_test.go	Multiple IEs	PLMF is set with a packet delay (TS 29.244 8.2.171), at /pfcp/Session Report/1/QoS Monitoring Report/0/QoS Monitoring Measurement: the answer is "Mandatory IE incorrect"
+session-report-request_test.go	Single IE	PLMF is set with a packet delay (TS 29.244 8.2.171), at /pfcp/Session Report/0/QoS Monitoring Report/0/QoS Monitoring Measurement: the answer is "Mandatory IE incorrect"

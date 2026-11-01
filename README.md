@@ -235,8 +235,8 @@ the mandatory IEs, the conditional IEs whose condition the message shows (the
 UP F-SEID of an accepted establishment, the Forwarding Parameters of a FAR that
 forwards, the reports that a Report Type names: `Row::checked` says which), the
 IEs that do not decode, repeat, or are not of the table or the interface, spare
-bits and values, reserved values, the flags of each IE, and the rules of the
-header. Each deviation has its path, its clause, and the Cause with which a
+bits and values, reserved values, the flags of each IE with the rules of
+clause 8.2 on which of them go together, and the rules of the header. Each deviation has its path, its clause, and the Cause with which a
 receiver answers a request for it.
 
 A table whose mandatory IEs differ between interfaces has a constructor for
@@ -367,7 +367,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 ## Limits
 
 - `check()` checks one message: the procedures, and the conditions of the C
-  rows that need the state of a node, are not its own.
+  rows that need the state of a node, are not its own. Nor is who sets a flag,
+  as CH of an F-TEID, which only the CP function sets.
 - `encode()` writes any value that a type can hold, so a test tool can send
   an invalid message.
 - A tree is in the order of the tables, and the octets in the order of the
@@ -429,7 +430,10 @@ makes in turn. `tests/spec/errata.tsv` names the 43 errata of the document
 that the crate meets, and the 3 readings of the crate where the document names
 no value, and `tests/spec/requirements.tsv` the 172 requirements of the
 procedures: 107 with the test that checks it, and 65 that are the
-application's, above the crate. The test `spec` checks these numbers.
+application's, above the crate. `tests/spec/flag-rules.tsv` has the 51
+sentences of clause 8.2 that say which flags of an IE go together: 50 with the
+rule of `check()` that checks it, and 1 that a value does not show alone. The
+test `spec` checks these numbers.
 `tests/captures` has 213 messages that Open5GS and free5GC sent in lab runs:
 each decodes, encodes back to its octets, reads back from its tree, and is
 checked on its interface. Three fuzz targets, `decode`, `tree` and `node`, run

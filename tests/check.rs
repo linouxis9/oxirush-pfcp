@@ -965,7 +965,10 @@ fn eps_cups_on_its_interfaces() {
             volum: true,
             ..Default::default()
         },
-        ReportingTriggers::default(),
+        ReportingTriggers {
+            start: true,
+            ..Default::default()
+        },
     )
     .with_aggregated_urrs(aggregated);
     let forward = CreateFar::new(
@@ -1364,4 +1367,91 @@ fn an_outer_header_creation_of_octet_6_alone() {
         of(OuterHeaderCreation::default()),
         [DeviationKind::Rule("no bit of the description is set")]
     );
+}
+
+/// The rules of clause 8.2 on which flags go together, in messages (tests/spec/flag-rules.tsv
+/// has each): an Apply Action of no action or of two, a Report Type, a Measurement Method,
+/// Reporting Triggers and a Node Report Type of no bit. Each in a mandatory IE of a request
+/// is answered "Mandatory IE incorrect", with the IE.
+#[test]
+fn the_flag_rules_of_clause_8_2_in_a_message() {
+    let rules = |message: &Message| -> Vec<(&'static str, &'static str, Option<CauseValue>)> {
+        let octets = message.encode().unwrap();
+        Message::decode(&octets)
+            .unwrap()
+            .check(Interfaces::N4)
+            .into_iter()
+            .filter_map(|deviation| match deviation.kind {
+                DeviationKind::Rule(rule) => Some((deviation.clause, rule, deviation.cause())),
+                _ => None,
+            })
+            .collect()
+    };
+    let incorrect = Some(CauseValue::MandatoryIeIncorrect);
+    for (action, rule) in [
+        (
+            ApplyAction::default(),
+            "none, or more than one, of DROP, FORW, BUFF, IPMA, IPMD, and FSSM or MBSU is set",
+        ),
+        (
+            ApplyAction {
+                drop: true,
+                forw: true,
+                ..Default::default()
+            },
+            "none, or more than one, of DROP, FORW, BUFF, IPMA, IPMD, and FSSM or MBSU is set",
+        ),
+        (
+            ApplyAction {
+                forw: true,
+                nocp: true,
+                ..Default::default()
+            },
+            "NOCP or BDPN is set and BUFF is not",
+        ),
+        (
+            ApplyAction {
+                drop: true,
+                dfrt: true,
+                ..Default::default()
+            },
+            "DFRT is set and FORW is not",
+        ),
+    ] {
+        let mut message = establishment();
+        if let Body::SessionEstablishmentRequest(request) = &mut message.body {
+            request.create_far[0].apply_action = Some(action);
+            request.create_far[0].forwarding_parameters = None;
+        }
+        let found = rules(&message);
+        assert_eq!(found, [("8.2.26", rule, incorrect)], "{rule}");
+    }
+    let report = Message {
+        header: Header::session(5, 1),
+        body: SessionReportRequest::new(ReportType::default()).into(),
+    };
+    assert_eq!(rules(&report), [("8.2.21", "no bit is set", incorrect)]);
+    let urr = CreateUrr::new(
+        UrrId::new(1),
+        MeasurementMethod::default(),
+        ReportingTriggers::default(),
+    );
+    let modification = Message {
+        header: Header::session(5, 1),
+        body: SessionModificationRequest::default()
+            .with_create_urr(urr)
+            .into(),
+    };
+    assert_eq!(
+        rules(&modification),
+        [
+            ("8.2.40", "no bit is set", incorrect),
+            ("8.2.19", "no bit is set", incorrect)
+        ]
+    );
+    let node = Message {
+        header: Header::node(1),
+        body: NodeReportRequest::new(NodeId::Ipv4(SMF), NodeReportType::default()).into(),
+    };
+    assert_eq!(rules(&node), [("8.2.69", "no bit is set", incorrect)]);
 }
