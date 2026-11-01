@@ -3942,6 +3942,57 @@ fn sset_an_smf_without_the_association_controls_a_session() {
     assert_eq!(decoded(&sent(&mut smf)[0]).header.seid, Some(0x77));
 }
 
+/// Table 7.4.4.3-1, §5.22.3: an Association Update carries the supported features, which
+/// the node must take, not only a new SMF Set ID. An SMF that turns MPAS off in an update
+/// no longer shares its sessions with the set.
+#[test]
+fn an_association_update_changes_the_set_features() {
+    let smf_b = Ipv4Addr::new(10, 0, 0, 5).into_socket(8805);
+    let smfs = [
+        (SMF, node_id(SMF), mpas(), Some("set")),
+        (smf_b, node_id(smf_b), mpas(), Some("set")),
+    ];
+    let mpas = SmfSet {
+        mpas: true,
+        ..SmfSet::default()
+    };
+    let (mut upf, up_seid) = upf_of_set(mpas, &smfs);
+    let modification = |seq| Message {
+        header: Header::session(up_seid, seq),
+        body: SessionModificationRequest::default().into(),
+    };
+    // Before: B may take A's session over by MPAS.
+    assert_eq!(taken(&mut upf, smf_b, modification(7)), Ok(true));
+    // A turns MPAS off in an Association Update, with no new SMF Set ID.
+    let update = Message {
+        header: Header::node(8),
+        body: AssociationUpdateRequest::new(node_id(SMF))
+            .with_cp_function_features(CpFunctionFeatures::default())
+            .into(),
+    };
+    upf.handle_datagram(at(2), SMF, &update.encode().unwrap());
+    let (inbound, _) = request(&mut upf);
+    upf.respond(
+        at(2),
+        &inbound,
+        AssociationUpdateResponse::new(node_id(UPF), accepted()),
+    )
+    .unwrap();
+    // After: A no longer shares the session, so B's modification is not of the set.
+    assert_eq!(
+        taken(&mut upf, smf_b, modification(9)),
+        Err(vec![ViolationKind::UnknownSeid])
+    );
+}
+
+/// The same of a UPF's Association Update to an SMF: the SMF takes the MPAS of the UPF's
+/// new UP Function Features, kept or withdrawn, for a release.
+#[test]
+fn a_cp_takes_the_mpas_of_a_upf_update() {
+    assert!(cp_keeps_with_a_upf_that_sets_up(Some(true)));
+    assert!(!cp_keeps_with_a_upf_that_sets_up(Some(false)));
+}
+
 /// §6.2.8.2: a CP function keeps the sessions of a released association only when the
 /// MPAS feature is used, which the UPF must support too. The CP reads the UPF's MPAS from
 /// the UP Function Features of the Association Setup Response; a UPF that did not announce
