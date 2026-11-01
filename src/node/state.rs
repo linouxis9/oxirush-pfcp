@@ -127,27 +127,44 @@ pub(crate) enum Effect {
     Deleted,
 }
 
-/// A request that the node received: its octets, its response once given, and when it
-/// goes.
-#[derive(Debug, Clone)]
+/// A request that the node received: its octets, its response once given, and when the
+/// response goes.
+#[derive(Clone)]
 pub(crate) struct Answered {
     pub(crate) request: Vec<u8>,
     pub(crate) response: Option<Vec<u8>>,
+    /// The request, as the node gave it to the caller: an answer of another is not its.
+    id: u64,
     expires: Duration,
     /// Its response is a rejection of the node's own.
     rejection: bool,
 }
 
-/// The requests of the peers that the node keeps for their retransmissions (§6.4), each
-/// until `keep` after it came or had its answer, and at most `capacity` of them: those
-/// that wait for their answer stay, the rejections of the node go first, then the
-/// oldest answers.
+impl core::fmt::Debug for Answered {
+    /// Their lengths only: a request or its answer may hold a key.
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        f.debug_struct("Answered")
+            .field("request", &format_args!("{} octets", self.request.len()))
+            .field(
+                "response",
+                &self.response.as_ref().map(|response| response.len()),
+            )
+            .field("id", &self.id)
+            .field("expires", &self.expires)
+            .field("rejection", &self.rejection)
+            .finish()
+    }
+}
+
+/// The requests of the peers that the node keeps for their retransmissions (§6.4), at
+/// most `capacity` of them: one that waits for its answer stays until the caller answers
+/// or forgets it, and an answer until `keep` after it was given; a rejection of the node
+/// goes first, then the oldest answer. The first answer of a request is the one of the
+/// request that waits.
 #[derive(Debug, Default)]
 pub(crate) struct Answers {
     entries: BTreeMap<(SocketAddr, u32), Answered>,
-    /// By when they go: the requests that wait for their answer, the rejections of the
-    /// node and the other answers.
-    waiting: BTreeSet<(Duration, SocketAddr, u32)>,
+    /// The rejections of the node and the other answers, by when they go.
     rejections: BTreeSet<(Duration, SocketAddr, u32)>,
     answers: BTreeSet<(Duration, SocketAddr, u32)>,
     pub(crate) evicted: u64,
@@ -159,22 +176,33 @@ impl Answers {
         self.entries.get(key)
     }
 
-    fn index(&mut self, entry: &Answered) -> &mut BTreeSet<(Duration, SocketAddr, u32)> {
+    /// Whether the request `id` of `key` waits for its answer.
+    pub(crate) fn waits(&self, key: &(SocketAddr, u32), id: u64) -> bool {
+        self.entries
+            .get(key)
+            .is_some_and(|entry| entry.id == id && entry.response.is_none())
+    }
+
+    fn index(&mut self, entry: &Answered) -> Option<&mut BTreeSet<(Duration, SocketAddr, u32)>> {
         match (&entry.response, entry.rejection) {
-            (None, _) => &mut self.waiting,
-            (Some(_), true) => &mut self.rejections,
-            (Some(_), false) => &mut self.answers,
+            (None, _) => None,
+            (Some(_), true) => Some(&mut self.rejections),
+            (Some(_), false) => Some(&mut self.answers),
         }
     }
 
     pub(crate) fn remove(&mut self, key: &(SocketAddr, u32)) -> Option<Answered> {
         let entry = self.entries.remove(key)?;
-        self.index(&entry).remove(&(entry.expires, key.0, key.1));
+        if let Some(index) = self.index(&entry) {
+            index.remove(&(entry.expires, key.0, key.1));
+        }
         Some(entry)
     }
 
     fn insert(&mut self, key: (SocketAddr, u32), entry: Answered) {
-        self.index(&entry).insert((entry.expires, key.0, key.1));
+        if let Some(index) = self.index(&entry) {
+            index.insert((entry.expires, key.0, key.1));
+        }
         self.entries.insert(key, entry);
     }
 
@@ -199,12 +227,13 @@ impl Answers {
         true
     }
 
-    /// Keep a request until its answer: `false`, and counted, when there is no room.
+    /// Keep the request `id` until its answer: `false`, and counted, when there is no
+    /// room.
     pub(crate) fn wait(
         &mut self,
         key: (SocketAddr, u32),
         request: Vec<u8>,
-        expires: Duration,
+        id: u64,
         capacity: usize,
     ) -> bool {
         self.remove(&key);
@@ -215,43 +244,70 @@ impl Answers {
         let entry = Answered {
             request,
             response: None,
-            expires,
+            id,
+            expires: Duration::ZERO,
             rejection: false,
         };
         self.insert(key, entry);
         true
     }
 
-    /// Keep the answer of a request until `expires`, when there is room: whether it is
-    /// its first answer.
+    /// Keep an answer of the request `id` until `expires`: whether it is its first, which
+    /// the request that waits for it has. A later answer replaces the one kept, and one
+    /// of a request that the node no longer keeps is not kept.
     pub(crate) fn answer(
         &mut self,
         key: (SocketAddr, u32),
+        id: u64,
         response: Vec<u8>,
         expires: Duration,
-        capacity: usize,
-        rejection: bool,
     ) -> bool {
-        let (request, first) = match self.remove(&key) {
-            Some(entry) => (entry.request, entry.response.is_none()),
-            None => (Vec::new(), true),
+        let Some(entry) = self.entries.get(&key).filter(|entry| entry.id == id) else {
+            return false;
         };
-        if self.room(capacity, rejection) {
-            let entry = Answered {
-                request,
-                response: Some(response),
-                expires,
-                rejection,
-            };
-            self.insert(key, entry);
-        }
+        let first = entry.response.is_none();
+        let Some(mut entry) = self.remove(&key) else {
+            return false;
+        };
+        entry.response = Some(response);
+        entry.expires = expires;
+        self.insert(key, entry);
         first
     }
 
-    /// Forget what has outlived `keep`.
+    /// Keep a rejection of the node's own of `request`, when there is room.
+    pub(crate) fn reject(
+        &mut self,
+        key: (SocketAddr, u32),
+        request: Vec<u8>,
+        response: Vec<u8>,
+        expires: Duration,
+        capacity: usize,
+    ) {
+        self.remove(&key);
+        if self.room(capacity, true) {
+            let entry = Answered {
+                request,
+                response: Some(response),
+                id: 0,
+                expires,
+                rejection: true,
+            };
+            self.insert(key, entry);
+        }
+    }
+
+    /// Forget the request `id` of `key`, answered or not.
+    pub(crate) fn forget(&mut self, key: &(SocketAddr, u32), id: u64) {
+        if self.entries.get(key).is_some_and(|entry| entry.id == id) {
+            self.remove(key);
+        }
+    }
+
+    /// Forget the answers that have outlived `keep`.
     pub(crate) fn prune(&mut self, now: Duration) {
         let entries = &mut self.entries;
-        for index in [&mut self.waiting, &mut self.rejections, &mut self.answers] {
+        for index in [&mut self.rejections, &mut self.answers] {
             while let Some(&(until, peer, sequence)) = index.first()
                 && until <= now
             {

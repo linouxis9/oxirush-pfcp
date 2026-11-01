@@ -116,7 +116,8 @@ impl core::fmt::Display for EndpointError {
 
 impl std::error::Error for EndpointError {}
 
-/// A request of a peer, with what answers it. It does not keep the endpoint running.
+/// A request of a peer, with what answers it. It does not keep the endpoint running, and
+/// one dropped unanswered is forgotten ([`Node::forget`]): its retransmission comes again.
 #[derive(Debug)]
 pub struct Incoming {
     /// The request.
@@ -124,6 +125,16 @@ pub struct Incoming {
     /// Who sent it, and what the answer takes from it.
     pub request: Inbound,
     commands: mpsc::WeakSender<Command>,
+    forgets: mpsc::UnboundedSender<Inbound>,
+    answered: bool,
+}
+
+impl Drop for Incoming {
+    fn drop(&mut self) {
+        if !self.answered {
+            let _ = self.forgets.send(self.request.clone());
+        }
+    }
 }
 
 impl Incoming {
@@ -133,11 +144,13 @@ impl Incoming {
     ///
     /// A body that is not the response of the request or that does not encode, and an
     /// endpoint that has ended.
-    pub async fn respond(self, body: impl Into<Body>) -> Result<(), EndpointError> {
+    pub async fn respond(mut self, body: impl Into<Body>) -> Result<(), EndpointError> {
         let commands = self.commands.upgrade().ok_or(EndpointError::Closed)?;
         let (reply, done) = oneshot::channel();
+        // Answered: the task forgets it if the answer fails.
+        self.answered = true;
         let command = Command::Respond {
-            request: self.request,
+            request: self.request.clone(),
             body: body.into(),
             reply,
         };
@@ -223,12 +236,15 @@ impl Endpoint {
         let (incoming_tx, incoming) = mpsc::channel(queues.incoming);
         let (events_tx, events) = mpsc::channel(queues.events);
         let statistics = Arc::new(Statistics::default());
+        let (forgetting, forgets) = mpsc::unbounded_channel();
         let task = Task {
             socket,
             node: Node::new(config),
             start: Instant::now(),
             commands: command_rx,
             responder: commands.downgrade(),
+            forgets,
+            forgetting,
             incoming: incoming_tx,
             events: events_tx,
             pending: BTreeMap::new(),
@@ -363,6 +379,9 @@ struct Task {
     commands: mpsc::Receiver<Command>,
     /// The commands of the answers: weak, so that the task ends with the endpoint.
     responder: mpsc::WeakSender<Command>,
+    /// The requests whose Incoming the caller dropped unanswered.
+    forgets: mpsc::UnboundedReceiver<Inbound>,
+    forgetting: mpsc::UnboundedSender<Inbound>,
     incoming: mpsc::Sender<Incoming>,
     events: mpsc::Sender<Event>,
     pending: BTreeMap<RequestId, Reply>,
@@ -395,6 +414,7 @@ impl Task {
                         }
                     }
                 }
+                Some(request) = self.forgets.recv() => self.node.forget(&request),
                 command = self.commands.recv() => {
                     // The endpoint ended: so does the task.
                     let Some(command) = command else { return };
@@ -443,7 +463,12 @@ impl Task {
                 body,
                 reply,
             } => {
-                let _ = reply.send(self.node.respond(now, &request, body));
+                let result = self.node.respond(now, &request, body);
+                // An Incoming answered in vain is gone: its retransmission comes again.
+                if result.is_err() {
+                    self.node.forget(&request);
+                }
+                let _ = reply.send(result);
             }
             Command::NewSession { peer, reply } => {
                 let _ = reply.send(self.node.new_session(peer));
@@ -484,6 +509,8 @@ impl Task {
                         message,
                         request,
                         commands: self.responder.clone(),
+                        forgets: self.forgetting.clone(),
+                        answered: false,
                     };
                     if let Err(dropped) = self.incoming.try_send(incoming) {
                         // Its retransmission comes in again.
