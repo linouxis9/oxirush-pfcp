@@ -2092,17 +2092,25 @@ impl Node {
                 }
             }
             Body::SessionModificationResponse(_) if accepted => {
-                if let (Change::Moves(new), Some(local)) = (request.change, request.local_seid)
-                    && let Some(session) = self.sessions.remove(&local)
-                {
-                    self.sessions.insert(new, session);
-                    // The UP function may still send to the previous SEID, for longer than
-                    // twice N1 x T1 (Table 7.5.4.1-1, NOTE 2).
-                    let window = self
-                        .config
-                        .t1
-                        .saturating_mul(2 * (u32::from(self.config.n1) + 1));
-                    self.sessions.alias(local, new, now.saturating_add(window));
+                let Change::Moves(new) = request.change else {
+                    return;
+                };
+                let moved = request
+                    .local_seid
+                    .and_then(|local| self.sessions.remove(&local).map(|session| (local, session)));
+                match moved {
+                    Some((local, session)) => {
+                        self.sessions.insert(new, session);
+                        // The UP function may still send to the previous SEID, for longer
+                        // than twice N1 x T1 (Table 7.5.4.1-1, NOTE 2).
+                        let window = self
+                            .config
+                            .t1
+                            .saturating_mul(2 * (u32::from(self.config.n1) + 1));
+                        self.sessions.alias(local, new, now.saturating_add(window));
+                    }
+                    // A move of no session, or of one that ended meanwhile, frees its SEID.
+                    None => self.abandon(request),
                 }
             }
             Body::SessionModificationResponse(_) => self.abandon(request),
