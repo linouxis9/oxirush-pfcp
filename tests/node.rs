@@ -3942,6 +3942,81 @@ fn sset_an_smf_without_the_association_controls_a_session() {
     assert_eq!(decoded(&sent(&mut smf)[0]).header.seid, Some(0x77));
 }
 
+/// Table 7.5.4.1-1 NOTE 2, §6.3.3: the accepted response to a session's outstanding
+/// request acts on that session, not on a new one that reused its local SEID. A move is
+/// outstanding for a session; the caller ends it and establishes a new session of the
+/// same SEID; the move's response must not move the new session.
+#[test]
+fn an_outstanding_move_does_not_take_a_reused_seid() {
+    let (mut smf, mut upf) = associated(at(0));
+    let l = 0x10;
+    let n = 0x20;
+    let up = |seid| FSeid {
+        v4: true,
+        seid: Some(seid),
+        ipv4: Some(Ipv4Addr::new(10, 0, 0, 2)),
+        ..Default::default()
+    };
+    // Establish session L, UP SEID 1.
+    smf.request(at(0), UPF, establishment(l)).unwrap();
+    pass(&mut smf, &mut upf, UPF, at(0));
+    let (inbound, _) = request(&mut upf);
+    upf.respond(
+        at(0),
+        &inbound,
+        SessionEstablishmentResponse::new(node_id(UPF), accepted()).with_up_f_seid(up(1)),
+    )
+    .unwrap();
+    pass(&mut upf, &mut smf, SMF, at(0));
+    events(&mut smf);
+    // A move of L to N is outstanding; keep its datagram for later.
+    let moved = FSeid {
+        v4: true,
+        seid: Some(n),
+        ipv4: Some(Ipv4Addr::new(10, 0, 0, 1)),
+        ..Default::default()
+    };
+    smf.session_request(
+        at(1),
+        l,
+        SessionModificationRequest::default().with_cp_f_seid(moved),
+    )
+    .unwrap();
+    let move_datagram = sent(&mut smf);
+    // The caller ends L and establishes a new session of the same SEID; UP SEID 2.
+    smf.end_session(l);
+    smf.request(at(1), UPF, establishment(l)).unwrap();
+    pass(&mut smf, &mut upf, UPF, at(1));
+    let (inbound, _) = request(&mut upf);
+    upf.respond(
+        at(1),
+        &inbound,
+        SessionEstablishmentResponse::new(node_id(UPF), accepted()).with_up_f_seid(up(2)),
+    )
+    .unwrap();
+    pass(&mut upf, &mut smf, SMF, at(1));
+    events(&mut smf);
+    // The old move's response arrives.
+    for transmit in &move_datagram {
+        upf.handle_datagram(at(1), SMF, &transmit.octets);
+    }
+    let (inbound, _) = request(&mut upf);
+    upf.respond(
+        at(1),
+        &inbound,
+        SessionModificationResponse::new(accepted()),
+    )
+    .unwrap();
+    pass(&mut upf, &mut smf, SMF, at(1));
+    events(&mut smf);
+    // L is still the new session (UP SEID 2); N holds no session.
+    assert_eq!(
+        smf.session(l).and_then(|session| session.peer_seid),
+        Some(2)
+    );
+    assert!(smf.session(n).is_none());
+}
+
 /// A probe may answer with anything, but a response of another type than the request's
 /// changes nothing: the peer discards such a response (§7.6.5), so the two sides agree. A
 /// modification answered with a deletion response does not end the session, and a setup
