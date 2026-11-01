@@ -1212,7 +1212,7 @@ pfcp_table! {
     /// IP Multicast Addressing Info IE within PFCP Session Establishment Request (Table 7.5.2.2-4).
     group IpMulticastAddressingInfo = 188, "IP Multicast Addressing Info", "7.5.2.2-4" {
         ip_multicast_address: "IP Multicast Address" M IpMulticastAddress [N4 N4MB],
-        source_ip_address: "Source IP Address" C* SourceIpAddress [N4 N4MB]
+        source_ip_address: "Source IP Address" M* SourceIpAddress [N4 N4MB]
             roles ["Source IP Address" O [N4], "Source IP Address" M [N4MB]],
     }
 }

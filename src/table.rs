@@ -117,7 +117,8 @@ pub struct Row {
     pub name: &'static str,
     /// The IE type.
     pub ie_type: u16,
-    /// Its presence: of a shared field, the strongest of its rows.
+    /// Its presence: of a shared field, the strongest of its rows, and
+    /// [`presence_on`](Self::presence_on) that of the rows of an interface.
     pub presence: Presence,
     /// How many times it may be there.
     pub repeat: Repeat,
@@ -267,6 +268,24 @@ pub struct Table {
     /// for a table whose mandatory IEs differ between them: none for a table of one
     /// `new()`.
     pub constructors: Interfaces,
+}
+
+impl Row {
+    /// Its presence on `interface`: of a shared field, that of its rows there, the
+    /// weakest on a set of interfaces, as mandatory is on each.
+    pub fn presence_on(&self, interface: Interfaces) -> Presence {
+        let rank = |presence: &Presence| match presence {
+            Presence::Mandatory => 0,
+            Presence::Conditional => 1,
+            Presence::Optional => 2,
+        };
+        self.roles
+            .iter()
+            .filter(|role| role.interfaces.has(interface))
+            .map(|role| role.presence)
+            .max_by_key(rank)
+            .unwrap_or(self.presence)
+    }
 }
 
 impl Table {

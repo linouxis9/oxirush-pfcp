@@ -465,7 +465,13 @@ pub(crate) fn check_field_values<
             row: row.name,
             nth: list.then_some(nth),
         };
-        check_field(value, &here, row.presence, context, found);
+        check_field(
+            value,
+            &here,
+            row.presence_on(context.interface),
+            context,
+            found,
+        );
     }
 }
 
