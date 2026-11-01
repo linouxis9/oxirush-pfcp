@@ -4625,6 +4625,57 @@ fn a_report_response_does_not_move_a_reused_seid() {
     assert_eq!(session.peer.ip(), SMF.ip());
 }
 
+/// §7.6.5: the peer discards a response of another type than its request's, and takes
+/// the next one of the right type. A probe that answers an establishment first with a
+/// Heartbeat Response, then with an accepted establishment response, leaves both sides
+/// with the session: the first answer of the response's type is the one that changes the
+/// node.
+#[test]
+fn a_probe_answer_of_another_type_leaves_the_next_one_its_effect() {
+    let (mut smf, mut upf) = associated(at(0));
+    let cp_seid = smf.new_session(UPF);
+    smf.request(at(0), UPF, establishment(cp_seid)).unwrap();
+    pass(&mut smf, &mut upf, UPF, at(0));
+    let (inbound, _) = request(&mut upf);
+    let wrong = Message {
+        header: Header::session(cp_seid, inbound.sequence),
+        body: HeartbeatResponse::new(RecoveryTimeStamp::new(1000)).into(),
+    };
+    upf.respond_message(at(0), &inbound, wrong, Delivery::Send)
+        .unwrap();
+    let up_seid = 0x5151;
+    let right = Message {
+        header: Header::session(cp_seid, inbound.sequence),
+        body: SessionEstablishmentResponse::new(node_id(UPF), accepted())
+            .with_up_f_seid(FSeid {
+                v4: true,
+                seid: Some(up_seid),
+                ipv4: Some(Ipv4Addr::new(10, 0, 0, 2)),
+                ..Default::default()
+            })
+            .into(),
+    };
+    upf.respond_message(at(0), &inbound, right, Delivery::Send)
+        .unwrap();
+    pass(&mut upf, &mut smf, SMF, at(0));
+    let got = events(&mut smf);
+    assert!(got.iter().any(|event| matches!(
+        event,
+        Event::Violation {
+            kind: ViolationKind::WrongResponseType,
+            ..
+        }
+    )));
+    assert_eq!(smf.session(cp_seid).unwrap().peer_seid, Some(up_seid));
+    assert_eq!(upf.session(up_seid).unwrap().peer_seid, Some(cp_seid));
+    // The SMF's next modification reaches the UPF's caller.
+    smf.session_request(at(1), cp_seid, SessionModificationRequest::default())
+        .unwrap();
+    pass(&mut smf, &mut upf, UPF, at(1));
+    let (inbound, _) = request(&mut upf);
+    assert_eq!(inbound.seid, Some(up_seid));
+}
+
 trait IntoSocket {
     fn into_socket(self, port: u16) -> SocketAddr;
 }
