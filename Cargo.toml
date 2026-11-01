@@ -11,14 +11,19 @@ keywords = ["pfcp", "5g", "lte", "n4", "3gpp"]
 categories = ["network-programming", "encoding", "parser-implementations", "no-std"]
 readme = "README.md"
 publish = false
+# Anchored to the root: an unanchored name is a gitignore glob, which matches a file of
+# that name in any directory. tests/README.md, which tests/spec.rs and tests/codec.rs
+# read, is named, and so are the scripts under tests/ that it names.
 include = [
-    "src/**/*.rs",
-    "tests/**/*.rs",
-    "tests/**/*.tsv",
-    "README.md",
-    "CHANGELOG.md",
-    "SECURITY.md",
-    "LICENSE",
+    "/src/**/*.rs",
+    "/tests/**/*.rs",
+    "/tests/**/*.tsv",
+    "/tests/**/*.py",
+    "/tests/README.md",
+    "/README.md",
+    "/CHANGELOG.md",
+    "/SECURITY.md",
+    "/LICENSE",
 ]
 
 [features]
