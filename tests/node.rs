@@ -3196,6 +3196,49 @@ fn a_session_request_by_its_seid_whatever_its_address() {
     assert!(smf.session(cp_seid).is_none());
 }
 
+/// §7.2.2.4.2: a SEID of 0 says that the peer's is not known: it is no local SEID, and an
+/// answer that gives it as the peer's establishes nothing.
+#[test]
+fn a_seid_of_zero_is_of_no_session() {
+    let (mut smf, mut upf) = associated(at(0));
+    assert_eq!(
+        smf.request(at(1), UPF, establishment(0)),
+        Err(NodeError::SeidZero)
+    );
+    let cp_seid = smf.new_session(UPF);
+    smf.request(at(1), UPF, establishment(cp_seid)).unwrap();
+    pass(&mut smf, &mut upf, UPF, at(1));
+    let (inbound, _) = request(&mut upf);
+    let zero = FSeid {
+        v4: true,
+        seid: Some(0),
+        ipv4: Some(Ipv4Addr::new(10, 0, 0, 2)),
+        ..Default::default()
+    };
+    let response = SessionEstablishmentResponse::new(node_id(UPF), accepted()).with_up_f_seid(zero);
+    assert_eq!(
+        upf.respond(at(1), &inbound, response.clone()),
+        Err(NodeError::SeidZero)
+    );
+    // A probe's answer with it: no session 0 on either side
+    let message = Message {
+        header: Header::session(cp_seid, inbound.sequence),
+        body: response.into(),
+    };
+    upf.respond_message(at(1), &inbound, message, Delivery::Send)
+        .unwrap();
+    assert!(upf.session(0).is_none());
+    pass(&mut upf, &mut smf, SMF, at(1));
+    assert!(smf.session(cp_seid).is_none());
+    assert_eq!(violations(&mut smf), [ViolationKind::SeidZero]);
+    let modification = Message {
+        header: Header::session(0, 77),
+        body: SessionModificationRequest::default().into(),
+    };
+    upf.handle_datagram(at(2), SMF, &modification.encode().unwrap());
+    assert_eq!(violations(&mut upf), [ViolationKind::UnknownSeid]);
+}
+
 /// The UP function's answer that gives the local SEID of another session is not sent.
 #[test]
 fn an_answer_of_a_seid_in_use_is_refused() {
