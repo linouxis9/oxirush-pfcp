@@ -378,21 +378,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ## Performance
 
-On one core of an AMD Ryzen 7 5700G (Linux 7.0, Rust 1.88.0), at ed70497 on
-2026-10-31, for a Session Establishment Request of 16 PDRs, 16 FARs, 8 URRs and
+On one core of an AMD Ryzen 7 5700G (Linux 7.0, Rust 1.88.0), at 5f9dd70 on
+2026-11-01, for a Session Establishment Request of 16 PDRs, 16 FARs, 8 URRs and
 a QER (2,824 octets, 347 IEs), in instructions of one round, which a shared
 machine does not change as it changes times:
 
 | Operation | Instructions | Allocations |
 |-----------|--------------|-------------|
-| `decode` | 97,858 | 15 |
-| `encode` | 59,519 | 1 |
-| `check` | 37,258 | 0 |
+| `decode` | 97,864 | 15 |
+| `encode` | 59,520 | 1 |
+| `check` | 37,433 | 0 |
 | `to_tree` | 580,030 | 899 |
-| `from_tree` | 420,821 | 587 |
+| `from_tree` | 421,180 | 587 |
 
-[`benches/`](benches/README.md) has every workload, with instructions and
-allocations, and how to run them.
+[`benches/`](https://github.com/linouxis9/oxirush-pfcp/blob/main/benches/README.md)
+has every workload, with instructions and allocations, and how to run them.
 
 ### Against go-pfcp
 
@@ -401,12 +401,13 @@ v0.0.24, in instructions on one core. A ratio is go-pfcp's over this crate's.
 
 | Message | Decode | Decode, then read every value | Encode |
 |---|---|---|---|
-| Heartbeat Request (41 octets) | 3.4x | 2.9x | 4.9x |
-| Session Establishment Request, 4 PDRs (820 octets) | 4.0x | 8.5x | 7.7x |
-| Session Establishment Request, 16 PDRs (2,824 octets) | 4.6x | 9.3x | 9.4x |
-| go-pfcp's own Session Establishment Request (2,110 octets) | 4.1x | 7.7x | 8.4x |
+| Heartbeat Request (41 octets) | 2.9x | 3.6x | 4.7x |
+| Session Establishment Request, 4 PDRs (820 octets) | 4.3x | 7.4x | 8.0x |
+| Session Establishment Request, 16 PDRs (2,824 octets) | 4.4x | 8.8x | 8.0x |
+| go-pfcp's own Session Establishment Request (2,110 octets) | 4.3x | 7.9x | 8.3x |
 
-[`benches/`](benches/README.md#against-go-pfcp) has the figures and the method.
+[`benches/`](https://github.com/linouxis9/oxirush-pfcp/blob/main/benches/README.md#against-go-pfcp)
+has the figures and the method.
 
 ## Tests and fuzzing
 
