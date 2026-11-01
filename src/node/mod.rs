@@ -45,7 +45,8 @@
 //!
 //! What it answers itself is what the clauses leave no choice in: a heartbeat; a
 //! request of the wrong direction, discarded; one that does not decode, "Invalid
-//! length"; a session or node request of a peer without an association, or of a session
+//! length"; an establishment whose CP F-SEID has SEID 0, "Mandatory IE incorrect"; a
+//! session or node request of a peer without an association, or of a session
 //! that the peer does not have, as above; and, but with the [`SmfSet`] of the node, the
 //! requests that §5.22 lets come from another SMF of a set, which it otherwise takes as
 //! those of any peer. Every other request is its caller's to accept or reject, through
@@ -958,8 +959,9 @@ impl Node {
 
     /// A session that the node did not establish, of the caller's own: one that an SMF of
     /// a set takes over (§5.22), with the UP function at `peer` and its SEID. The node
-    /// then takes its requests and sends the caller's; an answer to the request that
-    /// handed it over has the session's SEID as its [`Inbound::seid`].
+    /// then takes its requests and sends the caller's. To answer the request that handed
+    /// the session over to the session's SEID, the caller sets that request's
+    /// [`Inbound::seid`] to the local SEID before [`respond`](Self::respond).
     ///
     /// # Errors
     ///
