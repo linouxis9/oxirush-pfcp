@@ -21,7 +21,9 @@ The first version, of TS 29.244 V19.6.0 (2026-06).
   reliable delivery (§6.4), heartbeat, associations, sessions, load and
   overload control and message priority, and what a peer does wrong as an
   event. What it keeps of its peers is bounded, and what it drops counted.
-- `endpoint`: a node on a Tokio UDP socket.
+- `endpoint`: a node on a Tokio UDP socket. The `Endpoint` takes the peers'
+  requests and the events, and a `Handle`, which clones, sends the node's
+  requests and reaches its state, from any task.
 - `no_std` with an allocator. The minimum supported Rust version is 1.88.
 - The test `spec` compares the crate with the fixtures that
   `tests/spec/extract.py` takes from the document.
