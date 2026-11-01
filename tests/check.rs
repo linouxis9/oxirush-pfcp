@@ -1263,6 +1263,13 @@ fn flags_and_seids_that_do_not_go_together() {
         rules(&establishment(0, [source.clone(), f_teid].concat())),
         ["CH is set, and octets of a TEID or an address follow"]
     );
+    // CH and CHID, with a TEID and an address placed before the CHOOSE ID: the octets of
+    // a TEID and an address are flagged here too (CHID does not exempt them).
+    let f_teid = ie(21, &[0x0d, 0, 0, 0, 1, 10, 0, 0, 2, 7]);
+    assert_eq!(
+        rules(&establishment(0, [source.clone(), f_teid].concat())),
+        ["CH is set, and octets of a TEID or an address follow"]
+    );
     // An establishment of SEID 5
     assert_eq!(
         rules(&establishment(5, source)),
