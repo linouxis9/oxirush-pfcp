@@ -631,6 +631,65 @@ async fn a_request_dropped_before_the_task_takes_it_is_cancelled() {
     }
 }
 
+/// The drop-order invariant that `Handle::send_request` relies on: while the future
+/// sends the command, its cancel guard and its oneshot receiver are both live locals.
+/// Rust drops locals in reverse of declaration, so the guard must be declared first, so
+/// the receiver drops (closing the reply) before the guard queues the cancel. Then,
+/// whichever of the two the task sees first, the command's `reply.is_closed()` is true
+/// when the task reaches it, and the request is not sent. The reverse order queues the
+/// cancel while the reply is still open, which the task may miss.
+#[test]
+fn the_cancel_guard_drops_after_the_receiver() {
+    use std::future::{Future, pending};
+    use std::sync::{Arc, Mutex};
+    use std::task::{Context, Waker};
+
+    struct Logged {
+        what: &'static str,
+        log: Arc<Mutex<Vec<&'static str>>>,
+    }
+    impl Drop for Logged {
+        fn drop(&mut self) {
+            self.log.lock().unwrap().push(self.what);
+        }
+    }
+
+    // The two locals held across the command-send await, declared in `guard_first` order
+    // as in send_request, dropped when the future is dropped at that await.
+    let order_of = |guard_first: bool| -> Vec<&'static str> {
+        let log = Arc::new(Mutex::new(Vec::new()));
+        let log2 = log.clone();
+        let logged = move |what| Logged {
+            what,
+            log: log2.clone(),
+        };
+        let future: std::pin::Pin<Box<dyn Future<Output = ()>>> = if guard_first {
+            Box::pin(async move {
+                let cancel = logged("cancel");
+                let reply = logged("reply");
+                pending::<()>().await;
+                let _ = (&cancel, &reply);
+            })
+        } else {
+            Box::pin(async move {
+                let reply = logged("reply");
+                let cancel = logged("cancel");
+                pending::<()>().await;
+                let _ = (&cancel, &reply);
+            })
+        };
+        let mut future = future;
+        let waker = Waker::noop();
+        let _ = future.as_mut().poll(&mut Context::from_waker(waker));
+        drop(future);
+        log.lock().unwrap().clone()
+    };
+    // The guard declared first: the receiver (reply) drops before the cancel.
+    assert_eq!(order_of(true), ["reply", "cancel"]);
+    // The reverse order would queue the cancel first.
+    assert_eq!(order_of(false), ["cancel", "reply"]);
+}
+
 /// `close` frees the socket before it returns; an `Incoming` that the caller holds does
 /// not keep the endpoint running.
 #[tokio::test]
