@@ -339,7 +339,7 @@ pfcp_enum! {
         1 ConnectUdp "Connect-UDP",
     }
     /// Failure cause values (Table 8.2.263-1).
-    pub enum FailureCause "Table 8.2.263-1" bits 8 {
+    pub enum FailureCause "Table 8.2.263-1" bits 8 read [4 ..= 255 as 0] {
         0 Unspecified "Unspecified",
         1 ConnectionEstablishmentFailure "Connection Establishment Failure",
         2 ConnectionLost "Connection Lost",

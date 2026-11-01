@@ -22,6 +22,9 @@ script:
                         there
     value-tables.tsv    the tables of clause 8.2 that name values, or bits as octet/bit; a
                         value that a table reserves is named <reserved>
+    read-as.tsv         the values of those tables that a receiver reads as another: the
+                        table, the values, and what they are read as, in the words of the
+                        document
     clause-6.tsv        the headings of clause 6, and how many sentences each has that say
                         "shall" or "should": the requirements that requirements.tsv lists
 
@@ -128,6 +131,7 @@ def main():
     body = archive().find(W + 'body')
     heading, caption = '', None
     message_types, ie_types, tables, layouts, values, clause6 = [], [], [], [], [], []
+    read = []
     figures, conditions = [], []
     # The fields of octets of the figure of the clause, by name and by their octets.
     fields, labels = [], {}
@@ -177,6 +181,7 @@ def main():
         elif title and re.match(r'Table 8\.2\.\d+[.-]\d+', title):
             number = re.match(r'Table (8\.2\.\d+[.-]\d+)', title).group(1)
             values.extend(value_rows(number, title.split(':', 1)[1].strip(), rows))
+            read.extend(read_as(number, rows))
         elif re.match(r'^8\.2\.\d+ ', heading):
             figure = members(rows, spans)
             if figure:
@@ -192,6 +197,7 @@ def main():
     write('figures.tsv', ['clause', 'octets', 'name', 'lowest bit', 'bits'], figures)
     write('conditions.tsv', ['clause', 'flag', 'set', 'field', 'there'], conditions)
     write('value-tables.tsv', ['table', 'title', 'value', 'name'], values)
+    write('read-as.tsv', ['table', 'values', 'read as'], read)
     write('clause-6.tsv', ['clause', 'title', 'requirements'], [[c, t, str(n)] for c, t, n in clause6])
 
 
@@ -344,6 +350,37 @@ def value_rows(number, title, rows):
         if not re.fullmatch(r'\d+', value) or re.match(r'(?i)spare|for future use', name):
             continue
         out.append([number, title, value, '<reserved>' if re.match(r'(?i)<?reserved', name) else name])
+    return out
+
+
+def read_as(number, rows):
+    """The values of a table of values that a receiver reads as another: a row that says
+    "If received, shall be interpreted as", a row that names a note that says so, and the
+    "Other values" of a table of bits in prose."""
+    notes, out = {}, []
+    for row in rows:
+        for cell in row:
+            for label, text in re.findall(r'(NOTE(?: \d+)?):\s*(.*?)(?=NOTE(?: \d+)?:|$)', cell, flags=re.S):
+                found = re.search(r'shall be interpreted as (.+?)\.', clean(text))
+                if found:
+                    notes[label] = found.group(1)
+            for found in re.finditer(r'Other values shall be interpreted as (.+?) in this version', clean(cell)):
+                out.append([number, 'other values', found.group(1)])
+    for row in rows:
+        if row[0].startswith('NOTE'):
+            continue
+        values = [cell for cell in row if re.fullmatch(r'\d+(?:, \d+)*|\d+ to \d+', cell)]
+        if not values:
+            continue
+        cells = [clean(cell) for cell in row]
+        found = [found.group(1) for cell in cells
+                 for found in [re.search(r'If received, shall be interpreted as (.+?)\.?$', cell)] if found]
+        named = [found.group(1) for cell in cells
+                 for found in [re.search(r'\b(NOTE(?: \d+)?)\b', cell)] if found and found.group(1) in notes]
+        if found:
+            out.append([number, values[0], found[0]])
+        elif named:
+            out.append([number, values[0], notes[named[0]]])
     return out
 
 
