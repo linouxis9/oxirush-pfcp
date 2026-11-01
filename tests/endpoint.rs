@@ -602,6 +602,35 @@ async fn a_dropped_request_is_cancelled() {
     assert_eq!(count, 1, "the first datagram only");
 }
 
+/// A request whose future the caller drops once it is queued, before the task takes it,
+/// is cancelled all the same: it is not sent.
+#[tokio::test]
+async fn a_request_dropped_before_the_task_takes_it_is_cancelled() {
+    let smf_endpoint = Endpoint::bind(ANY, config(Function::Cp)).await.unwrap();
+    let smf = smf_endpoint.handle();
+    let silent = tokio::net::UdpSocket::bind(ANY).await.unwrap();
+    let heartbeat = Message {
+        header: Header::node(0),
+        body: HeartbeatRequest::new(RecoveryTimeStamp::new(7)).into(),
+    };
+    let mut buffer = [0; 64];
+    for _ in 0..20 {
+        assert!(
+            once(smf.request(silent.local_addr().unwrap(), heartbeat.clone()))
+                .await
+                .is_none()
+        );
+        // T1 is 100 ms: a request that the node kept would come again
+        let mut count = 0;
+        while let Ok(Ok(_)) =
+            tokio::time::timeout(Duration::from_millis(150), silent.recv_from(&mut buffer)).await
+        {
+            count += 1;
+        }
+        assert_eq!(count, 0, "sent {count} times");
+    }
+}
+
 /// `close` frees the socket before it returns; an `Incoming` that the caller holds does
 /// not keep the endpoint running.
 #[tokio::test]
