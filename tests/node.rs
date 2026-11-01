@@ -2837,6 +2837,46 @@ fn the_requests_of_strangers_are_bounded() {
     assert_eq!(upf.counters().refused, 1);
 }
 
+/// What the node keeps and gives, printed by Debug, prints no key: the octets of a
+/// message as their number, and an IE kept as octets that may hold a key as its length.
+#[test]
+fn debug_prints_no_key() {
+    let (mut smf, mut upf) = associated(at(0));
+    let password: String = b"hunter2"
+        .iter()
+        .map(u8::to_string)
+        .collect::<Vec<_>>()
+        .join(", ");
+    let printed = |text: &str| text.contains(&password) || text.contains("68756e74657232");
+    // An unknown session's modification, with a Tunnel Password kept as an IE
+    let mut modification = Message {
+        header: Header::session(0x777, 5),
+        body: SessionModificationRequest::default().into(),
+    };
+    if let Body::SessionModificationRequest(request) = &mut modification.body {
+        request.raw.push(RawIe::new(313, b"hunter2".to_vec()));
+    }
+    upf.handle_datagram(at(1), SMF, &modification.encode().unwrap());
+    let got = format!("{:?}", events(&mut upf));
+    assert!(!printed(&got), "{got}");
+    assert!(!printed(&format!("{:?}", sent(&mut upf))));
+    // A request that waits, the node's own outstanding one, and an L2TP Tunnel
+    // Information that did not decode, with the password in it
+    let mut establishment = establishment(smf.new_session(UPF));
+    if let Body::SessionEstablishmentRequest(request) = &mut establishment.body {
+        let tunnel = [&[1, 57][..], &(7u16).to_be_bytes(), b"hunter2"].concat();
+        request.raw.push(RawIe::new(276, tunnel));
+    }
+    smf.request(at(2), UPF, establishment).unwrap();
+    assert!(!printed(&format!("{smf:?}")));
+    let tunnel = [&[1, 57][..], &(7u16).to_be_bytes(), b"hunter2"].concat();
+    assert!(!printed(&format!("{:?}", RawIe::new(276, tunnel))));
+    pass(&mut smf, &mut upf, UPF, at(2));
+    assert!(!printed(&format!("{upf:?}")));
+    let got = format!("{:?}", events(&mut upf));
+    assert!(!printed(&got), "{got}");
+}
+
 // ── §4.2.2: the port of the requests ───────────────────────────────────────
 
 /// §4.2.2: a request goes to port 8805, whatever port the peer sends its own from, and
