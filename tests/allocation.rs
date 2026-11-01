@@ -177,5 +177,9 @@ fn what_is_kept_of_a_rejection_is_small() {
     // A retransmission is answered still, from what the node kept
     upf.handle_datagram(Duration::ZERO, HOST, &octets);
     assert!(upf.poll_transmit().is_some());
+    assert!(matches!(
+        upf.poll_event(),
+        Some(Event::Retransmission { answered: true, .. })
+    ));
     assert!(upf.poll_event().is_none());
 }

@@ -379,7 +379,7 @@ impl Endpoint {
         self.incoming.recv().await
     }
 
-    /// The next other event: associations, restarts, violations.
+    /// The next other event: associations, restarts, retransmissions, violations.
     pub async fn event(&mut self) -> Option<Event> {
         self.events.recv().await
     }

@@ -334,7 +334,14 @@ fn retransmitted_request_answered_from_cache() {
     // A retransmission before the answer is not a second request, and the number of a
     // request that has no answer yet is not another's
     upf.handle_datagram(at(2), SMF, &octets);
-    assert!(events(&mut upf).is_empty());
+    assert_eq!(
+        events(&mut upf),
+        [Event::Retransmission {
+            from: SMF,
+            sequence: 77,
+            answered: false
+        }]
+    );
     let changed = Message {
         header: Header::node(77),
         body: AssociationUpdateRequest::new(node_id(SMF))
@@ -352,7 +359,14 @@ fn retransmitted_request_answered_from_cache() {
     let answer = sent(&mut upf).remove(0);
     // One after it gets the same answer, byte for byte
     upf.handle_datagram(at(4), SMF, &octets);
-    assert!(events(&mut upf).is_empty());
+    assert_eq!(
+        events(&mut upf),
+        [Event::Retransmission {
+            from: SMF,
+            sequence: 77,
+            answered: true
+        }]
+    );
     assert_eq!(sent(&mut upf), [answer]);
     // Once answered, the number may be another request's (§6.4)
     upf.handle_datagram(at(5), SMF, &changed.encode().unwrap());
@@ -1987,7 +2001,14 @@ fn a_retransmission_alone_of_a_bundled_request() {
     }
     let answers = sent(&mut upf);
     upf.handle_datagram(at(4), SMF, &modification(20, false));
-    assert!(events(&mut upf).is_empty());
+    assert_eq!(
+        events(&mut upf),
+        [Event::Retransmission {
+            from: SMF,
+            sequence: 20,
+            answered: true
+        }]
+    );
     assert_eq!(sent(&mut upf), answers[..1]);
 }
 
@@ -2624,7 +2645,15 @@ fn a_request_waits_for_its_answer_through_a_flood() {
     assert!(matches!(events(&mut upf)[..], [Event::Associated { .. }]));
     sent(&mut upf);
     upf.handle_datagram(at(2), SMF, &setup);
-    assert!(events(&mut upf).is_empty(), "no new request");
+    assert_eq!(
+        events(&mut upf),
+        [Event::Retransmission {
+            from: SMF,
+            sequence: 1,
+            answered: true
+        }],
+        "no new request"
+    );
     assert_eq!(sent(&mut upf).len(), 1, "the kept answer");
     assert_eq!(upf.counters(), Counters::default());
 }
@@ -4924,6 +4953,62 @@ fn sset_an_update_of_an_association_not_of_sset_is_refused() {
     let (mut upf, _) = upf_of_set(sset, &smfs);
     assert_eq!(taken(&mut upf, other, update), Ok(true));
     assert_eq!(taken(&mut upf, other, release), Ok(true));
+}
+
+/// §6.4: a peer's retransmission of a request that the node holds is an event, which a
+/// probe of the peer's retransmissions sees without forgetting the request: one that waits
+/// for the caller's answer, unanswered, and one answered from the cache, the caller's
+/// answer or a rejection of the node's own, with the response sent again. A Heartbeat
+/// Request is answered from the state, and held by nothing.
+#[test]
+fn a_retransmission_of_a_held_request_is_an_event() {
+    let retransmission = |sequence, answered| Event::Retransmission {
+        from: SMF,
+        sequence,
+        answered,
+    };
+    let mut upf = node(UPF, Function::Up);
+    let setup = setup_of(SMF, 5, 1000);
+    upf.handle_datagram(at(0), SMF, &setup);
+    let (inbound, _) = request(&mut upf);
+    upf.handle_datagram(at(1), SMF, &setup);
+    assert_eq!(events(&mut upf), [retransmission(5, false)]);
+    assert!(sent(&mut upf).is_empty());
+    upf.respond(at(1), &inbound, setup_answer()).unwrap();
+    let answer = sent(&mut upf);
+    events(&mut upf);
+    upf.handle_datagram(at(2), SMF, &setup);
+    assert_eq!(events(&mut upf), [retransmission(5, true)]);
+    assert_eq!(sent(&mut upf), answer);
+    // A session request of a host without an association, which the node rejects itself
+    let modification = Message {
+        header: Header::session(0x10, 6),
+        body: SessionModificationRequest::default().into(),
+    }
+    .encode()
+    .unwrap();
+    let mut upf = node(UPF, Function::Up);
+    upf.handle_datagram(at(0), SMF, &modification);
+    assert_eq!(
+        violations(&mut upf),
+        [ViolationKind::SessionWithoutAssociation]
+    );
+    let rejection = sent(&mut upf);
+    upf.handle_datagram(at(1), SMF, &modification);
+    assert_eq!(events(&mut upf), [retransmission(6, true)]);
+    assert_eq!(sent(&mut upf), rejection);
+    // A heartbeat, again
+    let heartbeat = Message {
+        header: Header::node(7),
+        ..heartbeat()
+    }
+    .encode()
+    .unwrap();
+    for _ in 0..2 {
+        upf.handle_datagram(at(2), SMF, &heartbeat);
+        assert_eq!(sent(&mut upf).len(), 1);
+    }
+    assert!(events(&mut upf).is_empty());
 }
 
 trait IntoSocket {

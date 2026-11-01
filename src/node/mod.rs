@@ -25,7 +25,7 @@
 //!   outstanding request of the endpoint has, and sends it again after T1 without a
 //!   response, the same octets, up to N1 times. It matches each response by its sequence
 //!   number, its peer and its type, and answers a retransmitted request with the response
-//!   that it gave, byte for byte.
+//!   that it gave, byte for byte, telling its caller ([`Event::Retransmission`]).
 //! - **Heartbeat (§6.2.2).** It answers each Heartbeat Request, even from an unknown
 //!   peer, sends its own to the associated peers, and says when a peer stops answering
 //!   or restarts.
@@ -443,6 +443,18 @@ pub enum Event {
     OverloadEnded {
         /// The peer that sent it.
         peer: SocketAddr,
+    },
+    /// A peer's retransmission of a request that the node holds (§6.4): one that waits
+    /// for the caller's answer, which the node does not give the caller again, or one that
+    /// has its answer, the caller's or a rejection of the node's own, which the node sent
+    /// again. A Heartbeat Request is answered from the state, and held by nothing.
+    Retransmission {
+        /// The peer.
+        from: SocketAddr,
+        /// The sequence number of the request.
+        sequence: u32,
+        /// Whether the node sent the answer that it keeps.
+        answered: bool,
     },
     /// What a peer did wrong, and its octets.
     Violation {
@@ -1350,16 +1362,22 @@ impl Node {
         let priority = header.priority.unwrap_or(self.config.default_priority);
         if let Some(answered) = self.answers.get(&(from, sequence)) {
             match (answered.request == Digest::of(octets), &answered.response) {
-                (true, Some(response)) => {
-                    let transmit = Transmit {
-                        to: from,
-                        priority,
-                        octets: response.clone().into(),
-                    };
-                    self.queue(transmit);
+                (true, response) => {
+                    let answer = response.clone();
+                    self.events.push_back(Event::Retransmission {
+                        from,
+                        sequence,
+                        answered: answer.is_some(),
+                    });
+                    if let Some(answer) = answer {
+                        self.queue(Transmit {
+                            to: from,
+                            priority,
+                            octets: answer.into(),
+                        });
+                    }
                     return None;
                 }
-                (true, None) => return None,
                 (false, None) => {
                     self.violation(from, ViolationKind::ChangedRetransmission, octets);
                     return None;
