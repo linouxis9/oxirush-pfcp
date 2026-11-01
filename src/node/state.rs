@@ -34,6 +34,31 @@ pub struct Association {
     /// `NodeConfig::request_port` has it (§4.2.2).
     pub peer: SocketAddr,
     pub(crate) key: Vec<u8>,
+    /// The SMF set that the peer says it is of, as its setup has it (§5.22).
+    pub(crate) set: SetOf,
+}
+
+/// What a CP function says of its SMF set in an Association Setup (§5.22): its
+/// features SSET and MPAS, and its SMF Set ID.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) struct SetOf {
+    pub(crate) sset: bool,
+    pub(crate) mpas: bool,
+    pub(crate) id: Option<Vec<u8>>,
+}
+
+impl SetOf {
+    /// What a setup or its response of a CP function says.
+    pub(crate) fn of(
+        features: Option<&crate::values_hand::CpFunctionFeatures>,
+        id: Option<&crate::values_hand::SmfSetId>,
+    ) -> Self {
+        Self {
+            sset: features.is_some_and(|features| features.sset),
+            mpas: features.is_some_and(|features| features.mpas),
+            id: id.map(|id| id.fqdn.0.clone()),
+        }
+    }
 }
 
 /// A session: the peer, and its SEID once the node knows it.
@@ -102,6 +127,13 @@ impl Sessions {
             session.peer = peer;
             session.peer_seid = peer_seid;
             self.insert(local, session);
+        }
+    }
+
+    /// Give a session to the association of `node`.
+    pub(crate) fn set_node(&mut self, local: u64, node: Vec<u8>) {
+        if let Some(session) = self.by_local.get_mut(&local) {
+            session.node = node;
         }
     }
 
@@ -225,8 +257,11 @@ pub(crate) enum Effect {
     Nothing,
     /// An association setup: the addresses of the CP PFCP entities whose sessions the old
     /// association of the Node ID keeps, `None` for no PFCP Session Retention
-    /// Information, and an empty list for all of them (§6.2.6.2.2).
-    Setup(Option<Vec<IpAddr>>),
+    /// Information, and an empty list for all of them (§6.2.6.2.2); and the SMF set that
+    /// the CP function says.
+    Setup(Option<Vec<IpAddr>>, SetOf),
+    /// An association update of a new SMF Set ID (§5.22.3).
+    Update(Option<Vec<u8>>),
     /// The peer's F-SEID of an establishment, or the new CP F-SEID of a modification.
     PeerFSeid(u64, IpAddr),
     /// A report of a session that the UP function deleted (PSDBU, §5.18).

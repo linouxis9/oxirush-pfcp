@@ -86,9 +86,10 @@ datagrams to send, events and the next timer come out. It numbers each
 request and sends it again after T1, up to N1 times; matches each response
 by its sequence number, its peer and its type; answers a retransmitted
 request with the answer that it gave; answers heartbeats; and keeps the
-associations, the sessions and the load and overload of each peer. Each
-decision is yours: a request of a peer is an event, which you answer with
-`respond()`.
+associations, the sessions and the load and overload of each peer. It
+answers itself only what the clauses leave no choice in, as a request of a
+peer without an association; every other request of a peer is an event,
+which you answer with `respond()`.
 
 ```rust
 use std::net::{Ipv4Addr, SocketAddr};
@@ -427,7 +428,7 @@ lists changes of the crate that it must fail on, which `tests/spec/mutate.py`
 makes in turn. `tests/spec/errata.tsv` names the 43 errata of the document
 that the crate meets, and the 3 readings of the crate where the document names
 no value, and `tests/spec/requirements.tsv` the 172 requirements of the
-procedures: 105 with the test that checks it, and 67 that are the
+procedures: 107 with the test that checks it, and 65 that are the
 application's, above the crate. The test `spec` checks these numbers.
 `tests/captures` has 213 messages that Open5GS and free5GC sent in lab runs:
 each decodes, encodes back to its octets, reads back from its tree, and is

@@ -155,7 +155,7 @@
 6.2.8	0	The title of association release.	informative: a title
 6.2.8.1	1	Association release ends an association.	test association_release
 6.2.8.1	2	Final usage reports are collected by deleting the sessions first.	application: the sessions of the CP function
-6.2.8.1	3	With MPAS, sessions are kept while another association of the SMF set remains.	application: the sessions of an SMF set
+6.2.8.1	3	With MPAS, sessions are kept while another association of the SMF set remains.	test mpas_a_release_keeps_the_sessions_of_the_set
 6.2.8.2	1	On a successful release, the CP function deletes the sessions of the association.	test association_release_ends_sessions
 6.2.8.3	1	On a release request, the UP function deletes the sessions of the association.	test association_release_ends_sessions
 6.2.8.3	2	The UP function deletes the association and what it knows of it.	test association_release
@@ -196,7 +196,7 @@
 6.3.5.2	2	The request is sent to the SEID of the CP function, with what is reported.	test session_messages_carry_peer_seid
 6.3.5.2	3	A success means that the report was delivered.	application: what the UP function reports
 6.3.5.3	1	The CP function finds the session by its SEID, or answers that it is not found.	test unknown_seid_answered
-6.3.5.3	2	With EPFAR, a report with PSDBU means the session is deleted in the UP function.	application: the sessions of the CP function
+6.3.5.3	2	With EPFAR, a report with PSDBU means the session is deleted in the UP function.	test a_session_follows_its_f_seids
 6.4	1	An entity keeps a queue of requests for each local address, local port and peer address.	test queue_per_peer
 6.4	2	A request has a sequence number, and is kept until its response or its last retransmission.	test retransmit_until_response
 6.4	3	A sequence number is unique among the outstanding requests of an endpoint.	test sequence_unique
