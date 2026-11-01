@@ -1126,7 +1126,7 @@ fn keys_are_not_printed() {
     );
 }
 
-/// The values that review round 1 found misread: each as its clause has it.
+/// Values that the crate once misread: each as its clause has it.
 #[test]
 fn values_as_their_clauses_have_them() {
     // Table 7.5.8.2-1: a Downlink Data Service Information for each PDR ID
