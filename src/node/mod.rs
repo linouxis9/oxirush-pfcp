@@ -148,8 +148,9 @@ pub struct NodeConfig {
 /// reject; and a release keeps the sessions that the set keeps.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct SmfSet {
-    /// SSET (§5.22.2): one association for the set, whose sessions, update and release
-    /// any SMF of the set may ask, with an association of its own or not.
+    /// SSET (§5.22.2): one association for the set, whose established sessions any SMF of
+    /// the set may modify or delete, and which it may update or release, with an
+    /// association of its own or not. An establishment needs an association.
     pub sset: bool,
     /// MPAS (§5.22.3): an association for each SMF of the set, of the same SMF Set ID,
     /// any of which may modify or delete the sessions of another, and whose sessions are
@@ -728,7 +729,8 @@ impl Node {
     }
 
     /// Send a request to `to`, with the next sequence number. A session request needs an
-    /// association with the peer, and may be throttled for its overload. The SEID of the
+    /// association with the peer, but, with SSET, the modification or deletion of an
+    /// established session (§5.22.2), and may be throttled for its overload. The SEID of the
     /// CP F-SEID of an establishment is the local SEID of its session, from
     /// [`new_session`](Self::new_session) or of the caller's own, which no other session
     /// then takes until the establishment ends.
@@ -795,15 +797,17 @@ impl Node {
         let mut change = Change::Nothing;
         if !is_node_related(message_type) {
             // The association of the session, whose F-SEID may have another address; or,
-            // with SSET, a session of the set, which the one association that a different
-            // SMF of the set holds lets this SMF control without one of its own (§5.22.2
-            // bullet 3).
+            // with SSET, the modification or deletion of an established session of the
+            // set, which the one association that a different SMF of the set holds lets
+            // this SMF ask without one of its own (§5.22.2 bullet 3). An establishment
+            // needs an association (§6.2.6.2.1).
             let session = local_seid.and_then(|seid| self.sessions.get(&seid));
             let of_session = session
                 .is_some_and(|session| self.associations.contains_key(&session.node))
                 || (self.config.smf_set.sset
                     && self.config.function == Function::Cp
-                    && session.is_some());
+                    && matches!(message_type, 52 | 54)
+                    && session.is_some_and(|session| session.peer_seid.is_some()));
             if !of_session && self.association_of(to).is_none() {
                 return Err(NodeError::NoAssociation);
             }
