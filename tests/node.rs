@@ -2167,18 +2167,35 @@ fn what_the_node_keeps_is_bounded() {
     );
 }
 
-/// Every sequence number reserved: a request has none, and says so.
+/// Every sequence number reserved: a request has none, and says so; one given back is
+/// the next request's. CI runs it, with `--ignored`.
 #[test]
-#[ignore = "reserves 2^24 numbers"]
+#[ignore = "reserves 2^24 numbers: run with --release"]
 fn no_sequence_number_left() {
     let mut smf = node(SMF, Function::Cp);
-    for _ in 0..0x0100_0000u32 {
-        smf.reserve_sequence().unwrap();
-    }
+    let reserved: Vec<u32> = (0..0x0100_0000u32)
+        .map(|_| smf.reserve_sequence().unwrap())
+        .collect();
     assert_eq!(
         smf.request(at(0), UPF, heartbeat()),
         Err(NodeError::NoSequence)
     );
+    let given_back = reserved[1000];
+    assert!(smf.release_sequence(given_back));
+    assert!(!smf.release_sequence(given_back), "once");
+    smf.request(at(0), UPF, heartbeat()).unwrap();
+    assert_eq!(decoded(&sent(&mut smf)[0]).header.sequence, given_back);
+}
+
+/// A sequence number reserved and given back is free again; one that was not reserved is
+/// not given back.
+#[test]
+fn a_reserved_sequence_number_given_back() {
+    let mut smf = node(SMF, Function::Cp);
+    let sequence = smf.reserve_sequence().unwrap();
+    assert!(smf.release_sequence(sequence));
+    assert!(!smf.release_sequence(sequence));
+    assert!(!smf.release_sequence(sequence + 1));
 }
 
 // ── Associations and sessions, kept in step with the procedures ─────────────
