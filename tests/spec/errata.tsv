@@ -38,7 +38,7 @@ f-seid-reference	ie-type-reference	57	Extendable / Clause 8.2 37	Extendable / Cl
 predefined-rules-name-reference	ie-type-reference	299	Variable Length / Clause 8.205	Variable Length / Clause 8.2.205
 rat-type-reference	ie-type-reference	275	Extendable / Table 8.2.186	Extendable / Clause 8.2.186
 update-srr-reference	ie-type-reference	213	Extendable/ Table 7.5.4.21-1	Extendable / Table 7.5.4.20-1
-session-report-reference	ie-type-reference	214	Extendable / Table 7.5.8.7-1	Extendable / Table 7.5.7.3-1
+session-report-reference	ie-type-reference	214	Extendable / Table 7.5.8.7-1	Extendable / Table 7.5.8.6-1
 peer-up-restart-report-reference	ie-type-reference	315	Extendable / Clause 7.4.5.1.7	Extendable / Table 7.4.5.1.7-1
 moq-information-reference	ie-type-reference	386	Extendable / Table 7.3.5.1-6	Extendable / Table 7.5.3.1-6
 pfcp-session-retention-information-length	ie-type-length	183	1	Not Applicable
