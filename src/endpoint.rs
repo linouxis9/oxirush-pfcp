@@ -691,6 +691,10 @@ impl Task {
     fn command(&mut self, command: Command) {
         let now = self.start.elapsed();
         match command {
+            // A future dropped once it queued its request, before the task took it: its
+            // cancel came first and found nothing, and the request is not sent.
+            Command::Request { reply, .. } | Command::SessionRequest { reply, .. }
+                if reply.is_closed() => {}
             Command::Request {
                 to,
                 message,
