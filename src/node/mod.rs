@@ -1769,7 +1769,7 @@ impl Node {
             let scope = node.clone();
             let new = LoadControl {
                 sequence: sequence.value,
-                metric: metric.value.0,
+                metric: metric.value.effective(),
             };
             match self.load.get(&scope).copied() {
                 Some(known) if known.sequence == new.sequence && known.metric != new.metric => {
@@ -1810,7 +1810,7 @@ impl Node {
             let new = OverloadControl {
                 peer: from,
                 sequence: sequence.value,
-                metric: metric.value.0.min(100),
+                metric: metric.value.effective(),
                 validity,
                 until,
                 credit: 0,

@@ -423,6 +423,16 @@ impl Field for Rest {
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Percent(pub u8);
 
+impl Percent {
+    /// The percentage as a receiver takes it: 0 for a value above 100.
+    pub const fn effective(self) -> u8 {
+        match self.0 {
+            0..=100 => self.0,
+            _ => 0,
+        }
+    }
+}
+
 impl Field for Percent {
     const OCTETS: Option<usize> = Some(1);
     fn read(octets: &mut &[u8]) -> Option<Self> {
