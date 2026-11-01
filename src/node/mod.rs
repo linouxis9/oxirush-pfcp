@@ -309,8 +309,10 @@ pub enum ViolationKind {
     /// Messages bundled by a peer without an association, which could not have agreed on
     /// bundling (§6.5): discarded.
     BundledWithoutAssociation,
-    /// An establishment's response that gives the peer's SEID as 0, which says that it
-    /// is not known (§7.2.2.4.2): it establishes no session.
+    /// A peer's SEID of 0, which says that it is not known (§7.2.2.4.2): an
+    /// establishment's response that gives it establishes no session, an establishment
+    /// that gives it is answered "Mandatory IE incorrect", and a modification or a
+    /// response that moves a session to it leaves the session's.
     SeidZero,
 }
 
@@ -1272,6 +1274,10 @@ impl Node {
                 CauseValue::NoEstablishedPfcpAssociation,
                 ViolationKind::SessionWithoutAssociation,
             )),
+            // A CP F-SEID of SEID 0 is of no session (§7.2.2.4.2).
+            50 if peer_seid == Some(0) => {
+                Some((CauseValue::MandatoryIeIncorrect, ViolationKind::SeidZero))
+            }
             52 | 54 | 56 if association.is_none() && !of_host => Some((
                 CauseValue::NoEstablishedPfcpAssociation,
                 ViolationKind::SessionWithoutAssociation,
@@ -1307,7 +1313,8 @@ impl Node {
             effect: Effect::Nothing,
             id: 0,
         };
-        if let Some(body) = rejection_body(message_type, cause, None, &self.config.node_id) {
+        let offending = (kind == ViolationKind::SeidZero).then_some(57);
+        if let Some(body) = rejection_body(message_type, cause, offending, &self.config.node_id) {
             let mut header = self.response_header(&inbound);
             // The peer's SEID is not known: SEID 0 (§7.2.2.4.2), but that of the F-SEID
             // of an establishment without an association.
@@ -1492,7 +1499,13 @@ impl Node {
                 }
                 None => Effect::Nothing,
             },
+            // A new CP F-SEID of SEID 0 is of no session (§7.2.2.4.2): the session keeps
+            // the peer's SEID that it has.
             Body::SessionModificationRequest(request) => match request.cp_f_seid.as_ref() {
+                Some(f_seid) if f_seid.seid == Some(0) => {
+                    self.violation(from, ViolationKind::SeidZero, octets);
+                    Effect::Nothing
+                }
                 Some(f_seid) => {
                     Effect::PeerFSeid(f_seid.seid.unwrap_or(0), fseid_peer(from, f_seid).ip())
                 }
@@ -2099,7 +2112,11 @@ impl Node {
                     (response.cp_f_seid.as_ref(), request.local_seid)
                     && let Some(session) = self.sessions.get(&local)
                 {
-                    let peer_seid = f_seid.seid.or(session.peer_seid);
+                    // Not of SEID 0, which is of no session (§7.2.2.4.2).
+                    let peer_seid = f_seid.seid.filter(|seid| *seid != 0).or(session.peer_seid);
+                    if f_seid.seid == Some(0) {
+                        self.violation(from, ViolationKind::SeidZero, octets);
+                    }
                     self.sessions
                         .set_peer(local, fseid_peer(from, f_seid), peer_seid);
                 }
