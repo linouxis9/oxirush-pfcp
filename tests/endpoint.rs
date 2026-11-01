@@ -44,9 +44,11 @@ fn accepted() -> Cause {
 
 #[tokio::test]
 async fn an_smf_and_a_upf_set_up_an_association_and_a_session() {
-    let smf = Endpoint::bind(ANY, config(Function::Cp)).await.unwrap();
+    let smf_endpoint = Endpoint::bind(ANY, config(Function::Cp)).await.unwrap();
+    let smf = smf_endpoint.handle();
     let mut upf = Endpoint::bind(ANY, config(Function::Up)).await.unwrap();
     let upf_address = upf.local_addr();
+    let upf_handle = upf.handle();
 
     // The UPF answers what comes
     let answering = tokio::spawn(async move {
@@ -62,7 +64,7 @@ async fn an_smf_and_a_upf_set_up_an_association_and_a_session() {
                     incoming.respond(response).await.unwrap();
                 }
                 Body::SessionEstablishmentRequest(_) => {
-                    let seid = upf.new_session(incoming.request.from).await.unwrap();
+                    let seid = upf_handle.new_session(incoming.request.from).await.unwrap();
                     let f_seid = FSeid {
                         v4: true,
                         seid: Some(seid),
@@ -137,9 +139,179 @@ async fn an_smf_and_a_upf_set_up_an_association_and_a_session() {
     );
 }
 
+/// Answer an Association Setup Request, a Node Report Request and a Session
+/// Establishment Request of the peer.
+async fn answer(handle: &Handle, incoming: Incoming) {
+    let node_id = NodeId::Ipv4(Ipv4Addr::LOCALHOST);
+    let result = match &incoming.message.body {
+        Body::AssociationSetupRequest(_) => {
+            let response =
+                AssociationSetupResponse::new(node_id, accepted(), RecoveryTimeStamp::new(7));
+            incoming.respond(response).await
+        }
+        Body::NodeReportRequest(_) => {
+            incoming
+                .respond(NodeReportResponse::new(node_id, accepted()))
+                .await
+        }
+        Body::SessionEstablishmentRequest(_) => {
+            let seid = handle.new_session(incoming.request.from).await.unwrap();
+            let f_seid = FSeid {
+                v4: true,
+                seid: Some(seid),
+                ipv4: Some(Ipv4Addr::LOCALHOST),
+                ..Default::default()
+            };
+            let response =
+                SessionEstablishmentResponse::new(node_id, accepted()).with_up_f_seid(f_seid);
+            incoming.respond(response).await
+        }
+        other => panic!("{other:?}"),
+    };
+    result.unwrap();
+}
+
+/// Each endpoint waits for the response of its own request while it answers the peer's,
+/// which waits for it: a handle beside the incoming requests.
+#[tokio::test]
+async fn both_ways_at_once() {
+    let mut smf = Endpoint::bind(ANY, config(Function::Cp)).await.unwrap();
+    let mut upf = Endpoint::bind(ANY, config(Function::Up)).await.unwrap();
+    let (smf_address, upf_address) = (smf.local_addr(), upf.local_addr());
+    let node_id = NodeId::Ipv4(Ipv4Addr::LOCALHOST);
+    let (smf_handle, upf_handle) = (smf.handle(), upf.handle());
+    let setup = AssociationSetupRequest::new(node_id.clone(), RecoveryTimeStamp::new(7));
+    let setup = smf_handle.request(
+        upf_address,
+        Message {
+            header: Header::node(0),
+            body: setup.into(),
+        },
+    );
+    tokio::pin!(setup);
+    loop {
+        tokio::select! {
+            response = &mut setup => {
+                assert_eq!(response.unwrap().body.cause(), Some(CauseValue::RequestAccepted));
+                break;
+            }
+            Some(incoming) = upf.incoming() => answer(&upf_handle, incoming).await,
+        }
+    }
+    // The UPF's Node Report and the SMF's establishment, at once
+    let report = NodeReportRequest::new(
+        node_id.clone(),
+        NodeReportType {
+            uprr: true,
+            ..Default::default()
+        },
+    );
+    let report = upf_handle.request(
+        smf_address,
+        Message {
+            header: Header::node(0),
+            body: report.into(),
+        },
+    );
+    let seid = smf_handle.new_session(upf_address).await.unwrap();
+    let f_seid = FSeid {
+        v4: true,
+        seid: Some(seid),
+        ipv4: Some(Ipv4Addr::LOCALHOST),
+        ..Default::default()
+    };
+    let pdr = CreatePdr::new_n4(
+        PdrId::new(1),
+        Precedence::new(1),
+        Pdi::new(SourceInterface::new(SourceInterfaceValue::Access)),
+    );
+    let far = CreateFar::new(
+        FarId::new(1),
+        ApplyAction {
+            forw: true,
+            ..Default::default()
+        },
+    );
+    let establishment = smf_handle.request(
+        upf_address,
+        Message {
+            header: Header::session(0, 0),
+            body: SessionEstablishmentRequest::new_n4(node_id, f_seid, pdr, far).into(),
+        },
+    );
+    tokio::pin!(report, establishment);
+    let (mut reported, mut established) = (false, false);
+    while !(reported && established) {
+        tokio::select! {
+            response = &mut report, if !reported => {
+                assert_eq!(response.unwrap().body.cause(), Some(CauseValue::RequestAccepted));
+                reported = true;
+            }
+            response = &mut establishment, if !established => {
+                assert_eq!(response.unwrap().header.seid, Some(seid));
+                established = true;
+            }
+            Some(incoming) = upf.incoming() => answer(&upf_handle, incoming).await,
+            Some(incoming) = smf.incoming() => answer(&smf_handle, incoming).await,
+        }
+    }
+    // The state of the node, through a handle
+    assert!(smf_handle.association(upf_address).await.unwrap().is_some());
+    assert!(smf_handle.session(seid).await.unwrap().is_some());
+    assert_eq!(smf_handle.counters().await.unwrap(), Counters::default());
+    smf_handle.reserve_sequence().await.unwrap();
+    assert!(smf_handle.end_association(upf_address).await.unwrap());
+    assert!(smf_handle.session(seid).await.unwrap().is_none());
+    assert!(matches!(smf.event().await, Some(Event::Associated { .. })));
+    assert!(matches!(smf.event().await, Some(Event::Released { .. })));
+    smf.close().await;
+    assert_eq!(
+        smf_handle.counters().await,
+        Err(EndpointError::Closed),
+        "a handle of an endpoint that has ended"
+    );
+}
+
+/// A probe answers through its Incoming any number of times: the first alone changes
+/// the node.
+#[tokio::test]
+async fn a_probe_answers_twice() {
+    let mut upf = Endpoint::bind(ANY, config(Function::Up)).await.unwrap();
+    let peer = tokio::net::UdpSocket::bind(ANY).await.unwrap();
+    peer.send_to(&setup(4), upf.local_addr()).await.unwrap();
+    let mut incoming = upf.incoming().await.unwrap();
+    let answer = Message {
+        header: Header::node(4),
+        body: AssociationSetupResponse::new(
+            NodeId::Ipv4(Ipv4Addr::LOCALHOST),
+            accepted(),
+            RecoveryTimeStamp::new(7),
+        )
+        .into(),
+    };
+    for _ in 0..2 {
+        incoming
+            .respond_message(answer.clone(), Delivery::Send)
+            .await
+            .unwrap();
+    }
+    let peer_address = peer.local_addr().unwrap();
+    assert!(
+        upf.handle()
+            .association(peer_address)
+            .await
+            .unwrap()
+            .is_some()
+    );
+    assert!(matches!(upf.event().await, Some(Event::Associated { .. })));
+    let quiet = tokio::time::timeout(Duration::from_millis(100), upf.event()).await;
+    assert!(quiet.is_err(), "one association: {quiet:?}");
+}
+
 #[tokio::test]
 async fn a_request_without_an_answer_times_out_after_n1() {
-    let smf = Endpoint::bind(ANY, config(Function::Cp)).await.unwrap();
+    let smf_endpoint = Endpoint::bind(ANY, config(Function::Cp)).await.unwrap();
+    let smf = smf_endpoint.handle();
     // A socket that takes the datagrams and answers none
     let silent = tokio::net::UdpSocket::bind(ANY).await.unwrap();
     let heartbeat = Message {
@@ -285,7 +457,7 @@ async fn an_answer_that_does_not_encode_is_an_error() {
 /// A heartbeat interval beyond what an Instant holds is never, and the task goes on.
 #[tokio::test]
 async fn a_heartbeat_of_never() {
-    let smf = Endpoint::bind(
+    let smf_endpoint = Endpoint::bind(
         ANY,
         NodeConfig {
             heartbeat: Some(Duration::MAX),
@@ -294,6 +466,7 @@ async fn a_heartbeat_of_never() {
     )
     .await
     .unwrap();
+    let smf = smf_endpoint.handle();
     let mut upf = Endpoint::bind(ANY, config(Function::Up)).await.unwrap();
     let upf_address = upf.local_addr();
     let answering = tokio::spawn(async move {
@@ -342,7 +515,8 @@ async fn a_heartbeat_of_never() {
 /// A request whose future the caller drops is sent no more.
 #[tokio::test]
 async fn a_dropped_request_is_cancelled() {
-    let smf = Endpoint::bind(ANY, config(Function::Cp)).await.unwrap();
+    let smf_endpoint = Endpoint::bind(ANY, config(Function::Cp)).await.unwrap();
+    let smf = smf_endpoint.handle();
     let silent = tokio::net::UdpSocket::bind(ANY).await.unwrap();
     let heartbeat = Message {
         header: Header::node(0),

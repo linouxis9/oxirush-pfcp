@@ -201,7 +201,7 @@ fn block_3() {
             // The UPF's node answers a heartbeat itself
             let heartbeat = HeartbeatRequest::new(RecoveryTimeStamp::new(3_900_000_000));
             let message = Message { header: Header::node(0), body: heartbeat.into() };
-            let response = smf.request(upf.local_addr(), message).await?;
+            let response = smf.handle().request(upf.local_addr(), message).await?;
             println!("{response}");
             Ok(())
         })
