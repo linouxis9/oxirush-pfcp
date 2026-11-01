@@ -111,8 +111,10 @@ pub struct NodeConfig {
     pub capacity: usize,
     /// The UDP port of the requests that the node sends to a peer of its own accord, a
     /// heartbeat or a session request: 8805 (§4.2.2), whatever port the peer sends its
-    /// requests from. `None` for the port that the peer's request came from, for peers
-    /// on other ports, as in a test.
+    /// requests from, and a peer is of its IP address. `None` for the port that the
+    /// peer's request came from, for peers on ports of their own, as in a test: a peer is
+    /// then of its address and its port. Its association, its sessions, its Recovery Time
+    /// Stamp and its load and overload are of the peer so told apart.
     pub request_port: Option<u16>,
 }
 
@@ -486,8 +488,9 @@ pub struct Node {
     answers: Answers,
     associations: BTreeMap<Vec<u8>, Association>,
     sessions: BTreeMap<u64, Session>,
-    /// The Recovery Time Stamp of each peer, by its address, and when the node last had it.
-    recovery: BTreeMap<IpAddr, (u32, Duration)>,
+    /// The Recovery Time Stamp of each peer, as [`Node::same_peer`] tells them apart, and
+    /// when the node last had it.
+    recovery: BTreeMap<SocketAddr, (u32, Duration)>,
     heartbeats: BTreeMap<SocketAddr, Duration>,
     load: BTreeMap<Scope, LoadControl>,
     overload: BTreeMap<Scope, OverloadControl>,
@@ -844,7 +847,7 @@ impl Node {
             .sessions
             .iter()
             .filter(|(_, session)| {
-                session.peer.ip() == peer.ip() || key.as_ref() == Some(&session.node)
+                self.same_peer(session.peer, peer) || key.as_ref() == Some(&session.node)
             })
             .map(|(seid, _)| *seid)
             .collect();
@@ -854,7 +857,8 @@ impl Node {
         ended
     }
 
-    /// End the association with `peer`, of its address, without a procedure, with its
+    /// End the association with `peer`, as [`association`](Self::association) finds it,
+    /// without a procedure, with its
     /// sessions, as after [`Event::PeerDown`]: an [`Event::Released`] says what ended.
     /// `false` for a peer without an association.
     pub fn end_association(&mut self, peer: SocketAddr) -> bool {
@@ -1011,7 +1015,8 @@ impl Node {
         });
     }
 
-    /// The association with a peer, of its address, whatever its port (§4.2.2).
+    /// The association with a peer, of its address, or of its address and port without
+    /// `request_port` (§4.2.2). A peer has one: a setup of another Node ID ends it.
     pub fn association(&self, peer: SocketAddr) -> Option<&Association> {
         self.association_of(peer)
     }
@@ -1036,7 +1041,7 @@ impl Node {
             .association_of(peer)
             .map(|association| Scope::Node(association.key.clone()));
         self.overload
-            .get(&Scope::Address(peer.ip()))
+            .get(&Scope::Address(self.peer_key(peer)))
             .or_else(|| node.and_then(|scope| self.overload.get(&scope)))
             .copied()
     }
@@ -1085,7 +1090,7 @@ impl Node {
             }
             if bundled && let Some(session) = header.seid.and_then(|seid| self.sessions.get(&seid))
             {
-                peers.insert(session.peer.ip());
+                peers.insert(self.peer_key(session.peer));
                 if peers.len() > 1 {
                     self.violation(from, ViolationKind::BundledPeers, this);
                     continue;
@@ -1576,7 +1581,7 @@ impl Node {
         self.sessions
             .iter()
             .find(|(_, session)| {
-                session.peer.ip() == peer.ip() && session.peer_seid == Some(peer_seid)
+                self.same_peer(session.peer, peer) && session.peer_seid == Some(peer_seid)
             })
             .map(|(seid, _)| *seid)
     }
@@ -1614,11 +1619,24 @@ impl Node {
         self.answers.prune(now);
     }
 
-    /// The association of the address of `peer`, whatever its port (§4.2.2).
+    /// The association of `peer` (§4.2.2): of its address, or of its address and port for
+    /// a node without `request_port`.
     fn association_of(&self, peer: SocketAddr) -> Option<&Association> {
         self.associations
             .values()
-            .find(|association| association.peer.ip() == peer.ip())
+            .find(|association| self.same_peer(association.peer, peer))
+    }
+
+    /// Whether two addresses are of one peer: of one IP address when the node sends its
+    /// requests to port 8805, whatever port a peer sends from (§4.2.2), and of one address
+    /// and port for a node without `request_port`, whose peers have ports of their own.
+    fn same_peer(&self, one: SocketAddr, other: SocketAddr) -> bool {
+        self.peer_key(one) == self.peer_key(other)
+    }
+
+    /// The address of a peer as [`same_peer`](Self::same_peer) tells them apart.
+    fn peer_key(&self, peer: SocketAddr) -> SocketAddr {
+        peer_key(self.config.request_port, peer)
     }
 
     /// Where the requests of the node to the peer of `from` go: to port 8805 (§4.2.2),
@@ -1678,13 +1696,13 @@ impl Node {
             return;
         };
         // The stamps of peers without an association are bounded, the oldest first.
-        if !self.recovery.contains_key(&from.ip())
+        if !self.recovery.contains_key(&self.peer_key(from))
             && self.recovery.len() >= self.config.capacity.max(1)
         {
-            let associated: BTreeSet<IpAddr> = self
+            let associated: BTreeSet<SocketAddr> = self
                 .associations
                 .values()
-                .map(|association| association.peer.ip())
+                .map(|association| self.peer_key(association.peer))
                 .collect();
             let oldest = self
                 .recovery
@@ -1696,7 +1714,7 @@ impl Node {
                 self.recovery.remove(&oldest);
             }
         }
-        if let Some((known, _)) = self.recovery.insert(from.ip(), (stamp, now))
+        if let Some((known, _)) = self.recovery.insert(self.peer_key(from), (stamp, now))
             && known != stamp
         {
             // Load and overload of the peer start again (§6.2.3.3.2, §6.2.4.3.2).
@@ -1704,8 +1722,9 @@ impl Node {
                 .association_of(from)
                 .map(|association| Scope::Node(association.key.clone()));
             self.load.retain(|scope, _| Some(scope) != node.as_ref());
+            let (peer, request_port) = (self.peer_key(from), self.config.request_port);
             self.overload.retain(|scope, overload| {
-                overload.peer.ip() != from.ip() && Some(scope) != node.as_ref()
+                peer_key(request_port, overload.peer) != peer && Some(scope) != node.as_ref()
             });
             self.events.push_back(Event::PeerRestarted {
                 peer: from,
@@ -1752,7 +1771,7 @@ impl Node {
         // and of no other host, which would fill the maps or throttle a peer.
         let session = local_seid.and_then(|seid| self.sessions.get(&seid));
         let of_peer = |key: &[u8]| {
-            session.is_some_and(|session| session.peer.ip() == from.ip())
+            session.is_some_and(|session| self.same_peer(session.peer, from))
                 || self
                     .association_of(from)
                     .is_some_and(|association| association.key == key)
@@ -1770,10 +1789,10 @@ impl Node {
             Body::SessionEstablishmentResponse(response) => response
                 .up_f_seid
                 .as_ref()
-                .map(|f_seid| fseid_peer(from, f_seid).ip()),
-            _ => session.map(|session| session.peer.ip()),
+                .map(|f_seid| self.peer_key(fseid_peer(from, f_seid))),
+            _ => session.map(|session| self.peer_key(session.peer)),
         };
-        let address = Scope::Address(address.unwrap_or(from.ip()));
+        let address = Scope::Address(address.unwrap_or(self.peer_key(from)));
         if let Some(load) = load
             && let (Some(sequence), Some(metric)) =
                 (&load.load_control_sequence_number, &load.load_metric)
@@ -1862,7 +1881,7 @@ impl Node {
         }
         // The address of the UP F-SEID of the session, and its association.
         let session = local_seid.and_then(|seid| self.sessions.get(&seid));
-        let address = Scope::Address(session.map_or(to.ip(), |session| session.peer.ip()));
+        let address = Scope::Address(self.peer_key(session.map_or(to, |session| session.peer)));
         let node = session
             .filter(|session| self.associations.contains_key(&session.node))
             .map(|session| session.node.clone())
@@ -2042,6 +2061,17 @@ impl Node {
         retained: Option<Option<Vec<IpAddr>>>,
     ) {
         let key = key_of(&node_id);
+        // A peer, as the node tells peers apart, has one association: that of another
+        // Node ID ends.
+        let others: Vec<Vec<u8>> = self
+            .associations
+            .values()
+            .filter(|association| association.key != key && self.same_peer(association.peer, peer))
+            .map(|association| association.key.clone())
+            .collect();
+        for other in others {
+            self.release(&other);
+        }
         let replaced = self.associations.insert(
             key.clone(),
             Association {
@@ -2097,7 +2127,7 @@ impl Node {
         let ended: Vec<u64> = self
             .sessions
             .iter()
-            .filter(|(_, session)| session.node == key || session.peer.ip() == peer.ip())
+            .filter(|(_, session)| session.node == key || self.same_peer(session.peer, peer))
             .map(|(seid, _)| *seid)
             .collect();
         for seid in &ended {
@@ -2122,6 +2152,14 @@ impl Node {
 fn accepts(body: &Body) -> bool {
     body.cause()
         .is_some_and(|cause| (1..64).contains(&cause.effective().value()))
+}
+
+/// The address of a peer: of its IP address alone, port 0, for a node of a `request_port`.
+fn peer_key(request_port: Option<u16>, peer: SocketAddr) -> SocketAddr {
+    match request_port {
+        Some(_) => SocketAddr::new(peer.ip(), 0),
+        None => peer,
+    }
 }
 
 /// Whether sequence number `new` comes after `known`, through a roll-over of 32 bits.

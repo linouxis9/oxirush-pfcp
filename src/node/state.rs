@@ -79,7 +79,8 @@ pub struct OverloadControl {
 /// Whose load or overload it is: of an address, or of a Node ID (§6.2.4.3.1).
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) enum Scope {
-    Address(IpAddr),
+    /// The peer of an address, as the node tells peers apart.
+    Address(SocketAddr),
     Node(Vec<u8>),
 }
 

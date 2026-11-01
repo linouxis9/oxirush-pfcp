@@ -2865,6 +2865,129 @@ fn the_sessions_of_a_peer_end_by_its_association() {
     assert_eq!(smf.end_sessions_of(UPF), [first, second]);
 }
 
+/// The FQDN Node ID of `name`.
+fn fqdn(name: &str) -> NodeId {
+    let mut octets = Vec::new();
+    for label in name.split('.') {
+        octets.push(label.len() as u8);
+        octets.extend_from_slice(label.as_bytes());
+    }
+    NodeId::Fqdn(octets.into())
+}
+
+/// A peer is of an address and a port without `request_port`, as two SMFs on one host
+/// of a test, and of an address with it: its association, its sessions and its Recovery
+/// Time Stamp are its own.
+#[test]
+fn peers_on_one_address() {
+    let smf1: SocketAddr = "127.0.0.1:20001".parse().unwrap();
+    let smf2: SocketAddr = "127.0.0.1:20002".parse().unwrap();
+    for request_port in [None, Some(8805)] {
+        let mut upf = Node::new(NodeConfig {
+            request_port,
+            ..NodeConfig::new(fqdn("upf"), Function::Up, 1000)
+        });
+        let mut seids = Vec::new();
+        for (peer, name, stamp) in [(smf1, "smf1", 1001), (smf2, "smf2", 1002)] {
+            let setup = Message {
+                header: Header::node(1),
+                body: AssociationSetupRequest::new(fqdn(name), RecoveryTimeStamp::new(stamp))
+                    .into(),
+            };
+            upf.handle_datagram(at(0), peer, &setup.encode().unwrap());
+            let (inbound, _) = request(&mut upf);
+            let answer =
+                AssociationSetupResponse::new(fqdn("upf"), accepted(), RecoveryTimeStamp::new(1));
+            upf.respond(at(0), &inbound, answer).unwrap();
+            let f_seid = FSeid {
+                v4: true,
+                seid: Some(0x10),
+                ipv4: Some(Ipv4Addr::LOCALHOST),
+                ..Default::default()
+            };
+            let pdr = CreatePdr::new_n4(
+                PdrId::new(1),
+                Precedence::new(1),
+                Pdi::new(SourceInterface::new(SourceInterfaceValue::Access)),
+            );
+            let far = CreateFar::new(
+                FarId::new(1),
+                ApplyAction {
+                    forw: true,
+                    ..Default::default()
+                },
+            );
+            let establishment = Message {
+                header: Header::session(0, 2),
+                body: SessionEstablishmentRequest::new_n4(fqdn(name), f_seid, pdr, far).into(),
+            };
+            upf.handle_datagram(at(1), peer, &establishment.encode().unwrap());
+            let (inbound, _) = request(&mut upf);
+            let up_seid = upf.new_session(peer);
+            let up_f_seid = FSeid {
+                v4: true,
+                seid: Some(up_seid),
+                ipv4: Some(Ipv4Addr::LOCALHOST),
+                ..Default::default()
+            };
+            let response = SessionEstablishmentResponse::new(fqdn("upf"), accepted())
+                .with_up_f_seid(up_f_seid);
+            upf.respond(at(1), &inbound, response).unwrap();
+            seids.push(up_seid);
+        }
+        sent(&mut upf);
+        events(&mut upf);
+        if request_port.is_some() {
+            // One peer, of one association: the second Node ID replaced the first, with
+            // its session
+            assert_eq!(
+                upf.association(smf1)
+                    .map(|association| &association.node_id),
+                Some(&fqdn("smf2"))
+            );
+            assert!(upf.session(seids[0]).is_none() && upf.session(seids[1]).is_some());
+            continue;
+        }
+        assert_eq!(
+            upf.association(smf2)
+                .map(|association| &association.node_id),
+            Some(&fqdn("smf2"))
+        );
+        // Their heartbeats, each with its stamp: no restart
+        for i in 0..4 {
+            for (peer, stamp) in [(smf1, 1001), (smf2, 1002)] {
+                let heartbeat = Message {
+                    header: Header::node(10 + i),
+                    body: HeartbeatRequest::new(RecoveryTimeStamp::new(stamp)).into(),
+                };
+                upf.handle_datagram(at(2), peer, &heartbeat.encode().unwrap());
+            }
+        }
+        assert!(
+            !events(&mut upf)
+                .iter()
+                .any(|event| matches!(event, Event::PeerRestarted { .. }))
+        );
+        // The release of the first ends its sessions alone
+        let release = Message {
+            header: Header::node(3),
+            body: AssociationReleaseRequest::new(fqdn("smf1")).into(),
+        };
+        upf.handle_datagram(at(3), smf1, &release.encode().unwrap());
+        let (inbound, _) = request(&mut upf);
+        upf.respond(
+            at(3),
+            &inbound,
+            AssociationReleaseResponse::new(fqdn("upf"), accepted()),
+        )
+        .unwrap();
+        assert!(upf.session(seids[0]).is_none());
+        assert!(upf.session(seids[1]).is_some());
+        assert!(upf.association(smf2).is_some());
+        assert_eq!(upf.end_sessions_of(smf2), [seids[1]]);
+    }
+}
+
 // ── Local SEIDs, one session each ──────────────────────────────────────────
 
 /// An establishment of the SMF with `cp_seid` in its CP F-SEID.
