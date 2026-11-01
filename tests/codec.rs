@@ -275,16 +275,18 @@ fn a_flag_that_disagrees_is_refused_where_it_is_written() {
     );
 }
 
-/// The vectors of another implementation, when `PFCP_VECTORS` names their file: each
-/// decodes and encodes back to its octets, and its tree, in the order of its tables,
-/// reads back to itself. A fourth column names the
-/// interface to check the message on; without it, on N4 with the IEs of any interface.
+/// The vectors of go-pfcp, in the file that `PFCP_VECTORS` names, which
+/// tests/go-pfcp-vectors.py writes: each decodes and encodes back to its octets, and its
+/// tree, in the order of its tables, reads back to itself; what check() finds in them is
+/// what `go-pfcp-deviations.tsv` lists. A fourth column names the interface to check the
+/// message on; without it, on N4 with the IEs of any interface. CI runs it with
+/// `--ignored`.
 #[test]
+#[ignore = "the vectors of go-pfcp, in the file that PFCP_VECTORS names"]
 fn other_vectors_round_trip() {
-    let Ok(file) = std::env::var("PFCP_VECTORS") else {
-        return;
-    };
+    let file = std::env::var("PFCP_VECTORS").expect("PFCP_VECTORS names the file of the vectors");
     let (mut read, mut reordered) = (0, 0);
+    let mut found = Vec::new();
     for line in std::fs::read_to_string(file).unwrap().lines() {
         let fields: Vec<&str> = line.split('\t').collect();
         let octets = hex::decode(fields[2]).unwrap();
@@ -333,7 +335,7 @@ fn other_vectors_round_trip() {
                 let any = fields.len() < 4;
                 for deviation in message.check(interface) {
                     if !(any && matches!(deviation.kind, DeviationKind::NotOnInterface { .. })) {
-                        println!("  {deviation}");
+                        found.push(format!("{}\t{}\t{deviation}", fields[0], fields[1]));
                     }
                 }
             }
@@ -344,6 +346,25 @@ fn other_vectors_round_trip() {
         "{read} messages read by their tables, {reordered} of them not in the order of their tables"
     );
     assert!(read > 0, "no vector in the file");
+    let mut expected: Vec<&str> = include_str!("go-pfcp-deviations.tsv")
+        .lines()
+        .filter(|line| !line.starts_with('#') && !line.is_empty())
+        .collect();
+    let mut found: Vec<&str> = found.iter().map(String::as_str).collect();
+    expected.sort_unstable();
+    found.sort_unstable();
+    let missing: Vec<&&str> = expected
+        .iter()
+        .filter(|line| !found.contains(line))
+        .collect();
+    let more: Vec<&&str> = found
+        .iter()
+        .filter(|line| !expected.contains(line))
+        .collect();
+    assert!(
+        found == expected,
+        "not found: {missing:#?}\nnot listed: {more:#?}"
+    );
 }
 
 /// The IE types of a scope, depth first, by the forms of the registry: what a dissector
