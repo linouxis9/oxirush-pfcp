@@ -1326,3 +1326,42 @@ fn what_the_new_rules_let_pass() {
         assert!(rules(&establishment(5, source.clone()), interface).is_empty());
     }
 }
+
+/// §8.2.56: at least one bit of the Outer Header Creation Description is set, of its
+/// octets 5 and 6. The OHC of an MB-UPF's FSSM FAR has only 6/3, "Low Layer SSM and
+/// C-TEID", which NOTE 7 of Table 8.2.56-1 gives no TEID, address or port (Table
+/// 7.5.2.3-5): it is no deviation, nor is 6/1 or 6/2 alone. None at all is one.
+#[test]
+fn an_outer_header_creation_of_octet_6_alone() {
+    let of = |creation: OuterHeaderCreation| {
+        let forwarding =
+            ForwardingParameters::new(DestinationInterface::new(DestinationInterfaceValue::Core))
+                .with_outer_header_creation(creation);
+        let mut message = establishment();
+        if let Body::SessionEstablishmentRequest(request) = &mut message.body {
+            request.create_far[0].forwarding_parameters = Some(forwarding);
+        }
+        let octets = message.encode().unwrap();
+        Message::decode(&octets)
+            .unwrap()
+            .check(Interfaces::N4 | Interfaces::N4MB)
+            .into_iter()
+            .filter(|deviation| deviation.clause == "8.2.56")
+            .map(|deviation| deviation.kind)
+            .collect::<Vec<_>>()
+    };
+    let low_layer_ssm = OuterHeaderCreation {
+        low_layer_ssm_and_c_teid: true,
+        ..Default::default()
+    };
+    assert_eq!(of(low_layer_ssm), []);
+    let n19 = OuterHeaderCreation {
+        n19_indication: true,
+        ..Default::default()
+    };
+    assert_eq!(of(n19), []);
+    assert_eq!(
+        of(OuterHeaderCreation::default()),
+        [DeviationKind::Rule("no bit of the description is set")]
+    );
+}
