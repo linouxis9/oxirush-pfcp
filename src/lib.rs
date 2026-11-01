@@ -116,11 +116,18 @@ pub enum Error {
         /// Where and how.
         fault: IeFault,
     },
-    /// Content longer than a Length can say.
+    /// The content of an IE longer than its Length can say.
     TooLong {
-        /// The IE type, or 0 for the message.
+        /// The IE type.
         ie_type: u16,
         /// The length of the content.
+        length: usize,
+    },
+    /// A message longer than its Message Length can say (§7.2.2.4.1).
+    MessageTooLong {
+        /// Its message type.
+        message_type: u8,
+        /// Its octets after the first 4, which the Message Length counts.
         length: usize,
     },
     /// A message of a version of PFCP other than 1 (§7.6.2).
@@ -180,6 +187,13 @@ impl fmt::Display for Error {
             Self::TooLong { ie_type, length } => write!(
                 f,
                 "{length} octets of IE type {ie_type} are more than a Length says"
+            ),
+            Self::MessageTooLong {
+                message_type,
+                length,
+            } => write!(
+                f,
+                "{length} octets of message type {message_type} are more than a Message Length says (TS 29.244 7.2.2.4.1)"
             ),
             Self::FieldLength { ie, field } => {
                 write!(f, "{field} of {ie} is longer than its length can say")

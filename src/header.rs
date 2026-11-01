@@ -134,10 +134,12 @@ impl Header {
             | u8::from(self.seid.is_some());
         let length = match self.length {
             Some(length) => length,
-            None => u16::try_from(self.len() - 4 + body).map_err(|_| crate::Error::TooLong {
-                ie_type: 0,
-                length: body,
-            })?,
+            None => {
+                u16::try_from(self.len() - 4 + body).map_err(|_| crate::Error::MessageTooLong {
+                    message_type,
+                    length: self.len() - 4 + body,
+                })?
+            }
         };
         let mut octets = [0; SESSION_HEADER];
         octets[0] = flags;
