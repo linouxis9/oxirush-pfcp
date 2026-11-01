@@ -3895,6 +3895,53 @@ fn a_session_moved_to_another_smf_of_the_set() {
     assert_eq!((session.peer, session.peer_seid), (other, Some(0x99)));
 }
 
+/// §5.22.2 bullets 3-5: with SSET the set has one association, held by one SMF. Another
+/// SMF of the set, with no association of its own, still takes the UPF's SEID-0 handover
+/// report (header SEID 0, Old CP F-SEID of the previous SMF) for its caller, adopts the
+/// session, and may modify it: any SMF of the set controls the session, with or without
+/// an association of its own.
+#[test]
+fn sset_an_smf_without_the_association_controls_a_session() {
+    let mut smf = Node::new(NodeConfig {
+        smf_set: SmfSet {
+            sset: true,
+            ..SmfSet::default()
+        },
+        ..config(SMF, Function::Cp)
+    });
+    let old = FSeid {
+        v4: true,
+        seid: Some(0x1234),
+        ipv4: Some(Ipv4Addr::new(10, 0, 0, 9)),
+        ..Default::default()
+    };
+    let report = Message {
+        header: Header::session(0, 9),
+        body: SessionReportRequest::new(ReportType {
+            uisr: true,
+            ..Default::default()
+        })
+        .with_old_cp_f_seid(old)
+        .into(),
+    };
+    smf.handle_datagram(at(1), UPF, &report.encode().unwrap());
+    let (mut inbound, _) = request(&mut smf);
+    assert!(inbound.of_smf_set);
+    // The caller takes the session over, of the UPF's SEID that the set knows, and
+    // answers the report.
+    let local = smf.new_session(UPF);
+    smf.end_session(local);
+    smf.adopt_session(local, UPF, 0x77).unwrap();
+    inbound.seid = Some(local);
+    smf.respond(at(1), &inbound, SessionReportResponse::new(accepted()))
+        .unwrap();
+    assert_eq!(decoded(&sent(&mut smf)[0]).header.seid, Some(0x77));
+    // Any SMF of the set may modify the session, with no association of its own.
+    smf.session_request(at(2), local, SessionModificationRequest::default())
+        .unwrap();
+    assert_eq!(decoded(&sent(&mut smf)[0]).header.seid, Some(0x77));
+}
+
 trait IntoSocket {
     fn into_socket(self, port: u16) -> SocketAddr;
 }

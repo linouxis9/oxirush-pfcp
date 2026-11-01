@@ -128,8 +128,10 @@ pub struct NodeConfig {
     pub request_port: Option<u16>,
     /// How many requests of hosts without an association wait for their answer at once:
     /// Association Setup Requests, the session requests of a host of a session's F-SEID
-    /// address, and with SSET those of an SMF of the set. Beyond, one is dropped before
-    /// it is decoded, as [`Counters::refused`] counts, and its sender sends it again.
+    /// address, with SSET those of an SMF of the set, and on an SMF of a set a UP
+    /// function's report of SEID 0 that hands a session over. Beyond, one is dropped
+    /// before it is decoded, as [`Counters::refused`] counts, and its sender sends it
+    /// again.
     pub strangers: usize,
     /// The SMF sets that the node takes part in, as its CP or UP Function Features say
     /// them (§8.2.25, §8.2.58), which the caller writes in its Association Setup
@@ -326,7 +328,8 @@ pub enum ViolationKind {
     /// A session request, or a node related request of a node, from a peer without an
     /// association, or that names the Node ID of another's (§6.2.6): answered with "No
     /// established PFCP Association". A host without an association is taken for the
-    /// sessions whose F-SEID has its address, and, with SSET, as an SMF of the set.
+    /// sessions whose F-SEID has its address, with SSET as an SMF of the set, and, by an
+    /// SMF of a set, for a report of SEID 0 that hands a session over (§5.22.2).
     SessionWithoutAssociation,
     /// A session request of a SEID that is of no established session of the peer:
     /// answered with "Session context not found" (§7.2.2.4.2).
@@ -773,10 +776,16 @@ impl Node {
         }
         let mut change = Change::Nothing;
         if !is_node_related(message_type) {
-            // The association of the session, whose F-SEID may have another address.
-            let of_session = local_seid
-                .and_then(|seid| self.sessions.get(&seid))
-                .is_some_and(|session| self.associations.contains_key(&session.node));
+            // The association of the session, whose F-SEID may have another address; or,
+            // with SSET, a session of the set, which the one association that a different
+            // SMF of the set holds lets this SMF control without one of its own (§5.22.2
+            // bullet 3).
+            let session = local_seid.and_then(|seid| self.sessions.get(&seid));
+            let of_session = session
+                .is_some_and(|session| self.associations.contains_key(&session.node))
+                || (self.config.smf_set.sset
+                    && self.config.function == Function::Cp
+                    && session.is_some());
             if !of_session && self.association_of(to).is_none() {
                 return Err(NodeError::NoAssociation);
             }
@@ -1376,13 +1385,10 @@ impl Node {
                 mpas || sset
             }),
             // A UP function's request of SEID 0 with the CP F-SEID of the previous SMF,
-            // which hands the session over (§5.22.2 and §5.22.3, bullet 5).
-            56 => {
-                (set.sset || set.mpas)
-                    && association.is_some()
-                    && header.seid == Some(0)
-                    && peer_seid.is_some()
-            }
+            // which hands the session over (§5.22.2 and §5.22.3, bullet 5). With SSET the
+            // set has one association, which another SMF of the set holds, so the taking
+            // SMF needs none of its own.
+            56 => (set.sset || set.mpas) && header.seid == Some(0) && peer_seid.is_some(),
             _ => false,
         };
         let rejection = match message_type {
