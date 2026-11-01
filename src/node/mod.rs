@@ -277,6 +277,9 @@ pub enum ViolationKind {
     /// Messages bundled by a peer without an association, which could not have agreed on
     /// bundling (§6.5): discarded.
     BundledWithoutAssociation,
+    /// An establishment's response that gives the peer's SEID as 0, which says that it
+    /// is not known (§7.2.2.4.2): it establishes no session.
+    SeidZero,
 }
 
 /// Something the caller is told.
@@ -399,6 +402,8 @@ pub enum NodeError {
     /// An establishment, or its answer, of a local SEID that another session or
     /// establishment has.
     SeidInUse,
+    /// A local SEID of 0, which says that the peer's is not known (§7.2.2.4.2).
+    SeidZero,
     /// It does not encode.
     Encode(crate::Error),
 }
@@ -427,6 +432,7 @@ impl core::fmt::Display for NodeError {
             Self::Answered => write!(f, "the request has its answer (TS 29.244 6.4)"),
             Self::WrongResponse => write!(f, "the answer is not the response of the request"),
             Self::SeidInUse => write!(f, "the local SEID is of another session"),
+            Self::SeidZero => write!(f, "a SEID of 0 is of no session (TS 29.244 7.2.2.4.2)"),
             Self::Encode(error) => write!(f, "the message does not encode: {error}"),
         }
     }
@@ -650,8 +656,8 @@ impl Node {
     ///
     /// A session request without an association or throttled, a message that is no
     /// request or that the function of the node does not send, an establishment of a
-    /// local SEID that a session or another establishment has, or a modification to it,
-    /// no free sequence number, and a message that does not encode.
+    /// local SEID of 0 or that a session or another establishment has, or a modification
+    /// to it, no free sequence number, and a message that does not encode.
     pub fn request(
         &mut self,
         now: Duration,
@@ -685,6 +691,9 @@ impl Node {
             return Err(NodeError::WrongDirection);
         }
         let establishment = message_type == 50;
+        if establishment && local_seid == Some(0) {
+            return Err(NodeError::SeidZero);
+        }
         if establishment && local_seid.is_some_and(|seid| self.in_use(seid)) {
             return Err(NodeError::SeidInUse);
         }
@@ -716,6 +725,7 @@ impl Node {
                 }
                 Body::SessionModificationRequest(request) => {
                     match request.cp_f_seid.as_ref().and_then(|f_seid| f_seid.seid) {
+                        Some(0) => return Err(NodeError::SeidZero),
                         // Not to the SEID of another session; to one of new_session, yes.
                         Some(seid) if self.in_use(seid) && Some(seid) != local_seid => {
                             return Err(NodeError::SeidInUse);
@@ -895,8 +905,8 @@ impl Node {
     /// # Errors
     ///
     /// A body of another type than the response of the request, a request answered or
-    /// forgotten already, an establishment's answer of the local SEID of another session, and a
-    /// body that does not encode.
+    /// forgotten already, an establishment's answer of a local SEID of 0 or of another
+    /// session, and a body that does not encode.
     pub fn respond(
         &mut self,
         now: Duration,
@@ -915,9 +925,13 @@ impl Node {
         }
         if let Body::SessionEstablishmentResponse(response) = &body
             && let Some(seid) = response.up_f_seid.as_ref().and_then(|f_seid| f_seid.seid)
-            && self.in_use(seid)
         {
-            return Err(NodeError::SeidInUse);
+            if seid == 0 {
+                return Err(NodeError::SeidZero);
+            }
+            if self.in_use(seid) {
+                return Err(NodeError::SeidInUse);
+            }
         }
         self.respond_with(
             now,
@@ -1518,7 +1532,7 @@ impl Node {
         self.finish(now, sequence, from, false);
         self.note_recovery(now, from, &message.body);
         self.note_controls(now, from, octets, &message.body, request.local_seid);
-        self.response_effects(now, from, &request, &message);
+        self.response_effects(now, from, octets, &request, &message);
         if !request.heartbeat {
             self.events.push_back(Event::Response {
                 request: request.id,
@@ -1947,6 +1961,7 @@ impl Node {
         &mut self,
         now: Duration,
         from: SocketAddr,
+        octets: &[u8],
         request: &Outstanding,
         message: &Message,
     ) {
@@ -1968,6 +1983,10 @@ impl Node {
             Body::SessionEstablishmentResponse(response) => {
                 if let Some(local) = request.local_seid {
                     match (accepted, response.up_f_seid.as_ref()) {
+                        (true, Some(f_seid)) if f_seid.seid == Some(0) => {
+                            self.violation(from, ViolationKind::SeidZero, octets);
+                            self.abandon(request);
+                        }
                         (true, Some(f_seid)) if f_seid.seid.is_some() => {
                             let node = self
                                 .association_of(from)
@@ -2048,6 +2067,7 @@ impl Node {
             (Body::SessionEstablishmentResponse(response), effect) => {
                 // Not a SEID of another session, which a probe may answer with.
                 if let Some(local) = response.up_f_seid.as_ref().and_then(|f_seid| f_seid.seid)
+                    && local != 0
                     && !self.in_use(local)
                 {
                     let node = self
