@@ -4426,6 +4426,45 @@ fn a_seid_zero_report_is_rejected_with_seid_zero() {
     assert_eq!(decoded(&sent(&mut smf)[0]).header.seid, Some(0));
 }
 
+/// §5.22.2 bullet 3, §6.2.6.2.1: with SSET, an SMF without the set's association may
+/// modify or delete an established session of the set, and nothing more. An establishment
+/// needs an association, whatever its SEID, and so does a request of a session that is
+/// not established.
+#[test]
+fn sset_an_smf_without_the_association_establishes_nothing() {
+    let mut smf = Node::new(NodeConfig {
+        smf_set: SmfSet {
+            sset: true,
+            ..SmfSet::default()
+        },
+        ..config(SMF, Function::Cp)
+    });
+    // An establishment of a SEID of new_session, or of the caller's own: refused alike.
+    let seid = smf.new_session(UPF);
+    assert_eq!(
+        smf.request(at(0), UPF, establishment(seid)),
+        Err(NodeError::NoAssociation)
+    );
+    assert_eq!(
+        smf.request(at(0), UPF, establishment(0x99)),
+        Err(NodeError::NoAssociation)
+    );
+    // A deletion of a session that is not established.
+    let other = smf.new_session(OTHER);
+    assert_eq!(
+        smf.session_request(at(0), other, SessionDeletionRequest::default()),
+        Err(NodeError::NoAssociation)
+    );
+    assert!(sent(&mut smf).is_empty());
+    // An established session of the set, adopted, is modified and deleted.
+    smf.adopt_session(0x42, UPF, 0x77).unwrap();
+    smf.session_request(at(0), 0x42, SessionModificationRequest::default())
+        .unwrap();
+    smf.session_request(at(0), 0x42, SessionDeletionRequest::default())
+        .unwrap();
+    assert_eq!(sent(&mut smf).len(), 2);
+}
+
 trait IntoSocket {
     fn into_socket(self, port: u16) -> SocketAddr;
 }
