@@ -28,6 +28,25 @@ jobs:
       - run: cargo test
       - run: cargo test --no-default-features
 
+  # Targets without the standard library: the crate and each set of features
+  # that is `no_std` build there.
+  no-std:
+    name: Build without std (${{ matrix.target }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [thumbv7em-none-eabihf, aarch64-unknown-none]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --target ${{ matrix.target }} --no-default-features
+      - run: cargo build --target ${{ matrix.target }} --no-default-features --features node
+      - run: cargo build --target ${{ matrix.target }} --no-default-features --features serde,node
+
   msrv:
     name: MSRV (1.88)
     runs-on: ubuntu-latest
