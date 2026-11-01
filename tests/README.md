@@ -89,6 +89,8 @@ test `codec` expects them (`other_vectors_round_trip`, with `--ignored` and
   Application ID, Provide ATSSS Control Information and Created Bridge/Router Info where
   they are, and IE type 116, which no table of Release 19 has.
 - Access Type 3, which Table 8.2.153-1 has as spare.
+- Session Establishment Requests with a SEID other than 0 in their header, where the
+  peer's SEID is not known yet (§7.2.2.4.2).
 - Session Modification Requests that create, update and remove one rule (§6.3.3.2), two
   Session Establishment Requests without Node ID, CP F-SEID, Create PDR and Create FAR,
   and a Heartbeat Request without its Recovery Time Stamp.
