@@ -465,12 +465,16 @@ impl Handle {
         command: impl FnOnce(u64, Reply) -> Command,
     ) -> Result<Message, EndpointError> {
         let token = self.tokens.fetch_add(1, Ordering::Relaxed);
-        let (reply, response) = oneshot::channel();
+        // The cancel guard is declared before the oneshot, so that if the future is
+        // dropped while it sends the command, the reply is closed (the receiver dropped)
+        // before the cancel is queued. Whenever the task sees the cancel, the command's
+        // `reply.is_closed()` is then true, and the request is not sent.
         let mut cancel = Cancel {
             token,
             cancels: &self.cancels,
             done: false,
         };
+        let (reply, response) = oneshot::channel();
         self.commands
             .send(command(token, reply))
             .await
