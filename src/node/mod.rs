@@ -1125,9 +1125,10 @@ impl Node {
     }
 
     /// Answer a request with a message as it is, delivered as `delivery` says: a probe,
-    /// which may answer any number of times, and with anything. Its first answer alone
-    /// changes the node, whenever the others come; a later one replaces the answer kept
-    /// for the retransmissions while the node keeps it.
+    /// which may answer any number of times, and with anything. Its first answer of the
+    /// type of the request's response alone changes the node, whenever the others come:
+    /// the peer discards one of another type, and takes the next (§7.6.5). A later answer
+    /// replaces the one kept for the retransmissions while the node keeps it.
     ///
     /// # Errors
     ///
@@ -1142,9 +1143,9 @@ impl Node {
         self.respond_with(now, request, message.header, message.body, delivery)
     }
 
-    /// Answer a request, and keep the answer for its retransmissions. Its first answer
-    /// alone, which the node knows by the request that waits for it, changes the node: a
-    /// probe may answer again, past `keep` too.
+    /// Answer a request, and keep the answer for its retransmissions. Its first answer of
+    /// the response's type alone, which the node knows by the request that waits for it,
+    /// changes the node: a probe may answer again, past `keep` too.
     fn respond_with(
         &mut self,
         now: Duration,
@@ -1162,9 +1163,11 @@ impl Node {
             return Ok(());
         }
         let expires = now.saturating_add(self.config.keep);
+        // One of another type the peer discards (§7.6.5): it changes nothing here either.
+        let effective = message.body.message_type() == request.message_type + 1;
         if self
             .answers
-            .answer(key, request.id, octets.clone(), expires)
+            .answer(key, request.id, octets.clone(), expires, effective)
         {
             self.answered_effects(now, request, &message);
         }
@@ -2399,11 +2402,6 @@ impl Node {
 
     /// What an answer of the caller changes: the association, the session.
     fn answered_effects(&mut self, now: Duration, request: &Inbound, message: &Message) {
-        // A probe's answer of another type than the request's response is discarded by
-        // the peer (§7.6.5), so it changes nothing here either.
-        if message.body.message_type() != request.message_type + 1 {
-            return;
-        }
         let accepted = accepts(&message.body);
         if !accepted {
             return;

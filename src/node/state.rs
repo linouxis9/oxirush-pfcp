@@ -312,6 +312,8 @@ pub(crate) struct Answered {
     pub(crate) response: Option<Vec<u8>>,
     /// The request, as the node gave it to the caller: an answer of another is not its.
     id: u64,
+    /// It had an answer of the type of its response, the one that changed the node.
+    settled: bool,
     expires: Duration,
     /// Its response is a rejection of the node's own.
     rejection: bool,
@@ -329,6 +331,7 @@ impl core::fmt::Debug for Answered {
                 &self.response.as_ref().map(|response| response.len()),
             )
             .field("id", &self.id)
+            .field("settled", &self.settled)
             .field("expires", &self.expires)
             .field("rejection", &self.rejection)
             .finish()
@@ -339,8 +342,8 @@ impl core::fmt::Debug for Answered {
 /// most `capacity` of them: one that waits for its answer stays until the caller answers
 /// or forgets it, or `keep` after it came, and an answer until `keep` after it was given;
 /// a rejection of the node
-/// goes first, then the oldest answer. The first answer of a request is the one of the
-/// request that waits.
+/// goes first, then the oldest answer. The answer of a request that changes the node is
+/// its first of the type of its response.
 #[derive(Debug, Default)]
 pub(crate) struct Answers {
     entries: BTreeMap<(SocketAddr, u32), Answered>,
@@ -450,6 +453,7 @@ impl Answers {
             request,
             response: None,
             id,
+            settled: false,
             expires,
             rejection: false,
             stranger,
@@ -458,23 +462,26 @@ impl Answers {
         true
     }
 
-    /// Keep an answer of the request `id` until `expires`: whether it is its first, which
-    /// the request that waits for it has. A later answer replaces the one kept, and one
-    /// of a request that the node no longer keeps is not kept.
+    /// Keep an answer of the request `id` until `expires`, `effective` for one of the type
+    /// of its response: whether it is the first such, which changes the node. A later
+    /// answer replaces the one kept, and one of a request that the node no longer keeps
+    /// is not kept.
     pub(crate) fn answer(
         &mut self,
         key: (SocketAddr, u32),
         id: u64,
         response: Vec<u8>,
         expires: Duration,
+        effective: bool,
     ) -> bool {
-        let Some(entry) = self.entries.get(&key).filter(|entry| entry.id == id) else {
+        if !self.entries.get(&key).is_some_and(|entry| entry.id == id) {
             return false;
-        };
-        let first = entry.response.is_none();
+        }
         let Some(mut entry) = self.remove(&key) else {
             return false;
         };
+        let first = effective && !entry.settled;
+        entry.settled |= effective;
         entry.response = Some(response);
         entry.expires = expires;
         self.insert(key, entry);
@@ -496,6 +503,7 @@ impl Answers {
                 request,
                 response: Some(response),
                 id: 0,
+                settled: true,
                 expires,
                 rejection: true,
                 stranger: false,
