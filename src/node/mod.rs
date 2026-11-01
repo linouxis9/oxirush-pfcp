@@ -716,7 +716,7 @@ impl Node {
                     header: Header::node(0),
                     body: request.into(),
                 };
-                let _ = self.send(now, peer, message, true, None, Change::Nothing);
+                let _ = self.send(now, peer, message, true, None, None, Change::Nothing);
             }
         }
         for scope in self.overload.ended(now) {
@@ -848,19 +848,30 @@ impl Node {
             Change::Moves(new) => Some(new),
             _ => local_seid.filter(|_| establishment),
         };
-        let id = self.send(now, to, message, false, local_seid, change)?;
+        // The session that the request is of, which its response acts on: that of an
+        // establishment is the one that it holds.
+        let mark = match local_seid.and_then(|seid| self.sessions.get(&seid)) {
+            Some(session) => Some(session.mark),
+            None if establishment && local_seid.is_some() => Some(self.mark()),
+            None => None,
+        };
+        let id = self.send(now, to, message, false, local_seid, mark, change)?;
         if let Some(seid) = held {
             if !self.sessions.contains_key(&seid) {
                 let node = self
                     .association_of(to)
                     .map(|association| association.key.clone())
                     .unwrap_or_default();
+                let mark = match establishment {
+                    true => mark.expect("of the establishment"),
+                    false => self.mark(),
+                };
                 let session = Session {
                     peer: to,
                     peer_seid: None,
                     node,
                     reserved: false,
-                    mark: self.mark(),
+                    mark,
                 };
                 self.sessions.insert(seid, session);
             }
@@ -878,12 +889,22 @@ impl Node {
             || self.sessions.is_alias(seid)
     }
 
+    /// The local SEID of the session that a request of the node is of, while it is that
+    /// session: where it moved since, and not a session that took its SEID after it ended
+    /// (§6.3.3, Table 7.5.4.1-1 NOTE 2).
+    fn session_of(&self, request: &Outstanding) -> Option<u64> {
+        let local = self.sessions.resolve(request.local_seid?)?;
+        let session = self.sessions.get(&local)?;
+        (Some(session.mark) == request.mark).then_some(local)
+    }
+
     /// A request that ends without its response, or with a rejection: an establishment
     /// leaves no session, and a move frees its new SEID.
     fn abandon(&mut self, request: &Outstanding) {
         let held = match request.change {
             Change::Moves(new) => Some(new),
-            _ => request.local_seid.filter(|_| request.message_type == 50),
+            _ if request.message_type == 50 => self.session_of(request),
+            _ => None,
         };
         if let Some(seid) = held
             && self
@@ -1800,6 +1821,7 @@ impl Node {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn send(
         &mut self,
         now: Duration,
@@ -1807,6 +1829,7 @@ impl Node {
         mut message: Message,
         heartbeat: bool,
         local_seid: Option<u64>,
+        mark: Option<u64>,
         change: Change,
     ) -> Result<RequestId, NodeError> {
         let sequence = self.next_free_sequence()?;
@@ -1825,10 +1848,6 @@ impl Node {
         if heartbeat {
             self.beating.insert(to);
         }
-        // Which session the request is of, so that its response acts on that session only.
-        let mark = local_seid
-            .and_then(|seid| self.sessions.get(&seid))
-            .map(|session| session.mark);
         self.outstanding.insert(
             sequence,
             Outstanding {
@@ -2296,7 +2315,7 @@ impl Node {
                 }
             }
             Body::SessionEstablishmentResponse(response) => {
-                if let Some(local) = request.local_seid {
+                if let Some(local) = self.session_of(request) {
                     match (accepted, response.up_f_seid.as_ref()) {
                         (true, Some(f_seid)) if f_seid.seid == Some(0) => {
                             self.violation(from, ViolationKind::SeidZero, octets);
@@ -2307,7 +2326,7 @@ impl Node {
                                 .association_of(from)
                                 .map(|association| association.key.clone())
                                 .unwrap_or_default();
-                            let mark = self.mark();
+                            let mark = request.mark.expect("of the establishment");
                             self.sessions.insert(
                                 local,
                                 Session {
@@ -2323,12 +2342,9 @@ impl Node {
                     }
                 }
             }
-            // The session of the request, whatever SEID the header of the response has,
-            // and only if it is still that session (not one that reused its SEID).
+            // The session of the request, whatever SEID the header of the response has.
             _ if accepted && request.change == Change::Ends => {
-                if let Some(local) = request.local_seid
-                    && self.sessions.get(&local).map(|session| session.mark) == request.mark
-                {
+                if let Some(local) = self.session_of(request) {
                     self.sessions.remove(&local);
                 }
             }
@@ -2336,11 +2352,8 @@ impl Node {
                 let Change::Moves(new) = request.change else {
                     return;
                 };
-                let moved = request
-                    .local_seid
-                    .filter(|local| {
-                        self.sessions.get(local).map(|session| session.mark) == request.mark
-                    })
+                let moved = self
+                    .session_of(request)
                     .and_then(|local| self.sessions.remove(&local).map(|session| (local, session)));
                 match moved {
                     Some((local, session)) => {
@@ -2361,7 +2374,7 @@ impl Node {
             // A new CP F-SEID for the session, of another SMF (§5.22).
             Body::SessionReportResponse(response) if accepted => {
                 if let (Some(f_seid), Some(local)) =
-                    (response.cp_f_seid.as_ref(), request.local_seid)
+                    (response.cp_f_seid.as_ref(), self.session_of(request))
                     && let Some(session) = self.sessions.get(&local)
                 {
                     // Not of SEID 0, which is of no session (§7.2.2.4.2).
