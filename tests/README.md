@@ -8,7 +8,8 @@
 | `captures` | The 213 messages of the lab runs (`captures/`): each decodes, encodes back byte for byte, has a tree that reads back, and is checked on its interface |
 | `check` | What `check()` finds on each interface, with the clause and the Cause of each |
 | `node` | The procedures of clause 6 on a `Node`: one test for each requirement of `spec/requirements.tsv` that names it |
-| `endpoint` | Two endpoints on the loopback: a request that times out, a full queue, an answer that does not encode, a dropped request, `close()` |
+| `endpoint` | Two endpoints on the loopback: a setup and a session, both ways at once through a `Handle`, a probe that answers twice, a request that times out, a full queue and a full node, an `Incoming` dropped or answered in vain, an answer that does not encode, a heartbeat of never, a request dropped before and after the task takes it, `close()` |
+| `allocation` | What the node allocates and keeps of what it rejects unread: the datagrams of hosts without an association, and their rejections |
 | `codec` | The codec, the trees and paths, the IEs that a scope keeps as octets, and the vectors of `PFCP_VECTORS` |
 | `serde` | A message and an IE as JSON through serde |
 | `readme` | Each Rust block of the README prints what the README shows |
