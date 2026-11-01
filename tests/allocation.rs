@@ -30,23 +30,28 @@ struct Counting;
 
 thread_local! {
     static ALLOCATED: Cell<usize> = const { Cell::new(0) };
+    /// What is allocated and not freed yet.
+    static HELD: Cell<isize> = const { Cell::new(0) };
 }
 
 // SAFETY: the allocations are the system's; the count is of this thread alone.
 unsafe impl GlobalAlloc for Counting {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
         ALLOCATED.with(|allocated| allocated.set(allocated.get() + layout.size()));
+        HELD.with(|held| held.set(held.get() + layout.size() as isize));
         // SAFETY: as the caller of alloc has it.
         unsafe { System.alloc(layout) }
     }
 
     unsafe fn dealloc(&self, pointer: *mut u8, layout: Layout) {
+        HELD.with(|held| held.set(held.get() - layout.size() as isize));
         // SAFETY: as the caller of dealloc has it.
         unsafe { System.dealloc(pointer, layout) }
     }
 
     unsafe fn realloc(&self, pointer: *mut u8, layout: Layout, size: usize) -> *mut u8 {
         ALLOCATED.with(|allocated| allocated.set(allocated.get() + size));
+        HELD.with(|held| held.set(held.get() + size as isize - layout.size() as isize));
         // SAFETY: as the caller of realloc has it.
         unsafe { System.realloc(pointer, layout, size) }
     }
@@ -54,6 +59,13 @@ unsafe impl GlobalAlloc for Counting {
 
 #[global_allocator]
 static COUNTING: Counting = Counting;
+
+/// What `f` leaves allocated on this thread.
+fn held(f: impl FnOnce()) -> isize {
+    let before = HELD.with(Cell::get);
+    f();
+    HELD.with(Cell::get) - before
+}
 
 /// What `f` allocates on this thread.
 fn allocated(f: impl FnOnce()) -> usize {
@@ -139,4 +151,31 @@ fn a_setup_beyond_the_strangers_costs_little() {
     });
     assert!(cost < 4 * flood.len(), "{cost} octets for {}", flood.len());
     assert_eq!(upf.counters().refused, 1);
+}
+
+/// What the node keeps of the requests that it rejects, to answer their retransmissions,
+/// is not their octets: 200 rejected establishments of 64 KB from a host without an
+/// association leave a few kilooctets each at most.
+#[test]
+fn what_is_kept_of_a_rejection_is_small() {
+    let mut upf = Node::new(NodeConfig::new(
+        NodeId::Ipv4(Ipv4Addr::new(10, 0, 0, 2)),
+        Function::Up,
+        1,
+    ));
+    let node_id = [0, 60, 0, 5, 0, 10, 9, 9, 9];
+    let mut octets = flooded(50, Some(0), &node_id);
+    let kept = held(|| {
+        for sequence in 1..=200u32 {
+            octets[12..15].copy_from_slice(&sequence.to_be_bytes()[1..]);
+            upf.handle_datagram(Duration::ZERO, HOST, &octets);
+            while upf.poll_transmit().is_some() {}
+            while upf.poll_event().is_some() {}
+        }
+    });
+    assert!(kept < 200 * 1024, "{kept} octets kept for 200 rejections");
+    // A retransmission is answered still, from what the node kept
+    upf.handle_datagram(Duration::ZERO, HOST, &octets);
+    assert!(upf.poll_transmit().is_some());
+    assert!(upf.poll_event().is_none());
 }
