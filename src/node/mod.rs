@@ -478,8 +478,11 @@ pub enum NodeError {
     WrongDirection,
     /// Every sequence number is outstanding, reserved or recent.
     NoSequence,
-    /// An answer to a request that has one already (§6.4), or that the caller forgot.
+    /// An answer to a request that has one already (§6.4).
     Answered,
+    /// An answer to a request that is no longer waiting: it expired past `keep`, or the
+    /// caller forgot it.
+    Forgotten,
     /// An answer of another type than the response of the request.
     WrongResponse,
     /// An establishment, or its answer, of a local SEID that another session or
@@ -513,6 +516,10 @@ impl core::fmt::Display for NodeError {
             ),
             Self::NoSequence => write!(f, "no sequence number is free"),
             Self::Answered => write!(f, "the request has its answer (TS 29.244 6.4)"),
+            Self::Forgotten => write!(
+                f,
+                "the request is no longer waiting for an answer (TS 29.244 6.4)"
+            ),
             Self::WrongResponse => write!(f, "the answer is not the response of the request"),
             Self::SeidInUse => write!(f, "the local SEID is of another session"),
             Self::SeidZero => write!(f, "a SEID of 0 is of no session (TS 29.244 7.2.2.4.2)"),
@@ -1031,9 +1038,9 @@ impl Node {
     ///
     /// # Errors
     ///
-    /// A body of another type than the response of the request, a request answered or
-    /// forgotten already, an establishment's answer of a local SEID of 0 or of another
-    /// session, and a body that does not encode.
+    /// A body of another type than the response of the request, a request answered
+    /// already or no longer waiting, an establishment's answer of a local SEID of 0 or of
+    /// another session, and a body that does not encode.
     pub fn respond(
         &mut self,
         now: Duration,
@@ -1044,11 +1051,12 @@ impl Node {
         if body.message_type() != request.message_type + 1 {
             return Err(NodeError::WrongResponse);
         }
-        if !self
-            .answers
-            .waits(&(request.from, request.sequence), request.id)
-        {
+        let key = (request.from, request.sequence);
+        if self.answers.answered(&key, request.id) {
             return Err(NodeError::Answered);
+        }
+        if !self.answers.waits(&key, request.id) {
+            return Err(NodeError::Forgotten);
         }
         if let Body::SessionEstablishmentResponse(response) = &body
             && let Some(seid) = response.up_f_seid.as_ref().and_then(|f_seid| f_seid.seid)
