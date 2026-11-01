@@ -45,8 +45,8 @@ fn drain(node: &mut Node) -> Vec<(SocketAddr, Vec<u8>)> {
     let mut sent = Vec::new();
     while let Some(transmit) = node.poll_transmit() {
         let message = Message::decode(&transmit.octets).expect("what a node sends decodes");
-        assert_eq!(message.encode().expect("and encodes"), transmit.octets);
-        sent.push((transmit.to, transmit.octets));
+        assert_eq!(message.encode().expect("and encodes"), *transmit.octets);
+        sent.push((transmit.to, transmit.octets.0));
     }
     sent
 }
