@@ -4837,6 +4837,95 @@ fn a_refused_establishment_leaves_no_session() {
     assert!(smf.session(cp_seid).is_none());
 }
 
+/// §5.22.2, Table 7.4.4.3-1: an Association Update that turns SSET off or on changes
+/// what an SMF of the set without an association may ask. Once the holder of the set's
+/// association withdraws SSET, another SMF's modification is answered "No established
+/// PFCP Association"; once it announces SSET, the modification goes to the caller.
+#[test]
+fn an_association_update_changes_the_sset_of_the_set() {
+    let set = fqdn("set.example");
+    let other: SocketAddr = Ipv4Addr::new(10, 0, 0, 7).into_socket(8805);
+    let sset = SmfSet {
+        sset: true,
+        ..SmfSet::default()
+    };
+    let modification = |seid, sequence| Message {
+        header: Header::session(seid, sequence),
+        body: SessionModificationRequest::default().into(),
+    };
+    let update = |sset| Message {
+        header: Header::node(8),
+        body: AssociationUpdateRequest::new(fqdn("set.example"))
+            .with_cp_function_features(CpFunctionFeatures {
+                sset,
+                ..Default::default()
+            })
+            .into(),
+    };
+    let updated = |upf: &mut Node, sset| {
+        upf.handle_datagram(at(2), SMF, &update(sset).encode().unwrap());
+        let (inbound, _) = request(upf);
+        upf.respond(
+            at(2),
+            &inbound,
+            AssociationUpdateResponse::new(node_id(UPF), accepted()),
+        )
+        .unwrap();
+    };
+    let smfs = [(SMF, set.clone(), sset_features(), None)];
+    let (mut upf, up_seid) = upf_of_set(sset, &smfs);
+    assert_eq!(taken(&mut upf, other, modification(up_seid, 7)), Ok(true));
+    updated(&mut upf, false);
+    assert_eq!(
+        taken(&mut upf, other, modification(up_seid, 9)),
+        Err(vec![ViolationKind::SessionWithoutAssociation])
+    );
+    let smfs = [(SMF, set, CpFunctionFeatures::default(), None)];
+    let (mut upf, up_seid) = upf_of_set(sset, &smfs);
+    assert_eq!(
+        taken(&mut upf, other, modification(up_seid, 7)),
+        Err(vec![ViolationKind::SessionWithoutAssociation])
+    );
+    updated(&mut upf, true);
+    assert_eq!(taken(&mut upf, other, modification(up_seid, 9)), Ok(true));
+}
+
+/// §5.22.2 bullet 3: an SMF without an association updates or releases the set's
+/// association only when that association is of SSET. A UPF of SSET with an association
+/// whose SMF did not announce SSET answers another host's update or release of it with
+/// "No established PFCP Association".
+#[test]
+fn sset_an_update_of_an_association_not_of_sset_is_refused() {
+    let set = fqdn("set.example");
+    let other: SocketAddr = Ipv4Addr::new(10, 0, 0, 7).into_socket(8805);
+    let sset = SmfSet {
+        sset: true,
+        ..SmfSet::default()
+    };
+    let update = Message {
+        header: Header::node(8),
+        body: AssociationUpdateRequest::new(set.clone()).into(),
+    };
+    let release = Message {
+        header: Header::node(9),
+        body: AssociationReleaseRequest::new(set.clone()).into(),
+    };
+    let smfs = [(SMF, set.clone(), CpFunctionFeatures::default(), None)];
+    let (mut upf, _) = upf_of_set(sset, &smfs);
+    assert_eq!(
+        taken(&mut upf, other, update.clone()),
+        Err(vec![ViolationKind::UnknownNode])
+    );
+    assert_eq!(
+        taken(&mut upf, other, release.clone()),
+        Err(vec![ViolationKind::UnknownNode])
+    );
+    let smfs = [(SMF, set, sset_features(), None)];
+    let (mut upf, _) = upf_of_set(sset, &smfs);
+    assert_eq!(taken(&mut upf, other, update), Ok(true));
+    assert_eq!(taken(&mut upf, other, release), Ok(true));
+}
+
 trait IntoSocket {
     fn into_socket(self, port: u16) -> SocketAddr;
 }
