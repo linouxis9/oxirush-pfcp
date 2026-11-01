@@ -1001,15 +1001,12 @@ pfcp_layout! {
         if fteid.chid && !fteid.ch {
             found.push(Deviation::new(path, "8.2.3", DeviationKind::Rule("CHID is set and CH is not")));
         }
-        // With CH, no TEID and no address: unknown octets of the length of a TEID, and of
-        // the addresses that V4 and V6 announce, are those, and other ones of a later
-        // release, which the receiver ignores (§8.1.2).
+        // With CH, no TEID and no address, whether or not CHID adds a CHOOSE ID: octets
+        // of the length of a TEID, and of the addresses that V4 and V6 announce, are
+        // those, and other ones of a later release, which the receiver ignores (§8.1.2).
         let teid = [4, 4 + 4 * usize::from(fteid.v4), 4 + 16 * usize::from(fteid.v6)];
         let both = 4 + 4 * usize::from(fteid.v4) + 16 * usize::from(fteid.v6);
-        if fteid.ch
-            && !fteid.chid
-            && (teid.contains(&fteid.extra.len()) || fteid.extra.len() == both)
-        {
+        if fteid.ch && (teid.contains(&fteid.extra.len()) || fteid.extra.len() == both) {
             found.push(Deviation::new(path, "8.2.3", DeviationKind::Rule("CH is set, and octets of a TEID or an address follow")));
         }
     }
