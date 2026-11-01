@@ -851,9 +851,9 @@ impl Node {
         ended
     }
 
-    /// End the association with `peer` without a procedure, with its sessions, as after
-    /// [`Event::PeerDown`]: an [`Event::Released`] says what ended. `false` for a peer
-    /// without an association.
+    /// End the association with `peer`, of its address, without a procedure, with its
+    /// sessions, as after [`Event::PeerDown`]: an [`Event::Released`] says what ended.
+    /// `false` for a peer without an association.
     pub fn end_association(&mut self, peer: SocketAddr) -> bool {
         let Some(key) = self
             .association_of(peer)
@@ -1014,7 +1014,7 @@ impl Node {
         });
     }
 
-    /// The association with a peer.
+    /// The association with a peer, of its address, whatever its port (§4.2.2).
     pub fn association(&self, peer: SocketAddr) -> Option<&Association> {
         self.association_of(peer)
     }

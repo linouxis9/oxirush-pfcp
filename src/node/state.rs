@@ -30,7 +30,8 @@ use crate::values::NodeId;
 pub struct Association {
     /// The peer's Node ID, which identifies the association.
     pub node_id: NodeId,
-    /// Its address.
+    /// Where the requests of the node go: the peer's address, on port 8805, or as
+    /// `NodeConfig::request_port` has it (§4.2.2).
     pub peer: SocketAddr,
     pub(crate) key: Vec<u8>,
 }
