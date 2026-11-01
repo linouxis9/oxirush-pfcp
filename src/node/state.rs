@@ -45,8 +45,113 @@ pub struct Session {
     /// The peer's SEID: the SEID of the header of what goes to it.
     pub peer_seid: Option<u64>,
     pub(crate) node: Vec<u8>,
-    /// An establishment of the node's is outstanding for it.
-    pub(crate) establishing: bool,
+    /// An establishment of the node's, or a move of a session to it, is outstanding for
+    /// it: no other may take it.
+    pub(crate) reserved: bool,
+}
+
+/// The sessions of the node by their local SEIDs, with the peer's SEID of each and the
+/// previous local SEIDs of the sessions that moved.
+#[derive(Debug, Default)]
+pub(crate) struct Sessions {
+    by_local: BTreeMap<u64, Session>,
+    /// (peer's SEID, local SEID) of each session that has a peer's SEID.
+    by_peer: BTreeSet<(u64, u64)>,
+    /// A previous local SEID of a session, after a change of its CP F-SEID: to the new
+    /// one, until when.
+    aliases: BTreeMap<u64, (u64, Duration)>,
+    aliasing: BTreeSet<(Duration, u64)>,
+}
+
+impl Sessions {
+    pub(crate) fn get(&self, local: &u64) -> Option<&Session> {
+        self.by_local.get(local)
+    }
+
+    pub(crate) fn contains_key(&self, local: &u64) -> bool {
+        self.by_local.contains_key(local)
+    }
+
+    pub(crate) fn iter(&self) -> impl Iterator<Item = (&u64, &Session)> {
+        self.by_local.iter()
+    }
+
+    pub(crate) fn insert(&mut self, local: u64, session: Session) {
+        if let Some(seid) = session.peer_seid {
+            self.by_peer.insert((seid, local));
+        }
+        if let Some(old) = self.by_local.insert(local, session)
+            && let Some(seid) = old.peer_seid
+            && self.by_local[&local].peer_seid != Some(seid)
+        {
+            self.by_peer.remove(&(seid, local));
+        }
+    }
+
+    pub(crate) fn remove(&mut self, local: &u64) -> Option<Session> {
+        let session = self.by_local.remove(local)?;
+        if let Some(seid) = session.peer_seid {
+            self.by_peer.remove(&(seid, *local));
+        }
+        Some(session)
+    }
+
+    /// Change where the messages of a session go, and the peer's SEID.
+    pub(crate) fn set_peer(&mut self, local: u64, peer: SocketAddr, peer_seid: Option<u64>) {
+        if let Some(mut session) = self.remove(&local) {
+            session.peer = peer;
+            session.peer_seid = peer_seid;
+            self.insert(local, session);
+        }
+    }
+
+    pub(crate) fn reserve(&mut self, local: u64, reserved: bool) {
+        if let Some(session) = self.by_local.get_mut(&local) {
+            session.reserved = reserved;
+        }
+    }
+
+    /// The local SEIDs of the sessions whose peer's SEID is `peer_seid`.
+    pub(crate) fn of_peer_seid(&self, peer_seid: u64) -> impl Iterator<Item = u64> + '_ {
+        self.by_peer
+            .range((peer_seid, 0)..=(peer_seid, u64::MAX))
+            .map(|(_, local)| *local)
+    }
+
+    /// Keep `old` as a SEID of the session of `new` until `until`.
+    pub(crate) fn alias(&mut self, old: u64, new: u64, until: Duration) {
+        if let Some((_, before)) = self.aliases.insert(old, (new, until)) {
+            self.aliasing.remove(&(before, old));
+        }
+        self.aliasing.insert((until, old));
+    }
+
+    pub(crate) fn is_alias(&self, seid: u64) -> bool {
+        self.aliases.contains_key(&seid)
+    }
+
+    /// The local SEID of the session of a SEID that a header has: its own, or the one it
+    /// moved to.
+    pub(crate) fn resolve(&self, seid: u64) -> Option<u64> {
+        match self.by_local.contains_key(&seid) {
+            true => Some(seid),
+            false => self
+                .aliases
+                .get(&seid)
+                .map(|(new, _)| *new)
+                .filter(|new| self.by_local.contains_key(new)),
+        }
+    }
+
+    /// Forget the previous SEIDs that have outlived their time.
+    pub(crate) fn prune(&mut self, now: Duration) {
+        while let Some(&(until, old)) = self.aliasing.first()
+            && until <= now
+        {
+            self.aliasing.pop_first();
+            self.aliases.remove(&old);
+        }
+    }
 }
 
 /// The load control information of a peer (§6.2.3.3).
