@@ -291,13 +291,16 @@ impl core::fmt::Debug for Answered {
 
 /// The requests of the peers that the node keeps for their retransmissions (§6.4), at
 /// most `capacity` of them: one that waits for its answer stays until the caller answers
-/// or forgets it, and an answer until `keep` after it was given; a rejection of the node
+/// or forgets it, or `keep` after it came, and an answer until `keep` after it was given;
+/// a rejection of the node
 /// goes first, then the oldest answer. The first answer of a request is the one of the
 /// request that waits.
 #[derive(Debug, Default)]
 pub(crate) struct Answers {
     entries: BTreeMap<(SocketAddr, u32), Answered>,
-    /// The rejections of the node and the other answers, by when they go.
+    /// The requests that wait for their answer, the rejections of the node and the other
+    /// answers, by when they go.
+    waiting: BTreeSet<(Duration, SocketAddr, u32)>,
     rejections: BTreeSet<(Duration, SocketAddr, u32)>,
     answers: BTreeSet<(Duration, SocketAddr, u32)>,
     /// How many requests of hosts without an association wait for their answer.
@@ -318,33 +321,27 @@ impl Answers {
             .is_some_and(|entry| entry.id == id && entry.response.is_none())
     }
 
-    fn index(&mut self, entry: &Answered) -> Option<&mut BTreeSet<(Duration, SocketAddr, u32)>> {
+    fn index(&mut self, entry: &Answered) -> &mut BTreeSet<(Duration, SocketAddr, u32)> {
         match (&entry.response, entry.rejection) {
-            (None, _) => None,
-            (Some(_), true) => Some(&mut self.rejections),
-            (Some(_), false) => Some(&mut self.answers),
+            (None, _) => &mut self.waiting,
+            (Some(_), true) => &mut self.rejections,
+            (Some(_), false) => &mut self.answers,
         }
     }
 
     pub(crate) fn remove(&mut self, key: &(SocketAddr, u32)) -> Option<Answered> {
         let entry = self.entries.remove(key)?;
-        match self.index(&entry) {
-            Some(index) => {
-                index.remove(&(entry.expires, key.0, key.1));
-            }
-            None if entry.stranger => self.strangers -= 1,
-            None => {}
+        self.index(&entry).remove(&(entry.expires, key.0, key.1));
+        if entry.stranger && entry.response.is_none() {
+            self.strangers -= 1;
         }
         Some(entry)
     }
 
     fn insert(&mut self, key: (SocketAddr, u32), entry: Answered) {
-        match self.index(&entry) {
-            Some(index) => {
-                index.insert((entry.expires, key.0, key.1));
-            }
-            None if entry.stranger => self.strangers += 1,
-            None => {}
+        self.index(&entry).insert((entry.expires, key.0, key.1));
+        if entry.stranger && entry.response.is_none() {
+            self.strangers += 1;
         }
         self.entries.insert(key, entry);
     }
@@ -380,13 +377,14 @@ impl Answers {
         true
     }
 
-    /// Keep the request `id` until its answer, of a `stranger` without an association or
-    /// not: `false`, and counted, when there is no room.
+    /// Keep the request `id` until its answer or `expires`, of a `stranger` without an
+    /// association or not: `false`, and counted, when there is no room.
     pub(crate) fn wait(
         &mut self,
         key: (SocketAddr, u32),
         request: Digest,
         id: u64,
+        expires: Duration,
         capacity: usize,
         stranger: bool,
     ) -> bool {
@@ -399,7 +397,7 @@ impl Answers {
             request,
             response: None,
             id,
-            expires: Duration::ZERO,
+            expires,
             rejection: false,
             stranger,
         };
@@ -462,14 +460,16 @@ impl Answers {
 
     /// Forget the answers that have outlived `keep`.
     pub(crate) fn prune(&mut self, now: Duration) {
-        let entries = &mut self.entries;
-        for index in [&mut self.rejections, &mut self.answers] {
-            while let Some(&(until, peer, sequence)) = index.first()
-                && until <= now
-            {
-                index.pop_first();
-                entries.remove(&(peer, sequence));
-            }
+        loop {
+            let first = [&self.waiting, &self.rejections, &self.answers]
+                .into_iter()
+                .filter_map(|index| index.first().copied())
+                .filter(|(until, ..)| *until <= now)
+                .min();
+            let Some((_, peer, sequence)) = first else {
+                return;
+            };
+            self.remove(&(peer, sequence));
         }
     }
 }

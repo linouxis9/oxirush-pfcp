@@ -170,14 +170,17 @@ impl Incoming {
     pub async fn respond(mut self, body: impl Into<Body>) -> Result<(), EndpointError> {
         let request = self.request.clone();
         let body = body.into();
-        // Answered: the task forgets it if the answer fails.
-        self.answered = true;
-        self.command(move |reply| Command::Respond {
-            request,
-            body,
-            reply,
-        })
-        .await
+        // Answered once the node has the answer: cancelled or failed, the Incoming
+        // dropped forgets its request, which the task also does of a failed answer.
+        let answered = self
+            .command(move |reply| Command::Respond {
+                request,
+                body,
+                reply,
+            })
+            .await;
+        self.answered = answered.is_ok();
+        answered
     }
 
     /// Answer the request with a message as it is, for a probe, any number of times
@@ -192,14 +195,16 @@ impl Incoming {
         delivery: Delivery,
     ) -> Result<(), EndpointError> {
         let request = self.request.clone();
-        self.answered = true;
-        self.command(move |reply| Command::RespondMessage {
-            request,
-            message,
-            delivery,
-            reply,
-        })
-        .await
+        let answered = self
+            .command(move |reply| Command::RespondMessage {
+                request,
+                message,
+                delivery,
+                reply,
+            })
+            .await;
+        self.answered |= answered.is_ok();
+        answered
     }
 
     async fn command(
