@@ -106,3 +106,7 @@ session-report-request_test.go	Single IE	Access Availability Control Information
 session-report-request_test.go	Multiple IEs	spare bits are not zero (TS 29.244 8.1.2), at /pfcp/Usage Report/0/Usage Report Trigger
 session-report-request_test.go	Multiple IEs	Access Availability Control Information is no IE of this table (TS 29.244 7.6.9), at /pfcp/Session Report/0/Access Availability Control Information
 session-report-request_test.go	Multiple IEs	Access Availability Control Information is no IE of this table (TS 29.244 7.6.9), at /pfcp/Session Report/1/Access Availability Control Information
+generic_test.go	Normal	a Session Establishment Request of a SEID other than 0 (TS 29.244 7.2.2.4.2), at /header
+header_test.go	Session	a Session Establishment Request of a SEID other than 0 (TS 29.244 7.2.2.4.2), at /header
+session-establishment-request_test.go	Multiple IEs	a Session Establishment Request of a SEID other than 0 (TS 29.244 7.2.2.4.2), at /header
+session-establishment-request_test.go	Single IE	a Session Establishment Request of a SEID other than 0 (TS 29.244 7.2.2.4.2), at /header
