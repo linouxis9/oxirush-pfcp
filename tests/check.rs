@@ -116,6 +116,23 @@ fn a_grouped_ie_on_its_own_needs_what_its_interfaces_need() {
     );
 }
 
+/// A field that rows of several presences share is of the strongest, and on an
+/// interface of the presence of its row there: the Source IP Address of an IP Multicast
+/// Addressing Info is O on N4 and M on N4mb (Table 7.5.2.2-4), the weakest on both.
+#[test]
+fn a_shared_field_has_the_presence_of_its_row_on_the_interface() {
+    let row = IpMulticastAddressingInfo::table().row_of(192).unwrap();
+    assert_eq!(row.presence, Presence::Mandatory);
+    assert_eq!(row.presence_on(Interfaces::N4), Presence::Optional);
+    assert_eq!(row.presence_on(Interfaces::N4MB), Presence::Mandatory);
+    assert_eq!(
+        row.presence_on(Interfaces::N4 | Interfaces::N4MB),
+        Presence::Optional
+    );
+    let pdr_id = CreatePdr::table().row_of(56).unwrap();
+    assert_eq!(pdr_id.presence_on(Interfaces::N4), pdr_id.presence);
+}
+
 /// A set of interfaces is of the bits of the constants, and not empty.
 #[test]
 fn interfaces_of_their_bits() {

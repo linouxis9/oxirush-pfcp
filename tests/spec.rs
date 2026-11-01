@@ -400,6 +400,24 @@ fn tables() {
         // The rows of the crate, a role each, with the field that has it.
         let mut entries: Vec<CrateRow> = Vec::new();
         for (field, row) in table.rows.iter().enumerate() {
+            // A shared field is of the strongest presence of its rows.
+            let strongest = row
+                .roles
+                .iter()
+                .map(|role| role.presence)
+                .min_by_key(|presence| match presence {
+                    Presence::Mandatory => 0,
+                    Presence::Conditional => 1,
+                    Presence::Optional => 2,
+                });
+            if let Some(strongest) = strongest
+                && strongest != row.presence
+            {
+                problems.push(format!(
+                    "Table {id}, field {:?}: {:?} in the crate, and its rows are at most {strongest:?}",
+                    row.name, row.presence
+                ));
+            }
             if row.roles.is_empty() {
                 entries.push((
                     field,
