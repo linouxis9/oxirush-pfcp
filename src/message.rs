@@ -254,6 +254,17 @@ impl Message {
                 DeviationKind::Rule("a node related message is bundled"),
             ));
         }
+        // An establishment has SEID 0, the peer's SEID being not known yet, but on N4mb.
+        if message_type == 50
+            && header.seid.is_some_and(|seid| seid != 0)
+            && !Interfaces::N4MB.has_all(interface)
+        {
+            found.push(Deviation::new(
+                path,
+                "7.2.2.4.2",
+                DeviationKind::Rule("a Session Establishment Request of a SEID other than 0"),
+            ));
+        }
         let cause = self.body.cause();
         // SEID 0: an establishment, a report to another SMF, or an answer to a session
         // that the node does not have or to a request that it rejects (§7.2.2.4.2).
