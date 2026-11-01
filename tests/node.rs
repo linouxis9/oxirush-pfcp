@@ -4715,6 +4715,79 @@ fn mpas_a_handover_report_needs_an_association() {
     assert_eq!(taken(&mut of(true, true), UPF, report()), Ok(true));
 }
 
+/// Table 7.4.4.4-1: the Association Update Response carries the responder's function
+/// features too. A CP function of MPAS sets an association up with a UPF of MPAS `before`,
+/// sends it an update, which the UPF answers with its UP Function Features of MPAS
+/// `after`; whether a release then keeps a session.
+fn cp_keeps_after_an_update_answered_with(before: bool, after: bool) -> bool {
+    let mut smf = Node::new(NodeConfig {
+        smf_set: SmfSet {
+            mpas: true,
+            ..SmfSet::default()
+        },
+        ..config(SMF, Function::Cp)
+    });
+    let mut upf = node(UPF, Function::Up);
+    let up_mpas = |mpas| UpFunctionFeatures {
+        mpas,
+        ..Default::default()
+    };
+    let setup = AssociationSetupRequest::new(node_id(SMF), RecoveryTimeStamp::new(1000));
+    smf.request(
+        at(0),
+        UPF,
+        Message {
+            header: Header::node(0),
+            body: setup.into(),
+        },
+    )
+    .unwrap();
+    pass(&mut smf, &mut upf, UPF, at(0));
+    let (inbound, _) = request(&mut upf);
+    let answer =
+        AssociationSetupResponse::new(node_id(UPF), accepted(), RecoveryTimeStamp::new(1000))
+            .with_up_function_features(up_mpas(before));
+    upf.respond(at(0), &inbound, answer).unwrap();
+    pass(&mut upf, &mut smf, SMF, at(0));
+    events(&mut smf);
+    let (cp_seid, _) = established(&mut smf, &mut upf, at(0));
+    smf.request(
+        at(1),
+        UPF,
+        Message {
+            header: Header::node(0),
+            body: AssociationUpdateRequest::new(node_id(SMF)).into(),
+        },
+    )
+    .unwrap();
+    pass(&mut smf, &mut upf, UPF, at(1));
+    let (inbound, _) = request(&mut upf);
+    upf.respond(
+        at(1),
+        &inbound,
+        AssociationUpdateResponse::new(node_id(UPF), accepted())
+            .with_up_function_features(up_mpas(after)),
+    )
+    .unwrap();
+    pass(&mut upf, &mut smf, SMF, at(1));
+    events(&mut smf);
+    assert!(smf.end_association(UPF));
+    events(&mut smf)
+        .into_iter()
+        .any(|event| matches!(event, Event::Released { ref kept, .. } if kept == &[cp_seid]))
+}
+
+/// §6.2.8.2, Table 7.4.4.4-1: the node takes the set features of the peer's function from
+/// an Association Update Response as from a request: a UPF that withdraws MPAS in its
+/// answer leaves the CP nothing to keep on a release, and one that announces it there,
+/// its sessions.
+#[test]
+fn an_association_update_response_changes_the_set_features() {
+    assert!(cp_keeps_after_an_update_answered_with(true, true));
+    assert!(!cp_keeps_after_an_update_answered_with(true, false));
+    assert!(cp_keeps_after_an_update_answered_with(false, true));
+}
+
 trait IntoSocket {
     fn into_socket(self, port: u16) -> SocketAddr;
 }

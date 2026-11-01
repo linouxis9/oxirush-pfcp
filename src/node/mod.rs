@@ -2323,6 +2323,20 @@ impl Node {
                     self.release(&key);
                 }
             }
+            // The set features of the peer's function that the answer to an update carries
+            // (Table 7.4.4.4-1), as those of its request.
+            Body::AssociationUpdateResponse(response) if accepted => {
+                let features = self.features_of(
+                    response.cp_function_features.as_ref(),
+                    response.up_function_features.as_ref(),
+                );
+                if let Some(key) = self
+                    .association_of(from)
+                    .map(|association| association.key.clone())
+                {
+                    self.update_set(&key, features, None);
+                }
+            }
             Body::SessionEstablishmentResponse(response) => {
                 if let Some(local) = self.session_of(request) {
                     match (accepted, response.up_f_seid.as_ref()) {
@@ -2422,21 +2436,10 @@ impl Node {
                     self.associate(now, peer, node_id.clone(), retained, set);
                 }
             }
-            // The peer's new set features and SMF Set ID (§5.22.3, bullet 1): each taken if
-            // the update carried it, the rest of the set kept.
+            // The peer's new set features and SMF Set ID (§5.22.3, bullet 1).
             (Body::AssociationUpdateResponse(_), Effect::Update(features, id)) => {
-                if let Some(association) = request
-                    .node_id
-                    .as_ref()
-                    .and_then(|node_id| self.associations.get_mut(&key_of(node_id)))
-                {
-                    if let Some((sset, mpas)) = features {
-                        association.set.sset = sset;
-                        association.set.mpas = mpas;
-                    }
-                    if let Some(id) = id {
-                        association.set.id = Some(id);
-                    }
+                if let Some(node_id) = &request.node_id {
+                    self.update_set(&key_of(node_id), features, id);
                 }
             }
             (Body::AssociationReleaseResponse(_), _) => {
@@ -2498,6 +2501,22 @@ impl Node {
                 }
             }
             _ => {}
+        }
+    }
+
+    /// The set of the association of `key` that an update changes (§5.22.3, bullet 1): the
+    /// set features of the peer's function, and the FQDN of its SMF Set ID, each taken if
+    /// the update carried it, and the rest kept.
+    fn update_set(&mut self, key: &[u8], features: Option<(bool, bool)>, id: Option<Vec<u8>>) {
+        let Some(association) = self.associations.get_mut(key) else {
+            return;
+        };
+        if let Some((sset, mpas)) = features {
+            association.set.sset = sset;
+            association.set.mpas = mpas;
+        }
+        if let Some(id) = id {
+            association.set.id = Some(id);
         }
     }
 
