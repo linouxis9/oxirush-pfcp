@@ -207,7 +207,7 @@ pub(crate) struct Outstanding {
     pub(crate) id: RequestId,
     pub(crate) to: SocketAddr,
     pub(crate) message_type: u8,
-    pub(crate) octets: Vec<u8>,
+    pub(crate) octets: super::Datagram,
     pub(crate) deadline: Duration,
     pub(crate) attempts: u8,
     pub(crate) priority: u8,

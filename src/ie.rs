@@ -121,6 +121,24 @@ pub struct RawIe {
     pub octets: Octets,
 }
 
+/// Whether an IE of `ie_type` may hold a key: one of a key, or a grouped IE that a table
+/// gives one, at any depth.
+fn holds_secret(ie_type: u16, depth: u8) -> bool {
+    if crate::values_hand::SECRETS.contains(&ie_type) {
+        return true;
+    }
+    let Some(info) = crate::registry::ie_type_info(ie_type) else {
+        return false;
+    };
+    depth < 8
+        && info.tables.iter().any(|table| {
+            table
+                .rows
+                .iter()
+                .any(|row| holds_secret(row.ie_type, depth + 1))
+        })
+}
+
 impl core::fmt::Debug for RawIe {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         let mut debug = f.debug_struct("RawIe");
@@ -128,7 +146,7 @@ impl core::fmt::Debug for RawIe {
             .field("ie_type", &self.ie_type)
             .field("enterprise_id", &self.enterprise_id)
             .field("length", &self.length);
-        match self.enterprise_id.is_none() && crate::values_hand::SECRETS.contains(&self.ie_type) {
+        match self.enterprise_id.is_none() && holds_secret(self.ie_type, 0) {
             true => debug.field("octets", &format_args!("{} octets", self.octets.len())),
             false => debug.field("octets", &self.octets),
         };

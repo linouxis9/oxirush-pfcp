@@ -157,7 +157,31 @@ pub struct Transmit {
     /// Its priority: 0 the highest.
     pub priority: u8,
     /// The datagram.
-    pub octets: Vec<u8>,
+    pub octets: Datagram,
+}
+
+/// The octets of a datagram or of a message: `Debug` prints their number alone, as they
+/// may hold a key.
+#[derive(Clone, Default, PartialEq, Eq)]
+pub struct Datagram(pub Vec<u8>);
+
+impl core::fmt::Debug for Datagram {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        write!(f, "Datagram({} octets)", self.0.len())
+    }
+}
+
+impl core::ops::Deref for Datagram {
+    type Target = Vec<u8>;
+    fn deref(&self) -> &Vec<u8> {
+        &self.0
+    }
+}
+
+impl From<Vec<u8>> for Datagram {
+    fn from(octets: Vec<u8>) -> Self {
+        Self(octets)
+    }
 }
 
 /// What the node dropped to bound what it keeps of its peers' requests (§6.4), since it
@@ -373,7 +397,7 @@ pub enum Event {
         /// What.
         kind: ViolationKind,
         /// The message.
-        octets: Vec<u8>,
+        octets: Datagram,
     },
     /// A message that does not decode, or of another version: the node answered a request
     /// that it could (§7.6.2, §7.6.3, §7.6.7), and a response ended its request with
@@ -1018,7 +1042,7 @@ impl Node {
             self.queue(Transmit {
                 to: request.from,
                 priority: request.priority,
-                octets,
+                octets: octets.into(),
             });
         }
         Ok(())
@@ -1050,7 +1074,7 @@ impl Node {
         self.queue(Transmit {
             to,
             priority,
-            octets,
+            octets: octets.into(),
         });
     }
 
@@ -1201,7 +1225,7 @@ impl Node {
                     let transmit = Transmit {
                         to: from,
                         priority,
-                        octets: response.clone(),
+                        octets: response.clone().into(),
                     };
                     self.queue(transmit);
                     return true;
@@ -1305,7 +1329,7 @@ impl Node {
                 self.queue(Transmit {
                     to: from,
                     priority,
-                    octets: response,
+                    octets: response.into(),
                 });
             }
         }
@@ -1340,7 +1364,7 @@ impl Node {
                 self.queue(Transmit {
                     to: from,
                     priority: 0,
-                    octets,
+                    octets: octets.into(),
                 });
             }
         } else {
@@ -1524,7 +1548,7 @@ impl Node {
                 self.queue(Transmit {
                     to: from,
                     priority: inbound.priority,
-                    octets,
+                    octets: octets.into(),
                 });
             }
             return;
@@ -1598,7 +1622,7 @@ impl Node {
                 id,
                 to,
                 message_type,
-                octets: octets.clone(),
+                octets: octets.clone().into(),
                 deadline,
                 attempts: 0,
                 priority,
@@ -1610,7 +1634,7 @@ impl Node {
         self.queue(Transmit {
             to,
             priority,
-            octets,
+            octets: octets.into(),
         });
         Ok(id)
     }
@@ -1668,7 +1692,7 @@ impl Node {
         self.events.push_back(Event::Violation {
             from,
             kind,
-            octets: octets.to_vec(),
+            octets: octets.to_vec().into(),
         });
     }
 
@@ -1752,7 +1776,7 @@ impl Node {
             self.queue(Transmit {
                 to: from,
                 priority: header.priority.unwrap_or(self.config.default_priority),
-                octets,
+                octets: octets.into(),
             });
         }
     }
