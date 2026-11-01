@@ -3942,6 +3942,31 @@ fn sset_an_smf_without_the_association_controls_a_session() {
     assert_eq!(decoded(&sent(&mut smf)[0]).header.seid, Some(0x77));
 }
 
+/// §7.2.2.4.2 bullet 3: the response to a request of header SEID 0 has SEID 0. A UPF
+/// without an association sends a Session Report Request of SEID 0 with the Old CP F-SEID
+/// of a previous SMF; the rejection must not carry that SMF-assigned SEID in its header.
+#[test]
+fn a_seid_zero_report_is_rejected_with_seid_zero() {
+    let mut smf = node(SMF, Function::Cp);
+    let old = FSeid {
+        v4: true,
+        seid: Some(0x1234),
+        ipv4: Some(Ipv4Addr::new(10, 0, 0, 9)),
+        ..Default::default()
+    };
+    let report = Message {
+        header: Header::session(0, 9),
+        body: SessionReportRequest::new(ReportType {
+            uisr: true,
+            ..Default::default()
+        })
+        .with_old_cp_f_seid(old)
+        .into(),
+    };
+    smf.handle_datagram(at(1), UPF, &report.encode().unwrap());
+    assert_eq!(decoded(&sent(&mut smf)[0]).header.seid, Some(0));
+}
+
 trait IntoSocket {
     fn into_socket(self, port: u16) -> SocketAddr;
 }

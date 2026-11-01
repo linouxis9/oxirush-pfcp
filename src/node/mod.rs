@@ -1444,14 +1444,18 @@ impl Node {
         let offending = (kind == ViolationKind::SeidZero).then_some(57);
         if let Some(body) = rejection_body(message_type, cause, offending, &self.config.node_id) {
             let mut header = self.response_header(&inbound);
-            // The peer's SEID is not known: SEID 0 (§7.2.2.4.2), but that of the F-SEID
-            // of an establishment without an association.
+            // The peer's SEID is not known: SEID 0 (§7.2.2.4.2), but that of the CP
+            // F-SEID of an establishment without an association, which the SMF matches its
+            // response by. A report of SEID 0 carries the previous SMF's SEID in its Old
+            // CP F-SEID, not the peer's, so its rejection keeps SEID 0.
             if header.seid.is_some() {
-                header.seid = Some(if kind == ViolationKind::SessionWithoutAssociation {
-                    inbound.peer_seid.unwrap_or(0)
-                } else {
-                    0
-                });
+                header.seid = Some(
+                    if message_type == 50 && kind == ViolationKind::SessionWithoutAssociation {
+                        inbound.peer_seid.unwrap_or(0)
+                    } else {
+                        0
+                    },
+                );
             }
             if let Ok(response) = (Message { header, body }).encode() {
                 let expires = now.saturating_add(self.config.keep);
