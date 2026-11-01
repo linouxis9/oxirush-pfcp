@@ -500,13 +500,13 @@ impl Handle {
         answer.await.map_err(|_| EndpointError::Closed)
     }
 
-    /// A new local SEID for a session with `peer` ([`Node::new_session`]).
+    /// A new local SEID for a session ([`Node::new_session`]).
     ///
     /// # Errors
     ///
     /// The endpoint has ended.
-    pub async fn new_session(&self, peer: SocketAddr) -> Result<u64, EndpointError> {
-        self.on(move |node, _| node.new_session(peer)).await
+    pub async fn new_session(&self) -> Result<u64, EndpointError> {
+        self.on(move |node, _| node.new_session()).await
     }
 
     /// Send octets as they are, for a probe ([`Node::send_raw`]).

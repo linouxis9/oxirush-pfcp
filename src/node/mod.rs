@@ -954,9 +954,10 @@ impl Node {
         true
     }
 
-    /// A new local SEID, non-zero and of no other session, for a session with `peer`:
-    /// the SEID of the F-SEID that the caller then sends.
-    pub fn new_session(&mut self, peer: SocketAddr) -> u64 {
+    /// A new local SEID, non-zero, of no session and given by no call before: the SEID of
+    /// the F-SEID that the caller then sends. The node keeps nothing of it: the
+    /// establishment that sends it, or the answer that accepts one, makes the session.
+    pub fn new_session(&mut self) -> u64 {
         while self.next_seid == 0
             || self.sessions.contains_key(&self.next_seid)
             || self.sessions.is_alias(self.next_seid)
@@ -965,21 +966,6 @@ impl Node {
         }
         let seid = self.next_seid;
         self.next_seid = self.next_seid.wrapping_add(1);
-        let node = self
-            .association_of(peer)
-            .map(|association| association.key.clone())
-            .unwrap_or_default();
-        let mark = self.mark();
-        self.sessions.insert(
-            seid,
-            Session {
-                peer,
-                peer_seid: None,
-                node,
-                reserved: false,
-                mark,
-            },
-        );
         seid
     }
 

@@ -136,7 +136,7 @@ fn established(smf: &mut Node, upf: &mut Node, now: Duration) -> (u64, u64) {
 
 /// A session between them, of a UP F-SEID of `address`.
 fn established_on(smf: &mut Node, upf: &mut Node, now: Duration, address: Ipv4Addr) -> (u64, u64) {
-    let cp_seid = smf.new_session(UPF);
+    let cp_seid = smf.new_session();
     let f_seid = FSeid {
         v4: true,
         seid: Some(cp_seid),
@@ -167,7 +167,7 @@ fn established_on(smf: &mut Node, upf: &mut Node, now: Duration, address: Ipv4Ad
     .unwrap();
     pass(smf, upf, UPF, now);
     let (inbound, _) = request(upf);
-    let up_seid = upf.new_session(SMF);
+    let up_seid = upf.new_session();
     let up_f_seid = FSeid {
         v4: true,
         seid: Some(up_seid),
@@ -1261,9 +1261,9 @@ fn association_release_ends_sessions() {
 #[test]
 fn session_needs_association() {
     let (mut smf, mut upf) = (node(SMF, Function::Cp), node(UPF, Function::Up));
-    let seid = smf.new_session(UPF);
+    let seid = smf.new_session();
     assert_eq!(
-        smf.session_request(at(0), seid, SessionDeletionRequest::default()),
+        smf.request(at(0), UPF, establishment(seid)),
         Err(NodeError::NoAssociation)
     );
     // A UPF answers a session from a peer without an association
@@ -1402,7 +1402,7 @@ fn session_establishment_seids() {
     let (mut smf, mut upf) = associated(at(0));
     let (cp_seid, up_seid) = established(&mut smf, &mut upf, at(0));
     assert_ne!(cp_seid, 0);
-    assert_ne!(smf.new_session(UPF), cp_seid, "a SEID of no other session");
+    assert_ne!(smf.new_session(), cp_seid, "a SEID of no other session");
     assert_eq!(
         smf.session(cp_seid).and_then(|session| session.peer_seid),
         Some(up_seid)
@@ -1529,7 +1529,8 @@ fn bundled_message_of_another_version() {
 fn bundled_messages_of_one_peer() {
     let (mut smf, mut upf) = associated(at(0));
     let (_, up_seid) = established(&mut smf, &mut upf, at(0));
-    let other_seid = upf.new_session(OTHER);
+    let other_seid = 0x900;
+    upf.adopt_session(other_seid, OTHER, 0x99).unwrap();
     let modification = |seid, sequence| Message {
         header: Header::session(seid, sequence),
         body: SessionModificationRequest::default().into(),
@@ -2382,7 +2383,7 @@ fn a_deletion_ends_the_session_that_it_deletes() {
 #[test]
 fn a_session_follows_its_f_seids() {
     let (mut smf, mut upf) = associated(at(0));
-    let cp_seid = smf.new_session(UPF);
+    let cp_seid = smf.new_session();
     let f_seid = FSeid {
         v4: true,
         seid: Some(cp_seid),
@@ -2413,7 +2414,7 @@ fn a_session_follows_its_f_seids() {
     .unwrap();
     pass(&mut smf, &mut upf, UPF, at(0));
     let (inbound, _) = request(&mut upf);
-    let up_seid = upf.new_session(SMF);
+    let up_seid = upf.new_session();
     // The UPF's F-SEID has another address than its socket
     let up_f_seid = FSeid {
         v4: true,
@@ -2433,7 +2434,7 @@ fn a_session_follows_its_f_seids() {
         Some(Ipv4Addr::new(10, 0, 0, 22).into())
     );
     // The SMF moves the session to a new SEID of its own
-    let moved = smf.new_session(UPF);
+    let moved = smf.new_session();
     smf.end_session(moved);
     let f_seid = FSeid {
         v4: true,
@@ -2500,7 +2501,7 @@ fn a_session_follows_its_f_seids() {
 #[test]
 fn sessions_that_end_without_a_procedure() {
     let (mut smf, mut upf) = associated(at(0));
-    let pending = smf.new_session(UPF);
+    let pending = smf.new_session();
     let f_seid = FSeid {
         v4: true,
         seid: Some(pending),
@@ -2841,7 +2842,7 @@ fn a_session_request_of_a_session_of_the_host() {
         decoded(&sent(&mut upf)[0]).body.cause(),
         Some(CauseValue::NoEstablishedPfcpAssociation)
     );
-    let allocated = upf.new_session(SMF);
+    let allocated = upf.new_session();
     upf.handle_datagram(at(1), SMF, &deletion(allocated));
     assert_eq!(violations(&mut upf), [ViolationKind::UnknownSeid]);
     upf.handle_datagram(at(1), OTHER, &setup_of(OTHER, 1, 1000));
@@ -2894,7 +2895,7 @@ fn debug_prints_no_key() {
     assert!(!printed(&format!("{:?}", sent(&mut upf))));
     // A request that waits, the node's own outstanding one, and an L2TP Tunnel
     // Information that did not decode, with the password in it
-    let mut establishment = establishment(smf.new_session(UPF));
+    let mut establishment = establishment(smf.new_session());
     if let Body::SessionEstablishmentRequest(request) = &mut establishment.body {
         let tunnel = [&[1, 57][..], &(7u16).to_be_bytes(), b"hunter2"].concat();
         request.raw.push(RawIe::new(276, tunnel));
@@ -2960,7 +2961,7 @@ fn requests_go_to_port_8805() {
     };
     upf.handle_datagram(at(11), ephemeral, &establishment.encode().unwrap());
     let (inbound, _) = request(&mut upf);
-    let up_seid = upf.new_session(ephemeral);
+    let up_seid = upf.new_session();
     let up_f_seid = FSeid {
         v4: true,
         seid: Some(up_seid),
@@ -3071,7 +3072,7 @@ fn peers_on_one_address() {
             };
             upf.handle_datagram(at(1), peer, &establishment.encode().unwrap());
             let (inbound, _) = request(&mut upf);
-            let up_seid = upf.new_session(peer);
+            let up_seid = upf.new_session();
             let up_f_seid = FSeid {
                 v4: true,
                 seid: Some(up_seid),
@@ -3182,7 +3183,7 @@ fn an_establishment_of_a_seid_in_use_is_refused() {
         Err(NodeError::SeidInUse)
     );
     for _ in 0..0x1001 {
-        assert_ne!(smf.new_session(UPF), own);
+        assert_ne!(smf.new_session(), own);
     }
     pass(&mut smf, &mut upf, UPF, at(1));
     let (inbound, _) = request(&mut upf);
@@ -3206,7 +3207,7 @@ fn an_establishment_of_a_seid_in_use_is_refused() {
         Err(NodeError::SeidInUse)
     );
     // But to one that new_session gave for it
-    let fresh = smf.new_session(UPF);
+    let fresh = smf.new_session();
     let moved = FSeid {
         v4: true,
         seid: Some(fresh),
@@ -3292,7 +3293,7 @@ fn a_move_of_no_session_frees_its_new_seid() {
         };
         SessionModificationRequest::default().with_cp_f_seid(moved)
     };
-    let new = smf.new_session(UPF);
+    let new = smf.new_session();
     smf.session_request(at(1), cp_seid, to(new)).unwrap();
     pass(&mut smf, &mut upf, UPF, at(1));
     let (inbound, _) = request(&mut upf);
@@ -3327,7 +3328,7 @@ fn a_move_of_no_session_frees_its_new_seid() {
 fn the_previous_seid_of_a_moved_session() {
     let (mut smf, mut upf) = associated(at(0));
     let (cp_seid, _) = established(&mut smf, &mut upf, at(0));
-    let fresh = smf.new_session(UPF);
+    let fresh = smf.new_session();
     let moved = FSeid {
         v4: true,
         seid: Some(fresh),
@@ -3396,7 +3397,7 @@ fn a_seid_of_zero_is_of_no_session() {
         smf.request(at(1), UPF, establishment(0)),
         Err(NodeError::SeidZero)
     );
-    let cp_seid = smf.new_session(UPF);
+    let cp_seid = smf.new_session();
     smf.request(at(1), UPF, establishment(cp_seid)).unwrap();
     pass(&mut smf, &mut upf, UPF, at(1));
     let (inbound, _) = request(&mut upf);
@@ -3514,7 +3515,7 @@ fn a_peer_seid_of_zero_is_kept_by_no_session() {
 fn an_answer_of_a_seid_in_use_is_refused() {
     let (mut smf, mut upf) = associated(at(0));
     let (_, up_seid) = established(&mut smf, &mut upf, at(0));
-    let other = smf.new_session(UPF);
+    let other = smf.new_session();
     smf.request(at(1), UPF, establishment(other)).unwrap();
     pass(&mut smf, &mut upf, UPF, at(1));
     let (inbound, _) = request(&mut upf);
@@ -3601,7 +3602,7 @@ fn upf_of_set(
     };
     upf.handle_datagram(at(0), *from, &establishment.encode().unwrap());
     let (inbound, _) = request(&mut upf);
-    let up_seid = upf.new_session(*from);
+    let up_seid = upf.new_session();
     let up_f_seid = FSeid {
         v4: true,
         seid: Some(up_seid),
@@ -3822,7 +3823,7 @@ fn a_session_handed_over_to_an_smf_of_the_set() {
     let (mut inbound, _) = request(&mut smf);
     assert!(inbound.of_smf_set);
     // The caller takes the session over, of the UPF's SEID that the set knows
-    let local = smf.new_session(UPF);
+    let local = smf.new_session();
     smf.end_session(local);
     smf.adopt_session(local, UPF, 0x77).unwrap();
     assert_eq!(
@@ -3929,7 +3930,7 @@ fn sset_an_smf_without_the_association_controls_a_session() {
     assert!(inbound.of_smf_set);
     // The caller takes the session over, of the UPF's SEID that the set knows, and
     // answers the report.
-    let local = smf.new_session(UPF);
+    let local = smf.new_session();
     smf.end_session(local);
     smf.adopt_session(local, UPF, 0x77).unwrap();
     inbound.seid = Some(local);
@@ -4208,7 +4209,7 @@ fn mpas_of_associations_that_the_upf_sets_up() {
     events(&mut upf);
     upf.handle_datagram(at(0), SMF, &establishment(0x51).encode().unwrap());
     let (inbound, _) = request(&mut upf);
-    let up_seid = upf.new_session(SMF);
+    let up_seid = upf.new_session();
     let up_f_seid = FSeid {
         v4: true,
         seid: Some(up_seid),
@@ -4440,19 +4441,13 @@ fn sset_an_smf_without_the_association_establishes_nothing() {
         ..config(SMF, Function::Cp)
     });
     // An establishment of a SEID of new_session, or of the caller's own: refused alike.
-    let seid = smf.new_session(UPF);
+    let seid = smf.new_session();
     assert_eq!(
         smf.request(at(0), UPF, establishment(seid)),
         Err(NodeError::NoAssociation)
     );
     assert_eq!(
         smf.request(at(0), UPF, establishment(0x99)),
-        Err(NodeError::NoAssociation)
-    );
-    // A deletion of a session that is not established.
-    let other = smf.new_session(OTHER);
-    assert_eq!(
-        smf.session_request(at(0), other, SessionDeletionRequest::default()),
         Err(NodeError::NoAssociation)
     );
     assert!(sent(&mut smf).is_empty());
@@ -4463,6 +4458,23 @@ fn sset_an_smf_without_the_association_establishes_nothing() {
     smf.session_request(at(0), 0x42, SessionDeletionRequest::default())
         .unwrap();
     assert_eq!(sent(&mut smf).len(), 2);
+    // It moves to a new SEID, which is no established session while the move waits.
+    let moved = FSeid {
+        v4: true,
+        seid: Some(0x43),
+        ipv4: Some(Ipv4Addr::new(10, 0, 0, 1)),
+        ..Default::default()
+    };
+    smf.session_request(
+        at(0),
+        0x42,
+        SessionModificationRequest::default().with_cp_f_seid(moved),
+    )
+    .unwrap();
+    assert_eq!(
+        smf.session_request(at(0), 0x43, SessionDeletionRequest::default()),
+        Err(NodeError::NoAssociation)
+    );
 }
 
 /// The accepted responses of the node's requests in the order the peer took them
@@ -4633,7 +4645,7 @@ fn a_report_response_does_not_move_a_reused_seid() {
 #[test]
 fn a_probe_answer_of_another_type_leaves_the_next_one_its_effect() {
     let (mut smf, mut upf) = associated(at(0));
-    let cp_seid = smf.new_session(UPF);
+    let cp_seid = smf.new_session();
     smf.request(at(0), UPF, establishment(cp_seid)).unwrap();
     pass(&mut smf, &mut upf, UPF, at(0));
     let (inbound, _) = request(&mut upf);
@@ -4786,6 +4798,43 @@ fn an_association_update_response_changes_the_set_features() {
     assert!(cp_keeps_after_an_update_answered_with(true, true));
     assert!(!cp_keeps_after_an_update_answered_with(true, false));
     assert!(cp_keeps_after_an_update_answered_with(false, true));
+}
+
+/// An establishment that does not go, or that its peer rejects, takes its local SEID
+/// with it: new_session() gives a SEID, and the node keeps nothing of it until an
+/// establishment holds it. However many establishments request() refuses, and whatever
+/// the UPF's caller rejects, no session stays.
+#[test]
+fn a_refused_establishment_leaves_no_session() {
+    let mut smf = node(SMF, Function::Cp);
+    for _ in 0..1000 {
+        let seid = smf.new_session();
+        assert_eq!(
+            smf.request(at(0), UPF, establishment(seid)),
+            Err(NodeError::NoAssociation)
+        );
+        assert!(smf.session(seid).is_none());
+    }
+    let (mut smf, mut upf) = associated(at(0));
+    let cp_seid = smf.new_session();
+    assert_ne!(smf.new_session(), cp_seid);
+    smf.request(at(0), UPF, establishment(cp_seid)).unwrap();
+    assert!(smf.session(cp_seid).is_some(), "held by its establishment");
+    pass(&mut smf, &mut upf, UPF, at(0));
+    let (inbound, _) = request(&mut upf);
+    let up_seid = upf.new_session();
+    upf.respond(
+        at(0),
+        &inbound,
+        SessionEstablishmentResponse::new(
+            node_id(UPF),
+            Cause::new(CauseValue::NoResourcesAvailable),
+        ),
+    )
+    .unwrap();
+    assert!(upf.session(up_seid).is_none());
+    pass(&mut upf, &mut smf, SMF, at(0));
+    assert!(smf.session(cp_seid).is_none());
 }
 
 trait IntoSocket {
