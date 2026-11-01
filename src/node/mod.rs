@@ -2469,10 +2469,17 @@ impl Node {
         if self.by_peer.get(&self.peer_key(peer)).map(Vec::as_slice) == Some(key) {
             self.by_peer.remove(&self.peer_key(peer));
         }
+        // The sessions of the association: those of its key, and those of its peer's
+        // address that no live association owns. A session that another association took
+        // over (its node is that of a live association) stays with it (§5.22.3 bullet 3).
         let of_it: Vec<u64> = self
             .sessions
             .iter()
-            .filter(|(_, session)| session.node == key || self.same_peer(session.peer, peer))
+            .filter(|(_, session)| {
+                session.node == key
+                    || (!self.associations.contains_key(&session.node)
+                        && self.same_peer(session.peer, peer))
+            })
             .map(|(seid, _)| *seid)
             .collect();
         // With MPAS, the set keeps the sessions while another of its associations remains
