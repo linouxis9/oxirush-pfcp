@@ -418,14 +418,16 @@ cargo +nightly fuzz run tree -- -max_total_time=60
 The test `spec` compares the crate with TS 29.244 V19.6.0, as
 `tests/spec/extract.py` takes it from the document: every message type and IE
 type; every row of a table with its presence, its interfaces, its IE type and
-whether several IEs of it may be there; every flag and field of a figure with
-its octet, its bits and its order, the octets of each field of a fixed length,
-and the sentences that make a field there as a flag is set; every table of
-values. `tests/spec/mutations.tsv` lists changes of the crate that it must fail
-on, which `tests/spec/mutate.py` makes in turn. `tests/spec/errata.tsv` names
-the 43 errata of the document that the crate meets, and
-`tests/spec/requirements.tsv` the 172 requirements of the procedures, each with
-the test that checks it.
+how many IEs of it may be there; every flag and field of a figure with its
+octet, its bits and its order, the octets of each field of a fixed length, and
+the sentences that make a field there as a flag is set; every table of values,
+and the values that a receiver reads as another. `tests/spec/mutations.tsv`
+lists changes of the crate that it must fail on, which `tests/spec/mutate.py`
+makes in turn. `tests/spec/errata.tsv` names the 43 errata of the document
+that the crate meets, and the 3 readings of the crate where the document names
+no value, and `tests/spec/requirements.tsv` the 172 requirements of the
+procedures: 105 with the test that checks it, and 67 that are the
+application's, above the crate. The test `spec` checks these numbers.
 `tests/captures` has 213 messages that Open5GS and free5GC sent in lab runs:
 each decodes, encodes back to its octets, reads back from its tree, and is
 checked on its interface. Three fuzz targets, `decode`, `tree` and `node`, run

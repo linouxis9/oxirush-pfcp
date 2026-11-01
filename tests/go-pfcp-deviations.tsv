@@ -1,6 +1,6 @@
 # What check() finds in the vectors of go-pfcp v0.0.24, which the test other_vectors_round_trip
 # of tests/codec.rs expects, one line each: the file of the vector, its name, and the
-# deviation. README.md, "What the crate finds in others", says why each is one.
+# deviation. tests/README.md, "What the crate finds in others", says why each is one.
 association-setup-request_test.go	Single IEs	spare bits are not zero (TS 29.244 8.1.2), at /pfcp/SMF Set ID
 association-setup-request_test.go	Single IEs	the mandatory UE IP address Pool Identity does not decode (TS 29.244 7.4.4.1-3), at /pfcp/UE IP address Pool Information/0/UE IP address Pool Identity
 association-setup-request_test.go	Single IEs	Measurement Method is no IE of this table (TS 29.244 7.6.9), at /pfcp/GTP-U Path QoS Control Information/0/Measurement Method

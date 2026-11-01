@@ -1345,3 +1345,55 @@ fn notes() {
     assert_eq!(checked, 4);
     report(problems);
 }
+
+/// The numbers that the README and tests/README.md give of the fixtures are theirs.
+#[test]
+fn the_readme_counts() {
+    let words = |text: &str| text.split_whitespace().collect::<Vec<_>>().join(" ");
+    let (readme, tests) = (
+        words(include_str!("../README.md")),
+        words(include_str!("README.md")),
+    );
+    let errata = records(include_str!("spec/errata.tsv"));
+    let readings = errata
+        .iter()
+        .filter(|cells| cells[1].starts_with("read-as"))
+        .count();
+    let requirements: Vec<_> = records(include_str!("spec/requirements.tsv"))
+        .into_iter()
+        .filter(|cells| cells[1] != "0")
+        .collect();
+    let by = |kind: &str| {
+        requirements
+            .iter()
+            .filter(|cells| cells[3].starts_with(kind))
+            .count()
+    };
+    let captures = records(include_str!("captures/messages.tsv")).len();
+    let mut problems = Vec::new();
+    for (text, said) in [
+        (
+            &readme,
+            format!(
+                "the {} errata of the document that the crate meets, and the {readings} readings",
+                errata.len() - readings
+            ),
+        ),
+        (
+            &readme,
+            format!(
+                "the {} requirements of the procedures: {} with the test that checks it, and {} that are the application's",
+                requirements.len(),
+                by("test "),
+                by("application:")
+            ),
+        ),
+        (&readme, format!("has {captures} messages")),
+        (&tests, format!("The {captures} messages of the lab runs")),
+    ] {
+        if !text.contains(&said) {
+            problems.push(format!("not said: {said}"));
+        }
+    }
+    report(problems);
+}
