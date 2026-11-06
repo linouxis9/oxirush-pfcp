@@ -724,7 +724,8 @@ pfcp_bits! {
         false_field "FALSE": 0 2 1, true_field "TRUE": 0 1 1,
     }
     check(this, path, found) {
-        flag_rule(!(this.true_field || this.false_field), path, "8.2.278", "neither TRUE nor FALSE is set", found);
+        // "Either Bit 1 or Bit 2 shall be set" of a Boolean: one of them.
+        flag_rule(this.true_field == this.false_field, path, "8.2.278", "neither or both of TRUE and FALSE are set", found);
     }
 }
 
