@@ -46,12 +46,22 @@ pfcp_layout! {
         rtp_multiplexed_media "(S)RTP Multiplexed Media Identification Information": Counted<Lv16> if smmii,
     }
     check(this, path, found) {
-        // An (S)RTP Multiplexed Media Identification Information of the RTCP Packet Type is of
-        // (S)RTCP traffic only (NOTE 4), and has the SSRC or the Media Identification Tag
-        // (SSRCPI, MIDPI and RPTPI of its octet of flags, bits 1, 3 and 5).
-        let rtcp = |media: &Lv16| media.0.first().is_some_and(|flags| flags & 0x10 != 0 && flags & 0x05 == 0);
+        // The octet of flags of an (S)RTP Multiplexed Media Identification Information:
+        // SSRCPI, PTPI, MIDPI, RHIDMPI and RPTPI, bits 1 to 5. One of the RTCP Packet Type is
+        // of (S)RTCP traffic only, one of the Payload Type of (S)RTP only, and one of neither
+        // of both (NOTE 4). One without octets has no flag.
+        const SSRCPI: u8 = 0x01;
+        const PTPI: u8 = 0x02;
+        const MIDPI: u8 = 0x04;
+        const RHIDMPI: u8 = 0x08;
+        const RPTPI: u8 = 0x10;
         let media = this.rtp_multiplexed_media.as_ref().map_or(&[][..], |media| &media.0[..]);
-        flag_rule(media.iter().any(rtcp), path, "8.2.5", "an (S)RTCP media identification has neither SSRC nor a Media Identification Tag", found);
+        let any = |rule: fn(u8) -> bool| media.iter().any(|media| rule(media.0.first().copied().unwrap_or(0)));
+        // Their number is "greater or equal to 1".
+        flag_rule(this.rtp_multiplexed_media.as_ref().is_some_and(|media| media.0.is_empty()), path, "8.2.5", "SMMII is set with no (S)RTP Multiplexed Media Identification Information", found);
+        flag_rule(any(|flags| flags & (MIDPI | RHIDMPI | RPTPI) == MIDPI), path, "8.2.5", "a media identification has MIDPI, and neither RPTPI nor RHIDMPI", found);
+        flag_rule(any(|flags| flags & (SSRCPI | MIDPI | RPTPI) == RPTPI), path, "8.2.5", "an (S)RTCP media identification has neither SSRC nor a Media Identification Tag", found);
+        flag_rule(any(|flags| flags & (SSRCPI | PTPI | MIDPI | RPTPI) == 0), path, "8.2.5", "an (S)RTP and (S)RTCP media identification has neither SSRC nor a Media Identification Tag", found);
     }
 }
 

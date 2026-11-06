@@ -1,7 +1,8 @@
 # clause	n	phrase
 8.2.3	1	may only be set
 8.2.3	2	at least one
-8.2.5	1	at least one
+8.2.5	1	shall be set if
+8.2.5	2	at least one
 8.2.13	1	at least one
 8.2.16	1	at least one
 8.2.19	1	at least one

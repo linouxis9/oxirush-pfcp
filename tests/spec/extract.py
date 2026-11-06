@@ -22,9 +22,10 @@ script:
                         there
     flag-sentences.tsv  the sentences of clause 8.2 that say which flags of an IE are set
                         together: "at least one", "one and only one", "only one of", "may
-                        only be set", "shall not be set", "either ... shall be set" or
-                        "exclusive", by their clause and their number in it, which
-                        flag-rules.tsv lists with the rule that checks each
+                        only be set", "shall be set to "1" if the ... flag is set", "shall
+                        not be set", "either ... shall be set" or "exclusive", by their
+                        clause and their number in it, which flag-rules.tsv lists with the
+                        rule that checks each
     value-tables.tsv    the tables of clause 8.2 that name values, or bits as octet/bit; a
                         value that a table reserves is named <reserved>
     read-as.tsv         the values of those tables that a receiver reads as another: the
@@ -314,6 +315,8 @@ FLAG_PHRASES = [
     ('only one of', re.compile(r'(?i)\bonly one of\b')),
     ('at least one', re.compile(r'(?i)\bat least one\b[^.]*?\b(?:bit|flag|of)\b')),
     ('may only be set', re.compile(r'(?i)\bmay only be set\b')),
+    # Of a flag that another sets: "if the UP function is requested to" is not of them.
+    ('shall be set if', re.compile(r'(?i)\bshall be set to ["“]1["”] if the [A-Za-z0-9/-]+ (?:bit|flag) is set\b')),
     ('shall not be set', re.compile(r'(?i)\bs?shall not be set\b')),
     ('either', re.compile(r'(?i)\beither\b[^.]*\b(?:bit|flag)s?\b[^.]*\bshall be set\b')),
     ('exclusive', re.compile(r'(?i)\bexclusive\b')),

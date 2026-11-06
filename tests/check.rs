@@ -1455,3 +1455,46 @@ fn the_flag_rules_of_clause_8_2_in_a_message() {
     };
     assert_eq!(rules(&node), [("8.2.69", "no bit is set", incorrect)]);
 }
+
+/// What check() finds in a value of `octets`, which encodes back to them.
+fn value_found<T: Codec + Check>(octets: &str) -> Vec<(&'static str, DeviationKind)> {
+    let octets = hex::decode(octets).unwrap();
+    let value = T::decode(&octets).unwrap();
+    let mut again = Vec::new();
+    value.encode(&mut again).unwrap();
+    assert_eq!(again, octets);
+    let mut found = Vec::new();
+    value.check(&Path::Root("/value"), &mut found);
+    found
+        .into_iter()
+        .map(|deviation| (deviation.clause, deviation.kind))
+        .collect()
+}
+
+/// §8.2.5: an SDF Filter of SMMII has at least one (S)RTP Multiplexed Media Identification
+/// Information, and one of neither the Payload Type nor the RTCP Packet Type, which is of
+/// both RTP and RTCP (NOTE 4), has the SSRC or the Media Identification Tag.
+#[test]
+fn the_media_identifications_of_an_sdf_filter() {
+    let none = "SMMII is set with no (S)RTP Multiplexed Media Identification Information";
+    let empty = "an (S)RTP and (S)RTCP media identification has neither SSRC nor a Media Identification Tag";
+    for (octets, rule) in [
+        ("200000", none),
+        ("200001000100", empty),
+        ("2000010000", empty),
+    ] {
+        assert_eq!(
+            value_found::<SdfFilter>(octets),
+            [("8.2.5", DeviationKind::Rule(rule))],
+            "{octets}"
+        );
+    }
+    // An SSRC, of RTP and RTCP; a Payload Type, of RTP alone; two media identifications
+    for octets in [
+        "20000100050100000001",
+        "2000010002027f",
+        "200002000501000000010002027f",
+    ] {
+        assert_eq!(value_found::<SdfFilter>(octets), [], "{octets}");
+    }
+}
