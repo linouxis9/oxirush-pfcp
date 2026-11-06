@@ -67,4 +67,4 @@
 8.2.262	1	at least one	no bit is set	00	05
 8.2.262	2	exclusive	PER and EVT are both set	03	01 02 06
 8.2.268	1	at least one	no bit is set	0000	0100
-8.2.278	1	either	neither TRUE nor FALSE is set	00	01
+8.2.278	1	either	neither or both of TRUE and FALSE are set	00 03	01 02
