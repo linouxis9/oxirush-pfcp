@@ -445,7 +445,11 @@ pfcp_bits! {
         reserved "Reserved": 0 3 1, perio "PERIO": 0 2 1, evett "EVETT": 0 1 1,
     }
     check(this, path, found) {
-        // Bit 3 is reserved, and ignored by the receiver.
+        // Bit 3 is reserved: "set to "0" by the sender", as a spare bit is, and ignored by
+        // the receiver.
+        if this.reserved {
+            found.push(crate::check::Deviation::new(path, "8.2.168", crate::check::DeviationKind::SpareBits));
+        }
         flag_rule(!(this.evett || this.perio), path, "8.2.168", "no bit is set", found);
     }
 }

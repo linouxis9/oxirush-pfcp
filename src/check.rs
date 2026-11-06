@@ -128,7 +128,8 @@ pub enum DeviationKind {
     },
     /// A vendor IE with the Enterprise ID of 3GPP, or none (§8.1.1).
     VendorId,
-    /// Spare bits that are not zero (§8.1.2).
+    /// Spare bits that are not zero (§8.1.2), and a reserved bit that its clause has the
+    /// sender set to 0, as bit 3 of Reporting Frequency (§8.2.168).
     SpareBits,
     /// A value that its table has as spare, or does not have: the receiver ignores it
     /// (§7.6.8).

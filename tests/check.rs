@@ -1498,3 +1498,20 @@ fn the_media_identifications_of_an_sdf_filter() {
         assert_eq!(value_found::<SdfFilter>(octets), [], "{octets}");
     }
 }
+
+/// §8.2.168: bit 3 of Reporting Frequency is reserved, "set to "0" by the sender" and
+/// ignored by the receiver: set, it is a deviation as a spare bit is, which the receiver
+/// ignores.
+#[test]
+fn the_reserved_bit_of_reporting_frequency() {
+    let reserved = || ("8.2.168", DeviationKind::SpareBits);
+    assert_eq!(value_found::<ReportingFrequency>("05"), [reserved()]);
+    assert_eq!(
+        value_found::<ReportingFrequency>("04"),
+        [
+            reserved(),
+            ("8.2.168", DeviationKind::Rule("no bit is set"))
+        ]
+    );
+    assert_eq!(value_found::<ReportingFrequency>("03"), []);
+}

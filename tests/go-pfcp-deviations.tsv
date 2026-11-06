@@ -78,6 +78,8 @@ session-modification-request_test.go	Single IE	the message changes QER 429496729
 session-modification-request_test.go	Single IE	the message changes BAR 255 more than once (TS 29.244 6.3.3.2), at /pfcp
 session-modification-request_test.go	Single IE	the message changes MAR 4369 more than once (TS 29.244 6.3.3.2), at /pfcp
 session-modification-request_test.go	Single IE	the message changes SRR 255 more than once (TS 29.244 6.3.3.2), at /pfcp
+session-modification-request_test.go	Single IE	spare bits are not zero (TS 29.244 8.2.168), at /pfcp/Create SRR/0/QoS Monitoring per QoS flow Control Information/0/Reporting Frequency
+session-modification-request_test.go	Single IE	spare bits are not zero (TS 29.244 8.2.168), at /pfcp/Update SRR/0/QoS Monitoring per QoS flow Control Information/0/Reporting Frequency
 session-modification-request_test.go	Multiple IEs	UE IP address Pool Identity does not decode, and is taken as absent (TS 29.244 7.6.8), at /pfcp/Create PDR/0/UE IP address Pool Identity
 session-modification-request_test.go	Multiple IEs	spare bits are not zero (TS 29.244 8.1.2), at /pfcp/Create PDR/0/Outer Header Removal
 session-modification-request_test.go	Multiple IEs	UE IP address Pool Identity does not decode, and is taken as absent (TS 29.244 7.6.8), at /pfcp/Create PDR/1/UE IP address Pool Identity
@@ -97,6 +99,8 @@ session-modification-request_test.go	Multiple IEs	the message changes QER 429496
 session-modification-request_test.go	Multiple IEs	the message changes BAR 255 more than once (TS 29.244 6.3.3.2), at /pfcp
 session-modification-request_test.go	Multiple IEs	the message changes MAR 4369 more than once (TS 29.244 6.3.3.2), at /pfcp
 session-modification-request_test.go	Multiple IEs	the message changes SRR 255 more than once (TS 29.244 6.3.3.2), at /pfcp
+session-modification-request_test.go	Multiple IEs	spare bits are not zero (TS 29.244 8.2.168), at /pfcp/Create SRR/0/QoS Monitoring per QoS flow Control Information/0/Reporting Frequency
+session-modification-request_test.go	Multiple IEs	spare bits are not zero (TS 29.244 8.2.168), at /pfcp/Update SRR/0/QoS Monitoring per QoS flow Control Information/0/Reporting Frequency
 session-modification-response_test.go	Single IE	Created Bridge/Router Info is no IE of this table (TS 29.244 7.6.9), at /pfcp/Created Bridge/Router Info
 session-modification-response_test.go	Single IE	spare bits are not zero (TS 29.244 8.1.2), at /pfcp/Usage Report/0/Usage Report Trigger
 session-modification-response_test.go	Multiple IEs	Created Bridge/Router Info is no IE of this table (TS 29.244 7.6.9), at /pfcp/Created Bridge/Router Info
@@ -109,7 +113,9 @@ session-report-request_test.go	Multiple IEs	Access Availability Control Informat
 generic_test.go	Normal	a Session Establishment Request of a SEID other than 0 (TS 29.244 7.2.2.4.2), at /header
 header_test.go	Session	a Session Establishment Request of a SEID other than 0 (TS 29.244 7.2.2.4.2), at /header
 session-establishment-request_test.go	Multiple IEs	a Session Establishment Request of a SEID other than 0 (TS 29.244 7.2.2.4.2), at /header
+session-establishment-request_test.go	Multiple IEs	spare bits are not zero (TS 29.244 8.2.168), at /pfcp/Create SRR/0/QoS Monitoring per QoS flow Control Information/0/Reporting Frequency
 session-establishment-request_test.go	Single IE	a Session Establishment Request of a SEID other than 0 (TS 29.244 7.2.2.4.2), at /header
+session-establishment-request_test.go	Single IE	spare bits are not zero (TS 29.244 8.2.168), at /pfcp/Create SRR/0/QoS Monitoring per QoS flow Control Information/0/Reporting Frequency
 session-report-request_test.go	Single IE	a Session Report Request of a SEID other than 0 with the Old CP F-SEID (TS 29.244 7.2.2.4.2), at /header
 session-report-request_test.go	Multiple IEs	a Session Report Request of a SEID other than 0 with the Old CP F-SEID (TS 29.244 7.2.2.4.2), at /header
 session-report-request_test.go	Multiple IEs	PLMF is set with a packet delay (TS 29.244 8.2.171), at /pfcp/Session Report/0/QoS Monitoring Report/0/QoS Monitoring Measurement: the answer is "Mandatory IE incorrect"
