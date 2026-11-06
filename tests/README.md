@@ -84,6 +84,10 @@ test `codec` expects them (`other_vectors_round_trip`, with `--ignored` and
   Plane Node ID of eight (`ie/tsn-bridge-id.go`).
 - Spare bits are set: Usage Report Trigger (octet 7, bits 8 and 7), QER Control
   Indications (bits 2 and 3), Outer Header Removal (octet 6, bit 2).
+- Reporting Frequency has bit 3 set, SESRL of an earlier release, which §8.2.168
+  reserves, "set to "0" by the sender" (`NewReportingFrequency(1, 1, 1)` in
+  `message/session-establishment-request_test.go` and
+  `message/session-modification-request_test.go`).
 - IEs that their tables do not have: Measurement Method in GTP-U Path QoS Control
   Information, Redundant Transmission Parameters (IE 255) in Create FAR and Update FAR,
   Access Availability Control Information in Session Report, Time Offset Threshold and

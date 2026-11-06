@@ -49,7 +49,7 @@
 8.2.145	1	at least one	no bit is set	00	01
 8.2.152	1	at least one	no bit is set	00	01
 8.2.167	1	at least one	no bit is set	00	01
-8.2.168	1	at least one	no bit is set	00 04	01
+8.2.168	1	at least one	no bit is set	00	01
 8.2.169	1	at least one	no bit is set	00	010000000a
 8.2.171	1	at least one	no bit is set	00	08
 8.2.171	2	shall not be set	PLMF is set with a packet delay	090000000a	010000000a 08
