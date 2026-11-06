@@ -433,8 +433,8 @@ makes in turn. `tests/spec/errata.tsv` names the 43 errata of the document
 that the crate meets, and the 3 readings of the crate where the document names
 no value, and `tests/spec/requirements.tsv` the 172 requirements of the
 procedures: 107 with the test that checks it, and 65 that are the
-application's, above the crate. `tests/spec/flag-rules.tsv` has the 51
-sentences of clause 8.2 that say which flags of an IE go together: 50 with the
+application's, above the crate. `tests/spec/flag-rules.tsv` has the 52
+sentences of clause 8.2 that say which flags of an IE go together: 51 with the
 rule of `check()` that checks it, and 1 that a value does not show alone. The
 test `spec` checks these numbers.
 `tests/captures` has 213 messages that Open5GS and free5GC sent in lab runs:

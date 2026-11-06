@@ -1,8 +1,8 @@
 # The sentences of clause 8.2 of TS 29.244 V19.6.0 that say which flags of an IE are set
 # together, as flag-sentences.tsv numbers them in their clauses: "at least one", "one and
-# only one", "only one of", "may only be set", "shall not be set", "either ... shall be
-# set" and "exclusive". A sentence of who sets a bit ("shall only be set by the CP
-# function") is not of them. Each row gives the rule of check() that checks the sentence,
+# only one", "only one of", "may only be set", "shall be set to "1" if the ... flag is
+# set", "shall not be set", "either ... shall be set" and "exclusive". A sentence of who
+# sets a bit ("shall only be set by the CP function") is not of them. Each row gives the rule of check() that checks the sentence,
 # in its words, with the octets of values of the IE of the clause that break it and that
 # keep it, or `none:` and why check() cannot:
 #
@@ -18,7 +18,8 @@
 # clause	n	phrase	rule	breaks	keeps
 8.2.3	1	may only be set	CHID is set and CH is not	09000000010a00000107	0d07
 8.2.3	2	at least one	neither V4 nor V6 is set	0000000001	01000000010a000001
-8.2.5	1	at least one	an (S)RTCP media identification has neither SSRC nor a Media Identification Tag	200001000210c8	20000100061100000001c8
+8.2.5	1	shall be set if	a media identification has MIDPI, and neither RPTPI nor RHIDMPI	2000010003040161	20000100040c016105 2000010004140161c8
+8.2.5	2	at least one	an (S)RTCP media identification has neither SSRC nor a Media Identification Tag	200001000210c8	20000100061100000001c8
 8.2.13	1	at least one	no bit is set	00	010000000000000400
 8.2.16	1	at least one	no bit is set	00	010000000000000400
 8.2.19	1	at least one	no bit is set	0000	0100
