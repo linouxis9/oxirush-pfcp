@@ -264,6 +264,7 @@ fuzz_target!(|octets: &[u8]| {
         strangers: 4,
         keep: Duration::from_secs(5),
         smf_set,
+        other_entities: sets & 0x80 != 0,
         ..NodeConfig::new(node_id(address), function, 1)
     };
     let mut upf = Node::new(config(UPF, Function::Up));

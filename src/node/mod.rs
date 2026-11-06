@@ -129,16 +129,25 @@ pub struct NodeConfig {
     pub request_port: Option<u16>,
     /// How many requests of hosts without an association wait for their answer at once:
     /// Association Setup Requests, the session requests of a host of a session's F-SEID
-    /// address, with SSET those of an SMF of the set, and on an SMF of SSET a UP
-    /// function's report of SEID 0 that hands a session over. Beyond, one is dropped
-    /// before it is decoded, as [`Counters::refused`] counts, and its sender sends it
-    /// again.
+    /// address, with SSET those of an SMF of the set, and on an SMF of SSET, or of MPAS
+    /// and `other_entities`, a UP function's report of SEID 0 that hands a session over.
+    /// Beyond, one is dropped before it is decoded, as [`Counters::refused`] counts, and
+    /// its sender sends it again.
     pub strangers: usize,
     /// The SMF sets that the node takes part in, as its CP or UP Function Features say
     /// them (§8.2.25, §8.2.58), which the caller writes in its Association Setup
     /// messages too: without either, the node takes the requests of a set as those of
     /// any peer.
     pub smf_set: SmfSet,
+    /// A CP function of several PFCP entities, each a node with associations of its own,
+    /// of which this is one. With MPAS, a UP function hands a session over to another
+    /// entity of the same SMF too (§5.22.3 bullets 5 and 6), which has not the
+    /// association that the entity that set it up holds: its report of SEID 0 then goes
+    /// to the caller from a host without an association with this node too, with
+    /// [`Inbound::of_smf_set`], for the caller to take only from a UP function that has
+    /// an association with an entity of its SMF. Without, the node answers it "No
+    /// established PFCP Association".
+    pub other_entities: bool,
 }
 
 /// The features of the SMF sets of §5.22 that a node takes part in, as the bits SSET and
@@ -154,7 +163,10 @@ pub struct SmfSet {
     pub sset: bool,
     /// MPAS (§5.22.3): an association for each SMF of the set, of the same SMF Set ID,
     /// any of which may modify or delete the sessions of another, and whose sessions are
-    /// kept while one of the set remains (§6.2.8).
+    /// kept while one of the set remains (§6.2.8). A UP function hands a session over to
+    /// an SMF of the set that it has an association with, which a node of the SMF sees
+    /// when it holds the association; an SMF of several PFCP entities, each a node, says
+    /// so with [`NodeConfig::other_entities`].
     pub mpas: bool,
 }
 
@@ -162,7 +174,7 @@ impl NodeConfig {
     /// A node of `node_id`: T1 of 3 s, N1 of 3, a heartbeat every 60 s, answers kept for
     /// 24 s, default priority 8, throttling on, no priority spared, room for 65,536
     /// requests of the peers and 16 of hosts without an association, requests to port
-    /// 8805, and no SMF set.
+    /// 8805, no SMF set, and no other PFCP entity.
     pub fn new(node_id: NodeId, function: Function, recovery_time_stamp: u32) -> Self {
         Self {
             node_id,
@@ -179,6 +191,7 @@ impl NodeConfig {
             request_port: Some(PORT),
             strangers: 16,
             smf_set: SmfSet::default(),
+            other_entities: false,
         }
     }
 }
@@ -266,7 +279,10 @@ pub struct Inbound {
     /// the node's [`SmfSet`] lets come (§5.22): a modification or deletion of a session
     /// from another association of the set (MPAS), a request of an SMF of the set without
     /// an association (SSET), or a UP function's request of SEID 0 with the CP F-SEID of
-    /// the previous SMF, which hands a session over ([`Node::adopt_session`]).
+    /// the previous SMF, which hands a session over ([`Node::adopt_session`]). With
+    /// [`NodeConfig::other_entities`], the UP function of such a handover may have no
+    /// association with the node, and the caller takes the session only if it has one
+    /// with another PFCP entity of the SMF.
     pub of_smf_set: bool,
     /// The request, of all that the node gave the caller.
     pub(crate) id: u64,
@@ -1461,9 +1477,10 @@ impl Node {
             // which hands the session over (§5.22.2 and §5.22.3, bullet 5). With SSET the
             // set has one association, which another SMF of the set holds, so the taking
             // SMF needs none of its own; with MPAS, the UP function hands it to an SMF of
-            // the set that it has an association with (§5.22.3 bullet 6).
+            // the set that it has an association with (§5.22.3 bullet 6), which another
+            // PFCP entity of the SMF may hold, for the caller to tell.
             56 => {
-                (set.sset || set.mpas && association.is_some())
+                (set.sset || set.mpas && (association.is_some() || self.config.other_entities))
                     && header.seid == Some(0)
                     && peer_seid.is_some()
             }

@@ -4815,12 +4815,10 @@ fn a_probe_answer_of_another_type_leaves_the_next_one_its_effect() {
     assert_eq!(inbound.seid, Some(up_seid));
 }
 
-/// §5.22.3 bullet 6: with MPAS, a UPF hands a session over to an SMF of the set with which
-/// it has an association. An SMF of MPAS alone answers a report of SEID 0 of a UPF without
-/// one with "No established PFCP Association"; only SSET lets the taking SMF have none.
-#[test]
-fn mpas_a_handover_report_needs_an_association() {
-    let report = || Message {
+/// A UPF's report of SEID 0 that hands over the session of the Old CP F-SEID 0x1234 of
+/// 10.0.0.9 (§5.22.2, §5.22.3 bullet 6).
+fn handover_report() -> Message {
+    Message {
         header: Header::session(0, 9),
         body: SessionReportRequest::new(ReportType {
             uisr: true,
@@ -4833,7 +4831,17 @@ fn mpas_a_handover_report_needs_an_association() {
             ..Default::default()
         })
         .into(),
-    };
+    }
+}
+
+/// §5.22.3 bullet 6: with MPAS, a UPF hands a session over to an SMF of the set with which
+/// it has an association. An SMF of MPAS alone answers a report of SEID 0 of a UPF without
+/// one with "No established PFCP Association"; only SSET lets the taking SMF have none,
+/// and, with `other_entities`, another PFCP entity of the same SMF
+/// (`mpas_a_handover_report_to_another_entity_of_the_smf`).
+#[test]
+fn mpas_a_handover_report_needs_an_association() {
+    let report = handover_report;
     let of = |mpas, sset| {
         Node::new(NodeConfig {
             smf_set: SmfSet { sset, mpas },
@@ -4852,6 +4860,48 @@ fn mpas_a_handover_report_needs_an_association() {
     );
     assert_eq!(taken(&mut of(false, true), UPF, report()), Ok(true));
     assert_eq!(taken(&mut of(true, true), UPF, report()), Ok(true));
+}
+
+/// §5.22.3 bullets 5 and 6: with MPAS, a UPF hands a session over to another PFCP entity of
+/// the same SMF too, a node of its own, which has not the association that another entity
+/// of the SMF holds. A node of `other_entities` gives its caller the report of a host
+/// without an association with it, as of the set, and answers nothing itself: its caller
+/// takes the session only from a UPF that has an association with an entity of its SMF,
+/// here by adopting it, and answers to the UPF's SEID. Without MPAS, a node of
+/// `other_entities` rejects it.
+#[test]
+fn mpas_a_handover_report_to_another_entity_of_the_smf() {
+    let entity = |mpas| {
+        Node::new(NodeConfig {
+            smf_set: SmfSet {
+                mpas,
+                ..SmfSet::default()
+            },
+            other_entities: true,
+            ..config(OTHER, Function::Cp)
+        })
+    };
+    let mut other = entity(true);
+    other.handle_datagram(at(1), UPF, &handover_report().encode().unwrap());
+    let (mut inbound, _) = request(&mut other);
+    assert!(inbound.of_smf_set);
+    assert!(sent(&mut other).is_empty());
+    // The caller takes the session over, with the UPF's SEID that the SMF knows.
+    other.adopt_session(0x55, UPF, 0x66).unwrap();
+    inbound.seid = Some(0x55);
+    let cp_f_seid = FSeid {
+        v4: true,
+        seid: Some(0x55),
+        ipv4: Some(Ipv4Addr::new(10, 0, 0, 3)),
+        ..Default::default()
+    };
+    let response = SessionReportResponse::new(accepted()).with_cp_f_seid(cp_f_seid);
+    other.respond(at(1), &inbound, response).unwrap();
+    assert_eq!(decoded(&sent(&mut other)[0]).header.seid, Some(0x66));
+    assert_eq!(
+        taken(&mut entity(false), UPF, handover_report()),
+        Err(vec![ViolationKind::SessionWithoutAssociation])
+    );
 }
 
 /// Table 7.4.4.4-1: the Association Update Response carries the responder's function
