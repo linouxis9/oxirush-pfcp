@@ -4566,6 +4566,104 @@ fn a_deletion_after_a_move_ends_the_moved_session() {
     );
 }
 
+/// A UPF's report of a session that it deleted (PSDBU, §5.18).
+fn deleted_report() -> SessionReportRequest {
+    SessionReportRequest::new(ReportType {
+        upir: true,
+        ..Default::default()
+    })
+    .with_pfcpsrreq_flags(PFCPSRReqFlags {
+        psdbu: true,
+        ..Default::default()
+    })
+}
+
+/// §7.2.2.4.2 and §5.18: the answer to a peer's request goes to the session that the
+/// request is of, where it moved since the request came. The UPF reports a session that
+/// it deleted while the SMF's move of it is outstanding, and the SMF answers the report
+/// once the move is accepted: to the UPF's SEID, and the session ends at its new SEID.
+#[test]
+fn an_answer_after_a_move_goes_to_the_moved_session() {
+    let (mut smf, mut upf) = associated(at(0));
+    let (cp_seid, up_seid) = established(&mut smf, &mut upf, at(0));
+    let new = 0x77;
+    let moved = FSeid {
+        v4: true,
+        seid: Some(new),
+        ipv4: Some(Ipv4Addr::new(10, 0, 0, 1)),
+        ..Default::default()
+    };
+    smf.session_request(
+        at(1),
+        cp_seid,
+        SessionModificationRequest::default().with_cp_f_seid(moved),
+    )
+    .unwrap();
+    pass(&mut smf, &mut upf, UPF, at(1));
+    let (modification, _) = request(&mut upf);
+    upf.session_request(at(1), up_seid, deleted_report())
+        .unwrap();
+    pass(&mut upf, &mut smf, SMF, at(1));
+    let (report, _) = request(&mut smf);
+    upf.respond(
+        at(1),
+        &modification,
+        SessionModificationResponse::new(accepted()),
+    )
+    .unwrap();
+    pass(&mut upf, &mut smf, SMF, at(1));
+    assert!(smf.session(new).is_some());
+    smf.respond(at(1), &report, SessionReportResponse::new(accepted()))
+        .unwrap();
+    assert_eq!(decoded(&sent(&mut smf)[0]).header.seid, Some(up_seid));
+    assert!(
+        smf.session(new).is_none(),
+        "the session that the UPF deleted stays at its new SEID"
+    );
+}
+
+/// §6.3.3: the answer to a peer's request acts on the session that the request is of, not
+/// on a new one that took its local SEID after it ended: the SMF answers a UPF's report of
+/// a deleted session after its caller ended the session and established a new one of the
+/// same SEID, which stays, and the answer has SEID 0, as the session's peer SEID is gone.
+#[test]
+fn an_answer_does_not_act_on_a_reused_seid() {
+    let (mut smf, mut upf) = associated(at(0));
+    let (cp_seid, up_seid) = established(&mut smf, &mut upf, at(0));
+    upf.session_request(at(1), up_seid, deleted_report())
+        .unwrap();
+    pass(&mut upf, &mut smf, SMF, at(1));
+    let (report, _) = request(&mut smf);
+    // The caller ends the session, and establishes a new one of the same SEID.
+    smf.end_session(cp_seid);
+    smf.request(at(1), UPF, establishment(cp_seid)).unwrap();
+    pass(&mut smf, &mut upf, UPF, at(1));
+    let (inbound, _) = request(&mut upf);
+    let up_f_seid = FSeid {
+        v4: true,
+        seid: Some(0x99),
+        ipv4: Some(Ipv4Addr::new(10, 0, 0, 2)),
+        ..Default::default()
+    };
+    upf.respond(
+        at(1),
+        &inbound,
+        SessionEstablishmentResponse::new(node_id(UPF), accepted()).with_up_f_seid(up_f_seid),
+    )
+    .unwrap();
+    pass(&mut upf, &mut smf, SMF, at(1));
+    let peer_seid = |smf: &Node| smf.session(cp_seid).and_then(|session| session.peer_seid);
+    assert_eq!(peer_seid(&smf), Some(0x99));
+    smf.respond(at(1), &report, SessionReportResponse::new(accepted()))
+        .unwrap();
+    assert_eq!(decoded(&sent(&mut smf)[0]).header.seid, Some(0));
+    assert_eq!(
+        peer_seid(&smf),
+        Some(0x99),
+        "the new session of the SEID ends"
+    );
+}
+
 /// §6.3.3: the accepted response to a deletion ends the session that it deleted, not a
 /// new one that took its local SEID meanwhile.
 #[test]

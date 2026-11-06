@@ -251,12 +251,15 @@ pub struct Inbound {
     pub priority: u8,
     /// Whether it said its priority, which the response then says too.
     pub prioritized: bool,
-    /// The SEID of its header: the local SEID of the session.
+    /// The SEID of its header: the local SEID of its session when it came. Its answer goes
+    /// to that session, where it moved since, while it lasts.
     pub seid: Option<u64>,
     /// The SEID of the peer's F-SEID, of an establishment.
     pub peer_seid: Option<u64>,
     /// The Node ID that it carries.
     pub node_id: Option<NodeId>,
+    /// The mark of the session of `seid` when it came.
+    pub(crate) mark: Option<u64>,
     /// What an answer that accepts it changes.
     pub(crate) effect: Effect,
     /// A request of another SMF of a set than the session's or the association's, which
@@ -911,6 +914,19 @@ impl Node {
         (Some(session.mark) == request.mark).then_some(local)
     }
 
+    /// The local SEID of the session that a request of a peer is of, while it is that
+    /// session: where it moved since the request came, and not a session that took its SEID
+    /// after it ended. A request that came of no session is of the one of its `seid`, which
+    /// the caller sets to answer a handover ([`adopt_session`](Self::adopt_session)).
+    fn answered_session(&self, request: &Inbound) -> Option<u64> {
+        let local = self.sessions.resolve(request.seid?)?;
+        let session = self.sessions.get(&local)?;
+        request
+            .mark
+            .is_none_or(|mark| mark == session.mark)
+            .then_some(local)
+    }
+
     /// A request that ends without its response, or with a rejection: an establishment
     /// leaves no session, and a move frees its new SEID.
     fn abandon(&mut self, request: &Outstanding) {
@@ -1111,9 +1127,9 @@ impl Node {
         }
         let seid = match request.message_type {
             50 => request.peer_seid,
-            _ => request
-                .seid
-                .and_then(|seid| self.sessions.get(&seid))
+            _ => self
+                .answered_session(request)
+                .and_then(|local| self.sessions.get(&local))
                 .and_then(|session| session.peer_seid),
         };
         let mut header = Header::session(seid.unwrap_or(0), request.sequence);
@@ -1499,6 +1515,7 @@ impl Node {
             seid: header.seid,
             peer_seid,
             node_id,
+            mark: None,
             effect: Effect::Nothing,
             of_smf_set: false,
             id: 0,
@@ -1747,6 +1764,11 @@ impl Node {
             }
             _ => Effect::Nothing,
         };
+        // The session's, also by the SEID that it had before it moved.
+        let seid = message
+            .header
+            .seid
+            .map(|seid| self.sessions.resolve(seid).unwrap_or(seid));
         let inbound = Inbound {
             from,
             message_type,
@@ -1756,11 +1778,10 @@ impl Node {
                 .priority
                 .unwrap_or(self.config.default_priority),
             prioritized: message.header.priority.is_some(),
-            // The session's, also by the SEID that it had before it moved.
-            seid: message
-                .header
-                .seid
-                .map(|seid| self.sessions.resolve(seid).unwrap_or(seid)),
+            seid,
+            mark: seid
+                .and_then(|seid| self.sessions.get(&seid))
+                .map(|session| session.mark),
             peer_seid: match &message.body {
                 Body::SessionEstablishmentRequest(request) => {
                     request.cp_f_seid.as_ref().and_then(|f_seid| f_seid.seid)
@@ -2483,14 +2504,15 @@ impl Node {
                 }
             }
             (Body::SessionModificationResponse(_), effect) => {
-                if let (Effect::PeerFSeid(seid, address), Some(local)) = (effect, request.seid) {
+                let session = self.answered_session(request);
+                if let (Effect::PeerFSeid(seid, address), Some(local)) = (effect, session) {
                     let peer = self.request_address(SocketAddr::new(address, request.from.port()));
                     self.sessions.set_peer(local, peer, Some(seid));
                 }
                 // The SMF of the set that modifies a session controls it (§5.22.3, bullet 3).
                 if request.of_smf_set
                     && let (Some(local), Some(key)) = (
-                        request.seid,
+                        session,
                         self.association_of(request.from)
                             .map(|association| association.key.clone()),
                     )
@@ -2500,8 +2522,8 @@ impl Node {
             }
             (Body::SessionDeletionResponse(_), _)
             | (Body::SessionReportResponse(_), Effect::Deleted) => {
-                if let Some(seid) = request.seid {
-                    self.sessions.remove(&seid);
+                if let Some(local) = self.answered_session(request) {
+                    self.sessions.remove(&local);
                 }
             }
             _ => {}
