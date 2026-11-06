@@ -29,7 +29,7 @@
 use alloc::string::String;
 use alloc::vec::Vec;
 
-use oxirush_utils::tree::{ErrorKind, Map, Members, Reading, Refused, Root};
+use oxirush_utils::tree::{Absent, ErrorKind, Map, Members, Reading, Refused, Root};
 
 /// The engine of the trees, oxirush-utils' `tree`, and its macro `tree!`, which writes a
 /// tree as JSON is written.
@@ -38,8 +38,9 @@ pub use oxirush_utils::tree;
 pub use oxirush_utils::tree::Value;
 
 use crate::ie::{Placed, RawIe};
-use crate::registry::IE_TYPES;
-use crate::table::{FieldValues, Repeat, Scope, keep_order};
+use crate::message::{MESSAGE_TYPES, MessageTypeInfo};
+use crate::registry::{Form, IE_TYPES, IeTypeInfo, ie_type_info};
+use crate::table::{FieldValues, Repeat, Row, Scope, Table, keep_order};
 
 /// The tree hook of a scope, which the table macro writes.
 pub(crate) trait TreeScope {
@@ -326,23 +327,142 @@ fn no_such_ie(table: &crate::table::Table, names: &[&str], written: &str) -> Str
 }
 
 /// The rules of the paths of PFCP on the engine of oxirush-utils: `/pfcp` is short for
-/// the IEs of the message, and the rest is the plain rule of a tree.
+/// the IEs of the message, and the rest is the plain rule of a tree, which knows the
+/// tables: a row that a message or a grouped IE lacks, and a flag or a field of its figure
+/// that a value lacks, are not there, where another name is no member.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Paths;
 
+/// What [`Paths`] knows of a place of the tree of a message: the tables of the IEs that it
+/// holds, or the figure of the value that it is.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Shape(Of);
+
+#[derive(Clone, Copy, Default)]
+enum Of {
+    /// Nothing: a place of the plain rule.
+    #[default]
+    Nothing,
+    /// A message.
+    Message(&'static MessageTypeInfo),
+    /// The IEs of a message or of a grouped IE, of the tables of its content: one, or each
+    /// of those of a grouped IE that has other content in other places, which the tree does
+    /// not tell apart.
+    Ies(&'static [&'static Table]),
+    /// The values of an IE type, as a row that is a list has them, and an IE that is there
+    /// more times than its row allows.
+    List(&'static IeTypeInfo),
+    /// A value of an IE type that is no grouped IE: the flags and fields of its figure.
+    Value(&'static IeTypeInfo),
+}
+
+impl core::fmt::Debug for Of {
+    /// The names of the tables and the types, not their rows.
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Self::Nothing => f.write_str("Nothing"),
+            Self::Message(info) => f.debug_tuple("Message").field(&info.name()).finish(),
+            Self::Ies(tables) => {
+                let ids = tables.iter().map(|table| table.id);
+                f.debug_tuple("Ies")
+                    .field(&ids.collect::<Vec<_>>())
+                    .finish()
+            }
+            Self::List(info) => f.debug_tuple("List").field(&info.name).finish(),
+            Self::Value(info) => f.debug_tuple("Value").field(&info.name).finish(),
+        }
+    }
+}
+
+/// The row of `name` of `tables`, as the tree names it.
+fn row_named(tables: &[&'static Table], name: &str) -> Option<&'static Row> {
+    let mut rows = tables.iter().flat_map(|table| table.rows.iter());
+    rows.find(|row| tree::same_name(row.name, name))
+}
+
+/// What `value` is, of a row: the list of its values, or its value.
+fn of_row(row: &Row, value: Option<&Value>) -> Of {
+    let Some(info) = ie_type_info(row.ie_type) else {
+        return Of::Nothing;
+    };
+    match value.map_or(row.repeat != Repeat::Once, Value::is_array) {
+        true => Of::List(info),
+        false => of_value(info, value),
+    }
+}
+
+/// What `value` is, of an IE type: the IEs of a grouped IE, or a value with the flags and
+/// fields of its figure. An IE that the scope keeps as its octets has none of them.
+fn of_value(info: &'static IeTypeInfo, value: Option<&Value>) -> Of {
+    match info.form {
+        _ if value.is_some_and(is_octets) => Of::Nothing,
+        Form::Grouped => Of::Ies(info.tables),
+        _ => Of::Value(info),
+    }
+}
+
 impl tree::Family for Paths {
-    type Shape = ();
+    type Shape = Shape;
 
     fn root(&self) -> Root<'_> {
         Root::new("pfcp", &["ies"], false)
     }
+
+    /// The message of the name that the tree says: a message type of no table, which the
+    /// tree says by its number, has its IEs as octets.
+    fn start(&self, tree: &Value, _rooted: bool) -> Shape {
+        let name = tree
+            .as_object()
+            .and_then(|members| tree::member(members, "message"))
+            .and_then(|(_, kind)| kind.as_str());
+        let info = name.and_then(|name| {
+            MESSAGE_TYPES
+                .iter()
+                .find(|info| tree::same_name(info.name(), name))
+        });
+        Shape(info.map_or(Of::Nothing, Of::Message))
+    }
+
+    fn member(&self, shape: &Shape, name: &str, value: Option<&Value>) -> Shape {
+        Shape(match shape.0 {
+            Of::Message(info) if tree::same_name(name, "ies") => {
+                Of::Ies(core::slice::from_ref(&info.table))
+            }
+            Of::Ies(tables) => {
+                row_named(tables, name).map_or(Of::Nothing, |row| of_row(row, value))
+            }
+            _ => Of::Nothing,
+        })
+    }
+
+    fn entry(&self, shape: &Shape, value: Option<&Value>) -> Shape {
+        Shape(match shape.0 {
+            Of::List(info) => of_value(info, value),
+            _ => Of::Nothing,
+        })
+    }
+
+    fn absent(&self, shape: &Shape, name: &str) -> Absent<Shape> {
+        let there = match shape.0 {
+            Of::Ies(tables) => row_named(tables, name).is_some(),
+            Of::Value(info) => info.fields.iter().any(|field| tree::same_name(field, name)),
+            _ => false,
+        };
+        match there {
+            true => Absent::Optional(self.member(shape, name, None)),
+            false => Absent::Unknown,
+        }
+    }
 }
 
-/// The values at `path` in the tree of a message.
+/// The values at `path` in the tree of a message. A row of a table that a message or a
+/// grouped IE lacks, and a flag or a field of a figure that a value lacks, select nothing;
+/// a name that is none of them is an error.
 ///
 /// # Errors
 ///
-/// Those of `oxirush_utils::tree::select_in`.
+/// Those of `oxirush_utils::tree::select_in`: `NoSuchMember` for a name that the value at
+/// its place does not have and that its table or its figure does not name either.
 pub fn select<'v>(tree: &'v Value, path: &str) -> Result<Vec<&'v Value>, tree::Error> {
     tree::select_in(&Paths, tree, path)
 }

@@ -346,7 +346,9 @@ one. To send IEs out of order, write the octets.
 
 `tree::select` and `tree::set` take paths on the tree of a message: `/pfcp`
 stands for its IEs, a list has the positions of its entries, `*` stands for
-each, and names go in any case.
+each, and names go in any case. A row that a message lacks, or a flag or a
+field that a value lacks, selects nothing; a name that is none of them is an
+error.
 
 ```rust
 use oxirush_pfcp::*;
