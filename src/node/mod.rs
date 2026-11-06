@@ -1158,8 +1158,10 @@ impl Node {
     /// Answer a request with a message as it is, delivered as `delivery` says: a probe,
     /// which may answer any number of times, and with anything. Its first answer of the
     /// type of the request's response alone changes the node, whenever the others come:
-    /// the peer discards one of another type, and takes the next (§7.6.5). A later answer
-    /// replaces the one kept for the retransmissions while the node keeps it.
+    /// the peer discards one of another type, and takes the next (§7.6.5). It does while
+    /// the node keeps the request: an answer after [`Delivery::Forget`], which forgets it,
+    /// or once the node forgot it, `keep` after it came, is sent and changes nothing. A
+    /// later answer replaces the one kept for the retransmissions while the node keeps it.
     ///
     /// # Errors
     ///
@@ -1175,8 +1177,9 @@ impl Node {
     }
 
     /// Answer a request, and keep the answer for its retransmissions. Its first answer of
-    /// the response's type alone, which the node knows by the request that waits for it,
-    /// changes the node: a probe may answer again, past `keep` too.
+    /// the response's type alone, which the node knows by the request that it keeps,
+    /// changes the node: a probe may answer again, and once the node no longer keeps the
+    /// request, its answer changes nothing.
     fn respond_with(
         &mut self,
         now: Duration,

@@ -2125,6 +2125,39 @@ fn cache_only_and_forget() {
     assert_eq!(sent(&mut upf).len(), 1, "the kept answer");
 }
 
+/// A probe's answer changes the node while the node keeps the request: once a probe has
+/// answered with Forget, or `keep` has passed since the request came, an accepted answer
+/// is sent, and changes nothing.
+#[test]
+fn a_probe_answer_to_a_request_forgotten_changes_nothing() {
+    let mut upf = node(UPF, Function::Up);
+    let setup = |sequence| Message {
+        header: Header::node(sequence),
+        body: AssociationSetupRequest::new(node_id(SMF), RecoveryTimeStamp::new(1000)).into(),
+    };
+    let answer = |sequence| Message {
+        header: Header::node(sequence),
+        body: AssociationSetupResponse::new(node_id(UPF), accepted(), RecoveryTimeStamp::new(1000))
+            .into(),
+    };
+    upf.handle_datagram(at(0), SMF, &setup(3).encode().unwrap());
+    let (inbound, _) = request(&mut upf);
+    upf.respond_message(at(0), &inbound, answer(3), Delivery::Forget)
+        .unwrap();
+    upf.respond_message(at(0), &inbound, answer(3), Delivery::Send)
+        .unwrap();
+    assert_eq!(sent(&mut upf).len(), 1);
+    assert!(upf.association(SMF).is_none(), "after Forget");
+    upf.handle_datagram(at(1), SMF, &setup(4).encode().unwrap());
+    let (inbound, _) = request(&mut upf);
+    let past = at(1) + upf.config().keep;
+    upf.handle_timeout(past);
+    upf.respond_message(past, &inbound, answer(4), Delivery::Send)
+        .unwrap();
+    assert_eq!(sent(&mut upf).len(), 1);
+    assert!(upf.association(SMF).is_none(), "past keep");
+}
+
 /// Durations at their limits do not overflow: a request kept, sent again or beating for
 /// ever.
 #[test]
