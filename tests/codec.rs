@@ -130,6 +130,64 @@ fn the_tree_reads_back_and_a_path_edits_it() {
     assert!(error.contains("Local F-TEID"), "{error}");
 }
 
+/// What is not there selects nothing, and a misspelt name is an error, `NoSuchMember`, as
+/// oxirush-utils' `select_in` has it: a row of the table of a message or of a grouped IE
+/// that it lacks, and a flag or a field of the figure of a value that it lacks, select
+/// nothing, whether the path ends at them or goes on. A name that is none of them is
+/// `NoSuchMember`, and so is a row of a grouped IE that the scope keeps as its octets.
+#[test]
+fn what_a_message_lacks_selects_nothing() {
+    let nothing = |tree: &tree::Value, path: &str| {
+        assert_eq!(
+            select(tree, path).map_err(|error| error.kind()),
+            Ok(vec![]),
+            "{path}"
+        );
+    };
+    let misspelt = |tree: &tree::Value, path: &str| {
+        let kind = select(tree, path).map_err(|error| error.kind());
+        assert_eq!(kind, Err(tree::ErrorKind::NoSuchMember), "{path}");
+    };
+    let heartbeat = Message {
+        header: Header::node(1),
+        body: HeartbeatRequest::new(RecoveryTimeStamp::new(7)).into(),
+    };
+    let heartbeat = heartbeat.to_tree();
+    nothing(&heartbeat, "/pfcp/Source IP Address");
+    nothing(&heartbeat, "/pfcp/source-ip-address/IPv4 address");
+    misspelt(&heartbeat, "/pfcp/No Such IE");
+    misspelt(&heartbeat, "/pfcp/Source IP Adress");
+    let establishment = establishment().to_tree();
+    // Rows of grouped IEs, of a list and of a list of them
+    nothing(&establishment, "/pfcp/Create PDR/0/Outer Header Removal");
+    nothing(&establishment, "/pfcp/Create PDR/*/PDI/Network Instance");
+    nothing(&establishment, "/pfcp/Create QER");
+    nothing(&establishment, "/pfcp/Create QER/0/QER ID");
+    misspelt(&establishment, "/pfcp/Create PDR/0/Outer Header Removals");
+    misspelt(&establishment, "/pfcp/Create PDR/0/PDI/Network");
+    // Flags and fields of a figure
+    nothing(&establishment, "/pfcp/CP F-SEID/V6");
+    nothing(&establishment, "/pfcp/CP F-SEID/IPv6 address");
+    nothing(&establishment, "/pfcp/Create PDR/0/PDI/Local F-TEID/TEID");
+    misspelt(&establishment, "/pfcp/CP F-SEID/IPv7 address");
+    // What is there is selected
+    let selected = select(&establishment, "/pfcp/Create PDR/*/PDR ID").unwrap();
+    assert_eq!(selected, [&tree!(1), &tree!(2)]);
+    // A grouped IE that the scope keeps as its octets has no rows
+    let mut kept = establishment.clone();
+    kept["ies"]["Create PDR"][0] = tree!({"octets": "003800020001"});
+    misspelt(&kept, "/pfcp/Create PDR/0/FAR ID");
+    // A row that a message lacks is set as before
+    let mut edited = heartbeat.clone();
+    let address = tree!({"V4": true, "IPv4 address": "10.0.0.9"});
+    set(&mut edited, "/pfcp/Source IP Address", address).unwrap();
+    let Body::HeartbeatRequest(request) = Message::from_tree(&edited).unwrap().body else {
+        panic!()
+    };
+    let source = request.source_ip_address.unwrap().ipv4_address;
+    assert_eq!(source, Some(Ipv4Addr::new(10, 0, 0, 9)));
+}
+
 #[test]
 fn what_the_table_does_not_have_is_kept_in_its_place() {
     let message = establishment();
