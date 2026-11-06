@@ -382,6 +382,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
   (Release 19). An IE of a later release stays octets, and an IE that an earlier
   release laid out otherwise is read as Release 19 lays it out.
 - No message of a commercial UPF or SMF is among the test fixtures.
+- A `Node` is one PFCP entity, with its own associations: an SMF of several
+  entities is as many nodes, which do not share them. With MPAS, a node of
+  `NodeConfig::other_entities` gives its caller a UPF's handover of a session
+  to it, without the association, for the caller to check against the other
+  entities of the SMF.
 
 ## Performance
 

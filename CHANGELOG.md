@@ -24,7 +24,8 @@ The first version, of TS 29.244 V19.6.0 (2026-06).
   overload control and message priority, and what a peer does wrong as an
   event. What it keeps of its peers is bounded, and what it drops counted.
   With `SmfSet`, the requests that the SMF sets of §5.22 let come from another
-  SMF of a set go to the caller, and a release keeps what MPAS keeps.
+  SMF of a set go to the caller, and a release keeps what MPAS keeps; with
+  `other_entities`, a handover to another PFCP entity of the same SMF too.
 - `endpoint`: a node on a Tokio UDP socket. The `Endpoint` takes the peers'
   requests and the events, and a `Handle`, which clones, sends the node's
   requests and reaches its state, from any task.
