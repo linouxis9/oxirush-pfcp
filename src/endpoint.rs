@@ -509,6 +509,27 @@ impl Handle {
         self.on(move |node, _| node.new_session()).await
     }
 
+    /// Take over a session that the node did not establish, with the UP function at `peer`
+    /// and its SEID ([`Node::adopt_session`]): as an SMF of a set, the session of a UP
+    /// function's report of SEID 0, which comes with [`Inbound::of_smf_set`]. The caller
+    /// then sets the report's [`Inbound::seid`], in its [`Incoming`], to `local_seid`
+    /// before it answers.
+    ///
+    /// # Errors
+    ///
+    /// A local or peer's SEID of 0, a local SEID that another session has, and an endpoint
+    /// that has ended.
+    pub async fn adopt_session(
+        &self,
+        local_seid: u64,
+        peer: SocketAddr,
+        peer_seid: u64,
+    ) -> Result<(), EndpointError> {
+        self.on(move |node, _| node.adopt_session(local_seid, peer, peer_seid))
+            .await?
+            .map_err(EndpointError::Node)
+    }
+
     /// Send octets as they are, for a probe ([`Node::send_raw`]).
     ///
     /// # Errors
