@@ -24,6 +24,40 @@ use oxirush_pfcp::*;
 /// What the check finds in the captures, each a finding of the peer that sent it: the
 /// run, the number of the message, and the deviation as it is displayed.
 const EXPECTED: &[(&str, &str, &str)] = &[
+    // Open5GS 157f611a: the UPF's first usage report of a URR without ISTM, here of the
+    // deletion (TERMR), has no Start Time, which Table 7.5.7.2-1 has but of the start or
+    // stop of traffic and of MAC addresses: the time a URR starts is set for ISTM alone
+    // (src/upf/n4-handler.c), and a time of 0 is left out (lib/pfcp/build.c).
+    (
+        "open5gs-5gs-handover",
+        "16",
+        "Start Time is missing where its condition holds (TS 29.244 7.5.7.2-1), at /pfcp/Usage Report/0/Start Time",
+    ),
+    (
+        "open5gs-5gs-lifecycle",
+        "20",
+        "Start Time is missing where its condition holds (TS 29.244 7.5.7.2-1), at /pfcp/Usage Report/0/Start Time",
+    ),
+    (
+        "open5gs-5gs-lifecycle",
+        "22",
+        "Start Time is missing where its condition holds (TS 29.244 7.5.7.2-1), at /pfcp/Usage Report/0/Start Time",
+    ),
+    (
+        "open5gs-5gs-lifecycle",
+        "32",
+        "Start Time is missing where its condition holds (TS 29.244 7.5.7.2-1), at /pfcp/Usage Report/0/Start Time",
+    ),
+    (
+        "open5gs-5gs-upf-restart",
+        "20",
+        "Start Time is missing where its condition holds (TS 29.244 7.5.7.2-1), at /pfcp/Usage Report/0/Start Time",
+    ),
+    (
+        "open5gs-5gs-upf-restart",
+        "22",
+        "Start Time is missing where its condition holds (TS 29.244 7.5.7.2-1), at /pfcp/Usage Report/0/Start Time",
+    ),
     // Open5GS 157f611a: the SMF that restores a session to a UPF that restarted (RESTI)
     // gives the header of its establishment the SEID of the UPF from before the restart,
     // where the UPF has none: SEID 0 (§7.2.2.4.2, src/smf/pfcp-path.c).

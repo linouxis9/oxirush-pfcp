@@ -69,7 +69,13 @@ the interface. The SMF that restores a session to a UPF that restarted, with the
 flag, gives the header of its Session Establishment Request the UPF's SEID from before
 the restart, which the UPF no longer has, where §7.2.2.4.2 has SEID 0:
 `smf_5gc_pfcp_send_session_establishment_request()` (`src/smf/pfcp-path.c`) sets
-`h.seid = sess->upf_n4_seid`. The test `captures` expects both.
+`h.seid = sess->upf_n4_seid`. The UPF's first usage report of a URR without ISTM, as
+that of a deletion, has no Start Time, which Tables 7.5.5.2-1, 7.5.7.2-1 and 7.5.8.3-1
+have but of the start or stop of traffic and of MAC addresses: the time that a URR starts
+is set by `upf_sess_urr_acc_timers_setup()` (`src/upf/context.c`), which
+`upf_n4_handle_create_urr()` (`src/upf/n4-handler.c`) calls for a URR of ISTM alone, and
+`ogs_pfcp_build_session_deletion_response()` (`lib/pfcp/build.c`) leaves a start time of
+0 out. The test `captures` expects the three.
 
 **go-pfcp v0.0.24**, in its test vectors, which `go-pfcp-deviations.tsv` lists as the
 test `codec` expects them (`other_vectors_round_trip`, with `--ignored` and
@@ -88,6 +94,10 @@ test `codec` expects them (`other_vectors_round_trip`, with `--ignored` and
   Service Information, which §8.2.27 has spare
   (`NewDownlinkDataServiceInformation(true, true, 0xff, 0xff)` in
   `message/session-report-request_test.go`).
+- The GTP-U Path QoS Control Information of a periodic QoS Report Trigger has a
+  Measurement Method where Table 7.4.4.1.3-1 has the Measurement Period, which periodic
+  reporting needs, and an Association Setup Response of CP Function Features of MPAS
+  (`NewCPFunctionFeatures(0x3f)`) has no SMF Set ID, which Table 7.4.4.2-1 then has.
 - Reporting Frequency has bit 3 set, SESRL of an earlier release, which §8.2.168
   reserves, "set to "0" by the sender" (`NewReportingFrequency(1, 1, 1)` in
   `message/session-establishment-request_test.go` and

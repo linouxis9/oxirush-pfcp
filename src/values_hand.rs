@@ -1162,7 +1162,11 @@ macro_rules! mac_addresses {
             }
         }
 
-        impl Check for $ty {}
+        impl Check for $ty {
+            fn check(&self, path: &crate::check::Path, found: &mut Vec<Deviation>) {
+                check_tags(self.c_tag.as_ref(), self.s_tag.as_ref(), path, $clause, found);
+            }
+        }
 
         #[cfg(feature = "serde")]
         oxirush_utils::impl_serde!($ty);
@@ -1194,6 +1198,52 @@ macro_rules! mac_addresses {
             }
         }
     )*};
+}
+
+/// The C-TAG and the S-TAG of MAC Addresses Detected or Removed, of `clause`: "encoded as
+/// the Customer-VLAN tag defined in clause 8.2.94" and the Service-VLAN tag of §8.2.95,
+/// "excluding octets 1 to 4", whose first octet has the flags PCP, DEI and VID, at least one
+/// of them set, and spare bits. A length of 0 says that a field is absent; the octets after
+/// the three of a tag are a later release's, as those of the tag itself (Table 8.1.2-1).
+fn check_tags(
+    c_tag: Option<&Lv8>,
+    s_tag: Option<&Lv8>,
+    path: &crate::check::Path,
+    clause: &'static str,
+    found: &mut Vec<Deviation>,
+) {
+    use crate::check::DeviationKind;
+    let tags = [
+        (
+            c_tag,
+            "a C-TAG field of fewer than three octets",
+            "a C-TAG field with none of PCP, DEI and VID set",
+        ),
+        (
+            s_tag,
+            "an S-TAG field of fewer than three octets",
+            "an S-TAG field with none of PCP, DEI and VID set",
+        ),
+    ];
+    for (tag, short, unflagged) in tags {
+        let Some(tag) = tag.map(|tag| &tag.0[..]) else {
+            continue;
+        };
+        let rule = match tag {
+            [] => continue,
+            [_] | [_, _] => short,
+            [flags, ..] => {
+                if flags & 0xf8 != 0 {
+                    found.push(Deviation::new(path, "8.1.2", DeviationKind::SpareBits));
+                }
+                if flags & 0x07 != 0 {
+                    continue;
+                }
+                unflagged
+            }
+        };
+        found.push(Deviation::new(path, clause, DeviationKind::Rule(rule)));
+    }
 }
 
 mac_addresses! {

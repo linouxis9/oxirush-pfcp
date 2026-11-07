@@ -231,9 +231,10 @@ as slices, without decoding them.
 construct it on the interface that it names: N4, Sxa, Sxb, Sxc or N4mb, or a
 set of them, as `Interfaces::SXA_SXB` of a combined SGW/PGW (§5.2.6), on which
 a message may have the IEs of either and needs those that both need. It checks
-the mandatory IEs, the conditional IEs whose condition the message shows (the
-UP F-SEID of an accepted establishment, the Forwarding Parameters of a FAR that
-forwards, the reports that a Report Type names: `Row::checked` says which), the
+the mandatory IEs, the conditional IEs whose condition the IEs beside them show
+(the UP F-SEID of an accepted establishment, the Forwarding Parameters of a FAR
+that forwards, the reports that a Report Type names, two IEs of which a NOTE of
+their table needs one: `Row::checked` says which), the
 IEs that do not decode, repeat, or are not of the table or the interface, spare
 bits and values, reserved values, the flags of each IE with the rules of
 clause 8.2 on which of them are set, together, with a value or always, and the
@@ -251,7 +252,8 @@ use oxirush_pfcp::*;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // A modification that creates PDR 3 and removes it, and a Create PDR without its PDR ID
-    let mut pdr = CreatePdr::new_n4(PdrId::new(3), Precedence::new(32), Pdi::new(SourceInterface::new(SourceInterfaceValue::Core)));
+    let mut pdr = CreatePdr::new_n4(PdrId::new(3), Precedence::new(32), Pdi::new(SourceInterface::new(SourceInterfaceValue::Core)))
+        .with_far_id(FarId::new(3));
     let modification = SessionModificationRequest::default()
         .with_create_pdr(pdr.clone())
         .with_remove_pdr(RemovePdr::new(PdrId::new(3)));
@@ -376,8 +378,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 ## Limits
 
 - `check()` checks one message: the procedures, and the conditions of the C
-  rows that need the state of a node, are not its own. Nor is who sets a flag,
-  as CH of an F-TEID, which only the CP function sets.
+  rows that need the state of a node, are not its own. Nor are the conditions
+  on the IEs of another scope, as the Weight of an access of a MAR, of the
+  Steering Mode of the MAR (Table 7.5.2.8-2), or who sets a flag, as CH of an
+  F-TEID, which only the CP function sets.
 - `encode()` writes any value that a type can hold, so a test tool can send
   an invalid message.
 - A tree is in the order of the tables, and the octets in the order of the

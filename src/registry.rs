@@ -18,7 +18,7 @@
 //! The registry: every IE type of Table 8.1.2-1, one line each, and the tables of
 //! clause 7, one row each, which the macros expand into the types of the crate.
 
-use crate::enums::CauseValue;
+use crate::enums::{CauseValue, DestinationInterfaceValue, SteeringFunctionalityValue};
 use crate::macros::{pfcp_ies, pfcp_table};
 use crate::values::*;
 use crate::values_gen::*;
@@ -48,6 +48,29 @@ fn method(urr: &CreateUrr, has: impl Fn(&MeasurementMethod) -> bool) -> bool {
 /// Whether the Reporting Triggers of a Create URR have a trigger.
 fn triggers(urr: &CreateUrr, has: impl Fn(&ReportingTriggers) -> bool) -> bool {
     urr.reporting_triggers.as_ref().is_some_and(has)
+}
+
+/// Whether an SMF says MPAS in its CP Function Features (§5.22.3), which then has the SMF
+/// Set ID follow.
+fn of_mpas(features: &Option<CpFunctionFeatures>) -> bool {
+    features.as_ref().is_some_and(|features| features.mpas)
+}
+
+/// Whether a usage report is of a trigger that has its start and end times: not of the
+/// start or the stop of traffic, or of MAC addresses (Tables 7.5.5.2-1, 7.5.7.2-1 and
+/// 7.5.8.3-1).
+fn timed(trigger: &Option<UsageReportTrigger>) -> bool {
+    trigger
+        .as_ref()
+        .is_some_and(|trigger| !(trigger.start || trigger.stopt || trigger.macar))
+}
+
+/// Whether the Reporting Frequency of a QoS monitoring has a frequency.
+fn frequency(
+    monitoring: &QoSMonitoringPerQoSFlowControlInformation,
+    has: impl Fn(&ReportingFrequency) -> bool,
+) -> bool {
+    monitoring.reporting_frequency.as_ref().is_some_and(has)
 }
 
 /// The form of an IE type in Table 8.1.2-1.
@@ -556,7 +579,7 @@ pfcp_table! {
         up_function_features: "UP Function Features" C UpFunctionFeatures [SXA SXB SXC N4 N4MB],
         cp_function_features: "CP Function Features" C CpFunctionFeatures [SXA SXB SXC N4 N4MB],
         alternative_smf_ip_address: "Alternative SMF IP Address" O* AlternativeSmfIpAddress [N4 N4MB],
-        smf_set_id: "SMF Set ID" C SmfSetId [N4 N4MB],
+        smf_set_id: "SMF Set ID" C SmfSetId [N4 N4MB] if |s| of_mpas(&s.cp_function_features),
         pfcp_session_retention_information: "PFCP Session Retention Information" O PfcpSessionRetentionInformation [SXA SXB SXC N4 N4MB],
         ue_ip_address_pool_information: "UE IP address Pool Information" O* UeIpAddressPoolInformation [SXB N4],
         gtp_u_path_qos_control_information: "GTP-U Path QoS Control Information" C* GtpUPathQoSControlInformation [N4],
@@ -579,7 +602,7 @@ pfcp_table! {
         up_function_features: "UP Function Features" C UpFunctionFeatures [SXA SXB SXC N4 N4MB],
         cp_function_features: "CP Function Features" C CpFunctionFeatures [SXA SXB SXC N4 N4MB],
         alternative_smf_ip_address: "Alternative SMF IP Address" O* AlternativeSmfIpAddress [N4 N4MB],
-        smf_set_id: "SMF Set ID" C SmfSetId [N4 N4MB],
+        smf_set_id: "SMF Set ID" C SmfSetId [N4 N4MB] if |s| of_mpas(&s.cp_function_features),
         pfcpasrsp_flags: "PFCPASRsp-Flags" O PFCPASRspFlags [SXA SXB SXC N4 N4MB],
         clock_drift_control_information: "Clock Drift Control Information" C* ClockDriftControlInformation [N4],
         ue_ip_address_pool_information: "UE IP address Pool Information" O* UeIpAddressPoolInformation [SXB N4],
@@ -957,19 +980,21 @@ pfcp_table! {
         requested_clock_drift_information: "Requested Clock Drift Information" M RequestedClockDriftInformation [N4],
         time_domain_number: "Time Domain Number" C* TimeDomainNumber [N4],
         configured_time_domain: "Configured Time Domain" C ConfiguredTimeDomain [N4],
-        time_offset_threshold: "Time Offset Threshold" C TimeOffsetThreshold [N4],
-        cumulative_rateratio_threshold: "Cumulative rateRatio Threshold" C CumulativeRateRatioThreshold [N4],
+        time_offset_threshold: "Time Offset Threshold" C TimeOffsetThreshold [N4] if |s| s.requested_clock_drift_information.as_ref().is_some_and(|r| r.rrto),
+        cumulative_rateratio_threshold: "Cumulative rateRatio Threshold" C CumulativeRateRatioThreshold [N4] if |s| s.requested_clock_drift_information.as_ref().is_some_and(|r| r.rrcr),
     }
 }
 
 pfcp_table! {
     /// GTP-U Path QoS Control Information within PFCP Association Setup Request (Table 7.4.4.1.3-1).
     group GtpUPathQoSControlInformation = 238, "GTP-U Path QoS Control Information", "7.4.4.1.3-1" {
-        remote_gtp_u_peer: "Remote GTP-U Peer" C* RemoteGtpUPeer [N4],
-        gtp_u_path_interface_type: "GTP-U Path Interface Type" C GtpUPathInterfaceType [N4],
+        // NOTE: "At least one Remote GTP-U Peer IE or GTP-U Path Interface Type IE shall be
+        // present", the condition of each on the other.
+        remote_gtp_u_peer: "Remote GTP-U Peer" C* RemoteGtpUPeer [N4] if |s| s.gtp_u_path_interface_type.is_none(),
+        gtp_u_path_interface_type: "GTP-U Path Interface Type" C GtpUPathInterfaceType [N4] if |s| s.remote_gtp_u_peer.is_empty(),
         qos_report_trigger: "QoS Report Trigger" M QoSReportTrigger [N4],
         dscp: "DSCP" C* TransportLevelMarking [N4],
-        measurement_period: "Measurement Period" C MeasurementPeriod [N4],
+        measurement_period: "Measurement Period" C MeasurementPeriod [N4] if |s| s.qos_report_trigger.as_ref().is_some_and(|t| t.per),
         average_packet_delay_threshold: "Average Packet Delay Threshold" C AveragePacketDelay [N4],
         minimum_packet_delay_threshold: "Minimum Packet Delay Threshold" C MinimumPacketDelay [N4],
         maximum_packet_delay_threshold: "Maximum Packet Delay Threshold" C MaximumPacketDelay [N4],
@@ -986,7 +1011,7 @@ pfcp_table! {
         measurement_protocols: "Measurement Protocols" M* N6DelayMeasurementProtocols [N4],
         protocol_specific_configuration_parameters: "Protocol Specific Configuration Parameters" O ProtocolSpecificConfigurationParameters [N4],
         measurement_reporting_type: "Measurement Reporting Type" M MeasurementReportingType [N4],
-        measurement_period: "Measurement Period" C MeasurementPeriod [N4],
+        measurement_period: "Measurement Period" C MeasurementPeriod [N4] if |s| s.measurement_reporting_type.as_ref().is_some_and(|t| t.per),
         average_packet_delay_threshold: "Average Packet Delay Threshold" O AveragePacketDelay [N4],
         minimum_packet_delay_threshold: "Minimum Packet Delay Threshold" O MinimumPacketDelay [N4],
         maximum_packet_delay_threshold: "Maximum Packet Delay Threshold" O MaximumPacketDelay [N4],
@@ -1084,8 +1109,10 @@ pfcp_table! {
         measurement_reporting_type: "Measurement Reporting Type" M MeasurementReportingType [N4],
         time_stamp: "Time Stamp" M TimeStamp [N4],
         start_time: "Start Time" C StartTime [N4],
-        n6_delay_measurement_information: "N6 Delay Measurement Information" C N6DelayMeasurementInformation [N4],
-        n6_delay_measurement_failure_information: "N6 Delay Measurement Failure Information" C N6DelayMeasurementFailureInformation [N4],
+        // NOTE: "Either the N6 Delay Measurement Information IE or the N6 Delay Measurement
+        // Failure Information IE shall be present", the condition of each on the other.
+        n6_delay_measurement_information: "N6 Delay Measurement Information" C N6DelayMeasurementInformation [N4] if |s| s.n6_delay_measurement_failure_information.is_none(),
+        n6_delay_measurement_failure_information: "N6 Delay Measurement Failure Information" C N6DelayMeasurementFailureInformation [N4] if |s| s.n6_delay_measurement_information.is_none(),
         measurement_endpoint_port_number: "Measurement EndPoint Port Number" O MeasurementEndpointPortNumber [N4],
     }
 }
@@ -1154,7 +1181,8 @@ pfcp_table! {
         precedence: "Precedence" M Precedence [SXB SXC N4 N4MB],
         pdi: "PDI" M Pdi [SXA SXB SXC N4 N4MB],
         outer_header_removal: "Outer Header Removal" C OuterHeaderRemoval [SXA SXB N4 N4MB],
-        far_id: "FAR ID" C FarId [SXA SXB SXC N4 N4MB],
+        // Of a PDR without a predefined rule, which may give its FAR, and without a MAR.
+        far_id: "FAR ID" C FarId [SXA SXB SXC N4 N4MB] if |s| s.activate_predefined_rules.is_empty() && s.mar_id.is_none(),
         urr_id: "URR ID" C* UrrId [SXA SXB SXC N4],
         qer_id: "QER ID" C* QerId [SXB SXC N4 N4MB],
         activate_predefined_rules: "Activate Predefined Rules" C* ActivatePredefinedRules [SXB SXC N4],
@@ -1253,7 +1281,7 @@ pfcp_table! {
     /// RTP Header Extension Information IE (Table 7.5.2.2-8).
     group RtpHeaderExtensionInformation = 340, "RTP Header Extension Information", "7.5.2.2-8" {
         rtp_header_extension_type: "RTP Header Extension Type" C RtpHeaderExtensionType [N4],
-        rtp_header_extension_id: "RTP Header Extension ID" C RtpHeaderExtensionId [N4],
+        rtp_header_extension_id: "RTP Header Extension ID" C RtpHeaderExtensionId [N4] if |s| s.rtp_header_extension_type.is_some(),
         rtp_header_extension_additional_information: "RTP Header Extension Additional Information" O RtpHeaderExtensionAdditionalInformation [N4],
     }
 }
@@ -1261,7 +1289,7 @@ pfcp_table! {
 pfcp_table! {
     /// RTP Payload Information IE (Table 7.5.2.2-9).
     group RtpPayloadInformation = 341, "RTP Payload Information", "7.5.2.2-9" {
-        rtp_payload_type: "RTP Payload Type" C* RtpPayloadType [N4],
+        rtp_payload_type: "RTP Payload Type" C* RtpPayloadType [N4] if |s| s.rtp_payload_format.is_some(),
         rtp_payload_format: "RTP Payload Format" O RtpPayloadFormat [N4],
     }
 }
@@ -1276,7 +1304,7 @@ pfcp_table! {
         bar_id: "BAR ID" O BarId [SXA N4],
         // V19.6.0 marks no interface for this row; its row in Update FAR (Table
         // 7.5.4.3-1) and clause 5.24 have it on N4.
-        redundant_transmission_forwarding_parameters: "Redundant Transmission Forwarding Parameters" C RedundantTransmissionForwardingParameters [N4],
+        redundant_transmission_forwarding_parameters: "Redundant Transmission Forwarding Parameters" C RedundantTransmissionForwardingParameters [N4] if |s| s.apply_action.as_ref().is_some_and(|a| a.dfrt) && s.forwarding_parameters.is_some(),
         mbs_multicast_parameters: "MBS Multicast Parameters" C MbsMulticastParameters [N4MB] if |s| s.apply_action.as_ref().is_some_and(|a| a.fssm),
         add_mbs_unicast_parameters: "Add MBS Unicast Parameters" C* AddMbsUnicastParameters [N4MB] if |s| s.apply_action.as_ref().is_some_and(|a| a.mbsu),
     }
@@ -1292,7 +1320,7 @@ pfcp_table! {
         transport_level_marking: "Transport Level Marking" C TransportLevelMarking [SXA SXB N4],
         extended_transport_level_marking: "Extended Transport Level Marking" C* ExtendedTransportLevelMarking [N4],
         transport_level_marking_indications: "Transport Level Marking Indications" C TransportLevelMarkingIndications [N4],
-        forwarding_policy: "Forwarding Policy" C ForwardingPolicy [SXB SXC N4],
+        forwarding_policy: "Forwarding Policy" C ForwardingPolicy [SXB SXC N4] if |s| s.destination_interface.as_ref().is_some_and(|d| d.interface_value == DestinationInterfaceValue::SgiLanN6Lan),
         metadata: "Metadata" O Metadata [N4],
         header_enrichment: "Header Enrichment" O HeaderEnrichment [SXB SXC N4],
         linked_traffic_endpoint_id: "Linked Traffic Endpoint ID" C TrafficEndpointId [SXA SXB N4],
@@ -1376,10 +1404,10 @@ pfcp_table! {
     group HeaderHandlingControlInformation = 363, "Header Handling Control information", "7.5.2.3-9" {
         header_handling_control_id: "Header Handling Control ID" M HeaderHandlingControlId [N4],
         header_handling_control_reference: "Header Handling Control Reference" C HeaderHandlingControlReference [N4],
-        header_handling_action: "Header Handling Action" C HeaderHandlingAction [N4],
-        header_information: "Header Information" C HeaderInformation [N4],
-        header_value: "Header Value" C HeaderValue [N4],
-        header_handling_condition: "Header Handling Condition" C HeaderHandlingCondition [N4],
+        header_handling_action: "Header Handling Action" C HeaderHandlingAction [N4] if |s| s.header_handling_control_reference.is_none(),
+        header_information: "Header Information" C HeaderInformation [N4] if |s| s.header_handling_control_reference.is_none(),
+        header_value: "Header Value" C HeaderValue [N4] if |s| s.header_handling_control_reference.is_none(),
+        header_handling_condition: "Header Handling Condition" C HeaderHandlingCondition [N4] if |s| s.header_handling_control_reference.is_none(),
         header_handling_reporting: "Header Handling Reporting" C* ReportingEndpointId [N4],
     }
 }
@@ -1519,7 +1547,7 @@ pfcp_table! {
         non_3gpp_access_forwarding_action_information: "Non-3GPP Access Forwarding Action Information" C NonThreeGppAccessForwardingActionInformation [N4],
         threshold_values: "Threshold Values" C Thresholds [N4],
         steering_mode_indicator: "Steering Mode Indicator" C SteeringModeIndicator [N4],
-        transport_mode: "Transport Mode" C TransportMode [N4],
+        transport_mode: "Transport Mode" C TransportMode [N4] if |s| s.steering_functionality.as_ref().is_some_and(|f| matches!(f.steering_functionality_value, SteeringFunctionalityValue::MpquicUdp | SteeringFunctionalityValue::MpquicIp | SteeringFunctionalityValue::MpquicE)),
     }
 }
 
@@ -1571,11 +1599,13 @@ pfcp_table! {
         requested_qos_monitoring: "Requested QoS Monitoring" M RequestedQoSMonitoring [N4],
         reporting_frequency: "Reporting Frequency" M ReportingFrequency [N4],
         packet_delay_thresholds: "Packet Delay Thresholds" C PacketDelayThresholds [N4],
-        minimum_wait_time: "Minimum Wait Time" C MinimumWaitTime [N4],
-        measurement_period: "Measurement Period" C MeasurementPeriod [N4],
+        minimum_wait_time: "Minimum Wait Time" C MinimumWaitTime [N4] if |s| frequency(s, |f| f.evett),
+        // Of periodic reporting; that of event triggered packet delay monitoring an earlier
+        // release does not give (NOTE 2).
+        measurement_period: "Measurement Period" C MeasurementPeriod [N4] if |s| frequency(s, |f| f.perio),
         reporting_suggestion_info: "Reporting Suggestion Info" C ReportingSuggestionInfo [N4],
         measurement_indication: "Measurement Indication" C MeasurementIndication [N4],
-        reporting_thresholds: "Reporting Thresholds" C ReportingThresholds [N4],
+        reporting_thresholds: "Reporting Thresholds" C ReportingThresholds [N4] if |s| frequency(s, |f| f.evett) && s.requested_qos_monitoring.as_ref().is_some_and(|r| r.ulci || r.dlci || r.uldr || r.dldr),
         remaining_data_reporting_indication: "Remaining Data Reporting Indication" O RemainingDataReportingIndication [N4],
     }
 }
@@ -1595,9 +1625,11 @@ pfcp_table! {
     group TrafficParameterMeasurementControlInformation = 323, "Traffic Parameter Measurement Control Information", "7.5.2.9-5" {
         qfi: "QFI" M* Qfi [N4],
         traffic_parameter_measurement_indication: "Traffic Parameter Measurement Indication" M TrafficParameterMeasurementIndication [N4],
-        measurement_period: "Measurement Period" C MeasurementPeriod [N4],
+        // NOTE: "Either a Measurement Period or a Traffic Parameter Threshold shall be
+        // present", the condition of each on the other.
+        measurement_period: "Measurement Period" C MeasurementPeriod [N4] if |s| s.traffic_parameter_threshold.is_none(),
         dl_periodicity: "DL Periodicity" C DlPeriodicity [N4],
-        traffic_parameter_threshold: "Traffic Parameter Threshold" C TrafficParameterThreshold [N4],
+        traffic_parameter_threshold: "Traffic Parameter Threshold" C TrafficParameterThreshold [N4] if |s| s.measurement_period.is_none(),
     }
 }
 
@@ -2064,8 +2096,8 @@ pfcp_table! {
         urr_id: "URR ID" M UrrId [SXA SXB SXC N4 N4MB],
         ur_seqn: "UR-SEQN" M UrSeqn [SXA SXB SXC N4 N4MB],
         usage_report_trigger: "Usage Report Trigger" M UsageReportTrigger [SXA SXB SXC N4 N4MB],
-        start_time: "Start Time" C StartTime [SXA SXB SXC N4 N4MB],
-        end_time: "End Time" C EndTime [SXA SXB SXC N4 N4MB],
+        start_time: "Start Time" C StartTime [SXA SXB SXC N4 N4MB] if |s| timed(&s.usage_report_trigger),
+        end_time: "End Time" C EndTime [SXA SXB SXC N4 N4MB] if |s| timed(&s.usage_report_trigger),
         volume_measurement: "Volume Measurement" C VolumeMeasurement [SXA SXB SXC N4 N4MB],
         duration_measurement: "Duration Measurement" C DurationMeasurement [SXA SXB SXC N4],
         time_of_first_packet: "Time of First Packet" C TimeOfFirstPacket [SXB SXC N4 N4MB],
@@ -2117,8 +2149,8 @@ pfcp_table! {
         urr_id: "URR ID" M UrrId [SXA SXB SXC N4 N4MB],
         ur_seqn: "UR-SEQN" M UrSeqn [SXA SXB SXC N4 N4MB],
         usage_report_trigger: "Usage Report Trigger" M UsageReportTrigger [SXA SXB SXC N4 N4MB],
-        start_time: "Start Time" C StartTime [SXA SXB SXC N4 N4MB],
-        end_time: "End Time" C EndTime [SXA SXB SXC N4 N4MB],
+        start_time: "Start Time" C StartTime [SXA SXB SXC N4 N4MB] if |s| timed(&s.usage_report_trigger),
+        end_time: "End Time" C EndTime [SXA SXB SXC N4 N4MB] if |s| timed(&s.usage_report_trigger),
         volume_measurement: "Volume Measurement" C VolumeMeasurement [SXA SXB SXC N4 N4MB],
         duration_measurement: "Duration Measurement" C DurationMeasurement [SXA SXB SXC N4],
         time_of_first_packet: "Time of First Packet" C TimeOfFirstPacket [SXB SXC N4 N4MB],
@@ -2152,8 +2184,8 @@ pfcp_table! {
         urr_id: "URR ID" M UrrId [SXA SXB SXC N4 N4MB],
         ur_seqn: "UR-SEQN" M UrSeqn [SXA SXB SXC N4 N4MB],
         usage_report_trigger: "Usage Report Trigger" M UsageReportTrigger [SXA SXB SXC N4 N4MB],
-        start_time: "Start Time" C StartTime [SXA SXB SXC N4 N4MB],
-        end_time: "End Time" C EndTime [SXA SXB SXC N4 N4MB],
+        start_time: "Start Time" C StartTime [SXA SXB SXC N4 N4MB] if |s| timed(&s.usage_report_trigger),
+        end_time: "End Time" C EndTime [SXA SXB SXC N4 N4MB] if |s| timed(&s.usage_report_trigger),
         volume_measurement: "Volume Measurement" C VolumeMeasurement [SXA SXB SXC N4 N4MB],
         duration_measurement: "Duration Measurement" C DurationMeasurement [SXA SXB SXC N4],
         application_detection_information: "Application Detection Information" C ApplicationDetectionInformation [SXB SXC N4],
