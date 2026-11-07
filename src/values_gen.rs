@@ -218,6 +218,17 @@ pfcp_bits! {
     }
 }
 
+impl Timer {
+    /// A timer of `value` in `unit` (Table 8.2.35.1): of up to 31.
+    pub fn new(unit: TimerUnit, value: u8) -> Self {
+        Self {
+            timer_unit: unit,
+            timer_value: value,
+            ..Self::default()
+        }
+    }
+}
+
 pfcp_bits! {
     /// Usage Report Trigger (§8.2.41).
     pub struct UsageReportTrigger "8.2.41" octets 3 min 2 {
