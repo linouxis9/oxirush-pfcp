@@ -64,6 +64,10 @@ pub trait Field: Sized {
         value: &oxirush_utils::tree::Value,
         reading: &mut oxirush_utils::tree::Reading,
     ) -> Result<Self, oxirush_utils::tree::Refused>;
+    /// What its tree may hold below it, which a path below it is judged by where a value
+    /// lacks it: nothing for a field whose tree is a scalar.
+    #[cfg(feature = "tree")]
+    const BELOW: &'static crate::tree::Below = &crate::tree::Below::Scalar;
 }
 
 /// How a value is laid out, as the crate reads it: what the test `spec` compares with the
@@ -241,6 +245,11 @@ impl<E: Narrowable> Narrow<E> {
 
 impl<E: Narrowable> Field for Narrow<E> {
     const OCTETS: Option<usize> = Some(1);
+    #[cfg(feature = "tree")]
+    const BELOW: &'static crate::tree::Below = &crate::tree::Below::Object(&[
+        ("value", &crate::tree::Below::Scalar),
+        ("Spare", &crate::tree::Below::Scalar),
+    ]);
     const CELLS: &'static [NarrowCell] = &[NarrowCell {
         name: None,
         octet: 0,
@@ -592,6 +601,8 @@ impl Field for Spare {
 pub struct Counted<T>(pub Vec<T>);
 
 impl<T: Field> Field for Counted<T> {
+    #[cfg(feature = "tree")]
+    const BELOW: &'static crate::tree::Below = &crate::tree::Below::List(T::BELOW);
     fn read(octets: &mut &[u8]) -> Option<Self> {
         let count = u8::read(octets)?;
         let mut values = Vec::with_capacity(usize::from(count).min(octets.len()));
@@ -649,6 +660,8 @@ pub struct Each<T>(pub Vec<T>);
 
 impl<T: Field> Field for Each<T> {
     const CELLS: &'static [NarrowCell] = T::CELLS;
+    #[cfg(feature = "tree")]
+    const BELOW: &'static crate::tree::Below = &crate::tree::Below::List(T::BELOW);
     fn read(octets: &mut &[u8]) -> Option<Self> {
         let mut values = Vec::new();
         while !octets.is_empty() {
@@ -815,6 +828,11 @@ impl From<core::net::IpAddr> for TypedAddress {
 }
 
 impl Field for TypedAddress {
+    #[cfg(feature = "tree")]
+    const BELOW: &'static crate::tree::Below = &crate::tree::Below::Object(&[
+        ("Address Type", &crate::tree::Below::Scalar),
+        ("Address", &crate::tree::Below::Scalar),
+    ]);
     const CELLS: &'static [NarrowCell] = &[
         NarrowCell {
             name: Some("Address Type"),
@@ -1018,6 +1036,9 @@ macro_rules! pfcp_number {
             /// The members that its tree may have: its field and its unknown octets. Without
             /// them, its tree is the number alone.
             pub const MEMBERS: &'static [&'static str] = &[$field, crate::ie::UNKNOWN_OCTETS];
+            /// What the tree of each field may hold below it: nothing, of scalars alone.
+            #[cfg(feature = "tree")]
+            pub(crate) const MEMBERS_BELOW: &'static [(&'static str, &'static crate::tree::Below)] = &[];
             /// Its layout.
             pub const LAYOUT: Option<&'static Layout> = Some(&Layout {
                 head: &[],
@@ -1341,6 +1362,9 @@ impl NodeId {
     /// The members that its tree may have: the FQDN, or the octets of a Node ID that is no
     /// text. The tree of an address is the address alone.
     pub const MEMBERS: &'static [&'static str] = &["FQDN", "Node ID value"];
+    /// What the tree of each field may hold below it: nothing, of scalars alone.
+    #[cfg(feature = "tree")]
+    pub(crate) const MEMBERS_BELOW: &'static [(&'static str, &'static crate::tree::Below)] = &[];
     /// Read by hand: its layout depends on its type.
     pub const LAYOUT: Option<&'static Layout> = None;
 
@@ -1495,6 +1519,9 @@ impl NetworkInstance {
     pub const FIELDS: &'static [&'static str] = &["Network Instance"];
     /// None: its tree is its octets.
     pub const MEMBERS: &'static [&'static str] = &[];
+    /// What the tree of each field may hold below it: nothing, of scalars alone.
+    #[cfg(feature = "tree")]
+    pub(crate) const MEMBERS_BELOW: &'static [(&'static str, &'static crate::tree::Below)] = &[];
     /// Its layout.
     pub const LAYOUT: Option<&'static Layout> = Some(&Layout {
         head: &[],
@@ -1559,6 +1586,9 @@ macro_rules! pfcp_fields {
             pub const FIELDS: &'static [&'static str] = &[$($name),*];
             /// The members that its tree may have: its fields and its unknown octets.
             pub const MEMBERS: &'static [&'static str] = &[$($name,)* crate::ie::UNKNOWN_OCTETS];
+            /// What the tree of each field may hold below it.
+            #[cfg(feature = "tree")]
+            pub(crate) const MEMBERS_BELOW: &'static [(&'static str, &'static crate::tree::Below)] = &[$(($name, <$kind as Field>::BELOW)),*];
             /// Its layout.
             pub const LAYOUT: Option<&'static Layout> = Some(&Layout {
                 head: &[],
@@ -1861,6 +1891,9 @@ macro_rules! pfcp_octets {
             pub const FIELDS: &'static [&'static str] = &[$name];
             /// None: its tree is its octets.
             pub const MEMBERS: &'static [&'static str] = &[];
+            /// What the tree of each field may hold below it: nothing, of scalars alone.
+            #[cfg(feature = "tree")]
+            pub(crate) const MEMBERS_BELOW: &'static [(&'static str, &'static crate::tree::Below)] = &[];
             /// Its layout.
             pub const LAYOUT: Option<&'static Layout> = Some(&Layout { head: &[], bits: &[], fields: &[Member { name: $name, octets: None, cells: &[], condition: "true" }] });
         }

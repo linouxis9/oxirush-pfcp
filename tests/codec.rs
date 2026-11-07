@@ -310,8 +310,12 @@ fn a_misspelt_name_below_what_a_message_lacks_is_an_error() {
     let heartbeat = heartbeat.to_tree();
     misspelt(&heartbeat, "/pfcp/Source IP Address/Bogus");
     nothing(&heartbeat, "/pfcp/Source IP Address/V4");
-    // Below a flag or a field, whose members no table lays out, nothing, as the plain rule
-    nothing(&heartbeat, "/pfcp/Source IP Address/V4/Bogus");
+    // Below a flag, which has nothing below it
+    failing(
+        &heartbeat,
+        "/pfcp/Source IP Address/V4/Bogus",
+        tree::ErrorKind::Scalar,
+    );
     misspelt(&response, "/pfcp/Load Control Information/Bogus");
     nothing(&response, "/pfcp/Load Control Information/Load Metric");
     nothing(&response, "/pfcp/Load Control Information/*");
@@ -331,6 +335,121 @@ fn a_misspelt_name_below_what_a_message_lacks_is_an_error() {
     let mut edited = heartbeat.clone();
     assert!(set(&mut edited, "/pfcp/Source IP Address/V4", true).is_err());
     assert_eq!(edited, heartbeat);
+}
+
+/// oxirush-utils' `select_in`: "a misspelt name is not a member that is absent", also
+/// below a flag or a field that a value or the header lacks, and below an entry past the
+/// end of a list. Below such a field, a name is judged by what the tree of the field may
+/// hold (`tree::Below`): nothing below a scalar, the members of a value with spare bits
+/// or of an address, the entries of a list.
+#[test]
+fn a_misspelt_name_below_a_field_that_a_value_lacks_is_an_error() {
+    let nothing = |tree: &tree::Value, path: &str| {
+        assert_eq!(
+            select(tree, path).map_err(|error| error.kind()),
+            Ok(vec![]),
+            "{path}"
+        );
+    };
+    let failing = |tree: &tree::Value, path: &str, kind: tree::ErrorKind| {
+        let found = select(tree, path).map_err(|error| error.kind());
+        assert_eq!(found, Err(kind), "{path}");
+    };
+    let response = "2133002b000000000000100100000700003c0005000a00000200130001010039000d0200000000000020010a000002";
+    let mut response = Message::decode(&hex::decode(response).unwrap()).unwrap();
+    let Body::SessionEstablishmentResponse(body) = &mut response.body else {
+        panic!()
+    };
+    body.created_pdr.push(CreatedPdr::new(PdrId::new(1)));
+    let response = response.to_tree();
+    // Below a field or a flag that a value lacks, of a scalar
+    for path in [
+        "/pfcp/UP F-SEID/IPv6 address/Bogus",
+        "/pfcp/UP F-SEID/V6/Bogus",
+        "/pfcp/UP F-SEID/IPv6 address/*",
+        "/pfcp/Node ID/FQDN/Bogus",
+        "/Message Priority/Bogus",
+    ] {
+        failing(&response, path, tree::ErrorKind::Scalar);
+    }
+    // Below an entry past the end of a list, as below an entry
+    nothing(&response, "/pfcp/Created PDR/5/PDR ID");
+    failing(
+        &response,
+        "/pfcp/Created PDR/5/Bogus",
+        tree::ErrorKind::NoSuchMember,
+    );
+    // Below a field of a value with spare bits, of an address of another type, and of a
+    // list, that a value lacks
+    let rate = PacketRate {
+        ulpr: true,
+        uplink_time_unit: Some(Narrow::new(TimeUnit::Minute)),
+        maximum_uplink_packet_rate: Some(10),
+        ..Default::default()
+    };
+    let qer = CreateQer::new(QerId::new(1), GateStatus::default()).with_packet_rate(rate);
+    let atsss = ProvideAtsssControlInformation {
+        pmf_control_information: Some(PmfControlInformation {
+            pmfi: true,
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let mbs = MbsSessionN4ControlInformation::new(MbsSessionIdentifier {
+        tmgi: true,
+        tmgi_field: Some([1, 2, 3, 4, 5, 6]),
+        ..Default::default()
+    });
+    let Body::SessionEstablishmentRequest(request) = establishment().body else {
+        panic!()
+    };
+    let request = Message {
+        header: Header::session(0, 1),
+        body: request
+            .with_create_qer(qer)
+            .with_provide_atsss_control_information(atsss)
+            .with_mbs_session_n4_control_information(mbs)
+            .into(),
+    }
+    .to_tree();
+    let rate = "/pfcp/Create QER/0/Packet Rate/Downlink Time Unit";
+    nothing(&request, &format!("{rate}/Spare"));
+    nothing(&request, &format!("{rate}/value"));
+    failing(
+        &request,
+        &format!("{rate}/Bogus"),
+        tree::ErrorKind::NoSuchMember,
+    );
+    failing(
+        &request,
+        &format!("{rate}/value/Bogus"),
+        tree::ErrorKind::Scalar,
+    );
+    let qfis = "/pfcp/Provide ATSSS Control Information/PMF Control Information/value of QFI";
+    nothing(&request, &format!("{qfis}/0"));
+    nothing(&request, &format!("{qfis}/*"));
+    failing(
+        &request,
+        &format!("{qfis}/Bogus"),
+        tree::ErrorKind::NotAList,
+    );
+    failing(
+        &request,
+        &format!("{qfis}/0/Bogus"),
+        tree::ErrorKind::Scalar,
+    );
+    let ssm = "/pfcp/MBS Session N4 Control Information/0/MBS Session Identifier/Source Specific IP Multicast Address";
+    nothing(&request, &format!("{ssm}/IP Source Address/Address Type"));
+    failing(
+        &request,
+        &format!("{ssm}/IP Source Address/Bogus"),
+        tree::ErrorKind::NoSuchMember,
+    );
+    failing(
+        &request,
+        &format!("{ssm}/Bogus"),
+        tree::ErrorKind::NoSuchMember,
+    );
 }
 
 #[test]
@@ -496,9 +615,9 @@ fn a_shape_prints_its_names() {
     );
     let ies = paths.member(&message, "ies", Some(&heartbeat["ies"]));
     assert_eq!(format!("{ies:?}"), r#"Shape(Ies(["7.4.2.1-1"]))"#);
-    // The header is no table of IEs
+    // The header is no table of IEs: its fields are scalars
     let sequence = paths.member(&message, "Sequence Number", Some(&tree!(1)));
-    assert_eq!(format!("{sequence:?}"), "Shape(Nothing)");
+    assert_eq!(format!("{sequence:?}"), "Shape(Below(Scalar))");
     let stamp = &heartbeat["ies"]["Recovery Time Stamp"];
     let value = paths.member(&ies, "Recovery Time Stamp", Some(stamp));
     assert_eq!(
@@ -601,6 +720,26 @@ fn values_hold(
                 let wanted = if scalar_field { vec![entry] } else { vec![] };
                 let selected = select(message, &path).map_err(|error| error.kind());
                 assert_eq!(selected, Ok(wanted), "{path}");
+            }
+            // What the tree of each field that the value has holds below it is what the
+            // paths judge a field that a value lacks by (`tree::Below`): the entries of a
+            // list, the members of an object
+            for (name, field) in entry.as_object().into_iter().flatten() {
+                let path = format!("{at}/{}", tree::escape(name));
+                let place = tree::places_in(&oxirush_pfcp::tree::Paths, message, &path).unwrap();
+                let below = format!("{:?}", place[0].shape());
+                match field {
+                    tree::Value::Array(_) => {
+                        assert!(below.starts_with("Shape(Below(List("), "{path}: {below}");
+                    }
+                    tree::Value::Object(members) => {
+                        for member in members.keys() {
+                            let named = format!("({member:?}, ");
+                            assert!(below.contains(&named), "{path}: {member} in {below}");
+                        }
+                    }
+                    _ => {}
+                }
             }
         }
     }

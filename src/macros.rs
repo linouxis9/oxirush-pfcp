@@ -38,6 +38,16 @@ macro_rules! pfcp_ies {
             }, )*
         ];
         $( pfcp_ies!(@impls $num $name [pfcp_ies!(@length $form $(($fixed))?)] $($($ty),+)?); )*
+
+        /// What the tree of each field of a value of `ie_type` may hold below it, of those
+        /// whose tree is no scalar: none for a grouped IE.
+        #[cfg(feature = "tree")]
+        pub(crate) fn members_below(ie_type: u16) -> &'static [(&'static str, &'static crate::tree::Below)] {
+            match ie_type {
+                $( $num => pfcp_ies!(@below $form $($($ty),+)?), )*
+                _ => &[],
+            }
+        }
     };
     (@impls $num:literal $name:literal [$fixed:expr] $($ty:ident),*) => {
         $(
@@ -58,6 +68,9 @@ macro_rules! pfcp_ies {
     (@length $form:ident $(($fixed:literal))?) => { None };
     (@fields grouped $($ty:ident),+) => { &[] };
     (@fields $form:ident $ty:ident) => { $ty::FIELDS };
+    (@below grouped $($ty:ident),+) => { &[] };
+    (@below $form:ident $ty:ident) => { $ty::MEMBERS_BELOW };
+    (@below $form:ident) => { &[] };
     (@members grouped $($ty:ident),+) => { &[] };
     (@members $form:ident $ty:ident) => { $ty::MEMBERS };
     (@layout grouped $($ty:ident),+) => { None };
@@ -118,6 +131,12 @@ macro_rules! pfcp_layout {
             /// The members that its tree may have: its flags and fields, its spare bits and
             /// its unknown octets.
             pub const MEMBERS: &'static [&'static str] = &[$($($head_name,)*)? $($flag_name,)* "Spare", $($field_name,)* crate::ie::UNKNOWN_OCTETS];
+            /// What the tree of each field may hold below it.
+            #[cfg(feature = "tree")]
+            pub(crate) const MEMBERS_BELOW: &'static [(&'static str, &'static crate::tree::Below)] = &[
+                $($( ($head_name, <$hkind as crate::values::Field>::BELOW), )*)?
+                $( ($field_name, <$kind $(<$param>)? as crate::values::Field>::BELOW), )*
+            ];
             /// The octets of the fields before its flags.
             const HEAD_OCTETS: usize = 0 $($( + crate::values::octets_of(<$hkind as crate::values::Field>::OCTETS) )*)?;
             /// Its layout.
@@ -413,6 +432,9 @@ macro_rules! pfcp_bits {
             /// The members that its tree may have: its flags and fields, its spare bits, the
             /// number of the octets of its fields that it has, and its unknown octets.
             pub const MEMBERS: &'static [&'static str] = &[$($name,)* "Spare", "length", crate::ie::UNKNOWN_OCTETS];
+            /// What the tree of each field may hold below it: nothing, of scalars alone.
+            #[cfg(feature = "tree")]
+            pub(crate) const MEMBERS_BELOW: &'static [(&'static str, &'static crate::tree::Below)] = &[];
             /// Its layout.
             pub const LAYOUT: Option<&'static crate::values::Layout> = Some(&crate::values::Layout {
                 head: &[],

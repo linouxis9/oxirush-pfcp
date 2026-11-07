@@ -41,7 +41,7 @@ pub use oxirush_utils::tree::Value;
 
 use crate::ie::{Placed, RawIe};
 use crate::message::{MESSAGE_TYPES, MessageTypeInfo};
-use crate::registry::{Form, IE_TYPES, IeTypeInfo, ie_type_info};
+use crate::registry::{Form, IE_TYPES, IeTypeInfo, ie_type_info, members_below};
 use crate::table::{FieldValues, Repeat, Row, Scope, Table, keep_order};
 
 /// The tree hook of a scope, which the table macro writes.
@@ -328,12 +328,37 @@ fn no_such_ie(table: &crate::table::Table, names: &[&str], written: &str) -> Str
     )
 }
 
+/// What the tree of a field of a value may hold below it, as the crate writes it
+/// ([`Field::BELOW`](crate::Field::BELOW)): what [`select`] judges a name by below a field
+/// that a value lacks, or below an entry past the end of a list of them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum Below {
+    /// Nothing: a flag, or a field whose tree is a scalar.
+    Scalar,
+    /// The members of an object, each with what it may hold below it: those of a value
+    /// with spare bits, or of an address of another type than IPv4 and IPv6.
+    Object(&'static [(&'static str, &'static Below)]),
+    /// The entries of a list, with what each may hold below it.
+    List(&'static Below),
+}
+
+/// What the tree of the field `name` of a value of `info` may hold below it.
+fn below_member(info: &IeTypeInfo, name: &str) -> &'static Below {
+    members_below(info.ie_type)
+        .iter()
+        .find(|(member, _)| tree::same_name(member, name))
+        .map_or(&Below::Scalar, |(_, below)| below)
+}
+
 /// The rules of the paths of PFCP on the engine of oxirush-utils: `/pfcp` is short for
 /// the IEs of the message, and the rest is the plain rule of a tree, which knows the
 /// tables: a row that a message or a grouped IE lacks, and a member that a value or the
 /// header lacks of those that its tree may have ([`IeTypeInfo::members`]), are not
-/// there, where another name is no member, also below what is not there. A value that its
-/// tree writes as a scalar has the one field that it is.
+/// there, where another name is no member, also below what is not there: below a field
+/// that a value or the header lacks, and an entry past the end of a list, a name is
+/// judged by what the tree of the field may hold ([`Below`]), and nothing is below a
+/// scalar. A value that its tree writes as a scalar has the one field that it is.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Paths;
 
@@ -358,6 +383,9 @@ enum Of {
     List(&'static IeTypeInfo),
     /// A value of an IE type that is no grouped IE: the members that its tree may have.
     Value(&'static IeTypeInfo),
+    /// A field of a value, or of the header, an entry of a list of them, or a member of a
+    /// field: what its tree may hold below it.
+    Below(&'static Below),
 }
 
 impl core::fmt::Debug for Of {
@@ -374,6 +402,7 @@ impl core::fmt::Debug for Of {
             }
             Self::List(info) => f.debug_tuple("List").field(&info.name).finish(),
             Self::Value(info) => f.debug_tuple("Value").field(&info.name).finish(),
+            Self::Below(below) => f.debug_tuple("Below").field(below).finish(),
         }
     }
 }
@@ -422,9 +451,10 @@ impl tree::Family for Paths {
     }
 
     /// Below what is not there, a name is judged as where the value is there: a member
-    /// that it could have selects nothing, and another is refused. At a value that its
-    /// tree writes as a scalar, a member that it lacks selects nothing, and the one field
-    /// that it is selects it.
+    /// that it could have selects nothing, and another is refused; so is an entry past
+    /// the end of a list, and a field that a value lacks, by what its tree may hold
+    /// ([`Below`]). At a value that its tree writes as a scalar, a member that it lacks
+    /// selects nothing, and the one field that it is selects it.
     fn step<'v>(
         &self,
         place: &Place<'v, Shape>,
@@ -435,16 +465,29 @@ impl tree::Family for Paths {
             return Ok(Step::Plain);
         }
         let shape = place.shape();
+        let list = matches!(shape.0, Of::List(_) | Of::Below(Below::List(_)));
         match (place.value(), shape.0) {
             (_, Of::Nothing) => Ok(Step::Plain),
-            // An entry of a list that is not there, which has the members of one.
-            (None, Of::List(_)) if segment == "*" || tree::position(segment).is_some() => {
+            // An entry of a list that is not there, or past the end of one, which has the
+            // members of one.
+            (None, _) if list && (segment == "*" || tree::position(segment).is_some()) => {
                 next.absent(segment, self.entry(shape, None));
                 Ok(Step::Taken)
             }
-            (None, Of::List(_)) => {
+            (Some(Value::Array(entries)), _)
+                if list && tree::position(segment).is_some_and(|at| at >= entries.len()) =>
+            {
+                next.absent(segment, self.entry(shape, None));
+                Ok(Step::Taken)
+            }
+            (None, _) if list => {
                 let reason = alloc::format!("{segment:?} is no position in a list");
                 Err(tree::Error::new(ErrorKind::NotAList, "", reason))
+            }
+            // A field that is not there, whose tree is a scalar, has nothing below it.
+            (None, Of::Below(Below::Scalar)) => {
+                let reason = alloc::format!("{segment:?} is no member of a field, which has none");
+                Err(tree::Error::new(ErrorKind::Scalar, "", reason))
             }
             (None, _) if segment == "*" => Ok(Step::Plain),
             (None, _) => match self.absent(shape, segment) {
@@ -467,7 +510,10 @@ impl tree::Family for Paths {
                     .iter()
                     .any(|member| tree::same_name(member, segment))
                 {
-                    true => Ok(Step::Taken),
+                    true => {
+                        next.absent(segment, Shape(Of::Below(below_member(info, segment))));
+                        Ok(Step::Taken)
+                    }
                     false => Ok(Step::Plain),
                 }
             }
@@ -495,9 +541,23 @@ impl tree::Family for Paths {
             Of::Message(info) if tree::same_name(name, "ies") => {
                 Of::Ies(core::slice::from_ref(&info.table))
             }
+            // The other members of the header are scalars.
+            Of::Message(_) => Of::Below(&Below::Scalar),
             Of::Ies(tables) => {
                 row_named(tables, name).map_or(Of::Nothing, |row| of_row(row, value))
             }
+            Of::Value(info)
+                if info
+                    .members
+                    .iter()
+                    .any(|member| tree::same_name(member, name)) =>
+            {
+                Of::Below(below_member(info, name))
+            }
+            Of::Below(Below::Object(members)) => members
+                .iter()
+                .find(|(member, _)| tree::same_name(member, name))
+                .map_or(Of::Nothing, |(_, below)| Of::Below(below)),
             _ => Of::Nothing,
         })
     }
@@ -505,6 +565,7 @@ impl tree::Family for Paths {
     fn entry(&self, shape: &Shape, value: Option<&Value>) -> Shape {
         Shape(match shape.0 {
             Of::List(info) => of_value(info, value),
+            Of::Below(Below::List(below)) => Of::Below(below),
             _ => Of::Nothing,
         })
     }
@@ -519,6 +580,9 @@ impl tree::Family for Paths {
                 .members
                 .iter()
                 .any(|member| tree::same_name(member, name)),
+            Of::Below(Below::Object(members)) => members
+                .iter()
+                .any(|(member, _)| tree::same_name(member, name)),
             _ => false,
         };
         match there {
@@ -531,7 +595,8 @@ impl tree::Family for Paths {
 /// The values at `path` in the tree of a message. A row of a table that a message or a
 /// grouped IE lacks, and a member that a value or the header lacks of those that its tree
 /// may have ([`IeTypeInfo::members`]), select nothing; a name that is none of them is an
-/// error, also below what is not there.
+/// error, also below what is not there: a row, a flag or a field, of what its tree may
+/// hold ([`Below`]), and an entry past the end of a list.
 ///
 /// # Errors
 ///
