@@ -670,6 +670,9 @@ pub struct Node {
     heartbeats: Heartbeats,
     load: BTreeMap<Scope, LoadControl>,
     overload: Overloads,
+    /// The peers, as the node tells them apart, whose load and overload of their address
+    /// go unless a session or an association of theirs remains.
+    orphans: BTreeSet<SocketAddr>,
     transmits: [VecDeque<Transmit>; 16],
     events: VecDeque<Event>,
 }
@@ -706,6 +709,7 @@ impl Node {
             heartbeats: Heartbeats::default(),
             load: BTreeMap::new(),
             overload: Overloads::default(),
+            orphans: BTreeSet::new(),
             transmits: Default::default(),
             events: VecDeque::new(),
         }
@@ -816,6 +820,7 @@ impl Node {
                 });
             }
         }
+        self.prune_controls();
     }
 
     /// Send a request to `to`, with the next sequence number. A session request needs an
@@ -1145,7 +1150,9 @@ impl Node {
     /// End the session of `local_seid` without a procedure: one that a Session Set
     /// Deletion, a restart of the peer or the caller's own state ends.
     pub fn end_session(&mut self, local_seid: u64) -> Option<Session> {
-        self.sessions.remove(&local_seid)
+        let session = self.sessions.remove(&local_seid);
+        self.prune_controls();
+        session
     }
 
     /// End every session with `peer`, as after its restart: those of its association,
@@ -1166,6 +1173,7 @@ impl Node {
         for seid in &ended {
             self.sessions.remove(seid);
         }
+        self.prune_controls();
         ended
     }
 
@@ -1181,6 +1189,7 @@ impl Node {
             return false;
         };
         self.release(&key);
+        self.prune_controls();
         true
     }
 
@@ -1358,7 +1367,8 @@ impl Node {
 
     /// The latest load control information of a peer, by its Node ID (§6.2.3.3.1), or by
     /// its address for the peer of an adopted session without an association, whose Node ID
-    /// the node does not know.
+    /// the node does not know: kept while the association, or a session of the address,
+    /// lasts.
     pub fn load_control(&self, peer: SocketAddr) -> Option<LoadControl> {
         let scope = match self.association_of(peer) {
             Some(association) => Scope::Node(association.key.clone()),
@@ -1369,7 +1379,10 @@ impl Node {
 
     /// The overload control information that still holds for the requests to `peer`: of
     /// its address, as the UP F-SEID of a session has it, or of its Node ID (§6.2.4.3.1),
-    /// which the peer of an adopted session without an association has by its address.
+    /// which the peer of an adopted session without an association has by its address. The
+    /// node keeps it while its period of validity lasts and a session of the address, or
+    /// the association, remains: what the last of them takes with it ends without
+    /// [`Event::OverloadEnded`].
     pub fn overload_control(&self, peer: SocketAddr) -> Option<OverloadControl> {
         let node = self
             .association_of(peer)
@@ -1453,6 +1466,7 @@ impl Node {
                 Err(error) => self.malformed(now, from, error),
             }
         }
+        self.prune_controls();
     }
 
     /// What the node tells from the header of a message, and from the IEs that name the
@@ -2124,6 +2138,21 @@ impl Node {
         for local_seid in self.sessions.ended(now) {
             self.events.push_back(Event::SessionEnded { local_seid });
         }
+        self.prune_controls();
+    }
+
+    /// Forget the load and overload of the addresses that no session or association has
+    /// any more, whose information goes with what set it.
+    fn prune_controls(&mut self) {
+        let mut orphans = core::mem::take(&mut self.orphans);
+        orphans.append(&mut self.sessions.emptied());
+        for peer in orphans {
+            if !self.sessions.has(peer) && !self.by_peer.contains_key(&peer) {
+                let scope = Scope::Address(peer);
+                self.load.remove(&scope);
+                self.overload.remove(&scope);
+            }
+        }
     }
 
     /// Put off the end of a session whose deletion waits for its last usage reports to
@@ -2426,6 +2455,9 @@ impl Node {
                 (&load.load_control_sequence_number, &load.load_metric)
         {
             let scope = node.clone();
+            if let Scope::Address(peer) = scope {
+                self.orphans.insert(peer);
+            }
             let new = LoadControl {
                 sequence: sequence.value,
                 metric: metric.value.effective(),
@@ -2464,6 +2496,9 @@ impl Node {
                 true => node,
                 false => address,
             };
+            if let Scope::Address(peer) = scope {
+                self.orphans.insert(peer);
+            }
             let validity = timer(validity);
             let until = validity.map(|period| now.saturating_add(period));
             let new = OverloadControl {
@@ -2906,6 +2941,12 @@ impl Node {
         if self.by_peer.get(&self.peer_key(peer)).map(Vec::as_slice) == Some(key) {
             self.by_peer.remove(&self.peer_key(peer));
         }
+        // The load and overload of its Node ID go with it; those of its address with the
+        // last session of the address.
+        let node = Scope::Node(association.key.clone());
+        self.load.remove(&node);
+        self.overload.remove(&node);
+        self.orphans.insert(self.peer_key(peer));
         self.reage(self.peer_key(peer));
         // The sessions of the association: those of its key, and those of its peer's
         // address that no live association owns. A session that another association took
