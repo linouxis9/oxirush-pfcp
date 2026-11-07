@@ -15,14 +15,14 @@
    limitations under the License.
 */
 
-//! What a node keeps: its requests, its answers, its peers and their sessions.
+//! What a node keeps of its peers: their associations and sessions, and its answers to
+//! their requests.
 
 use alloc::collections::{BTreeMap, BTreeSet};
 use alloc::vec::Vec;
 use core::net::{IpAddr, SocketAddr};
 use core::time::Duration;
 
-use super::RequestId;
 use crate::values::NodeId;
 
 /// An association with a peer (§6.2.6).
@@ -334,114 +334,6 @@ impl Sessions {
     }
 }
 
-/// The load control information of a peer (§6.2.3.3).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct LoadControl {
-    /// Its Load Control Sequence Number.
-    pub sequence: u32,
-    /// Its Load Metric, a percentage: of 0 to 100, a value above read as 0 (§8.2.34).
-    pub metric: u8,
-}
-
-/// The overload control information of a peer, while it holds (§6.2.4.3).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct OverloadControl {
-    /// The peer that sent it.
-    pub peer: SocketAddr,
-    /// Its Overload Control Sequence Number.
-    pub sequence: u32,
-    /// Its Overload Reduction Metric: the percentage of the requests to throttle, of 0 to
-    /// 100, a value above read as 0 (§8.2.34).
-    pub metric: u8,
-    /// Its Period of Validity: `None` for an infinite one.
-    pub validity: Option<Duration>,
-    /// When its period of validity ends: `None` for never.
-    pub until: Option<Duration>,
-    /// What the "Loss" algorithm owes, in hundredths of a request.
-    pub(crate) credit: u32,
-}
-
-/// Whose load or overload it is: of an address, or of a Node ID (§6.2.4.3.1).
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub(crate) enum Scope {
-    /// The peer of an address, as the node tells peers apart.
-    Address(SocketAddr),
-    Node(Vec<u8>),
-}
-
-/// What the response to a request of the node changes, besides the association.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub(crate) enum Change {
-    /// None.
-    #[default]
-    Nothing,
-    /// The session of the request ends: a deletion, or a report of a session that the UP
-    /// function deleted (PSDBU, §5.18).
-    Ends,
-    /// The session goes to another local SEID: a modification of the CP F-SEID.
-    Moves(u64),
-}
-
-/// What the node keeps of a request that it sends, besides its message.
-#[derive(Debug, Clone, Copy, Default)]
-pub(crate) struct Pending {
-    /// A heartbeat of the node's own, whose response goes to no event.
-    pub(crate) heartbeat: bool,
-    /// The local SEID of the session of a session request.
-    pub(crate) local_seid: Option<u64>,
-    /// The mark of the session when the request is sent.
-    pub(crate) mark: Option<u64>,
-    pub(crate) change: Change,
-    /// The address of the node's F-SEID that the request gives the peer.
-    pub(crate) local_address: Option<IpAddr>,
-    /// The features of the node's function that an association setup or update announces.
-    pub(crate) features: Option<Features>,
-}
-
-/// A request of the node, until its response or its last retransmission.
-#[derive(Debug, Clone)]
-pub(crate) struct Outstanding {
-    pub(crate) id: RequestId,
-    pub(crate) to: SocketAddr,
-    pub(crate) message_type: u8,
-    pub(crate) octets: super::Datagram,
-    pub(crate) deadline: Duration,
-    pub(crate) attempts: u8,
-    pub(crate) priority: u8,
-    /// A heartbeat of the node's own, whose response goes to no event.
-    pub(crate) heartbeat: bool,
-    /// The local SEID of the session of a session request.
-    pub(crate) local_seid: Option<u64>,
-    /// The mark of the session when the request was sent, so its response acts on that
-    /// session only.
-    pub(crate) mark: Option<u64>,
-    pub(crate) change: Change,
-    /// The address of the node's F-SEID that the request gives the peer: of the CP F-SEID
-    /// of an establishment or a modification, of the family of the peer.
-    pub(crate) local_address: Option<IpAddr>,
-    /// The features of the node's function that an association setup or update announces.
-    pub(crate) features: Option<Features>,
-}
-
-/// What the answer to a request of a peer changes, once accepted.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum Effect {
-    /// None besides what the answer itself says.
-    Nothing,
-    /// An association setup: the addresses of the CP PFCP entities whose sessions the old
-    /// association of the Node ID keeps, `None` for no PFCP Session Retention
-    /// Information, and an empty list for all of them (§6.2.6.2.2); and the SMF set that
-    /// the CP function says.
-    Setup(Option<Vec<IpAddr>>, SetOf),
-    /// An association update (§5.22.3): the features of the peer's new function features,
-    /// `None` for none in the update, and the FQDN of a new SMF Set ID, `None` for none.
-    Update(Option<Features>, Option<Vec<u8>>),
-    /// The peer's F-SEID of an establishment, or the new CP F-SEID of a modification.
-    PeerFSeid(u64, IpAddr),
-    /// A report of a session that the UP function deleted (PSDBU, §5.18).
-    Deleted,
-}
-
 /// What tells a retransmission of a request from another request of its sequence number
 /// (§6.4): its length and a hash of its octets, the FO flag aside, as a retransmission
 /// need not be bundled as the first one was (§6.5 NOTE 3). A request kept for its
@@ -695,113 +587,6 @@ impl Answers {
             };
             self.remove(&(peer, sequence));
         }
-    }
-}
-
-/// When each associated peer is due a heartbeat, and the peers by when.
-#[derive(Debug, Default)]
-pub(crate) struct Heartbeats {
-    at: BTreeMap<SocketAddr, Duration>,
-    due: BTreeSet<(Duration, SocketAddr)>,
-}
-
-impl Heartbeats {
-    pub(crate) fn insert(&mut self, peer: SocketAddr, at: Duration) {
-        if let Some(before) = self.at.insert(peer, at) {
-            self.due.remove(&(before, peer));
-        }
-        self.due.insert((at, peer));
-    }
-
-    pub(crate) fn remove(&mut self, peer: &SocketAddr) {
-        if let Some(before) = self.at.remove(peer) {
-            self.due.remove(&(before, *peer));
-        }
-    }
-
-    /// When the first is due.
-    pub(crate) fn first(&self) -> Option<Duration> {
-        self.due.first().map(|(at, _)| *at)
-    }
-
-    /// The peers due at `now`.
-    pub(crate) fn due(&self, now: Duration) -> Vec<SocketAddr> {
-        self.due
-            .iter()
-            .take_while(|(at, _)| *at <= now)
-            .map(|(_, peer)| *peer)
-            .collect()
-    }
-}
-
-/// The overload control information of the peers, by its scope, and the scopes by when
-/// their period of validity ends.
-#[derive(Debug, Default)]
-pub(crate) struct Overloads {
-    by_scope: BTreeMap<Scope, OverloadControl>,
-    ending: BTreeSet<(Duration, Scope)>,
-}
-
-impl Overloads {
-    pub(crate) fn get(&self, scope: &Scope) -> Option<&OverloadControl> {
-        self.by_scope.get(scope)
-    }
-
-    pub(crate) fn iter(&self) -> impl Iterator<Item = (&Scope, &OverloadControl)> {
-        self.by_scope.iter()
-    }
-
-    pub(crate) fn contains_key(&self, scope: &Scope) -> bool {
-        self.by_scope.contains_key(scope)
-    }
-
-    /// What the "Loss" algorithm owes of a scope.
-    pub(crate) fn credit(&mut self, scope: &Scope) -> Option<&mut u32> {
-        self.by_scope
-            .get_mut(scope)
-            .map(|overload| &mut overload.credit)
-    }
-
-    pub(crate) fn insert(&mut self, scope: Scope, overload: OverloadControl) {
-        self.remove(&scope);
-        if let Some(until) = overload.until {
-            self.ending.insert((until, scope.clone()));
-        }
-        self.by_scope.insert(scope, overload);
-    }
-
-    pub(crate) fn remove(&mut self, scope: &Scope) -> Option<OverloadControl> {
-        let overload = self.by_scope.remove(scope)?;
-        if let Some(until) = overload.until {
-            self.ending.remove(&(until, scope.clone()));
-        }
-        Some(overload)
-    }
-
-    pub(crate) fn retain(&mut self, keep: impl Fn(&Scope, &OverloadControl) -> bool) {
-        let gone: Vec<Scope> = self
-            .by_scope
-            .iter()
-            .filter(|(scope, overload)| !keep(scope, overload))
-            .map(|(scope, _)| scope.clone())
-            .collect();
-        for scope in gone {
-            self.remove(&scope);
-        }
-    }
-
-    /// When the first period of validity ends.
-    pub(crate) fn first_end(&self) -> Option<Duration> {
-        self.ending.first().map(|(until, _)| *until)
-    }
-
-    /// The scopes whose period of validity has ended at `now`.
-    pub(crate) fn ended(&self, now: Duration) -> Vec<Scope> {
-        self.ending
-            .iter()
-            .take_while(|(until, _)| *until <= now)
-            .map(|(_, scope)| scope.clone())
-            .collect()
     }
 }
 
