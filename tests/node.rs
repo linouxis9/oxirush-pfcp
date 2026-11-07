@@ -5304,6 +5304,304 @@ fn a_response_after_two_moves_acts_on_its_session() {
     );
 }
 
+/// §5.22.3 bullets 3 and 5: the PFCP entity of an SMF that takes a session over controls
+/// it, also one without the association, which another entity of the SMF holds. A node of
+/// MPAS and `other_entities` adopts a session that a UPF hands over to it: it then sends
+/// its modifications and deletions to the UPF, takes the UPF's requests of the session
+/// beyond the room of hosts without an association, and heartbeats the UPF while it has
+/// the session, so that it sees the UPF restart (§6.2.2.2).
+#[test]
+fn mpas_an_entity_controls_the_session_that_it_takes_over() {
+    let mut other = Node::new(NodeConfig {
+        smf_set: SmfSet {
+            mpas: true,
+            ..SmfSet::default()
+        },
+        other_entities: true,
+        strangers: 2,
+        heartbeat: Some(Duration::from_secs(60)),
+        ..config(OTHER, Function::Cp)
+    });
+    other.handle_datagram(at(1), UPF, &handover_report().encode().unwrap());
+    let (mut inbound, _) = request(&mut other);
+    other.adopt_session(0x55, UPF, 0x66).unwrap();
+    inbound.seid = Some(0x55);
+    let cp_f_seid = FSeid {
+        v4: true,
+        seid: Some(0x55),
+        ipv4: Some(Ipv4Addr::new(10, 0, 0, 3)),
+        ..Default::default()
+    };
+    other
+        .respond(
+            at(1),
+            &inbound,
+            SessionReportResponse::new(accepted()).with_cp_f_seid(cp_f_seid),
+        )
+        .unwrap();
+    sent(&mut other);
+    // Its modifications go to the UPF's SEID
+    other
+        .session_request(at(2), 0x55, SessionModificationRequest::default())
+        .unwrap();
+    let transmits = sent(&mut other);
+    assert_eq!(transmits.len(), 1);
+    assert_eq!(transmits[0].to, UPF);
+    let modification = decoded(&transmits[0]);
+    assert_eq!(modification.header.seid, Some(0x66));
+    let response = Message {
+        header: Header::session(0x55, modification.header.sequence),
+        body: SessionModificationResponse::new(accepted()).into(),
+    };
+    other.handle_datagram(at(2), UPF, &response.encode().unwrap());
+    assert!(matches!(&events(&mut other)[..], [Event::Response { .. }]));
+    // The UPF's requests of the session, beyond the room of strangers
+    for sequence in 10..20 {
+        let report = Message {
+            header: Header::session(0x55, sequence),
+            body: SessionReportRequest::new(ReportType {
+                dldr: true,
+                ..Default::default()
+            })
+            .into(),
+        };
+        other.handle_datagram(at(3), UPF, &report.encode().unwrap());
+    }
+    assert_eq!(requests_of(&events(&mut other)), 10);
+    assert_eq!(other.counters().refused, 0);
+    // A heartbeat to the UPF, which tells its Recovery Time Stamp, and then its restart
+    let beat = |other: &mut Node, now: Duration, stamp: u32| {
+        assert!(other.poll_timeout().is_some_and(|due| due <= now));
+        other.handle_timeout(now);
+        let heartbeats: Vec<Message> = sent(other)
+            .iter()
+            .filter(|transmit| transmit.to == UPF)
+            .map(decoded)
+            .filter(|message| matches!(message.body, Body::HeartbeatRequest(_)))
+            .collect();
+        assert_eq!(heartbeats.len(), 1, "a heartbeat to the UPF at {now:?}");
+        let response = Message {
+            header: Header::node(heartbeats[0].header.sequence),
+            body: HeartbeatResponse::new(RecoveryTimeStamp::new(stamp)).into(),
+        };
+        other.handle_datagram(now, UPF, &response.encode().unwrap());
+        events(other)
+    };
+    assert!(
+        !beat(&mut other, at(3), 1000)
+            .iter()
+            .any(|event| matches!(event, Event::PeerRestarted { .. }))
+    );
+    let restarted = beat(&mut other, at(63), 2000);
+    assert!(restarted.iter().any(|event| matches!(
+        event,
+        Event::PeerRestarted {
+            peer: UPF,
+            recovery_time_stamp: 2000
+        }
+    )));
+    // Its deletion ends it, and the heartbeats with it
+    other
+        .session_request(at(64), 0x55, SessionDeletionRequest::default())
+        .unwrap();
+    let deletion = decoded(&sent(&mut other)[0]);
+    let response = Message {
+        header: Header::session(0x55, deletion.header.sequence),
+        body: SessionDeletionResponse::new(accepted()).into(),
+    };
+    other.handle_datagram(at(64), UPF, &response.encode().unwrap());
+    assert!(other.session(0x55).is_none());
+    other.handle_timeout(at(123));
+    assert!(sent(&mut other).is_empty());
+    assert_eq!(other.poll_timeout(), None);
+}
+
+/// §6.2.2.2: a node heartbeats the peer of a session adopted without an association for
+/// as long as such a session lasts, also through an association with the peer that ends
+/// and leaves the session to the set (§6.2.8, MPAS); without one, a released association
+/// has no more heartbeats.
+#[test]
+fn an_adopted_session_keeps_the_heartbeats_of_its_peer_through_a_release() {
+    let released = |adopt: bool| {
+        let mut smf = Node::new(NodeConfig {
+            smf_set: SmfSet {
+                mpas: true,
+                ..SmfSet::default()
+            },
+            heartbeat: Some(Duration::from_secs(60)),
+            ..config(SMF, Function::Cp)
+        });
+        if adopt {
+            smf.adopt_session(0x55, UPF, 0x66).unwrap();
+        }
+        let mut upf = node(UPF, Function::Up);
+        let setup = AssociationSetupRequest::new(node_id(SMF), RecoveryTimeStamp::new(1000));
+        smf.request(
+            at(0),
+            UPF,
+            Message {
+                header: Header::node(0),
+                body: setup.into(),
+            },
+        )
+        .unwrap();
+        pass(&mut smf, &mut upf, UPF, at(0));
+        let (inbound, _) = request(&mut upf);
+        let answer =
+            AssociationSetupResponse::new(node_id(UPF), accepted(), RecoveryTimeStamp::new(1000))
+                .with_up_function_features(UpFunctionFeatures {
+                    mpas: true,
+                    ..Default::default()
+                });
+        upf.respond(at(0), &inbound, answer).unwrap();
+        pass(&mut upf, &mut smf, SMF, at(0));
+        assert!(smf.end_association(UPF));
+        smf
+    };
+    let mut smf = released(true);
+    assert!(smf.session(0x55).is_some());
+    let due = smf.poll_timeout().expect("a heartbeat");
+    smf.handle_timeout(due);
+    assert!(sent(&mut smf).iter().any(|transmit| transmit.to == UPF
+        && matches!(decoded(transmit).body, Body::HeartbeatRequest(_))));
+    assert_eq!(released(false).poll_timeout(), None);
+}
+
+/// The requests of a host without an association, of the address of a session's F-SEID,
+/// wait in the room of hosts without an association, as `NodeConfig::strangers` says: only
+/// a session that the caller adopted makes its peer's requests those of an association.
+#[test]
+fn the_requests_of_the_host_of_an_f_seid_wait_as_a_strangers() {
+    let (mut smf, mut upf) = associated_as(
+        NodeConfig {
+            strangers: 1,
+            ..config(SMF, Function::Cp)
+        },
+        at(0),
+    );
+    let (cp_seid, _) = established_on(&mut smf, &mut upf, at(0), Ipv4Addr::new(10, 0, 0, 12));
+    let host = Ipv4Addr::new(10, 0, 0, 12).into_socket(8805);
+    for sequence in [10, 11] {
+        let report = Message {
+            header: Header::session(cp_seid, sequence),
+            body: SessionReportRequest::new(ReportType {
+                dldr: true,
+                ..Default::default()
+            })
+            .into(),
+        };
+        smf.handle_datagram(at(1), host, &report.encode().unwrap());
+    }
+    assert_eq!(requests_of(&events(&mut smf)), 1);
+    assert_eq!(smf.counters().refused, 1);
+}
+
+/// A node heartbeats the peer of its adopted sessions from the first adoption: those
+/// after change nothing, nor does an adoption from a peer of an association, which has
+/// the heartbeats of one, nor one on a node of no heartbeat.
+#[test]
+fn adoptions_start_the_heartbeats_of_their_peer_once() {
+    let (mut smf, _) = associated_as(
+        NodeConfig {
+            heartbeat: Some(Duration::from_secs(60)),
+            ..config(SMF, Function::Cp)
+        },
+        at(0),
+    );
+    assert_eq!(smf.poll_timeout(), Some(at(60)));
+    smf.adopt_session(0x55, UPF, 0x66).unwrap();
+    assert_eq!(smf.poll_timeout(), Some(at(60)));
+    let mut smf = Node::new(NodeConfig {
+        heartbeat: Some(Duration::from_secs(60)),
+        ..config(SMF, Function::Cp)
+    });
+    smf.adopt_session(0x55, UPF, 0x66).unwrap();
+    assert_eq!(smf.poll_timeout(), Some(at(0)));
+    smf.handle_timeout(at(0));
+    let request = decoded(&sent(&mut smf)[0]);
+    let response = Message {
+        header: Header::node(request.header.sequence),
+        body: HeartbeatResponse::new(RecoveryTimeStamp::new(1000)).into(),
+    };
+    smf.handle_datagram(at(0), UPF, &response.encode().unwrap());
+    smf.adopt_session(0x56, UPF, 0x67).unwrap();
+    assert_eq!(smf.poll_timeout(), Some(at(60)));
+    // A node of no heartbeat beats none
+    let mut smf = node(SMF, Function::Cp);
+    smf.adopt_session(0x55, UPF, 0x66).unwrap();
+    assert_eq!(smf.poll_timeout(), None);
+}
+
+/// A node keeps the Recovery Time Stamp of the peer of an adopted session through a flood
+/// of hosts without an association, as it keeps those of its associations: their
+/// heartbeats do not make it miss the peer's restart.
+#[test]
+fn an_adopted_peer_keeps_its_recovery_time_stamp() {
+    let mut smf = Node::new(NodeConfig {
+        capacity: 2,
+        heartbeat: Some(Duration::from_secs(60)),
+        ..config(SMF, Function::Cp)
+    });
+    smf.adopt_session(0x55, UPF, 0x66).unwrap();
+    let beat = |smf: &mut Node, now: Duration, stamp: u32| {
+        smf.handle_timeout(now);
+        let request = decoded(&sent(smf)[0]);
+        let response = Message {
+            header: Header::node(request.header.sequence),
+            body: HeartbeatResponse::new(RecoveryTimeStamp::new(stamp)).into(),
+        };
+        smf.handle_datagram(now, UPF, &response.encode().unwrap());
+        events(smf)
+    };
+    beat(&mut smf, at(0), 1000);
+    for host in 10..14 {
+        let stranger = Ipv4Addr::new(10, 0, 0, host).into_socket(8805);
+        smf.handle_datagram(at(1), stranger, &heartbeat().encode().unwrap());
+    }
+    sent(&mut smf);
+    assert!(
+        beat(&mut smf, at(60), 2000)
+            .iter()
+            .any(|event| matches!(event, Event::PeerRestarted { peer: UPF, .. }))
+    );
+}
+
+/// §5.22.3 bullet 6, and 4119cdf: an adoption gives no more to a host that it does not
+/// name. A host without an association with the node, of another address than the
+/// adopted session's UPF, has its requests of that session rejected, and its handover
+/// reports, of no session, wait in the room of strangers.
+#[test]
+fn mpas_an_adopted_session_is_none_of_a_strangers() {
+    let mut other = Node::new(NodeConfig {
+        smf_set: SmfSet {
+            mpas: true,
+            ..SmfSet::default()
+        },
+        other_entities: true,
+        strangers: 1,
+        ..config(OTHER, Function::Cp)
+    });
+    other.adopt_session(0x55, UPF, 0x66).unwrap();
+    let stranger = Ipv4Addr::new(10, 0, 0, 8).into_socket(8805);
+    let report = Message {
+        header: Header::session(0x55, 10),
+        body: SessionReportRequest::new(ReportType {
+            dldr: true,
+            ..Default::default()
+        })
+        .into(),
+    };
+    assert_eq!(
+        taken(&mut other, stranger, report),
+        Err(vec![ViolationKind::SessionWithoutAssociation])
+    );
+    assert_eq!(taken(&mut other, stranger, handover_report()), Ok(true));
+    let another = Ipv4Addr::new(10, 0, 0, 9).into_socket(8805);
+    other.handle_datagram(at(1), another, &handover_report().encode().unwrap());
+    assert_eq!(requests_of(&events(&mut other)), 0);
+    assert_eq!(other.counters().refused, 1);
+}
+
 trait IntoSocket {
     fn into_socket(self, port: u16) -> SocketAddr;
 }

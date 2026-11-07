@@ -27,8 +27,9 @@
 //!   number, its peer and its type, and answers a retransmitted request with the response
 //!   that it gave, byte for byte, telling its caller ([`Event::Retransmission`]).
 //! - **Heartbeat (§6.2.2).** It answers each Heartbeat Request, even from an unknown
-//!   peer, sends its own to the associated peers, and says when a peer stops answering
-//!   or restarts.
+//!   peer, sends its own to the associated peers, and to the peer of a session adopted
+//!   without an association ([`Node::adopt_session`]), and says when a peer stops
+//!   answering or restarts.
 //! - **Associations (§6.2.6 to §6.2.8).** It keeps the associations that a successful
 //!   setup makes, an update changes and a release ends, with the sessions of each.
 //! - **Sessions.** It gives the local SEIDs, keeps the peer's SEID of each session,
@@ -131,8 +132,9 @@ pub struct NodeConfig {
     /// Association Setup Requests, the session requests of a host of a session's F-SEID
     /// address, with SSET those of an SMF of the set, and on an SMF of SSET, or of MPAS
     /// and `other_entities`, a UP function's report of SEID 0 that hands a session over.
-    /// Beyond, one is dropped before it is decoded, as [`Counters::refused`] counts, and
-    /// its sender sends it again.
+    /// The requests of a session that the caller adopted, from its peer, are not counted
+    /// ([`Node::adopt_session`]). Beyond, one is dropped before it is decoded, as
+    /// [`Counters::refused`] counts, and its sender sends it again.
     pub strangers: usize,
     /// The SMF sets that the node takes part in, as its CP or UP Function Features say
     /// them (§8.2.25, §8.2.58), which the caller writes in its Association Setup
@@ -146,7 +148,8 @@ pub struct NodeConfig {
     /// to the caller from a host without an association with this node too, with
     /// [`Inbound::of_smf_set`], for the caller to take only from a UP function that has
     /// an association with an entity of its SMF. Without, the node answers it "No
-    /// established PFCP Association".
+    /// established PFCP Association". The session that the caller adopts is then the
+    /// node's to control ([`Node::adopt_session`]).
     pub other_entities: bool,
 }
 
@@ -159,14 +162,16 @@ pub struct NodeConfig {
 pub struct SmfSet {
     /// SSET (§5.22.2): one association for the set, whose established sessions any SMF of
     /// the set may modify or delete, and which it may update or release, with an
-    /// association of its own or not. An establishment needs an association.
+    /// association of its own or not: an SMF without one modifies or deletes a session that
+    /// it adopted ([`Node::adopt_session`]). An establishment needs an association.
     pub sset: bool,
     /// MPAS (§5.22.3): an association for each SMF of the set, of the same SMF Set ID,
     /// any of which may modify or delete the sessions of another, and whose sessions are
     /// kept while one of the set remains (§6.2.8). A UP function hands a session over to
     /// an SMF of the set that it has an association with, which a node of the SMF sees
     /// when it holds the association; an SMF of several PFCP entities, each a node, says
-    /// so with [`NodeConfig::other_entities`].
+    /// so with [`NodeConfig::other_entities`], and the entity that adopts the session
+    /// controls it without the association ([`Node::adopt_session`]).
     pub mpas: bool,
 }
 
@@ -739,6 +744,12 @@ impl Node {
             }
         }
         for peer in self.heartbeats.due(now) {
+            // A peer with neither an association nor an adopted session has no more
+            // heartbeats.
+            if !self.beats(peer) {
+                self.heartbeats.remove(&peer);
+                continue;
+            }
             let interval = self.config.heartbeat.unwrap_or(Duration::MAX);
             self.heartbeats.insert(peer, now.saturating_add(interval));
             if !self.beating.contains(&peer) {
@@ -761,8 +772,8 @@ impl Node {
     }
 
     /// Send a request to `to`, with the next sequence number. A session request needs an
-    /// association with the peer, but, with SSET, the modification or deletion of an
-    /// established session (§5.22.2), and may be throttled for its overload. The SEID of the
+    /// association with the peer, but that of a session adopted without one (§5.22.2,
+    /// §5.22.3), and may be throttled for its overload. The SEID of the
     /// CP F-SEID of an establishment is the local SEID of its session, from
     /// [`new_session`](Self::new_session) or of the caller's own, which no other session
     /// then takes until the establishment ends.
@@ -828,18 +839,14 @@ impl Node {
         }
         let mut change = Change::Nothing;
         if !is_node_related(message_type) {
-            // The association of the session, whose F-SEID may have another address; or,
-            // with SSET, the modification or deletion of an established session of the
-            // set, which the one association that a different SMF of the set holds lets
-            // this SMF ask without one of its own (§5.22.2 bullet 3). An establishment
-            // needs an association (§6.2.6.2.1).
+            // The association of the session, whose F-SEID may have another address, or the
+            // caller's adoption of it from a peer whose association another SMF of the set
+            // holds (SSET, §5.22.2 bullet 3), or another PFCP entity of the SMF (MPAS,
+            // §5.22.3 bullets 3 and 5). An establishment needs an association (§6.2.6.2.1).
             let session = local_seid.and_then(|seid| self.sessions.get(&seid));
-            let of_session = session
-                .is_some_and(|session| self.associations.contains_key(&session.node))
-                || (self.config.smf_set.sset
-                    && self.config.function == Function::Cp
-                    && matches!(message_type, 52 | 54)
-                    && session.is_some_and(|session| session.peer_seid.is_some()));
+            let of_session = session.is_some_and(|session| {
+                session.adopted || self.associations.contains_key(&session.node)
+            });
             if !of_session && self.association_of(to).is_none() {
                 return Err(NodeError::NoAssociation);
             }
@@ -904,6 +911,7 @@ impl Node {
                     node,
                     reserved: false,
                     mark,
+                    adopted: false,
                 };
                 self.sessions.insert(seid, session);
             }
@@ -1015,6 +1023,13 @@ impl Node {
     /// the session over to the session's SEID, the caller sets that request's
     /// [`Inbound::seid`] to the local SEID before [`respond`](Self::respond).
     ///
+    /// A `peer` without an association with the node is one whose association another
+    /// SMF of the set, or another PFCP entity of the SMF, holds, as the caller knows
+    /// (§5.22.3 bullets 3 and 5): the node takes the session's requests from it as those
+    /// of an association, outside the room of [`NodeConfig::strangers`], sends the
+    /// caller's modifications and deletions, and, while such a session of the peer lasts,
+    /// sends it Heartbeat Requests, the first at once, to tell its restart (§6.2.2.2).
+    ///
     /// # Errors
     ///
     /// A local or peer's SEID of 0, and a local SEID that another session has.
@@ -1032,14 +1047,18 @@ impl Node {
         }
         let node = self
             .association_of(peer)
-            .map(|association| association.key.clone())
-            .unwrap_or_default();
+            .map(|association| association.key.clone());
+        let adopted = node.is_none();
+        if adopted && !self.sessions.adopts(peer) && self.config.heartbeat.is_some() {
+            self.heartbeats.insert(peer, Duration::ZERO);
+        }
         let session = Session {
             peer,
             peer_seid: Some(peer_seid),
-            node,
+            node: node.unwrap_or_default(),
             reserved: false,
             mark: self.mark(),
+            adopted,
         };
         self.sessions.insert(local_seid, session);
         Ok(())
@@ -1513,7 +1532,7 @@ impl Node {
             // A host without an association has only so many requests waiting; its
             // heartbeat, answered from the state, waits for nothing.
             if message_type != 1
-                && association.is_none()
+                && self.stranger(from, header.seid)
                 && self.answers.strangers() >= self.config.strangers
             {
                 self.answers.refuse();
@@ -1828,7 +1847,7 @@ impl Node {
             }
             return;
         }
-        let stranger = self.association_of(from).is_none();
+        let stranger = self.stranger(from, message.header.seid);
         if !self.answers.wait(
             (from, sequence),
             Digest::of(octets),
@@ -2025,6 +2044,23 @@ impl Node {
         self.peer_key(one) == self.peer_key(other)
     }
 
+    /// Whether the node heartbeats `peer`: of an association, or of an adopted session.
+    fn beats(&self, peer: SocketAddr) -> bool {
+        self.association_of(peer).is_some() || self.sessions.adopts(peer)
+    }
+
+    /// Whether a request of `from` to the SEID `seid`, which [`screen`](Self::screen) lets
+    /// through, waits in the room of [`NodeConfig::strangers`]: from a host without an
+    /// association, and of no adopted session, whose requests it lets through from its
+    /// peer alone.
+    fn stranger(&self, from: SocketAddr, seid: Option<u64>) -> bool {
+        self.association_of(from).is_none()
+            && !seid
+                .and_then(|seid| self.sessions.resolve(seid))
+                .and_then(|seid| self.sessions.get(&seid))
+                .is_some_and(|session| session.adopted)
+    }
+
     /// The address of a peer as [`same_peer`](Self::same_peer) tells them apart.
     fn peer_key(&self, peer: SocketAddr) -> SocketAddr {
         peer_key(self.config.request_port, peer)
@@ -2117,7 +2153,9 @@ impl Node {
             let associated: BTreeSet<SocketAddr> = self
                 .associations
                 .values()
-                .map(|association| self.peer_key(association.peer))
+                .map(|association| association.peer)
+                .chain(self.sessions.adopted_peers())
+                .map(|peer| self.peer_key(peer))
                 .collect();
             let oldest = self
                 .recovery
@@ -2399,6 +2437,7 @@ impl Node {
                                     node,
                                     reserved: false,
                                     mark,
+                                    adopted: false,
                                 },
                             );
                         }
@@ -2516,6 +2555,7 @@ impl Node {
                             node,
                             reserved: false,
                             mark,
+                            adopted: false,
                         },
                     );
                 }
@@ -2685,7 +2725,7 @@ impl Node {
                 self.sessions.set_node(*seid, heir.clone());
             }
         }
-        if !self.by_peer.contains_key(&self.peer_key(peer)) {
+        if !self.beats(peer) {
             self.heartbeats.remove(&peer);
         }
         self.events.push_back(Event::Released {

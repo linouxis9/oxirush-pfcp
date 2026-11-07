@@ -25,7 +25,8 @@ The first version, of TS 29.244 V19.6.0 (2026-06).
   event. What it keeps of its peers is bounded, and what it drops counted.
   With `SmfSet`, the requests that the SMF sets of §5.22 let come from another
   SMF of a set go to the caller, and a release keeps what MPAS keeps; with
-  `other_entities`, a handover to another PFCP entity of the same SMF too.
+  `other_entities`, a handover to another PFCP entity of the same SMF too,
+  which then controls the session that it adopts.
 - `endpoint`: a node on a Tokio UDP socket. The `Endpoint` takes the peers'
   requests and the events, and a `Handle`, which clones, sends the node's
   requests and reaches its state, from any task.
