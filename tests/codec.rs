@@ -478,6 +478,42 @@ fn a_flag_that_disagrees_is_refused_where_it_is_written() {
     );
 }
 
+/// What the paths know of a place prints the names of the message, of the tables and of
+/// the IE types, not their rows.
+#[test]
+fn a_shape_prints_its_names() {
+    use tree::Family;
+    let heartbeat = Message {
+        header: Header::node(1),
+        body: HeartbeatRequest::new(RecoveryTimeStamp::new(7)).into(),
+    };
+    let heartbeat = heartbeat.to_tree();
+    let paths = oxirush_pfcp::tree::Paths;
+    let message = paths.start(&heartbeat, true);
+    assert_eq!(
+        format!("{message:?}"),
+        r#"Shape(Message("PFCP Heartbeat Request"))"#
+    );
+    let ies = paths.member(&message, "ies", Some(&heartbeat["ies"]));
+    assert_eq!(format!("{ies:?}"), r#"Shape(Ies(["7.4.2.1-1"]))"#);
+    // The header is no table of IEs
+    let sequence = paths.member(&message, "Sequence Number", Some(&tree!(1)));
+    assert_eq!(format!("{sequence:?}"), "Shape(Nothing)");
+    let stamp = &heartbeat["ies"]["Recovery Time Stamp"];
+    let value = paths.member(&ies, "Recovery Time Stamp", Some(stamp));
+    assert_eq!(
+        format!("{value:?}"),
+        r#"Shape(Value("Recovery Time Stamp"))"#
+    );
+    let addresses = paths.member(&ies, "Source IP Address", Some(&tree!([])));
+    assert_eq!(
+        format!("{addresses:?}"),
+        r#"Shape(List("Source IP Address"))"#
+    );
+    let nothing = paths.member(&value, "Bogus", None);
+    assert_eq!(format!("{nothing:?}"), "Shape(Nothing)");
+}
+
 /// What the tree of a message holds of the members of its values: at each value of an IE
 /// that is no grouped IE, each member that it has is a member of its IE type
 /// (`IeTypeInfo::members`), and each other member of its type selects nothing, but the one
@@ -1316,6 +1352,21 @@ fn a_number_of_six_bits_in_a_tree() {
     let mapping = DscpToPpiMappingInformation::decode(&[0x01, 0x2e, 0xc1]).unwrap();
     let written = tree!({"PPI Value": 1, "DSCP Value": [46, {"value": 1, "Spare": 192}]});
     assert_eq!(tree::Tree::to_tree(&mapping), written);
+}
+
+/// A Number of six bits is, as a field of its own, its whole octet, which a Narrow parts
+/// into the number and the spare bits.
+#[test]
+fn a_number_of_six_bits_as_a_field() {
+    let mut octets: &[u8] = &[0x2e, 0xc1];
+    assert_eq!(Number::<6>::read(&mut octets), Some(Number(0x2e)));
+    assert_eq!(octets, [0xc1]);
+    assert_eq!(Number::<6>::read(&mut &[][..]), None);
+    let mut out = Vec::new();
+    Number::<6>(0xc1).write(&mut out);
+    assert_eq!(out, [0xc1]);
+    assert_eq!(Number::<6>(0x2e).size(), 1);
+    assert_eq!(Field::to_tree(&Number::<6>(46)), tree!(46));
 }
 
 /// Values that the crate once misread: each as its clause has it.

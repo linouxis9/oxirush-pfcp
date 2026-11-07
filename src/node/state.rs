@@ -724,4 +724,22 @@ mod tests {
         sessions.insert(3, session(10, false));
         assert_eq!(sessions.of_mark(9), Some(2));
     }
+
+    /// A session that another replaces at its local SEID leaves the peer's SEID of the new
+    /// one: the same as before, or another.
+    #[test]
+    fn a_replaced_session_leaves_its_peer_seid() {
+        let of_peer = |sessions: &Sessions, seid| sessions.of_peer_seid(seid).collect::<Vec<_>>();
+        let mut sessions = Sessions::default();
+        sessions.insert(1, session(7, false));
+        sessions.insert(1, session(8, false));
+        assert_eq!(of_peer(&sessions, 0x66), [1]);
+        let other = Session {
+            peer_seid: Some(0x67),
+            ..session(9, false)
+        };
+        sessions.insert(1, other);
+        assert_eq!(of_peer(&sessions, 0x66), Vec::<u64>::new());
+        assert_eq!(of_peer(&sessions, 0x67), [1]);
+    }
 }
