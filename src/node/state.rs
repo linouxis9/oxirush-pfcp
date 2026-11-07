@@ -768,6 +768,10 @@ impl Overloads {
         self.by_scope.get(scope)
     }
 
+    pub(crate) fn iter(&self) -> impl Iterator<Item = (&Scope, &OverloadControl)> {
+        self.by_scope.iter()
+    }
+
     pub(crate) fn contains_key(&self, scope: &Scope) -> bool {
         self.by_scope.contains_key(scope)
     }

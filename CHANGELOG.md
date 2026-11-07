@@ -24,7 +24,8 @@ The first version, of TS 29.244 V19.6.0 (2026-06).
   overload control and message priority, and what a peer does wrong as an
   event. A deletion whose usage reports follow keeps its session until the
   last of them (§5.2.2.3.1). What it keeps of its peers is bounded, and what
-  it drops counted.
+  it drops counted; its sessions, associations, loads and overloads are
+  listed.
   With `SmfSet`, the requests that the SMF sets of §5.22 let come from another
   SMF of a set go to the caller, and a release keeps what MPAS keeps; with
   `other_entities`, a handover to another PFCP entity of the same SMF too,

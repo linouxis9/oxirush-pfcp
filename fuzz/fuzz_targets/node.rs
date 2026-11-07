@@ -27,14 +27,17 @@
 //! given back. Answers accept or reject, through `respond` or as a probe's message of any
 //! type and delivery, and a deletion's may say that usage reports follow. What the nodes send each other is delivered. What a node sends
 //! decodes and encodes back to its octets; a datagram gets at most one answer for each of
-//! its messages; a timer that is due moves on; nothing panics.
+//! its messages; a timer that is due moves on; the load and overload that a node keeps are
+//! of its sessions and associations; nothing panics.
 #![no_main]
 
 use std::net::{Ipv4Addr, SocketAddr};
 use std::time::Duration;
 
 use libfuzzer_sys::fuzz_target;
-use oxirush_pfcp::node::{Delivery, Event, Function, Inbound, Node, NodeConfig, RequestId, SmfSet};
+use oxirush_pfcp::node::{
+    ControlScope, Delivery, Event, Function, Inbound, Node, NodeConfig, RequestId, SmfSet,
+};
 use oxirush_pfcp::*;
 
 const UPF: SocketAddr = SocketAddr::new(std::net::IpAddr::V4(Ipv4Addr::new(10, 0, 0, 2)), 8805);
@@ -118,6 +121,27 @@ fn establishment(from: SocketAddr, cp_seid: u64) -> Message {
     Message {
         header: Header::session(0, 0),
         body: SessionEstablishmentRequest::new_n4(node_id(from), f_seid, pdr, far).into(),
+    }
+}
+
+/// What a node keeps of the load and overload of its peers, checked: each is of a session
+/// or an association of its address, or of the association of its Node ID.
+fn held(node: &Node) {
+    let scopes = node.loads().map(|(scope, _)| scope);
+    for scope in scopes.chain(node.overloads().map(|(scope, _)| scope)) {
+        let held = match &scope {
+            ControlScope::Address(address) => {
+                node.sessions()
+                    .any(|(_, session)| session.peer.ip() == address.ip())
+                    || node
+                        .associations()
+                        .any(|association| association.peer.ip() == address.ip())
+            }
+            ControlScope::Node(id) => node
+                .associations()
+                .any(|association| association.node_id.effective().as_ref() == Some(id)),
+        };
+        assert!(held, "{scope:?} outlives what set it");
     }
 }
 
@@ -519,6 +543,7 @@ fuzz_target!(|octets: &[u8]| {
         settle(&mut upf, &mut smf, now, how, &mut kept);
         for node in [&mut upf, &mut smf] {
             while node.poll_event().is_some() {}
+            held(node);
         }
     }
 });

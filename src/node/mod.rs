@@ -410,6 +410,18 @@ pub enum ViolationKind {
     SeidZero,
 }
 
+/// Whose load or overload control information the node keeps (§6.2.3.3.1, §6.2.4.3.1).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ControlScope {
+    /// Of the Node ID of an association.
+    Node(NodeId),
+    /// Of an address: of a UP F-SEID, or of the peer of a session adopted without an
+    /// association. The address is the peer's as the node tells peers apart: its IP
+    /// address on port 0 for a node of a [`NodeConfig::request_port`], and its address and
+    /// port without.
+    Address(SocketAddr),
+}
+
 /// Something the caller is told.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
@@ -1077,6 +1089,7 @@ impl Node {
         self.deadlines.remove(&(outstanding.deadline, sequence));
         self.finish(now, sequence, outstanding.to, true);
         self.abandon(&outstanding);
+        self.prune_controls();
         true
     }
 
@@ -1306,6 +1319,7 @@ impl Node {
             .answer(key, request.id, octets.clone(), expires, effective)
         {
             self.answered_effects(now, request, &message);
+            self.prune_controls();
         }
         if delivery == Delivery::Send {
             self.queue(Transmit {
@@ -1363,6 +1377,31 @@ impl Node {
     /// The session of a local SEID.
     pub fn session(&self, local_seid: u64) -> Option<&Session> {
         self.sessions.get(&local_seid)
+    }
+
+    /// The sessions of the node, by their local SEIDs, in their order.
+    pub fn sessions(&self) -> impl Iterator<Item = (u64, &Session)> + '_ {
+        self.sessions.iter().map(|(seid, session)| (*seid, session))
+    }
+
+    /// The associations of the node.
+    pub fn associations(&self) -> impl Iterator<Item = &Association> + '_ {
+        self.associations.values()
+    }
+
+    /// The load control information that the node keeps, and whose.
+    pub fn loads(&self) -> impl Iterator<Item = (ControlScope, LoadControl)> + '_ {
+        self.load
+            .iter()
+            .map(|(scope, load)| (control_scope(scope), *load))
+    }
+
+    /// The overload control information that the node keeps, and whose, which
+    /// [`overload_control`](Self::overload_control) gives of a peer.
+    pub fn overloads(&self) -> impl Iterator<Item = (ControlScope, OverloadControl)> + '_ {
+        self.overload
+            .iter()
+            .map(|(scope, overload)| (control_scope(scope), *overload))
     }
 
     /// The latest load control information of a peer, by its Node ID (§6.2.3.3.1), or by
@@ -3032,6 +3071,18 @@ fn peer_key(request_port: Option<u16>, peer: SocketAddr) -> SocketAddr {
     match request_port {
         Some(_) => SocketAddr::new(peer.ip(), 0),
         None => peer,
+    }
+}
+
+/// The public form of the scope of a load or an overload: the Node ID that its key
+/// encodes.
+fn control_scope(scope: &Scope) -> ControlScope {
+    match scope {
+        Scope::Address(peer) => ControlScope::Address(*peer),
+        Scope::Node(key) => ControlScope::Node(
+            <NodeId as crate::ie::Codec>::decode(key)
+                .unwrap_or_else(|| NodeId::Fqdn(crate::octets::Octets::copied(key))),
+        ),
     }
 }
 
