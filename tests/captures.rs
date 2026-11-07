@@ -22,8 +22,21 @@
 use oxirush_pfcp::*;
 
 /// What the check finds in the captures, each a finding of the peer that sent it: the
-/// run, the number of the message, and the deviation as it is displayed.
-const EXPECTED: &[(&str, &str, &str)] = &[
+/// run, the number of the message, and the path, the clause, the kind and the Cause of the
+/// deviation.
+type Found = (
+    &'static str,
+    &'static str,
+    &'static str,
+    &'static str,
+    DeviationKind,
+    Option<CauseValue>,
+);
+
+/// The Start Time that the deviations below are of.
+const START_TIME: DeviationKind = DeviationKind::ConditionalMissing { ie_type: 75 };
+
+const EXPECTED: &[Found] = &[
     // Open5GS 157f611a: the UPF's first usage report of a URR without ISTM, here of the
     // deletion (TERMR), has no Start Time, which Table 7.5.7.2-1 has but of the start or
     // stop of traffic and of MAC addresses: the time a URR starts is set for ISTM alone
@@ -31,32 +44,50 @@ const EXPECTED: &[(&str, &str, &str)] = &[
     (
         "open5gs-5gs-handover",
         "16",
-        "Start Time is missing where its condition holds (TS 29.244 7.5.7.2-1), at /pfcp/Usage Report/0/Start Time",
+        "/pfcp/Usage Report/0/Start Time",
+        "7.5.7.2-1",
+        START_TIME,
+        None,
     ),
     (
         "open5gs-5gs-lifecycle",
         "20",
-        "Start Time is missing where its condition holds (TS 29.244 7.5.7.2-1), at /pfcp/Usage Report/0/Start Time",
+        "/pfcp/Usage Report/0/Start Time",
+        "7.5.7.2-1",
+        START_TIME,
+        None,
     ),
     (
         "open5gs-5gs-lifecycle",
         "22",
-        "Start Time is missing where its condition holds (TS 29.244 7.5.7.2-1), at /pfcp/Usage Report/0/Start Time",
+        "/pfcp/Usage Report/0/Start Time",
+        "7.5.7.2-1",
+        START_TIME,
+        None,
     ),
     (
         "open5gs-5gs-lifecycle",
         "32",
-        "Start Time is missing where its condition holds (TS 29.244 7.5.7.2-1), at /pfcp/Usage Report/0/Start Time",
+        "/pfcp/Usage Report/0/Start Time",
+        "7.5.7.2-1",
+        START_TIME,
+        None,
     ),
     (
         "open5gs-5gs-upf-restart",
         "20",
-        "Start Time is missing where its condition holds (TS 29.244 7.5.7.2-1), at /pfcp/Usage Report/0/Start Time",
+        "/pfcp/Usage Report/0/Start Time",
+        "7.5.7.2-1",
+        START_TIME,
+        None,
     ),
     (
         "open5gs-5gs-upf-restart",
         "22",
-        "Start Time is missing where its condition holds (TS 29.244 7.5.7.2-1), at /pfcp/Usage Report/0/Start Time",
+        "/pfcp/Usage Report/0/Start Time",
+        "7.5.7.2-1",
+        START_TIME,
+        None,
     ),
     // Open5GS 157f611a: the SMF that restores a session to a UPF that restarted (RESTI)
     // gives the header of its establishment the SEID of the UPF from before the restart,
@@ -64,29 +95,44 @@ const EXPECTED: &[(&str, &str, &str)] = &[
     (
         "open5gs-5gs-upf-restart",
         "43",
-        "a Session Establishment Request of a SEID other than 0 (TS 29.244 7.2.2.4.2), at /header",
+        "/header",
+        "7.2.2.4.2",
+        DeviationKind::Rule("a Session Establishment Request of a SEID other than 0"),
+        None,
     ),
     // Open5GS 157f611a: the SMF as PGW-C sends Create BAR on Sxb, which Table 7.5.2.1-1
     // has on Sxa and N4 only (src/smf/n4-build.c).
     (
         "open5gs-eps-handover",
         "17",
-        "Create BAR is not on this interface (TS 29.244 7.5.2.1-1), at /pfcp/Create BAR",
+        "/pfcp/Create BAR",
+        "7.5.2.1-1",
+        DeviationKind::NotOnInterface { ie_type: 85 },
+        None,
     ),
     (
         "open5gs-eps-handover",
         "17",
-        "BAR ID is not on this interface (TS 29.244 7.5.2.6-1), at /pfcp/Create BAR/BAR ID",
+        "/pfcp/Create BAR/BAR ID",
+        "7.5.2.6-1",
+        DeviationKind::NotOnInterface { ie_type: 88 },
+        None,
     ),
     (
         "open5gs-eps-lifecycle",
         "17",
-        "Create BAR is not on this interface (TS 29.244 7.5.2.1-1), at /pfcp/Create BAR",
+        "/pfcp/Create BAR",
+        "7.5.2.1-1",
+        DeviationKind::NotOnInterface { ie_type: 85 },
+        None,
     ),
     (
         "open5gs-eps-lifecycle",
         "17",
-        "BAR ID is not on this interface (TS 29.244 7.5.2.6-1), at /pfcp/Create BAR/BAR ID",
+        "/pfcp/Create BAR/BAR ID",
+        "7.5.2.6-1",
+        DeviationKind::NotOnInterface { ie_type: 88 },
+        None,
     ),
 ];
 
@@ -120,14 +166,31 @@ fn each_captured_message_is_read_written_and_checked() {
             _ => Interfaces::N4,
         };
         for deviation in message.check(interface) {
-            found.push((run.to_string(), number.to_string(), deviation.to_string()));
+            let Deviation {
+                path,
+                clause,
+                kind,
+                cause,
+                ..
+            } = deviation;
+            found.push((
+                run.to_string(),
+                number.to_string(),
+                path,
+                clause,
+                kind,
+                cause,
+            ));
         }
         count += 1;
     }
     assert_eq!(count, 213);
-    let expected: Vec<(String, String, String)> = EXPECTED
+    let expected: Vec<_> = EXPECTED
         .iter()
-        .map(|(run, number, said)| (run.to_string(), number.to_string(), said.to_string()))
+        .map(|(run, number, path, clause, kind, cause)| {
+            let (run, number, path) = (run.to_string(), number.to_string(), path.to_string());
+            (run, number, path, *clause, kind.clone(), *cause)
+        })
         .collect();
     assert_eq!(found, expected);
 }

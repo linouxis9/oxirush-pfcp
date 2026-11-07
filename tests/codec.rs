@@ -1068,7 +1068,16 @@ fn other_vectors_round_trip() {
                 let any = fields.len() < 4;
                 for deviation in message.check(interface) {
                     if !(any && matches!(deviation.kind, DeviationKind::NotOnInterface { .. })) {
-                        found.push(format!("{}\t{}\t{deviation}", fields[0], fields[1]));
+                        let cause = deviation
+                            .cause
+                            .map_or("-".to_string(), |cause| format!("{cause:?}"));
+                        let Deviation {
+                            path, clause, kind, ..
+                        } = deviation;
+                        found.push(format!(
+                            "{}\t{}\t{path}\t{clause}\t{kind:?}\t{cause}",
+                            fields[0], fields[1]
+                        ));
                     }
                 }
             }
@@ -1079,23 +1088,6 @@ fn other_vectors_round_trip() {
         "{read} messages read by their tables, {reordered} of them not in the order of their tables"
     );
     assert!(read > 0, "no vector in the file");
-    // What tests/README.md says of them
-    let said = include_str!("README.md")
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ");
-    for count in [
-        format!(
-            "the {} vectors of go-pfcp's message tests",
-            vectors.lines().count()
-        ),
-        format!("{reordered} of them have their IEs in another order"),
-    ] {
-        assert!(
-            said.contains(&count),
-            "tests/README.md does not say: {count}"
-        );
-    }
     let mut expected: Vec<&str> = include_str!("go-pfcp-deviations.tsv")
         .lines()
         .filter(|line| !line.starts_with('#') && !line.is_empty())

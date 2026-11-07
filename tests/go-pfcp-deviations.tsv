@@ -1,196 +1,197 @@
 # What check() finds in the vectors of go-pfcp v0.0.24, which the test other_vectors_round_trip
-# of tests/codec.rs expects, one line each: the file of the vector, its name, and the
-# deviation. tests/README.md, "What the crate finds in others", says why each is one.
-association-setup-request_test.go	Single IEs	spare bits are not zero (TS 29.244 8.1.2), at /pfcp/SMF Set ID
-association-setup-request_test.go	Single IEs	the mandatory UE IP address Pool Identity does not decode (TS 29.244 7.4.4.1-3), at /pfcp/UE IP address Pool Information/0/UE IP address Pool Identity
-association-setup-request_test.go	Single IEs	Measurement Method is no IE of this table (TS 29.244 7.6.9), at /pfcp/GTP-U Path QoS Control Information/0/Measurement Method
-association-setup-request_test.go	Multiple IEs	IE type 116 is in no table of Release 19 (TS 29.244 8.1.2), at /pfcp/116
-association-setup-request_test.go	Multiple IEs	IE type 116 is in no table of Release 19 (TS 29.244 8.1.2), at /pfcp/116
-association-setup-request_test.go	Multiple IEs	spare bits are not zero (TS 29.244 8.1.2), at /pfcp/SMF Set ID
-association-setup-request_test.go	Multiple IEs	the mandatory UE IP address Pool Identity does not decode (TS 29.244 7.4.4.1-3), at /pfcp/UE IP address Pool Information/0/UE IP address Pool Identity
-association-setup-request_test.go	Multiple IEs	the mandatory UE IP address Pool Identity does not decode (TS 29.244 7.4.4.1-3), at /pfcp/UE IP address Pool Information/1/UE IP address Pool Identity
-association-setup-request_test.go	Multiple IEs	Measurement Method is no IE of this table (TS 29.244 7.6.9), at /pfcp/GTP-U Path QoS Control Information/0/Measurement Method
-association-setup-request_test.go	Multiple IEs	Measurement Method is no IE of this table (TS 29.244 7.6.9), at /pfcp/GTP-U Path QoS Control Information/1/Measurement Method
-association-setup-request_test.go	Multiple IEs	a ToS/Traffic Class mask other than 0xFC (TS 29.244 8.2.12), at /pfcp/GTP-U Path QoS Control Information/0/DSCP/0: the answer is "Mandatory IE incorrect"
-association-setup-request_test.go	Multiple IEs	a ToS/Traffic Class mask other than 0xFC (TS 29.244 8.2.12), at /pfcp/GTP-U Path QoS Control Information/1/DSCP/0: the answer is "Mandatory IE incorrect"
-association-setup-request_test.go	Single IEs	a ToS/Traffic Class mask other than 0xFC (TS 29.244 8.2.12), at /pfcp/GTP-U Path QoS Control Information/0/DSCP/0: the answer is "Mandatory IE incorrect"
-association-setup-request_test.go	Single IEs	Measurement Period is missing where its condition holds (TS 29.244 7.4.4.1.3-1), at /pfcp/GTP-U Path QoS Control Information/0/Measurement Period: the answer is "Conditional IE missing"
-association-setup-request_test.go	Multiple IEs	Measurement Period is missing where its condition holds (TS 29.244 7.4.4.1.3-1), at /pfcp/GTP-U Path QoS Control Information/0/Measurement Period: the answer is "Conditional IE missing"
-association-setup-request_test.go	Multiple IEs	Measurement Period is missing where its condition holds (TS 29.244 7.4.4.1.3-1), at /pfcp/GTP-U Path QoS Control Information/1/Measurement Period: the answer is "Conditional IE missing"
-association-setup-request_test.go	Multiple IEs	labels that are no FQDN of RFC 1035: each of 1 to 63 octets, after its length, and 255 octets at most with the trailing zero byte (TS 29.244 8.2.131), at /pfcp/SMF Set ID: the answer is "Mandatory IE incorrect"
-association-setup-request_test.go	Single IEs	labels that are no FQDN of RFC 1035: each of 1 to 63 octets, after its length, and 255 octets at most with the trailing zero byte (TS 29.244 8.2.131), at /pfcp/SMF Set ID: the answer is "Mandatory IE incorrect"
-association-setup-response_test.go	Single IE	the mandatory UE IP address Pool Identity does not decode (TS 29.244 7.4.4.1-3), at /pfcp/UE IP address Pool Information/0/UE IP address Pool Identity
-association-setup-response_test.go	Single IE	Measurement Method is no IE of this table (TS 29.244 7.6.9), at /pfcp/GTP-U Path QoS Control Information/0/Measurement Method
-association-setup-response_test.go	Multiple IEs	the mandatory UE IP address Pool Identity does not decode (TS 29.244 7.4.4.1-3), at /pfcp/UE IP address Pool Information/0/UE IP address Pool Identity
-association-setup-response_test.go	Multiple IEs	the mandatory UE IP address Pool Identity does not decode (TS 29.244 7.4.4.1-3), at /pfcp/UE IP address Pool Information/1/UE IP address Pool Identity
-association-setup-response_test.go	Multiple IEs	Measurement Method is no IE of this table (TS 29.244 7.6.9), at /pfcp/GTP-U Path QoS Control Information/0/Measurement Method
-association-setup-response_test.go	Multiple IEs	Measurement Method is no IE of this table (TS 29.244 7.6.9), at /pfcp/GTP-U Path QoS Control Information/1/Measurement Method
-association-setup-response_test.go	Multiple IEs	a ToS/Traffic Class mask other than 0xFC (TS 29.244 8.2.12), at /pfcp/GTP-U Path QoS Control Information/0/DSCP/0
-association-setup-response_test.go	Multiple IEs	a ToS/Traffic Class mask other than 0xFC (TS 29.244 8.2.12), at /pfcp/GTP-U Path QoS Control Information/1/DSCP/0
-association-setup-response_test.go	Single IE	a ToS/Traffic Class mask other than 0xFC (TS 29.244 8.2.12), at /pfcp/GTP-U Path QoS Control Information/0/DSCP/0
-association-setup-response_test.go	Single IE	Measurement Period is missing where its condition holds (TS 29.244 7.4.4.1.3-1), at /pfcp/GTP-U Path QoS Control Information/0/Measurement Period
-association-setup-response_test.go	Single IE	SMF Set ID is missing where its condition holds (TS 29.244 7.4.4.2-1), at /pfcp/SMF Set ID
-association-setup-response_test.go	Multiple IEs	Measurement Period is missing where its condition holds (TS 29.244 7.4.4.1.3-1), at /pfcp/GTP-U Path QoS Control Information/0/Measurement Period
-association-setup-response_test.go	Multiple IEs	Measurement Period is missing where its condition holds (TS 29.244 7.4.4.1.3-1), at /pfcp/GTP-U Path QoS Control Information/1/Measurement Period
-association-setup-response_test.go	Multiple IEs	SMF Set ID is missing where its condition holds (TS 29.244 7.4.4.2-1), at /pfcp/SMF Set ID
-association-update-request_test.go	Single IE	the mandatory UE IP address Pool Identity does not decode (TS 29.244 7.4.4.1-3), at /pfcp/UE IP address Pool Information/0/UE IP address Pool Identity
-association-update-request_test.go	Single IE	Measurement Method is no IE of this table (TS 29.244 7.6.9), at /pfcp/GTP-U Path QoS Control Information/0/Measurement Method
-association-update-request_test.go	Single IE	UE IP address Pool Identity does not decode, and is taken as absent (TS 29.244 7.6.8), at /pfcp/UE IP Address Usage Information/0/UE IP Address Pool Id
-association-update-request_test.go	Multiple IEs	the mandatory UE IP address Pool Identity does not decode (TS 29.244 7.4.4.1-3), at /pfcp/UE IP address Pool Information/0/UE IP address Pool Identity
-association-update-request_test.go	Multiple IEs	the mandatory UE IP address Pool Identity does not decode (TS 29.244 7.4.4.1-3), at /pfcp/UE IP address Pool Information/1/UE IP address Pool Identity
-association-update-request_test.go	Multiple IEs	Measurement Method is no IE of this table (TS 29.244 7.6.9), at /pfcp/GTP-U Path QoS Control Information/0/Measurement Method
-association-update-request_test.go	Multiple IEs	Measurement Method is no IE of this table (TS 29.244 7.6.9), at /pfcp/GTP-U Path QoS Control Information/1/Measurement Method
-association-update-request_test.go	Multiple IEs	UE IP address Pool Identity does not decode, and is taken as absent (TS 29.244 7.6.8), at /pfcp/UE IP Address Usage Information/0/UE IP Address Pool Id
-association-update-request_test.go	Multiple IEs	a ToS/Traffic Class mask other than 0xFC (TS 29.244 8.2.12), at /pfcp/GTP-U Path QoS Control Information/0/DSCP/0: the answer is "Mandatory IE incorrect"
-association-update-request_test.go	Multiple IEs	a ToS/Traffic Class mask other than 0xFC (TS 29.244 8.2.12), at /pfcp/GTP-U Path QoS Control Information/1/DSCP/0: the answer is "Mandatory IE incorrect"
-association-update-request_test.go	Single IE	a ToS/Traffic Class mask other than 0xFC (TS 29.244 8.2.12), at /pfcp/GTP-U Path QoS Control Information/0/DSCP/0: the answer is "Mandatory IE incorrect"
-association-update-request_test.go	Single IE	Measurement Period is missing where its condition holds (TS 29.244 7.4.4.1.3-1), at /pfcp/GTP-U Path QoS Control Information/0/Measurement Period: the answer is "Conditional IE missing"
-association-update-request_test.go	Multiple IEs	Measurement Period is missing where its condition holds (TS 29.244 7.4.4.1.3-1), at /pfcp/GTP-U Path QoS Control Information/0/Measurement Period: the answer is "Conditional IE missing"
-association-update-request_test.go	Multiple IEs	Measurement Period is missing where its condition holds (TS 29.244 7.4.4.1.3-1), at /pfcp/GTP-U Path QoS Control Information/1/Measurement Period: the answer is "Conditional IE missing"
-generic_test.go	Normal	the mandatory Node ID is missing (TS 29.244 7.5.2.1-1), at /pfcp/Node ID: the answer is "Mandatory IE missing"
-generic_test.go	Normal	the mandatory F-SEID is missing (TS 29.244 7.5.2.1-1), at /pfcp/CP F-SEID: the answer is "Mandatory IE missing"
-generic_test.go	Normal	the mandatory Create PDR is missing (TS 29.244 7.5.2.1-1), at /pfcp/Create PDR: the answer is "Mandatory IE missing"
-generic_test.go	Normal	the mandatory Create FAR is missing (TS 29.244 7.5.2.1-1), at /pfcp/Create FAR: the answer is "Mandatory IE missing"
-generic_test.go	Normal	Application ID is no IE of this table (TS 29.244 7.6.9), at /pfcp/Application ID
-generic_test.go	No-SEID	the mandatory Recovery Time Stamp is missing (TS 29.244 7.4.2.1-1), at /pfcp/Recovery Time Stamp
-generic_test.go	No-SEID	Application ID is no IE of this table (TS 29.244 7.6.9), at /pfcp/Application ID
-header_test.go	Session	the mandatory Node ID is missing (TS 29.244 7.5.2.1-1), at /pfcp/Node ID: the answer is "Mandatory IE missing"
-header_test.go	Session	the mandatory F-SEID is missing (TS 29.244 7.5.2.1-1), at /pfcp/CP F-SEID: the answer is "Mandatory IE missing"
-header_test.go	Session	the mandatory Create PDR is missing (TS 29.244 7.5.2.1-1), at /pfcp/Create PDR: the answer is "Mandatory IE missing"
-header_test.go	Session	the mandatory Create FAR is missing (TS 29.244 7.5.2.1-1), at /pfcp/Create FAR: the answer is "Mandatory IE missing"
-header_test.go	Session	Application ID is no IE of this table (TS 29.244 7.6.9), at /pfcp/Application ID
-node-report-request_test.go	Single IE	Time Offset Threshold is no IE of this table (TS 29.244 7.6.9), at /pfcp/Clock Drift Report/0/Time Offset Threshold
-node-report-request_test.go	Single IE	Cumulative rateRatio Threshold is no IE of this table (TS 29.244 7.6.9), at /pfcp/Clock Drift Report/0/Cumulative rateRatio Threshold
-node-report-request_test.go	Multiple IEs	Time Offset Threshold is no IE of this table (TS 29.244 7.6.9), at /pfcp/Clock Drift Report/0/Time Offset Threshold
-node-report-request_test.go	Multiple IEs	Cumulative rateRatio Threshold is no IE of this table (TS 29.244 7.6.9), at /pfcp/Clock Drift Report/0/Cumulative rateRatio Threshold
-node-report-request_test.go	Multiple IEs	Time Offset Threshold is no IE of this table (TS 29.244 7.6.9), at /pfcp/Clock Drift Report/1/Time Offset Threshold
-node-report-request_test.go	Multiple IEs	Cumulative rateRatio Threshold is no IE of this table (TS 29.244 7.6.9), at /pfcp/Clock Drift Report/1/Cumulative rateRatio Threshold
-node-report-request_test.go	Multiple IEs	a ToS/Traffic Class mask other than 0xFC (TS 29.244 8.2.12), at /pfcp/GTP-U Path QoS Report/0/QoS Information/0/DSCP: the answer is "Mandatory IE incorrect"
-node-report-request_test.go	Multiple IEs	a ToS/Traffic Class mask other than 0xFC (TS 29.244 8.2.12), at /pfcp/GTP-U Path QoS Report/1/QoS Information/0/DSCP: the answer is "Mandatory IE incorrect"
-node-report-request_test.go	Single IE	a ToS/Traffic Class mask other than 0xFC (TS 29.244 8.2.12), at /pfcp/GTP-U Path QoS Report/0/QoS Information/0/DSCP: the answer is "Mandatory IE incorrect"
-session-deletion-response_test.go	Single IE	spare bits are not zero (TS 29.244 8.1.2), at /pfcp/Usage Report/0/Usage Report Trigger
-session-deletion-response_test.go	Multiple IEs	spare bits are not zero (TS 29.244 8.1.2), at /pfcp/Usage Report/0/Usage Report Trigger
-session-deletion-response_test.go	Multiple IEs	spare bits are not zero (TS 29.244 8.1.2), at /pfcp/Usage Report/1/Usage Report Trigger
-session-establishment-request_test.go	Single IE	UE IP address Pool Identity does not decode, and is taken as absent (TS 29.244 7.6.8), at /pfcp/Create PDR/0/UE IP address Pool Identity
-session-establishment-request_test.go	Single IE	spare bits are not zero (TS 29.244 8.1.2), at /pfcp/Create PDR/0/Outer Header Removal
-session-establishment-request_test.go	Single IE	Redundant Transmission Parameters is no IE of this table (TS 29.244 7.6.9), at /pfcp/Create FAR/0/Redundant Transmission Parameters
-session-establishment-request_test.go	Single IE	spare bits are not zero (TS 29.244 8.1.2), at /pfcp/Create QER/0/QER Control Indications
-session-establishment-request_test.go	Multiple IEs	UE IP address Pool Identity does not decode, and is taken as absent (TS 29.244 7.6.8), at /pfcp/Create PDR/0/UE IP address Pool Identity
-session-establishment-request_test.go	Multiple IEs	spare bits are not zero (TS 29.244 8.1.2), at /pfcp/Create PDR/0/Outer Header Removal
-session-establishment-request_test.go	Multiple IEs	UE IP address Pool Identity does not decode, and is taken as absent (TS 29.244 7.6.8), at /pfcp/Create PDR/1/UE IP address Pool Identity
-session-establishment-request_test.go	Multiple IEs	spare bits are not zero (TS 29.244 8.1.2), at /pfcp/Create PDR/1/Outer Header Removal
-session-establishment-request_test.go	Multiple IEs	Redundant Transmission Parameters is no IE of this table (TS 29.244 7.6.9), at /pfcp/Create FAR/0/Redundant Transmission Parameters
-session-establishment-request_test.go	Multiple IEs	spare bits are not zero (TS 29.244 8.1.2), at /pfcp/Create QER/0/QER Control Indications
-session-establishment-request_test.go	Multiple IEs	a ToS/Traffic Class mask other than 0xFC (TS 29.244 8.2.12), at /pfcp/Create FAR/0/Duplicating Parameters/0/Transport Level marking: the answer is "Mandatory IE incorrect"
-session-establishment-request_test.go	Multiple IEs	a ToS/Traffic Class mask other than 0xFC (TS 29.244 8.2.12), at /pfcp/Create FAR/0/Forwarding Parameters/Transport Level Marking: the answer is "Mandatory IE incorrect"
-session-establishment-request_test.go	Single IE	a ToS/Traffic Class mask other than 0xFC (TS 29.244 8.2.12), at /pfcp/Create FAR/0/Duplicating Parameters/0/Transport Level marking: the answer is "Mandatory IE incorrect"
-session-establishment-request_test.go	Single IE	a ToS/Traffic Class mask other than 0xFC (TS 29.244 8.2.12), at /pfcp/Create FAR/0/Forwarding Parameters/Transport Level Marking: the answer is "Mandatory IE incorrect"
-session-establishment-response_test.go	Single IE	Provide ATSSS Control Information is no IE of this table (TS 29.244 7.6.9), at /pfcp/Provide ATSSS Control Information
-session-establishment-response_test.go	Single IE	NW-TT Port Number is no IE of this table (TS 29.244 7.6.9), at /pfcp/Created Bridge/Router Info/NW-TT Port Number
-session-establishment-response_test.go	Single IE	the conditional 5GS User Plane Node ID does not decode (TS 29.244 7.6.8), at /pfcp/Created Bridge/Router Info/5GS User Plane Node ID
-session-establishment-response_test.go	Multiple IEs	Provide ATSSS Control Information is no IE of this table (TS 29.244 7.6.9), at /pfcp/Provide ATSSS Control Information
-session-establishment-response_test.go	Multiple IEs	NW-TT Port Number is no IE of this table (TS 29.244 7.6.9), at /pfcp/Created Bridge/Router Info/NW-TT Port Number
-session-modification-request_test.go	Single IE	UE IP address Pool Identity does not decode, and is taken as absent (TS 29.244 7.6.8), at /pfcp/Create PDR/0/UE IP address Pool Identity
-session-modification-request_test.go	Single IE	spare bits are not zero (TS 29.244 8.1.2), at /pfcp/Create PDR/0/Outer Header Removal
-session-modification-request_test.go	Single IE	Redundant Transmission Parameters is no IE of this table (TS 29.244 7.6.9), at /pfcp/Create FAR/0/Redundant Transmission Parameters
-session-modification-request_test.go	Single IE	spare bits are not zero (TS 29.244 8.1.2), at /pfcp/Create QER/0/QER Control Indications
-session-modification-request_test.go	Single IE	spare bits are not zero (TS 29.244 8.1.2), at /pfcp/Update PDR/0/Outer Header Removal
-session-modification-request_test.go	Single IE	Redundant Transmission Parameters is no IE of this table (TS 29.244 7.6.9), at /pfcp/Update FAR/0/Redundant Transmission Parameters
-session-modification-request_test.go	Single IE	Packet Rate Status is no IE of this table (TS 29.244 7.6.9), at /pfcp/Update QER/0/Packet Rate Status
-session-modification-request_test.go	Single IE	spare bits are not zero (TS 29.244 8.1.2), at /pfcp/Update QER/0/QER Control Indications
-session-modification-request_test.go	Single IE	3 is a spare value (TS 29.244 8.2.153), at /pfcp/Access Availability Information/0
-session-modification-request_test.go	Single IE	3 is a spare value (TS 29.244 8.2.153), at /pfcp/Access Availability Information/0
-session-modification-request_test.go	Single IE	the message changes PDR 65535 more than once (TS 29.244 6.3.3.2), at /pfcp
-session-modification-request_test.go	Single IE	the message changes FAR 4294967295 more than once (TS 29.244 6.3.3.2), at /pfcp
-session-modification-request_test.go	Single IE	the message changes URR 4294967295 more than once (TS 29.244 6.3.3.2), at /pfcp
-session-modification-request_test.go	Single IE	the message changes QER 4294967295 more than once (TS 29.244 6.3.3.2), at /pfcp
-session-modification-request_test.go	Single IE	the message changes BAR 255 more than once (TS 29.244 6.3.3.2), at /pfcp
-session-modification-request_test.go	Single IE	the message changes MAR 4369 more than once (TS 29.244 6.3.3.2), at /pfcp
-session-modification-request_test.go	Single IE	the message changes SRR 255 more than once (TS 29.244 6.3.3.2), at /pfcp
-session-modification-request_test.go	Single IE	spare bits are not zero (TS 29.244 8.2.168), at /pfcp/Create SRR/0/QoS Monitoring per QoS flow Control Information/0/Reporting Frequency
-session-modification-request_test.go	Single IE	spare bits are not zero (TS 29.244 8.2.168), at /pfcp/Update SRR/0/QoS Monitoring per QoS flow Control Information/0/Reporting Frequency
-session-modification-request_test.go	Multiple IEs	UE IP address Pool Identity does not decode, and is taken as absent (TS 29.244 7.6.8), at /pfcp/Create PDR/0/UE IP address Pool Identity
-session-modification-request_test.go	Multiple IEs	spare bits are not zero (TS 29.244 8.1.2), at /pfcp/Create PDR/0/Outer Header Removal
-session-modification-request_test.go	Multiple IEs	UE IP address Pool Identity does not decode, and is taken as absent (TS 29.244 7.6.8), at /pfcp/Create PDR/1/UE IP address Pool Identity
-session-modification-request_test.go	Multiple IEs	spare bits are not zero (TS 29.244 8.1.2), at /pfcp/Create PDR/1/Outer Header Removal
-session-modification-request_test.go	Multiple IEs	Redundant Transmission Parameters is no IE of this table (TS 29.244 7.6.9), at /pfcp/Create FAR/0/Redundant Transmission Parameters
-session-modification-request_test.go	Multiple IEs	spare bits are not zero (TS 29.244 8.1.2), at /pfcp/Create QER/0/QER Control Indications
-session-modification-request_test.go	Multiple IEs	spare bits are not zero (TS 29.244 8.1.2), at /pfcp/Update PDR/0/Outer Header Removal
-session-modification-request_test.go	Multiple IEs	Redundant Transmission Parameters is no IE of this table (TS 29.244 7.6.9), at /pfcp/Update FAR/0/Redundant Transmission Parameters
-session-modification-request_test.go	Multiple IEs	Packet Rate Status is no IE of this table (TS 29.244 7.6.9), at /pfcp/Update QER/0/Packet Rate Status
-session-modification-request_test.go	Multiple IEs	spare bits are not zero (TS 29.244 8.1.2), at /pfcp/Update QER/0/QER Control Indications
-session-modification-request_test.go	Multiple IEs	3 is a spare value (TS 29.244 8.2.153), at /pfcp/Access Availability Information/0
-session-modification-request_test.go	Multiple IEs	3 is a spare value (TS 29.244 8.2.153), at /pfcp/Access Availability Information/0
-session-modification-request_test.go	Multiple IEs	the message changes PDR 65535 more than once (TS 29.244 6.3.3.2), at /pfcp
-session-modification-request_test.go	Multiple IEs	the message changes FAR 4294967295 more than once (TS 29.244 6.3.3.2), at /pfcp
-session-modification-request_test.go	Multiple IEs	the message changes URR 4294967295 more than once (TS 29.244 6.3.3.2), at /pfcp
-session-modification-request_test.go	Multiple IEs	the message changes QER 4294967295 more than once (TS 29.244 6.3.3.2), at /pfcp
-session-modification-request_test.go	Multiple IEs	the message changes BAR 255 more than once (TS 29.244 6.3.3.2), at /pfcp
-session-modification-request_test.go	Multiple IEs	the message changes MAR 4369 more than once (TS 29.244 6.3.3.2), at /pfcp
-session-modification-request_test.go	Multiple IEs	the message changes SRR 255 more than once (TS 29.244 6.3.3.2), at /pfcp
-session-modification-request_test.go	Multiple IEs	spare bits are not zero (TS 29.244 8.2.168), at /pfcp/Create SRR/0/QoS Monitoring per QoS flow Control Information/0/Reporting Frequency
-session-modification-request_test.go	Multiple IEs	spare bits are not zero (TS 29.244 8.2.168), at /pfcp/Update SRR/0/QoS Monitoring per QoS flow Control Information/0/Reporting Frequency
-session-modification-request_test.go	Multiple IEs	a ToS/Traffic Class mask other than 0xFC (TS 29.244 8.2.12), at /pfcp/Create FAR/0/Duplicating Parameters/0/Transport Level marking: the answer is "Mandatory IE incorrect"
-session-modification-request_test.go	Multiple IEs	a ToS/Traffic Class mask other than 0xFC (TS 29.244 8.2.12), at /pfcp/Create FAR/0/Forwarding Parameters/Transport Level Marking: the answer is "Mandatory IE incorrect"
-session-modification-request_test.go	Multiple IEs	a ToS/Traffic Class mask other than 0xFC (TS 29.244 8.2.12), at /pfcp/Update FAR/0/Update Duplicating Parameters/0/Transport Level Marking: the answer is "Mandatory IE incorrect"
-session-modification-request_test.go	Multiple IEs	a ToS/Traffic Class mask other than 0xFC (TS 29.244 8.2.12), at /pfcp/Update FAR/0/Update Forwarding parameters/Transport Level Marking: the answer is "Mandatory IE incorrect"
-session-modification-request_test.go	Single IE	a ToS/Traffic Class mask other than 0xFC (TS 29.244 8.2.12), at /pfcp/Create FAR/0/Duplicating Parameters/0/Transport Level marking: the answer is "Mandatory IE incorrect"
-session-modification-request_test.go	Single IE	a ToS/Traffic Class mask other than 0xFC (TS 29.244 8.2.12), at /pfcp/Create FAR/0/Forwarding Parameters/Transport Level Marking: the answer is "Mandatory IE incorrect"
-session-modification-request_test.go	Single IE	a ToS/Traffic Class mask other than 0xFC (TS 29.244 8.2.12), at /pfcp/Update FAR/0/Update Duplicating Parameters/0/Transport Level Marking: the answer is "Mandatory IE incorrect"
-session-modification-request_test.go	Single IE	a ToS/Traffic Class mask other than 0xFC (TS 29.244 8.2.12), at /pfcp/Update FAR/0/Update Forwarding parameters/Transport Level Marking: the answer is "Mandatory IE incorrect"
-session-modification-request_test.go	Multiple IEs	F-TEID is there where its condition has it absent (TS 29.244 7.5.2.2-2), at /pfcp/Create PDR/0/PDI/Local F-TEID
-session-modification-request_test.go	Multiple IEs	F-TEID is there where its condition has it absent (TS 29.244 7.5.2.2-2), at /pfcp/Create PDR/1/PDI/Local F-TEID
-session-modification-request_test.go	Multiple IEs	F-TEID is there where its condition has it absent (TS 29.244 7.5.2.2-2), at /pfcp/Update PDR/0/PDI/Local F-TEID
-session-modification-request_test.go	Multiple IEs	Network Instance is there where its condition has it absent (TS 29.244 7.5.2.2-2), at /pfcp/Create PDR/0/PDI/Network Instance
-session-modification-request_test.go	Multiple IEs	Network Instance is there where its condition has it absent (TS 29.244 7.5.2.2-2), at /pfcp/Create PDR/1/PDI/Network Instance
-session-modification-request_test.go	Multiple IEs	Network Instance is there where its condition has it absent (TS 29.244 7.5.2.2-2), at /pfcp/Update PDR/0/PDI/Network Instance
-session-modification-request_test.go	Multiple IEs	SDF Filter is there where its condition has it absent (TS 29.244 7.5.2.2-2), at /pfcp/Create PDR/0/PDI/SDF Filter
-session-modification-request_test.go	Multiple IEs	SDF Filter is there where its condition has it absent (TS 29.244 7.5.2.2-2), at /pfcp/Create PDR/1/PDI/SDF Filter
-session-modification-request_test.go	Multiple IEs	SDF Filter is there where its condition has it absent (TS 29.244 7.5.2.2-2), at /pfcp/Update PDR/0/PDI/SDF Filter
-session-modification-request_test.go	Multiple IEs	UE IP Address is there where its condition has it absent (TS 29.244 7.5.2.2-2), at /pfcp/Create PDR/0/PDI/UE IP address
-session-modification-request_test.go	Multiple IEs	UE IP Address is there where its condition has it absent (TS 29.244 7.5.2.2-2), at /pfcp/Create PDR/1/PDI/UE IP address
-session-modification-request_test.go	Multiple IEs	UE IP Address is there where its condition has it absent (TS 29.244 7.5.2.2-2), at /pfcp/Update PDR/0/PDI/UE IP address
-session-modification-request_test.go	Single IE	F-TEID is there where its condition has it absent (TS 29.244 7.5.2.2-2), at /pfcp/Create PDR/0/PDI/Local F-TEID
-session-modification-request_test.go	Single IE	F-TEID is there where its condition has it absent (TS 29.244 7.5.2.2-2), at /pfcp/Update PDR/0/PDI/Local F-TEID
-session-modification-request_test.go	Single IE	Network Instance is there where its condition has it absent (TS 29.244 7.5.2.2-2), at /pfcp/Create PDR/0/PDI/Network Instance
-session-modification-request_test.go	Single IE	Network Instance is there where its condition has it absent (TS 29.244 7.5.2.2-2), at /pfcp/Update PDR/0/PDI/Network Instance
-session-modification-request_test.go	Single IE	SDF Filter is there where its condition has it absent (TS 29.244 7.5.2.2-2), at /pfcp/Create PDR/0/PDI/SDF Filter
-session-modification-request_test.go	Single IE	SDF Filter is there where its condition has it absent (TS 29.244 7.5.2.2-2), at /pfcp/Update PDR/0/PDI/SDF Filter
-session-modification-request_test.go	Single IE	UE IP Address is there where its condition has it absent (TS 29.244 7.5.2.2-2), at /pfcp/Create PDR/0/PDI/UE IP address
-session-modification-request_test.go	Single IE	UE IP Address is there where its condition has it absent (TS 29.244 7.5.2.2-2), at /pfcp/Update PDR/0/PDI/UE IP address
-session-modification-response_test.go	Single IE	Created Bridge/Router Info is no IE of this table (TS 29.244 7.6.9), at /pfcp/Created Bridge/Router Info
-session-modification-response_test.go	Single IE	spare bits are not zero (TS 29.244 8.1.2), at /pfcp/Usage Report/0/Usage Report Trigger
-session-modification-response_test.go	Multiple IEs	Created Bridge/Router Info is no IE of this table (TS 29.244 7.6.9), at /pfcp/Created Bridge/Router Info
-session-modification-response_test.go	Multiple IEs	spare bits are not zero (TS 29.244 8.1.2), at /pfcp/Usage Report/0/Usage Report Trigger
-session-report-request_test.go	Single IE	spare bits are not zero (TS 29.244 8.1.2), at /pfcp/Downlink Data Report/Downlink Data Service Information/0
-session-report-request_test.go	Single IE	spare bits are not zero (TS 29.244 8.1.2), at /pfcp/Downlink Data Report/Downlink Data Service Information/0
-session-report-request_test.go	Single IE	spare bits are not zero (TS 29.244 8.1.2), at /pfcp/Usage Report/0/Usage Report Trigger
-session-report-request_test.go	Single IE	Access Availability Control Information is no IE of this table (TS 29.244 7.6.9), at /pfcp/Session Report/0/Access Availability Control Information
-session-report-request_test.go	Multiple IEs	spare bits are not zero (TS 29.244 8.1.2), at /pfcp/Downlink Data Report/Downlink Data Service Information/0
-session-report-request_test.go	Multiple IEs	spare bits are not zero (TS 29.244 8.1.2), at /pfcp/Downlink Data Report/Downlink Data Service Information/0
-session-report-request_test.go	Multiple IEs	spare bits are not zero (TS 29.244 8.1.2), at /pfcp/Usage Report/0/Usage Report Trigger
-session-report-request_test.go	Multiple IEs	Access Availability Control Information is no IE of this table (TS 29.244 7.6.9), at /pfcp/Session Report/0/Access Availability Control Information
-session-report-request_test.go	Multiple IEs	Access Availability Control Information is no IE of this table (TS 29.244 7.6.9), at /pfcp/Session Report/1/Access Availability Control Information
-generic_test.go	Normal	a Session Establishment Request of a SEID other than 0 (TS 29.244 7.2.2.4.2), at /header
-header_test.go	Session	a Session Establishment Request of a SEID other than 0 (TS 29.244 7.2.2.4.2), at /header
-session-establishment-request_test.go	Multiple IEs	a Session Establishment Request of a SEID other than 0 (TS 29.244 7.2.2.4.2), at /header
-session-establishment-request_test.go	Multiple IEs	spare bits are not zero (TS 29.244 8.2.168), at /pfcp/Create SRR/0/QoS Monitoring per QoS flow Control Information/0/Reporting Frequency
-session-establishment-request_test.go	Single IE	a Session Establishment Request of a SEID other than 0 (TS 29.244 7.2.2.4.2), at /header
-session-establishment-request_test.go	Single IE	spare bits are not zero (TS 29.244 8.2.168), at /pfcp/Create SRR/0/QoS Monitoring per QoS flow Control Information/0/Reporting Frequency
-session-establishment-request_test.go	Multiple IEs	F-TEID is there where its condition has it absent (TS 29.244 7.5.2.2-2), at /pfcp/Create PDR/0/PDI/Local F-TEID
-session-establishment-request_test.go	Multiple IEs	F-TEID is there where its condition has it absent (TS 29.244 7.5.2.2-2), at /pfcp/Create PDR/1/PDI/Local F-TEID
-session-establishment-request_test.go	Multiple IEs	Network Instance is there where its condition has it absent (TS 29.244 7.5.2.2-2), at /pfcp/Create PDR/0/PDI/Network Instance
-session-establishment-request_test.go	Multiple IEs	Network Instance is there where its condition has it absent (TS 29.244 7.5.2.2-2), at /pfcp/Create PDR/1/PDI/Network Instance
-session-establishment-request_test.go	Multiple IEs	SDF Filter is there where its condition has it absent (TS 29.244 7.5.2.2-2), at /pfcp/Create PDR/0/PDI/SDF Filter
-session-establishment-request_test.go	Multiple IEs	SDF Filter is there where its condition has it absent (TS 29.244 7.5.2.2-2), at /pfcp/Create PDR/1/PDI/SDF Filter
-session-establishment-request_test.go	Multiple IEs	UE IP Address is there where its condition has it absent (TS 29.244 7.5.2.2-2), at /pfcp/Create PDR/0/PDI/UE IP address
-session-establishment-request_test.go	Multiple IEs	UE IP Address is there where its condition has it absent (TS 29.244 7.5.2.2-2), at /pfcp/Create PDR/1/PDI/UE IP address
-session-establishment-request_test.go	Single IE	F-TEID is there where its condition has it absent (TS 29.244 7.5.2.2-2), at /pfcp/Create PDR/0/PDI/Local F-TEID
-session-establishment-request_test.go	Single IE	Network Instance is there where its condition has it absent (TS 29.244 7.5.2.2-2), at /pfcp/Create PDR/0/PDI/Network Instance
-session-establishment-request_test.go	Single IE	SDF Filter is there where its condition has it absent (TS 29.244 7.5.2.2-2), at /pfcp/Create PDR/0/PDI/SDF Filter
-session-establishment-request_test.go	Single IE	UE IP Address is there where its condition has it absent (TS 29.244 7.5.2.2-2), at /pfcp/Create PDR/0/PDI/UE IP address
-session-report-request_test.go	Single IE	a Session Report Request of a SEID other than 0 with the Old CP F-SEID (TS 29.244 7.2.2.4.2), at /header
-session-report-request_test.go	Multiple IEs	a Session Report Request of a SEID other than 0 with the Old CP F-SEID (TS 29.244 7.2.2.4.2), at /header
-session-report-request_test.go	Multiple IEs	PLMF is set with a packet delay (TS 29.244 8.2.171), at /pfcp/Session Report/0/QoS Monitoring Report/0/QoS Monitoring Measurement: the answer is "Mandatory IE incorrect"
-session-report-request_test.go	Multiple IEs	PLMF is set with a packet delay (TS 29.244 8.2.171), at /pfcp/Session Report/1/QoS Monitoring Report/0/QoS Monitoring Measurement: the answer is "Mandatory IE incorrect"
-session-report-request_test.go	Single IE	PLMF is set with a packet delay (TS 29.244 8.2.171), at /pfcp/Session Report/0/QoS Monitoring Report/0/QoS Monitoring Measurement: the answer is "Mandatory IE incorrect"
+# of tests/codec.rs expects, one line each: the file of the vector, its name, and the path,
+# the clause, the kind and the Cause of the deviation. tests/README.md, "What the crate
+# finds in others", says why each is one.
+association-setup-request_test.go	Multiple IEs	/pfcp/116	8.1.2	UnknownType { ie_type: 116 }	-
+association-setup-request_test.go	Multiple IEs	/pfcp/116	8.1.2	UnknownType { ie_type: 116 }	-
+association-setup-request_test.go	Multiple IEs	/pfcp/GTP-U Path QoS Control Information/0/DSCP/0	8.2.12	Rule("a ToS/Traffic Class mask other than 0xFC")	MandatoryIeIncorrect
+association-setup-request_test.go	Multiple IEs	/pfcp/GTP-U Path QoS Control Information/0/Measurement Method	7.6.9	Unexpected { ie_type: 62 }	-
+association-setup-request_test.go	Multiple IEs	/pfcp/GTP-U Path QoS Control Information/0/Measurement Period	7.4.4.1.3-1	ConditionalMissing { ie_type: 64 }	ConditionalIeMissing
+association-setup-request_test.go	Multiple IEs	/pfcp/GTP-U Path QoS Control Information/1/DSCP/0	8.2.12	Rule("a ToS/Traffic Class mask other than 0xFC")	MandatoryIeIncorrect
+association-setup-request_test.go	Multiple IEs	/pfcp/GTP-U Path QoS Control Information/1/Measurement Method	7.6.9	Unexpected { ie_type: 62 }	-
+association-setup-request_test.go	Multiple IEs	/pfcp/GTP-U Path QoS Control Information/1/Measurement Period	7.4.4.1.3-1	ConditionalMissing { ie_type: 64 }	ConditionalIeMissing
+association-setup-request_test.go	Multiple IEs	/pfcp/SMF Set ID	8.1.2	SpareBits	-
+association-setup-request_test.go	Multiple IEs	/pfcp/SMF Set ID	8.2.131	Rule("labels that are no FQDN of RFC 1035: each of 1 to 63 octets, after its length, and 255 octets at most with the trailing zero byte")	MandatoryIeIncorrect
+association-setup-request_test.go	Multiple IEs	/pfcp/UE IP address Pool Information/0/UE IP address Pool Identity	7.4.4.1-3	MandatoryIncorrect { ie_type: 177 }	-
+association-setup-request_test.go	Multiple IEs	/pfcp/UE IP address Pool Information/1/UE IP address Pool Identity	7.4.4.1-3	MandatoryIncorrect { ie_type: 177 }	-
+association-setup-request_test.go	Single IEs	/pfcp/GTP-U Path QoS Control Information/0/DSCP/0	8.2.12	Rule("a ToS/Traffic Class mask other than 0xFC")	MandatoryIeIncorrect
+association-setup-request_test.go	Single IEs	/pfcp/GTP-U Path QoS Control Information/0/Measurement Method	7.6.9	Unexpected { ie_type: 62 }	-
+association-setup-request_test.go	Single IEs	/pfcp/GTP-U Path QoS Control Information/0/Measurement Period	7.4.4.1.3-1	ConditionalMissing { ie_type: 64 }	ConditionalIeMissing
+association-setup-request_test.go	Single IEs	/pfcp/SMF Set ID	8.1.2	SpareBits	-
+association-setup-request_test.go	Single IEs	/pfcp/SMF Set ID	8.2.131	Rule("labels that are no FQDN of RFC 1035: each of 1 to 63 octets, after its length, and 255 octets at most with the trailing zero byte")	MandatoryIeIncorrect
+association-setup-request_test.go	Single IEs	/pfcp/UE IP address Pool Information/0/UE IP address Pool Identity	7.4.4.1-3	MandatoryIncorrect { ie_type: 177 }	-
+association-setup-response_test.go	Multiple IEs	/pfcp/GTP-U Path QoS Control Information/0/DSCP/0	8.2.12	Rule("a ToS/Traffic Class mask other than 0xFC")	-
+association-setup-response_test.go	Multiple IEs	/pfcp/GTP-U Path QoS Control Information/0/Measurement Method	7.6.9	Unexpected { ie_type: 62 }	-
+association-setup-response_test.go	Multiple IEs	/pfcp/GTP-U Path QoS Control Information/0/Measurement Period	7.4.4.1.3-1	ConditionalMissing { ie_type: 64 }	-
+association-setup-response_test.go	Multiple IEs	/pfcp/GTP-U Path QoS Control Information/1/DSCP/0	8.2.12	Rule("a ToS/Traffic Class mask other than 0xFC")	-
+association-setup-response_test.go	Multiple IEs	/pfcp/GTP-U Path QoS Control Information/1/Measurement Method	7.6.9	Unexpected { ie_type: 62 }	-
+association-setup-response_test.go	Multiple IEs	/pfcp/GTP-U Path QoS Control Information/1/Measurement Period	7.4.4.1.3-1	ConditionalMissing { ie_type: 64 }	-
+association-setup-response_test.go	Multiple IEs	/pfcp/SMF Set ID	7.4.4.2-1	ConditionalMissing { ie_type: 180 }	-
+association-setup-response_test.go	Multiple IEs	/pfcp/UE IP address Pool Information/0/UE IP address Pool Identity	7.4.4.1-3	MandatoryIncorrect { ie_type: 177 }	-
+association-setup-response_test.go	Multiple IEs	/pfcp/UE IP address Pool Information/1/UE IP address Pool Identity	7.4.4.1-3	MandatoryIncorrect { ie_type: 177 }	-
+association-setup-response_test.go	Single IE	/pfcp/GTP-U Path QoS Control Information/0/DSCP/0	8.2.12	Rule("a ToS/Traffic Class mask other than 0xFC")	-
+association-setup-response_test.go	Single IE	/pfcp/GTP-U Path QoS Control Information/0/Measurement Method	7.6.9	Unexpected { ie_type: 62 }	-
+association-setup-response_test.go	Single IE	/pfcp/GTP-U Path QoS Control Information/0/Measurement Period	7.4.4.1.3-1	ConditionalMissing { ie_type: 64 }	-
+association-setup-response_test.go	Single IE	/pfcp/SMF Set ID	7.4.4.2-1	ConditionalMissing { ie_type: 180 }	-
+association-setup-response_test.go	Single IE	/pfcp/UE IP address Pool Information/0/UE IP address Pool Identity	7.4.4.1-3	MandatoryIncorrect { ie_type: 177 }	-
+association-update-request_test.go	Multiple IEs	/pfcp/GTP-U Path QoS Control Information/0/DSCP/0	8.2.12	Rule("a ToS/Traffic Class mask other than 0xFC")	MandatoryIeIncorrect
+association-update-request_test.go	Multiple IEs	/pfcp/GTP-U Path QoS Control Information/0/Measurement Method	7.6.9	Unexpected { ie_type: 62 }	-
+association-update-request_test.go	Multiple IEs	/pfcp/GTP-U Path QoS Control Information/0/Measurement Period	7.4.4.1.3-1	ConditionalMissing { ie_type: 64 }	ConditionalIeMissing
+association-update-request_test.go	Multiple IEs	/pfcp/GTP-U Path QoS Control Information/1/DSCP/0	8.2.12	Rule("a ToS/Traffic Class mask other than 0xFC")	MandatoryIeIncorrect
+association-update-request_test.go	Multiple IEs	/pfcp/GTP-U Path QoS Control Information/1/Measurement Method	7.6.9	Unexpected { ie_type: 62 }	-
+association-update-request_test.go	Multiple IEs	/pfcp/GTP-U Path QoS Control Information/1/Measurement Period	7.4.4.1.3-1	ConditionalMissing { ie_type: 64 }	ConditionalIeMissing
+association-update-request_test.go	Multiple IEs	/pfcp/UE IP Address Usage Information/0/UE IP Address Pool Id	7.6.8	Incorrect { ie_type: 177 }	-
+association-update-request_test.go	Multiple IEs	/pfcp/UE IP address Pool Information/0/UE IP address Pool Identity	7.4.4.1-3	MandatoryIncorrect { ie_type: 177 }	-
+association-update-request_test.go	Multiple IEs	/pfcp/UE IP address Pool Information/1/UE IP address Pool Identity	7.4.4.1-3	MandatoryIncorrect { ie_type: 177 }	-
+association-update-request_test.go	Single IE	/pfcp/GTP-U Path QoS Control Information/0/DSCP/0	8.2.12	Rule("a ToS/Traffic Class mask other than 0xFC")	MandatoryIeIncorrect
+association-update-request_test.go	Single IE	/pfcp/GTP-U Path QoS Control Information/0/Measurement Method	7.6.9	Unexpected { ie_type: 62 }	-
+association-update-request_test.go	Single IE	/pfcp/GTP-U Path QoS Control Information/0/Measurement Period	7.4.4.1.3-1	ConditionalMissing { ie_type: 64 }	ConditionalIeMissing
+association-update-request_test.go	Single IE	/pfcp/UE IP Address Usage Information/0/UE IP Address Pool Id	7.6.8	Incorrect { ie_type: 177 }	-
+association-update-request_test.go	Single IE	/pfcp/UE IP address Pool Information/0/UE IP address Pool Identity	7.4.4.1-3	MandatoryIncorrect { ie_type: 177 }	-
+generic_test.go	No-SEID	/pfcp/Application ID	7.6.9	Unexpected { ie_type: 24 }	-
+generic_test.go	No-SEID	/pfcp/Recovery Time Stamp	7.4.2.1-1	MandatoryMissing { ie_type: 96 }	-
+generic_test.go	Normal	/header	7.2.2.4.2	Rule("a Session Establishment Request of a SEID other than 0")	-
+generic_test.go	Normal	/pfcp/Application ID	7.6.9	Unexpected { ie_type: 24 }	-
+generic_test.go	Normal	/pfcp/CP F-SEID	7.5.2.1-1	MandatoryMissing { ie_type: 57 }	MandatoryIeMissing
+generic_test.go	Normal	/pfcp/Create FAR	7.5.2.1-1	MandatoryMissing { ie_type: 3 }	MandatoryIeMissing
+generic_test.go	Normal	/pfcp/Create PDR	7.5.2.1-1	MandatoryMissing { ie_type: 1 }	MandatoryIeMissing
+generic_test.go	Normal	/pfcp/Node ID	7.5.2.1-1	MandatoryMissing { ie_type: 60 }	MandatoryIeMissing
+header_test.go	Session	/header	7.2.2.4.2	Rule("a Session Establishment Request of a SEID other than 0")	-
+header_test.go	Session	/pfcp/Application ID	7.6.9	Unexpected { ie_type: 24 }	-
+header_test.go	Session	/pfcp/CP F-SEID	7.5.2.1-1	MandatoryMissing { ie_type: 57 }	MandatoryIeMissing
+header_test.go	Session	/pfcp/Create FAR	7.5.2.1-1	MandatoryMissing { ie_type: 3 }	MandatoryIeMissing
+header_test.go	Session	/pfcp/Create PDR	7.5.2.1-1	MandatoryMissing { ie_type: 1 }	MandatoryIeMissing
+header_test.go	Session	/pfcp/Node ID	7.5.2.1-1	MandatoryMissing { ie_type: 60 }	MandatoryIeMissing
+node-report-request_test.go	Multiple IEs	/pfcp/Clock Drift Report/0/Cumulative rateRatio Threshold	7.6.9	Unexpected { ie_type: 208 }	-
+node-report-request_test.go	Multiple IEs	/pfcp/Clock Drift Report/0/Time Offset Threshold	7.6.9	Unexpected { ie_type: 207 }	-
+node-report-request_test.go	Multiple IEs	/pfcp/Clock Drift Report/1/Cumulative rateRatio Threshold	7.6.9	Unexpected { ie_type: 208 }	-
+node-report-request_test.go	Multiple IEs	/pfcp/Clock Drift Report/1/Time Offset Threshold	7.6.9	Unexpected { ie_type: 207 }	-
+node-report-request_test.go	Multiple IEs	/pfcp/GTP-U Path QoS Report/0/QoS Information/0/DSCP	8.2.12	Rule("a ToS/Traffic Class mask other than 0xFC")	MandatoryIeIncorrect
+node-report-request_test.go	Multiple IEs	/pfcp/GTP-U Path QoS Report/1/QoS Information/0/DSCP	8.2.12	Rule("a ToS/Traffic Class mask other than 0xFC")	MandatoryIeIncorrect
+node-report-request_test.go	Single IE	/pfcp/Clock Drift Report/0/Cumulative rateRatio Threshold	7.6.9	Unexpected { ie_type: 208 }	-
+node-report-request_test.go	Single IE	/pfcp/Clock Drift Report/0/Time Offset Threshold	7.6.9	Unexpected { ie_type: 207 }	-
+node-report-request_test.go	Single IE	/pfcp/GTP-U Path QoS Report/0/QoS Information/0/DSCP	8.2.12	Rule("a ToS/Traffic Class mask other than 0xFC")	MandatoryIeIncorrect
+session-deletion-response_test.go	Multiple IEs	/pfcp/Usage Report/0/Usage Report Trigger	8.1.2	SpareBits	-
+session-deletion-response_test.go	Multiple IEs	/pfcp/Usage Report/1/Usage Report Trigger	8.1.2	SpareBits	-
+session-deletion-response_test.go	Single IE	/pfcp/Usage Report/0/Usage Report Trigger	8.1.2	SpareBits	-
+session-establishment-request_test.go	Multiple IEs	/header	7.2.2.4.2	Rule("a Session Establishment Request of a SEID other than 0")	-
+session-establishment-request_test.go	Multiple IEs	/pfcp/Create FAR/0/Duplicating Parameters/0/Transport Level marking	8.2.12	Rule("a ToS/Traffic Class mask other than 0xFC")	MandatoryIeIncorrect
+session-establishment-request_test.go	Multiple IEs	/pfcp/Create FAR/0/Forwarding Parameters/Transport Level Marking	8.2.12	Rule("a ToS/Traffic Class mask other than 0xFC")	MandatoryIeIncorrect
+session-establishment-request_test.go	Multiple IEs	/pfcp/Create FAR/0/Redundant Transmission Parameters	7.6.9	Unexpected { ie_type: 255 }	-
+session-establishment-request_test.go	Multiple IEs	/pfcp/Create PDR/0/Outer Header Removal	8.1.2	SpareBits	-
+session-establishment-request_test.go	Multiple IEs	/pfcp/Create PDR/0/PDI/Local F-TEID	7.5.2.2-2	Excluded { ie_type: 21 }	-
+session-establishment-request_test.go	Multiple IEs	/pfcp/Create PDR/0/PDI/Network Instance	7.5.2.2-2	Excluded { ie_type: 22 }	-
+session-establishment-request_test.go	Multiple IEs	/pfcp/Create PDR/0/PDI/SDF Filter	7.5.2.2-2	Excluded { ie_type: 23 }	-
+session-establishment-request_test.go	Multiple IEs	/pfcp/Create PDR/0/PDI/UE IP address	7.5.2.2-2	Excluded { ie_type: 93 }	-
+session-establishment-request_test.go	Multiple IEs	/pfcp/Create PDR/0/UE IP address Pool Identity	7.6.8	Incorrect { ie_type: 177 }	-
+session-establishment-request_test.go	Multiple IEs	/pfcp/Create PDR/1/Outer Header Removal	8.1.2	SpareBits	-
+session-establishment-request_test.go	Multiple IEs	/pfcp/Create PDR/1/PDI/Local F-TEID	7.5.2.2-2	Excluded { ie_type: 21 }	-
+session-establishment-request_test.go	Multiple IEs	/pfcp/Create PDR/1/PDI/Network Instance	7.5.2.2-2	Excluded { ie_type: 22 }	-
+session-establishment-request_test.go	Multiple IEs	/pfcp/Create PDR/1/PDI/SDF Filter	7.5.2.2-2	Excluded { ie_type: 23 }	-
+session-establishment-request_test.go	Multiple IEs	/pfcp/Create PDR/1/PDI/UE IP address	7.5.2.2-2	Excluded { ie_type: 93 }	-
+session-establishment-request_test.go	Multiple IEs	/pfcp/Create PDR/1/UE IP address Pool Identity	7.6.8	Incorrect { ie_type: 177 }	-
+session-establishment-request_test.go	Multiple IEs	/pfcp/Create QER/0/QER Control Indications	8.1.2	SpareBits	-
+session-establishment-request_test.go	Multiple IEs	/pfcp/Create SRR/0/QoS Monitoring per QoS flow Control Information/0/Reporting Frequency	8.2.168	SpareBits	-
+session-establishment-request_test.go	Single IE	/header	7.2.2.4.2	Rule("a Session Establishment Request of a SEID other than 0")	-
+session-establishment-request_test.go	Single IE	/pfcp/Create FAR/0/Duplicating Parameters/0/Transport Level marking	8.2.12	Rule("a ToS/Traffic Class mask other than 0xFC")	MandatoryIeIncorrect
+session-establishment-request_test.go	Single IE	/pfcp/Create FAR/0/Forwarding Parameters/Transport Level Marking	8.2.12	Rule("a ToS/Traffic Class mask other than 0xFC")	MandatoryIeIncorrect
+session-establishment-request_test.go	Single IE	/pfcp/Create FAR/0/Redundant Transmission Parameters	7.6.9	Unexpected { ie_type: 255 }	-
+session-establishment-request_test.go	Single IE	/pfcp/Create PDR/0/Outer Header Removal	8.1.2	SpareBits	-
+session-establishment-request_test.go	Single IE	/pfcp/Create PDR/0/PDI/Local F-TEID	7.5.2.2-2	Excluded { ie_type: 21 }	-
+session-establishment-request_test.go	Single IE	/pfcp/Create PDR/0/PDI/Network Instance	7.5.2.2-2	Excluded { ie_type: 22 }	-
+session-establishment-request_test.go	Single IE	/pfcp/Create PDR/0/PDI/SDF Filter	7.5.2.2-2	Excluded { ie_type: 23 }	-
+session-establishment-request_test.go	Single IE	/pfcp/Create PDR/0/PDI/UE IP address	7.5.2.2-2	Excluded { ie_type: 93 }	-
+session-establishment-request_test.go	Single IE	/pfcp/Create PDR/0/UE IP address Pool Identity	7.6.8	Incorrect { ie_type: 177 }	-
+session-establishment-request_test.go	Single IE	/pfcp/Create QER/0/QER Control Indications	8.1.2	SpareBits	-
+session-establishment-request_test.go	Single IE	/pfcp/Create SRR/0/QoS Monitoring per QoS flow Control Information/0/Reporting Frequency	8.2.168	SpareBits	-
+session-establishment-response_test.go	Multiple IEs	/pfcp/Created Bridge/Router Info/NW-TT Port Number	7.6.9	Unexpected { ie_type: 197 }	-
+session-establishment-response_test.go	Multiple IEs	/pfcp/Provide ATSSS Control Information	7.6.9	Unexpected { ie_type: 220 }	-
+session-establishment-response_test.go	Single IE	/pfcp/Created Bridge/Router Info/5GS User Plane Node ID	7.6.8	ConditionalIncorrect { ie_type: 198 }	-
+session-establishment-response_test.go	Single IE	/pfcp/Created Bridge/Router Info/NW-TT Port Number	7.6.9	Unexpected { ie_type: 197 }	-
+session-establishment-response_test.go	Single IE	/pfcp/Provide ATSSS Control Information	7.6.9	Unexpected { ie_type: 220 }	-
+session-modification-request_test.go	Multiple IEs	/pfcp	6.3.3.2	RuleChangedTwice { rule: "BAR", id: 255 }	-
+session-modification-request_test.go	Multiple IEs	/pfcp	6.3.3.2	RuleChangedTwice { rule: "FAR", id: 4294967295 }	-
+session-modification-request_test.go	Multiple IEs	/pfcp	6.3.3.2	RuleChangedTwice { rule: "MAR", id: 4369 }	-
+session-modification-request_test.go	Multiple IEs	/pfcp	6.3.3.2	RuleChangedTwice { rule: "PDR", id: 65535 }	-
+session-modification-request_test.go	Multiple IEs	/pfcp	6.3.3.2	RuleChangedTwice { rule: "QER", id: 4294967295 }	-
+session-modification-request_test.go	Multiple IEs	/pfcp	6.3.3.2	RuleChangedTwice { rule: "SRR", id: 255 }	-
+session-modification-request_test.go	Multiple IEs	/pfcp	6.3.3.2	RuleChangedTwice { rule: "URR", id: 4294967295 }	-
+session-modification-request_test.go	Multiple IEs	/pfcp/Access Availability Information/0	8.2.153	SpareValue { value: 3 }	-
+session-modification-request_test.go	Multiple IEs	/pfcp/Access Availability Information/0	8.2.153	SpareValue { value: 3 }	-
+session-modification-request_test.go	Multiple IEs	/pfcp/Create FAR/0/Duplicating Parameters/0/Transport Level marking	8.2.12	Rule("a ToS/Traffic Class mask other than 0xFC")	MandatoryIeIncorrect
+session-modification-request_test.go	Multiple IEs	/pfcp/Create FAR/0/Forwarding Parameters/Transport Level Marking	8.2.12	Rule("a ToS/Traffic Class mask other than 0xFC")	MandatoryIeIncorrect
+session-modification-request_test.go	Multiple IEs	/pfcp/Create FAR/0/Redundant Transmission Parameters	7.6.9	Unexpected { ie_type: 255 }	-
+session-modification-request_test.go	Multiple IEs	/pfcp/Create PDR/0/Outer Header Removal	8.1.2	SpareBits	-
+session-modification-request_test.go	Multiple IEs	/pfcp/Create PDR/0/PDI/Local F-TEID	7.5.2.2-2	Excluded { ie_type: 21 }	-
+session-modification-request_test.go	Multiple IEs	/pfcp/Create PDR/0/PDI/Network Instance	7.5.2.2-2	Excluded { ie_type: 22 }	-
+session-modification-request_test.go	Multiple IEs	/pfcp/Create PDR/0/PDI/SDF Filter	7.5.2.2-2	Excluded { ie_type: 23 }	-
+session-modification-request_test.go	Multiple IEs	/pfcp/Create PDR/0/PDI/UE IP address	7.5.2.2-2	Excluded { ie_type: 93 }	-
+session-modification-request_test.go	Multiple IEs	/pfcp/Create PDR/0/UE IP address Pool Identity	7.6.8	Incorrect { ie_type: 177 }	-
+session-modification-request_test.go	Multiple IEs	/pfcp/Create PDR/1/Outer Header Removal	8.1.2	SpareBits	-
+session-modification-request_test.go	Multiple IEs	/pfcp/Create PDR/1/PDI/Local F-TEID	7.5.2.2-2	Excluded { ie_type: 21 }	-
+session-modification-request_test.go	Multiple IEs	/pfcp/Create PDR/1/PDI/Network Instance	7.5.2.2-2	Excluded { ie_type: 22 }	-
+session-modification-request_test.go	Multiple IEs	/pfcp/Create PDR/1/PDI/SDF Filter	7.5.2.2-2	Excluded { ie_type: 23 }	-
+session-modification-request_test.go	Multiple IEs	/pfcp/Create PDR/1/PDI/UE IP address	7.5.2.2-2	Excluded { ie_type: 93 }	-
+session-modification-request_test.go	Multiple IEs	/pfcp/Create PDR/1/UE IP address Pool Identity	7.6.8	Incorrect { ie_type: 177 }	-
+session-modification-request_test.go	Multiple IEs	/pfcp/Create QER/0/QER Control Indications	8.1.2	SpareBits	-
+session-modification-request_test.go	Multiple IEs	/pfcp/Create SRR/0/QoS Monitoring per QoS flow Control Information/0/Reporting Frequency	8.2.168	SpareBits	-
+session-modification-request_test.go	Multiple IEs	/pfcp/Update FAR/0/Redundant Transmission Parameters	7.6.9	Unexpected { ie_type: 255 }	-
+session-modification-request_test.go	Multiple IEs	/pfcp/Update FAR/0/Update Duplicating Parameters/0/Transport Level Marking	8.2.12	Rule("a ToS/Traffic Class mask other than 0xFC")	MandatoryIeIncorrect
+session-modification-request_test.go	Multiple IEs	/pfcp/Update FAR/0/Update Forwarding parameters/Transport Level Marking	8.2.12	Rule("a ToS/Traffic Class mask other than 0xFC")	MandatoryIeIncorrect
+session-modification-request_test.go	Multiple IEs	/pfcp/Update PDR/0/Outer Header Removal	8.1.2	SpareBits	-
+session-modification-request_test.go	Multiple IEs	/pfcp/Update PDR/0/PDI/Local F-TEID	7.5.2.2-2	Excluded { ie_type: 21 }	-
+session-modification-request_test.go	Multiple IEs	/pfcp/Update PDR/0/PDI/Network Instance	7.5.2.2-2	Excluded { ie_type: 22 }	-
+session-modification-request_test.go	Multiple IEs	/pfcp/Update PDR/0/PDI/SDF Filter	7.5.2.2-2	Excluded { ie_type: 23 }	-
+session-modification-request_test.go	Multiple IEs	/pfcp/Update PDR/0/PDI/UE IP address	7.5.2.2-2	Excluded { ie_type: 93 }	-
+session-modification-request_test.go	Multiple IEs	/pfcp/Update QER/0/Packet Rate Status	7.6.9	Unexpected { ie_type: 193 }	-
+session-modification-request_test.go	Multiple IEs	/pfcp/Update QER/0/QER Control Indications	8.1.2	SpareBits	-
+session-modification-request_test.go	Multiple IEs	/pfcp/Update SRR/0/QoS Monitoring per QoS flow Control Information/0/Reporting Frequency	8.2.168	SpareBits	-
+session-modification-request_test.go	Single IE	/pfcp	6.3.3.2	RuleChangedTwice { rule: "BAR", id: 255 }	-
+session-modification-request_test.go	Single IE	/pfcp	6.3.3.2	RuleChangedTwice { rule: "FAR", id: 4294967295 }	-
+session-modification-request_test.go	Single IE	/pfcp	6.3.3.2	RuleChangedTwice { rule: "MAR", id: 4369 }	-
+session-modification-request_test.go	Single IE	/pfcp	6.3.3.2	RuleChangedTwice { rule: "PDR", id: 65535 }	-
+session-modification-request_test.go	Single IE	/pfcp	6.3.3.2	RuleChangedTwice { rule: "QER", id: 4294967295 }	-
+session-modification-request_test.go	Single IE	/pfcp	6.3.3.2	RuleChangedTwice { rule: "SRR", id: 255 }	-
+session-modification-request_test.go	Single IE	/pfcp	6.3.3.2	RuleChangedTwice { rule: "URR", id: 4294967295 }	-
+session-modification-request_test.go	Single IE	/pfcp/Access Availability Information/0	8.2.153	SpareValue { value: 3 }	-
+session-modification-request_test.go	Single IE	/pfcp/Access Availability Information/0	8.2.153	SpareValue { value: 3 }	-
+session-modification-request_test.go	Single IE	/pfcp/Create FAR/0/Duplicating Parameters/0/Transport Level marking	8.2.12	Rule("a ToS/Traffic Class mask other than 0xFC")	MandatoryIeIncorrect
+session-modification-request_test.go	Single IE	/pfcp/Create FAR/0/Forwarding Parameters/Transport Level Marking	8.2.12	Rule("a ToS/Traffic Class mask other than 0xFC")	MandatoryIeIncorrect
+session-modification-request_test.go	Single IE	/pfcp/Create FAR/0/Redundant Transmission Parameters	7.6.9	Unexpected { ie_type: 255 }	-
+session-modification-request_test.go	Single IE	/pfcp/Create PDR/0/Outer Header Removal	8.1.2	SpareBits	-
+session-modification-request_test.go	Single IE	/pfcp/Create PDR/0/PDI/Local F-TEID	7.5.2.2-2	Excluded { ie_type: 21 }	-
+session-modification-request_test.go	Single IE	/pfcp/Create PDR/0/PDI/Network Instance	7.5.2.2-2	Excluded { ie_type: 22 }	-
+session-modification-request_test.go	Single IE	/pfcp/Create PDR/0/PDI/SDF Filter	7.5.2.2-2	Excluded { ie_type: 23 }	-
+session-modification-request_test.go	Single IE	/pfcp/Create PDR/0/PDI/UE IP address	7.5.2.2-2	Excluded { ie_type: 93 }	-
+session-modification-request_test.go	Single IE	/pfcp/Create PDR/0/UE IP address Pool Identity	7.6.8	Incorrect { ie_type: 177 }	-
+session-modification-request_test.go	Single IE	/pfcp/Create QER/0/QER Control Indications	8.1.2	SpareBits	-
+session-modification-request_test.go	Single IE	/pfcp/Create SRR/0/QoS Monitoring per QoS flow Control Information/0/Reporting Frequency	8.2.168	SpareBits	-
+session-modification-request_test.go	Single IE	/pfcp/Update FAR/0/Redundant Transmission Parameters	7.6.9	Unexpected { ie_type: 255 }	-
+session-modification-request_test.go	Single IE	/pfcp/Update FAR/0/Update Duplicating Parameters/0/Transport Level Marking	8.2.12	Rule("a ToS/Traffic Class mask other than 0xFC")	MandatoryIeIncorrect
+session-modification-request_test.go	Single IE	/pfcp/Update FAR/0/Update Forwarding parameters/Transport Level Marking	8.2.12	Rule("a ToS/Traffic Class mask other than 0xFC")	MandatoryIeIncorrect
+session-modification-request_test.go	Single IE	/pfcp/Update PDR/0/Outer Header Removal	8.1.2	SpareBits	-
+session-modification-request_test.go	Single IE	/pfcp/Update PDR/0/PDI/Local F-TEID	7.5.2.2-2	Excluded { ie_type: 21 }	-
+session-modification-request_test.go	Single IE	/pfcp/Update PDR/0/PDI/Network Instance	7.5.2.2-2	Excluded { ie_type: 22 }	-
+session-modification-request_test.go	Single IE	/pfcp/Update PDR/0/PDI/SDF Filter	7.5.2.2-2	Excluded { ie_type: 23 }	-
+session-modification-request_test.go	Single IE	/pfcp/Update PDR/0/PDI/UE IP address	7.5.2.2-2	Excluded { ie_type: 93 }	-
+session-modification-request_test.go	Single IE	/pfcp/Update QER/0/Packet Rate Status	7.6.9	Unexpected { ie_type: 193 }	-
+session-modification-request_test.go	Single IE	/pfcp/Update QER/0/QER Control Indications	8.1.2	SpareBits	-
+session-modification-request_test.go	Single IE	/pfcp/Update SRR/0/QoS Monitoring per QoS flow Control Information/0/Reporting Frequency	8.2.168	SpareBits	-
+session-modification-response_test.go	Multiple IEs	/pfcp/Created Bridge/Router Info	7.6.9	Unexpected { ie_type: 195 }	-
+session-modification-response_test.go	Multiple IEs	/pfcp/Usage Report/0/Usage Report Trigger	8.1.2	SpareBits	-
+session-modification-response_test.go	Single IE	/pfcp/Created Bridge/Router Info	7.6.9	Unexpected { ie_type: 195 }	-
+session-modification-response_test.go	Single IE	/pfcp/Usage Report/0/Usage Report Trigger	8.1.2	SpareBits	-
+session-report-request_test.go	Multiple IEs	/header	7.2.2.4.2	Rule("a Session Report Request of a SEID other than 0 with the Old CP F-SEID")	-
+session-report-request_test.go	Multiple IEs	/pfcp/Downlink Data Report/Downlink Data Service Information/0	8.1.2	SpareBits	-
+session-report-request_test.go	Multiple IEs	/pfcp/Downlink Data Report/Downlink Data Service Information/0	8.1.2	SpareBits	-
+session-report-request_test.go	Multiple IEs	/pfcp/Session Report/0/Access Availability Control Information	7.6.9	Unexpected { ie_type: 216 }	-
+session-report-request_test.go	Multiple IEs	/pfcp/Session Report/0/QoS Monitoring Report/0/QoS Monitoring Measurement	8.2.171	Rule("PLMF is set with a packet delay")	MandatoryIeIncorrect
+session-report-request_test.go	Multiple IEs	/pfcp/Session Report/1/Access Availability Control Information	7.6.9	Unexpected { ie_type: 216 }	-
+session-report-request_test.go	Multiple IEs	/pfcp/Session Report/1/QoS Monitoring Report/0/QoS Monitoring Measurement	8.2.171	Rule("PLMF is set with a packet delay")	MandatoryIeIncorrect
+session-report-request_test.go	Multiple IEs	/pfcp/Usage Report/0/Usage Report Trigger	8.1.2	SpareBits	-
+session-report-request_test.go	Single IE	/header	7.2.2.4.2	Rule("a Session Report Request of a SEID other than 0 with the Old CP F-SEID")	-
+session-report-request_test.go	Single IE	/pfcp/Downlink Data Report/Downlink Data Service Information/0	8.1.2	SpareBits	-
+session-report-request_test.go	Single IE	/pfcp/Downlink Data Report/Downlink Data Service Information/0	8.1.2	SpareBits	-
+session-report-request_test.go	Single IE	/pfcp/Session Report/0/Access Availability Control Information	7.6.9	Unexpected { ie_type: 216 }	-
+session-report-request_test.go	Single IE	/pfcp/Session Report/0/QoS Monitoring Report/0/QoS Monitoring Measurement	8.2.171	Rule("PLMF is set with a packet delay")	MandatoryIeIncorrect
+session-report-request_test.go	Single IE	/pfcp/Usage Report/0/Usage Report Trigger	8.1.2	SpareBits	-
