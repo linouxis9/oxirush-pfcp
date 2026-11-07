@@ -50,7 +50,7 @@ use std::io;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 use std::vec;
 
 use tokio::net::UdpSocket;
@@ -244,8 +244,8 @@ impl Incoming {
 
 type Reply = oneshot::Sender<Result<Message, EndpointError>>;
 
-/// What the node does for a [`Handle`], on its state.
-type OnNode = Box<dyn FnOnce(&mut Node) + Send>;
+/// What the node does for a [`Handle`], on its state, at its time.
+type OnNode = Box<dyn FnOnce(&mut Node, Duration) + Send>;
 
 enum Command {
     Request {
@@ -506,13 +506,17 @@ impl Handle {
     /// Do `with` on the node, in the task of the endpoint, and give what it returns: its
     /// state ([`Node::sessions`], [`Node::association`], [`Node::counters`]), a new local
     /// SEID ([`Node::new_session`]), an adopted session, the end of one, a probe's
-    /// sequence number or octets. The response of a request that `with` sends comes as an
-    /// [`Event::Response`]: [`request`](Self::request) waits for its own.
+    /// sequence number or octets. `with` takes the node and its time, which the methods
+    /// of the node that take a `now` take. A request that `with` sends ends with an
+    /// [`Event::Response`], [`Event::Timeout`] or [`Event::Failed`] from
+    /// [`Endpoint::event`]; [`request`](Self::request) waits for its own.
     ///
     /// ```no_run
-    /// # async fn run(handle: oxirush_pfcp::endpoint::Handle) -> Result<(), oxirush_pfcp::endpoint::EndpointError> {
-    /// let seid = handle.with(|node| node.new_session()).await?;
-    /// let sessions = handle.with(|node| node.sessions().count()).await?;
+    /// # use oxirush_pfcp::{endpoint::Handle, node::RequestId};
+    /// # async fn run(handle: Handle, request: RequestId) -> Result<(), oxirush_pfcp::endpoint::EndpointError> {
+    /// let seid = handle.with(|node, _| node.new_session()).await?;
+    /// let sessions = handle.with(|node, _| node.sessions().count()).await?;
+    /// let cancelled = handle.with(move |node, now| node.cancel(now, request)).await?;
     /// # Ok(()) }
     /// ```
     ///
@@ -521,11 +525,11 @@ impl Handle {
     /// The endpoint has ended.
     pub async fn with<T: Send + 'static>(
         &self,
-        with: impl FnOnce(&mut Node) -> T + Send + 'static,
+        with: impl FnOnce(&mut Node, Duration) -> T + Send + 'static,
     ) -> Result<T, EndpointError> {
         let (reply, answer) = oneshot::channel();
-        let command = Command::On(Box::new(move |node| {
-            let _ = reply.send(with(node));
+        let command = Command::On(Box::new(move |node, now| {
+            let _ = reply.send(with(node, now));
         }));
         self.commands
             .send(command)
@@ -642,7 +646,7 @@ impl Task {
             } => {
                 let _ = reply.send(self.node.respond_message(now, &request, message, delivery));
             }
-            Command::On(on) => on(&mut self.node),
+            Command::On(on) => on(&mut self.node, now),
         }
     }
 
@@ -676,25 +680,25 @@ impl Task {
             };
         }
         while let Some(event) = self.node.poll_event() {
-            match event {
-                Event::Response { request, message } => {
-                    if let Some(reply) = self.reply(request) {
-                        let _ = reply.send(Ok(message));
-                    }
+            // The end of a request of a Handle goes to its future; that of a request that
+            // `with` sent is an event.
+            let ended = match &event {
+                Event::Response { request, .. }
+                | Event::Timeout { request, .. }
+                | Event::Failed { request, .. } => self.reply(*request),
+                _ => None,
+            };
+            match (event, ended) {
+                (Event::Response { message, .. }, Some(reply)) => {
+                    let _ = reply.send(Ok(message));
                 }
-                Event::Timeout { request, .. } => {
-                    if let Some(reply) = self.reply(request) {
-                        let _ = reply.send(Err(EndpointError::Timeout));
-                    }
+                (Event::Timeout { .. }, Some(reply)) => {
+                    let _ = reply.send(Err(EndpointError::Timeout));
                 }
-                Event::Failed {
-                    request, failure, ..
-                } => {
-                    if let Some(reply) = self.reply(request) {
-                        let _ = reply.send(Err(EndpointError::Failed(failure)));
-                    }
+                (Event::Failed { failure, .. }, Some(reply)) => {
+                    let _ = reply.send(Err(EndpointError::Failed(failure)));
                 }
-                Event::Request { request, message } => {
+                (Event::Request { request, message }, _) => {
                     let incoming = Incoming {
                         message,
                         request,
@@ -710,7 +714,7 @@ impl Task {
                             .fetch_add(1, Ordering::Relaxed);
                     }
                 }
-                other => {
+                (other, _) => {
                     if self.events.try_send(other).is_err() {
                         self.statistics
                             .events_dropped

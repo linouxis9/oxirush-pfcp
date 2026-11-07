@@ -64,7 +64,7 @@ async fn an_smf_and_a_upf_set_up_an_association_and_a_session() {
                     incoming.respond(response).await.unwrap();
                 }
                 Body::SessionEstablishmentRequest(_) => {
-                    let seid = upf_handle.with(|node| node.new_session()).await.unwrap();
+                    let seid = upf_handle.with(|node, _| node.new_session()).await.unwrap();
                     let f_seid = FSeid {
                         v4: true,
                         seid: Some(seid),
@@ -99,7 +99,7 @@ async fn an_smf_and_a_upf_set_up_an_association_and_a_session() {
     .unwrap();
     assert_eq!(response.body.cause(), Some(CauseValue::RequestAccepted));
 
-    let seid = smf.with(|node| node.new_session()).await.unwrap();
+    let seid = smf.with(|node, _| node.new_session()).await.unwrap();
     let f_seid = FSeid {
         v4: true,
         seid: Some(seid),
@@ -163,7 +163,7 @@ async fn answer(handle: &Handle, incoming: Incoming) {
                 .await
         }
         Body::SessionEstablishmentRequest(_) => {
-            let seid = handle.with(|node| node.new_session()).await.unwrap();
+            let seid = handle.with(|node, _| node.new_session()).await.unwrap();
             let f_seid = FSeid {
                 v4: true,
                 seid: Some(seid),
@@ -221,7 +221,7 @@ async fn both_ways_at_once() {
             body: report.into(),
         },
     );
-    let seid = smf_handle.with(|node| node.new_session()).await.unwrap();
+    let seid = smf_handle.with(|node, _| node.new_session()).await.unwrap();
     let f_seid = FSeid {
         v4: true,
         seid: Some(seid),
@@ -265,7 +265,7 @@ async fn both_ways_at_once() {
     }
     // The state of the node, and its lists, through a handle
     let state = smf_handle
-        .with(move |node| {
+        .with(move |node, _| {
             let associations = node.associations().count();
             let sessions: Vec<u64> = node.sessions().map(|(seid, _)| seid).collect();
             let listed = (node.loads().count(), node.overloads().count());
@@ -281,19 +281,19 @@ async fn both_ways_at_once() {
         .unwrap();
     assert_eq!(state, (true, 1, vec![seid], (0, 0), Counters::default()));
     smf_handle
-        .with(|node| node.reserve_sequence())
+        .with(|node, _| node.reserve_sequence())
         .await
         .unwrap()
         .unwrap();
     assert!(
         smf_handle
-            .with(move |node| node.end_association(upf_address))
+            .with(move |node, _| node.end_association(upf_address))
             .await
             .unwrap()
     );
     assert!(
         smf_handle
-            .with(move |node| node.session(seid).is_none())
+            .with(move |node, _| node.session(seid).is_none())
             .await
             .unwrap()
     );
@@ -301,7 +301,7 @@ async fn both_ways_at_once() {
     assert!(matches!(smf.event().await, Some(Event::Released { .. })));
     smf.close().await;
     assert_eq!(
-        smf_handle.with(|node| node.counters()).await,
+        smf_handle.with(|node, _| node.counters()).await,
         Err(EndpointError::Closed),
         "a handle of an endpoint that has ended"
     );
@@ -332,7 +332,7 @@ async fn a_probe_answers_twice() {
     }
     let peer_address = peer.local_addr().unwrap();
     let handle = upf.handle();
-    let associated = handle.with(move |node| node.association(peer_address).is_some());
+    let associated = handle.with(move |node, _| node.association(peer_address).is_some());
     assert!(associated.await.unwrap());
     assert!(matches!(upf.event().await, Some(Event::Associated { .. })));
     let quiet = tokio::time::timeout(Duration::from_millis(100), upf.event()).await;
@@ -362,6 +362,38 @@ async fn a_request_without_an_answer_times_out_after_n1() {
     }
     assert_eq!(datagrams.len(), 3);
     assert!(datagrams.windows(2).all(|pair| pair[0] == pair[1]));
+}
+
+/// A request that the caller sends through `Handle::with`, at the node's time, which the
+/// closure is given: its response, and its timeout, come as events.
+#[tokio::test]
+async fn the_events_of_a_request_sent_with_the_node() {
+    let mut smf = Endpoint::bind(ANY, config(Function::Cp)).await.unwrap();
+    let upf = Endpoint::bind(ANY, config(Function::Up)).await.unwrap();
+    let silent = tokio::net::UdpSocket::bind(ANY).await.unwrap();
+    tokio::time::sleep(Duration::from_millis(20)).await;
+    let now = smf.handle().with(|_, now| now).await.unwrap();
+    assert!(now >= Duration::from_millis(20), "{now:?}");
+    for (to, answered) in [(upf.local_addr(), true), (silent.local_addr().unwrap(), false)] {
+        let heartbeat = Message {
+            header: Header::node(0),
+            body: HeartbeatRequest::new(RecoveryTimeStamp::new(7)).into(),
+        };
+        let handle = smf.handle();
+        let sent = handle.with(move |node, now| node.request(now, to, heartbeat));
+        let sent = sent.await.unwrap().unwrap();
+        let ended = loop {
+            match within(smf.event()).await.unwrap() {
+                Event::Response { request, message } => {
+                    assert!(matches!(message.body, Body::HeartbeatResponse(_)));
+                    break (request, true);
+                }
+                Event::Timeout { request, .. } => break (request, false),
+                _ => {}
+            }
+        };
+        assert_eq!(ended, (sent, answered));
+    }
 }
 
 fn setup(sequence: u32) -> Vec<u8> {
@@ -431,7 +463,7 @@ async fn a_request_refused_by_a_full_node_is_counted() {
     let first = upf.incoming().await.unwrap();
     peer.send_to(&setup(2), upf.local_addr()).await.unwrap();
     tokio::time::sleep(Duration::from_millis(100)).await;
-    let counters = upf.handle().with(|node| node.counters()).await.unwrap();
+    let counters = upf.handle().with(|node, _| node.counters()).await.unwrap();
     assert_eq!((counters.refused, counters.evicted), (1, 0));
     drop(first);
 }
@@ -478,7 +510,7 @@ async fn an_answer_in_vain_leaves_its_request_unanswered() {
     let incoming = upf.incoming().await.unwrap();
     // A command that fills the queue, which the task has not taken yet, and the answer,
     // which waits for room, cancelled
-    assert!(once(handle.with(|node| node.counters())).await.is_none());
+    assert!(once(handle.with(|node, _| node.counters())).await.is_none());
     assert!(once(incoming.respond(answer())).await.is_none());
     peer.send_to(&setup(1), upf.local_addr()).await.unwrap();
     let mut again = tokio::time::timeout(Duration::from_millis(500), upf.incoming())
@@ -713,9 +745,9 @@ async fn an_entity_of_the_smf_takes_a_session_over() {
     assert!(incoming.request.stranger);
     // The caller takes the session over, with the UP function's SEID that the SMF knows, at
     // a local SEID that no other call gave
-    let local = handle.with(|node| node.new_session()).await.unwrap();
-    assert_ne!(handle.with(|node| node.new_session()).await.unwrap(), local);
-    let adopt = move |node: &mut Node| node.adopt_session(local, upf_address, 0x66);
+    let local = handle.with(|node, _| node.new_session()).await.unwrap();
+    assert_ne!(handle.with(|node, _| node.new_session()).await.unwrap(), local);
+    let adopt = move |node: &mut Node, _| node.adopt_session(local, upf_address, 0x66);
     handle.with(adopt).await.unwrap().unwrap();
     assert_eq!(handle.with(adopt).await.unwrap(), Err(NodeError::SeidInUse));
     incoming.request.seid = Some(local);
@@ -785,7 +817,7 @@ async fn queues_of_no_entry_hold_one() {
     let incoming = within(upf.incoming()).await.unwrap();
     assert_eq!(incoming.request.sequence, 1);
     assert!(
-        within(upf.handle().with(|node| node.counters()))
+        within(upf.handle().with(|node, _| node.counters()))
             .await
             .is_ok()
     );
