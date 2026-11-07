@@ -1338,6 +1338,26 @@ fn the_values_read_by_hand_have_the_places_of_their_figures() {
         ..Default::default()
     };
     assert_eq!(again(&ipv6), [&[0x11][..], &[0; 16], &[0, 1]].concat());
+    // A reserved Node-ID Type is written with the Node-Address that the value has, which
+    // a receiver cannot frame; one of more than four bits is not
+    let mut out = Vec::new();
+    let reserved = FqCsid {
+        node_id_type: 3,
+        node_address: vec![10, 0, 0, 1, 2],
+        csids: vec![1],
+        ..Default::default()
+    };
+    reserved.encode(&mut out).unwrap();
+    assert_eq!(out, [0x31, 10, 0, 0, 1, 2, 0, 1]);
+    assert_eq!(FqCsid::decode(&out), None);
+    let wide = FqCsid {
+        node_id_type: 16,
+        ..reserved
+    };
+    assert!(matches!(
+        wide.encode(&mut Vec::new()),
+        Err(Error::FieldLength { .. })
+    ));
     // MAC Addresses Detected and Removed: the number of MAC addresses in octet 5, each
     // address of 6 octets, then the C-TAG and the S-TAG, each after its length
     let octets = [

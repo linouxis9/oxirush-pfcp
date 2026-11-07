@@ -782,6 +782,23 @@ fn a_reserved_node_id_type_of_an_fq_csid_is_incorrect() {
         ),
         "{found:?}"
     );
+    // It encodes, for a test tool to send, and its receiver keeps it as octets: a
+    // conditional IE that does not decode, incorrect all the same
+    let octets = message.encode().unwrap();
+    let received = Message::decode(&octets).unwrap();
+    assert_eq!(received.encode().unwrap(), octets);
+    let found: Vec<_> = received
+        .check(Interfaces::N4)
+        .into_iter()
+        .map(|deviation| (deviation.kind, deviation.cause))
+        .collect();
+    assert_eq!(
+        found,
+        [(
+            DeviationKind::ConditionalIncorrect { ie_type: 65 },
+            Some(CauseValue::MandatoryIeIncorrect)
+        )]
+    );
 }
 
 /// §7.6.8: a verifiable conditional IE that does not decode is semantically invalid, as one

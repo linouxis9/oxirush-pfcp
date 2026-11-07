@@ -947,9 +947,18 @@ impl Codec for FqCsid {
             extra: Octets::wire(rest),
         })
     }
+    // A reserved Node-ID Type has a Node-Address of no length that the clause says: the
+    // value writes the one that it has, for a test tool to send (§8.2.43).
     fn encode(&self, out: &mut Vec<u8>) -> Result<(), Error> {
+        if self.node_id_type > 0x0f {
+            return Err(Error::FieldLength {
+                ie: "FQ-CSID",
+                field: "FQ-CSID Node-ID Type",
+            });
+        }
         if self.csids.len() > 15
-            || Self::address_length(self.node_id_type) != Some(self.node_address.len())
+            || Self::address_length(self.node_id_type)
+                .is_some_and(|length| length != self.node_address.len())
         {
             return Err(Error::Inconsistent {
                 ie: "FQ-CSID",
