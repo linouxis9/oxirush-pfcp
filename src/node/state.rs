@@ -84,6 +84,9 @@ pub struct Session {
     /// the node takes the session's requests from its peer as those of an association,
     /// sends the caller's, and heartbeats the peer while it has such a session.
     pub(crate) adopted: bool,
+    /// Its deletion waits for the UP function's last usage reports (§5.2.2.3.1): the node
+    /// ends it then, without them.
+    pub(crate) until: Option<Duration>,
 }
 
 /// The sessions of the node by their local SEIDs, with the peer's SEID and the mark of
@@ -101,6 +104,9 @@ pub(crate) struct Sessions {
     /// the session, until when.
     aliases: BTreeMap<u64, (u64, Duration)>,
     aliasing: BTreeSet<(Duration, u64)>,
+    /// The sessions whose deletion waits for their last usage reports, by when the node
+    /// ends them.
+    ends: BTreeSet<(Duration, u64)>,
 }
 
 impl Sessions {
@@ -124,6 +130,7 @@ impl Sessions {
         if session.adopted {
             *self.adopted.entry(session.peer).or_default() += 1;
         }
+        let until = session.until;
         if let Some(old) = self.by_local.insert(local, session) {
             if let Some(seid) = old.peer_seid
                 && self.by_local[&local].peer_seid != Some(seid)
@@ -133,7 +140,13 @@ impl Sessions {
             if self.by_mark.get(&old.mark) == Some(&local) {
                 self.by_mark.remove(&old.mark);
             }
+            if let Some(until) = old.until {
+                self.ends.remove(&(until, local));
+            }
             self.unadopt(&old);
+        }
+        if let Some(until) = until {
+            self.ends.insert((until, local));
         }
         self.by_mark.insert(mark, local);
     }
@@ -168,8 +181,39 @@ impl Sessions {
         if self.by_mark.get(&session.mark) == Some(local) {
             self.by_mark.remove(&session.mark);
         }
+        if let Some(until) = session.until {
+            self.ends.remove(&(until, *local));
+        }
         self.unadopt(&session);
         Some(session)
+    }
+
+    /// End the session of `local` at `until`, unless something ends it before: its
+    /// deletion waits for its last usage reports.
+    pub(crate) fn end_at(&mut self, local: u64, until: Duration) {
+        if let Some(mut session) = self.remove(&local) {
+            session.until = Some(until);
+            self.insert(local, session);
+        }
+    }
+
+    /// When the first session whose deletion waits for its last usage reports ends.
+    pub(crate) fn first_end(&self) -> Option<Duration> {
+        self.ends.first().map(|(until, _)| *until)
+    }
+
+    /// End the sessions whose deletion waited for their last usage reports until `now`:
+    /// their local SEIDs.
+    pub(crate) fn ended(&mut self, now: Duration) -> Vec<u64> {
+        let mut ended = Vec::new();
+        while let Some(&(until, local)) = self.ends.first()
+            && until <= now
+        {
+            self.ends.pop_first();
+            self.remove(&local);
+            ended.push(local);
+        }
+        ended
     }
 
     /// The local SEID of the session of `mark`, wherever it moved.
@@ -699,6 +743,7 @@ mod tests {
             reserved: false,
             mark,
             adopted,
+            until: None,
         }
     }
 

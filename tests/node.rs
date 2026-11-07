@@ -5653,6 +5653,152 @@ fn a_request_that_ends_leaves_an_establishment_its_session() {
     );
 }
 
+// ── §5.2.2.3.1: the usage reports that follow a deletion ────────────────────
+
+/// A UPF's report of the usage of a session that the SMF deletes: the last with PSDBU.
+fn usage_report(last: bool) -> SessionReportRequest {
+    let report = SessionReportRequest::new(ReportType {
+        usar: true,
+        ..Default::default()
+    });
+    match last {
+        true => report.with_pfcpsrreq_flags(PFCPSRReqFlags {
+            psdbu: true,
+            ..Default::default()
+        }),
+        false => report,
+    }
+}
+
+/// An SMF and a UPF whose session the SMF deletes at 1 s, which the UPF's caller answers
+/// with `answer`: their SEIDs.
+fn deleted_with(answer: SessionDeletionResponse) -> (Node, Node, u64, u64) {
+    let (mut smf, mut upf) = associated(at(0));
+    let (cp_seid, up_seid) = established(&mut smf, &mut upf, at(0));
+    smf.session_request(at(1), cp_seid, SessionDeletionRequest::default())
+        .unwrap();
+    pass(&mut smf, &mut upf, UPF, at(1));
+    let (inbound, _) = request(&mut upf);
+    upf.respond(at(1), &inbound, answer).unwrap();
+    pass(&mut upf, &mut smf, SMF, at(1));
+    assert!(matches!(&events(&mut smf)[..], [Event::Response { .. }]));
+    (smf, upf, cp_seid, up_seid)
+}
+
+/// The UPF reports the usage of its session to the SMF, whose caller has the report and
+/// accepts it, and the UPF has the response.
+fn usage_reported(smf: &mut Node, upf: &mut Node, seids: (u64, u64), last: bool, now: Duration) {
+    let (cp_seid, up_seid) = seids;
+    upf.session_request(now, up_seid, usage_report(last))
+        .unwrap();
+    pass(upf, smf, SMF, now);
+    let (inbound, message) = request(smf);
+    assert_eq!(inbound.seid, Some(cp_seid));
+    assert!(matches!(message.body, Body::SessionReportRequest(_)));
+    smf.respond(now, &inbound, SessionReportResponse::new(accepted()))
+        .unwrap();
+    pass(smf, upf, UPF, now);
+    assert!(matches!(&events(upf)[..], [Event::Response { .. }]));
+}
+
+/// §5.2.2.3.1: a UP function with more usage reports of a session that the CP function
+/// deletes answers the deletion "More Usage Report to send", then sends them in Session
+/// Report Requests, the last with PSDBU, and the CP function deletes the session only
+/// then. Both nodes keep the session: each report in between reaches the SMF's caller and
+/// has its answer, and the last ends the session on both, with nothing left due.
+#[test]
+fn more_usage_reports_keep_the_session_until_the_last() {
+    let more = SessionDeletionResponse::new(Cause::new(CauseValue::MoreUsageReportToSend))
+        .with_additional_usage_reports_information(AdditionalUsageReportsInformation {
+            auri: true,
+            ..Default::default()
+        });
+    let (mut smf, mut upf, cp_seid, up_seid) = deleted_with(more);
+    assert!(smf.session(cp_seid).is_some());
+    assert!(upf.session(up_seid).is_some());
+    for (now, last) in [(2, false), (3, false), (4, true)] {
+        usage_reported(&mut smf, &mut upf, (cp_seid, up_seid), last, at(now));
+        assert_eq!(smf.session(cp_seid).is_some(), !last, "at {now} s");
+        assert_eq!(upf.session(up_seid).is_some(), !last, "at {now} s");
+    }
+    assert_eq!(smf.poll_timeout(), None);
+    assert_eq!(upf.poll_timeout(), None);
+    assert!(events(&mut smf).is_empty());
+}
+
+/// §5.2.2.3.1: a UP function that has reports of a session not yet acknowledged when it
+/// answers the session's deletion sets PURU, and the CP function waits before it deletes
+/// the session. The SMF keeps the session: the UPF's pending report, sent again, reaches
+/// its caller, and the session ends `keep` after the last report of it, as an event says.
+/// The UPF keeps none, as its pending report is a request of its own.
+#[test]
+fn pending_usage_reports_keep_the_session_a_while() {
+    let (mut smf, mut upf) = associated(at(0));
+    let (cp_seid, up_seid) = established(&mut smf, &mut upf, at(0));
+    // A report of the UPF, lost
+    upf.session_request(at(1), up_seid, usage_report(false))
+        .unwrap();
+    sent(&mut upf);
+    smf.session_request(at(1), cp_seid, SessionDeletionRequest::default())
+        .unwrap();
+    pass(&mut smf, &mut upf, UPF, at(1));
+    let (inbound, _) = request(&mut upf);
+    let pending = SessionDeletionResponse::new(accepted()).with_pfcpsdrsp_flags(PFCPSDRspFlags {
+        puru: true,
+        ..Default::default()
+    });
+    upf.respond(at(1), &inbound, pending).unwrap();
+    assert!(upf.session(up_seid).is_none());
+    pass(&mut upf, &mut smf, SMF, at(1));
+    assert!(matches!(&events(&mut smf)[..], [Event::Response { .. }]));
+    assert!(smf.session(cp_seid).is_some());
+    // The report again, after T1
+    upf.handle_timeout(at(1) + T1);
+    pass(&mut upf, &mut smf, SMF, at(4));
+    let (inbound, _) = request(&mut smf);
+    smf.respond(at(4), &inbound, SessionReportResponse::new(accepted()))
+        .unwrap();
+    pass(&mut smf, &mut upf, UPF, at(4));
+    assert!(matches!(&events(&mut upf)[..], [Event::Response { .. }]));
+    let keep = config(SMF, Function::Cp).keep;
+    assert_eq!(smf.poll_timeout(), Some(at(4) + keep));
+    smf.handle_timeout(at(4) + keep - Duration::from_millis(1));
+    assert!(smf.session(cp_seid).is_some());
+    smf.handle_timeout(at(4) + keep);
+    assert!(smf.session(cp_seid).is_none());
+    assert_eq!(
+        events(&mut smf),
+        [Event::SessionEnded {
+            local_seid: cp_seid
+        }]
+    );
+    assert_eq!(smf.poll_timeout(), None);
+}
+
+/// §5.2.2.3.1: a session whose deletion waits for its last usage reports, which do not
+/// come, ends on each node `keep` after the last message of it: on the SMF after the
+/// deletion's response or the last report that it took, on the UPF after its answer or
+/// the last report that it sent, as an event says on each.
+#[test]
+fn a_session_without_its_last_usage_report_ends_after_keep() {
+    let more = SessionDeletionResponse::new(Cause::new(CauseValue::MoreUsageReportToSend));
+    let (mut smf, mut upf, cp_seid, up_seid) = deleted_with(more);
+    let keep = config(SMF, Function::Cp).keep;
+    assert_eq!(smf.poll_timeout(), Some(at(1) + keep));
+    assert_eq!(upf.poll_timeout(), Some(at(1) + keep));
+    usage_reported(&mut smf, &mut upf, (cp_seid, up_seid), false, at(5));
+    for (node, local_seid) in [(&mut smf, cp_seid), (&mut upf, up_seid)] {
+        assert_eq!(node.poll_timeout(), Some(at(5) + keep));
+        node.handle_timeout(at(1) + keep);
+        assert!(node.session(local_seid).is_some());
+        assert!(events(node).is_empty());
+        node.handle_timeout(at(5) + keep);
+        assert!(node.session(local_seid).is_none());
+        assert_eq!(events(node), [Event::SessionEnded { local_seid }]);
+        assert_eq!(node.poll_timeout(), None);
+    }
+}
+
 trait IntoSocket {
     fn into_socket(self, port: u16) -> SocketAddr;
 }
