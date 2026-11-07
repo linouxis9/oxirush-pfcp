@@ -278,6 +278,61 @@ fn what_a_value_lacks_selects_nothing() {
     assert_eq!(edited, establishment);
 }
 
+/// oxirush-utils' `select_in`: "a misspelt name is not a member that is absent", also
+/// below what a message lacks. Below a row that it lacks, a name is judged as where the row
+/// is there: a member that it could have selects nothing, and another is `NoSuchMember`;
+/// below a list that it lacks, an entry has the members of one, and a name that is no
+/// position is `NotAList`.
+#[test]
+fn a_misspelt_name_below_what_a_message_lacks_is_an_error() {
+    let nothing = |tree: &tree::Value, path: &str| {
+        assert_eq!(
+            select(tree, path).map_err(|error| error.kind()),
+            Ok(vec![]),
+            "{path}"
+        );
+    };
+    let failing = |tree: &tree::Value, path: &str, kind: tree::ErrorKind| {
+        let found = select(tree, path).map_err(|error| error.kind());
+        assert_eq!(found, Err(kind), "{path}");
+    };
+    let misspelt = |tree: &tree::Value, path: &str| {
+        failing(tree, path, tree::ErrorKind::NoSuchMember);
+    };
+    let response = "2133002b000000000000100100000700003c0005000a00000200130001010039000d0200000000000020010a000002";
+    let response = Message::decode(&hex::decode(response).unwrap())
+        .unwrap()
+        .to_tree();
+    let heartbeat = Message {
+        header: Header::node(1),
+        body: HeartbeatRequest::new(RecoveryTimeStamp::new(7)).into(),
+    };
+    let heartbeat = heartbeat.to_tree();
+    misspelt(&heartbeat, "/pfcp/Source IP Address/Bogus");
+    nothing(&heartbeat, "/pfcp/Source IP Address/V4");
+    // Below a flag or a field, whose members no table lays out, nothing, as the plain rule
+    nothing(&heartbeat, "/pfcp/Source IP Address/V4/Bogus");
+    misspelt(&response, "/pfcp/Load Control Information/Bogus");
+    nothing(&response, "/pfcp/Load Control Information/Load Metric");
+    nothing(&response, "/pfcp/Load Control Information/*");
+    misspelt(&response, "/pfcp/Created PDR/0/Bogus");
+    misspelt(&response, "/pfcp/Created PDR/*/Bogus");
+    nothing(&response, "/pfcp/Created PDR/*/PDR ID");
+    failing(
+        &response,
+        "/pfcp/Created PDR/Bogus",
+        tree::ErrorKind::NotAList,
+    );
+    nothing(&response, "/pfcp/Created PDR/*/F-TEID/0/CHID");
+    misspelt(&response, "/pfcp/Created PDR/0/F-TEID/1/Bogus");
+    // A role that the wire does not tell from the others of its row is no member
+    misspelt(&response, "/pfcp/Created PDR/0/Local F-TEID/CHID");
+    // An edit takes the plain rule: it adds no member below what is not there
+    let mut edited = heartbeat.clone();
+    assert!(set(&mut edited, "/pfcp/Source IP Address/V4", true).is_err());
+    assert_eq!(edited, heartbeat);
+}
+
 #[test]
 fn what_the_table_does_not_have_is_kept_in_its_place() {
     let message = establishment();

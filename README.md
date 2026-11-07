@@ -349,7 +349,7 @@ stands for its IEs, a list has the positions of its entries, `*` stands for
 each, and names go in any case. A row that a message lacks, or a member that a
 value lacks of those that its tree may have (`IeTypeInfo::members`: its flags,
 its fields, `Spare`, `length`, `unknown octets`), selects nothing; a name that
-is none of them is an error.
+is none of them is an error, also below what a message lacks.
 
 ```rust
 use oxirush_pfcp::*;
