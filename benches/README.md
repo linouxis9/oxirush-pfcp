@@ -4,7 +4,7 @@ A package of its own, which the published crate does not have. `measure` runs on
 workload on one message, many times, for `perf stat`; the figures are the
 instructions of one round, `(count of 2N rounds − count of N rounds) / N`, and the
 times are notes. They were taken on one core of an AMD Ryzen 7 5700G (Linux 7.0,
-Rust 1.88.0) on 2026-11-01, at 5f9dd70, with N = 2,000.
+Rust 1.88.0) on 2026-11-01, at 8a26de2, with N = 2,000.
 
 ```sh
 cargo build --release                       # measure
@@ -75,7 +75,7 @@ Instructions of a round, and go-pfcp's over this crate's:
 | go-pfcp-ser | 61,862 | 264,900 (4.3x) | 62,661 | 492,027 (7.9x) | 36,252 | 300,655 (8.3x) |
 
 go-pfcp's instructions vary from run to run with its collector, by up to a sixth for
-`encode` between ed70497 and 5f9dd70. Times were not taken at 5f9dd70, on a shared
+`encode` between e669488 and 8a26de2. Times were not taken at 8a26de2, on a shared
 machine. At 526bee4, on an idle
 core, `read` of ser-16 took 6.5 µs here and 67 µs with go-pfcp, which allocates 1,043
 times where this crate allocates 15 times.

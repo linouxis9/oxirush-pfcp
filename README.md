@@ -350,8 +350,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ## Performance
 
-On one core of an AMD Ryzen 7 5700G, at 5f9dd70, for a Session Establishment
-Request of 16 PDRs (2,824 octets), in instructions:
+On one core of an AMD Ryzen 7 5700G, at 8a26de2 (2026-11-01), for a Session
+Establishment Request of 16 PDRs (2,824 octets), in instructions:
 
 | Operation | Instructions | Allocations |
 |-----------|--------------|-------------|
