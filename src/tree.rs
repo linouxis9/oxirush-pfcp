@@ -332,8 +332,8 @@ fn no_such_ie(table: &crate::table::Table, names: &[&str], written: &str) -> Str
 /// the IEs of the message, and the rest is the plain rule of a tree, which knows the
 /// tables: a row that a message or a grouped IE lacks, and a member that a value or the
 /// header lacks of those that its tree may have ([`IeTypeInfo::members`]), are not
-/// there, where another name is no member. A value that its tree writes as a scalar has
-/// the one field that it is.
+/// there, where another name is no member, also below what is not there. A value that its
+/// tree writes as a scalar has the one field that it is.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Paths;
 
@@ -421,8 +421,10 @@ impl tree::Family for Paths {
         Root::new("pfcp", &["ies"], false)
     }
 
-    /// At a value that its tree writes as a scalar, a member that it lacks selects nothing,
-    /// and the one field that it is selects it.
+    /// Below what is not there, a name is judged as where the value is there: a member
+    /// that it could have selects nothing, and another is refused. At a value that its
+    /// tree writes as a scalar, a member that it lacks selects nothing, and the one field
+    /// that it is selects it.
     fn step<'v>(
         &self,
         place: &Place<'v, Shape>,
@@ -434,6 +436,27 @@ impl tree::Family for Paths {
         }
         let shape = place.shape();
         match (place.value(), shape.0) {
+            (_, Of::Nothing) => Ok(Step::Plain),
+            // An entry of a list that is not there, which has the members of one.
+            (None, Of::List(_)) if segment == "*" || tree::position(segment).is_some() => {
+                next.absent(segment, self.entry(shape, None));
+                Ok(Step::Taken)
+            }
+            (None, Of::List(_)) => {
+                let reason = alloc::format!("{segment:?} is no position in a list");
+                Err(tree::Error::new(ErrorKind::NotAList, "", reason))
+            }
+            (None, _) if segment == "*" => Ok(Step::Plain),
+            (None, _) => match self.absent(shape, segment) {
+                Absent::Optional(inside) => {
+                    next.absent(segment, inside);
+                    Ok(Step::Taken)
+                }
+                _ => {
+                    let reason = alloc::format!("{segment:?} is no member of what is not there");
+                    Err(tree::Error::new(ErrorKind::NoSuchMember, "", reason))
+                }
+            },
             (Some(value), Of::Value(info)) if !value.is_object() => {
                 if scalar_field(info).is_some_and(|field| tree::same_name(field, segment)) {
                     next.stay(place, Shape(Of::Nothing));
@@ -508,7 +531,7 @@ impl tree::Family for Paths {
 /// The values at `path` in the tree of a message. A row of a table that a message or a
 /// grouped IE lacks, and a member that a value or the header lacks of those that its tree
 /// may have ([`IeTypeInfo::members`]), select nothing; a name that is none of them is an
-/// error.
+/// error, also below what is not there.
 ///
 /// # Errors
 ///
