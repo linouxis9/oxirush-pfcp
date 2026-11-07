@@ -72,23 +72,16 @@ hex = "0.4" # for the examples of this page
 | `node` | `Node`, a PFCP entity without I/O | no dependency |
 | `endpoint` | `Endpoint`, a `Node` on a UDP socket | a Tokio runtime |
 
-`serde` turns on `tree`, and `endpoint` turns on `node`. The crate is `no_std`
-and needs an allocator, but with `endpoint`.
-
-The minimum supported Rust version is 1.88.
+The crate is `no_std` with an allocator, but for `endpoint`. Rust 1.88 or later.
 
 ## Set up an association, from the SMF to the UPF
 
-A `Node` is a PFCP entity on one local address: datagrams and time go in, and
-datagrams to send, events and the next timer come out. It numbers each
-request and sends it again after T1, up to N1 times; matches each response
-by its sequence number, its peer and its type; answers a retransmitted
-request with the answer that it gave; answers heartbeats; takes each message
-of a bundle on its own, when both peers announced BUNDL (§6.5); and keeps the
-associations, the sessions and the load and overload of each peer. It
-answers itself only what the clauses leave no choice in, as a request of a
-peer without an association; every other request of a peer is an event,
-which you answer with `respond()`.
+A `Node` is a PFCP entity without I/O: datagrams and time go in; datagrams,
+events and the next timer come out. It numbers and retransmits requests, matches
+responses, answers heartbeats and retransmitted requests, takes bundles (§6.5),
+and keeps associations, sessions and the load of each peer. It answers itself
+only what the clauses leave no choice in; every other request is an event that
+you answer with `respond()`.
 
 ```rust
 use std::net::{Ipv4Addr, SocketAddr};
@@ -144,22 +137,15 @@ the SMF: PFCP Association Setup Response (sequence 1)
 no more timer: Some(60s)
 ```
 
-The next timer is the first heartbeat to the UPF. A peer that does what its
-clause forbids, as a response to no request, is an event too, and the node
-still does what the clause says.
+The next timer is the first heartbeat to the UPF. What a peer does wrong is
+an event too.
 
 ## Run a node on a socket
 
-An `Endpoint` runs a node on a UDP socket, in a task of its own: a request of
-a peer comes through `incoming()` with what answers it. A `Handle`, which
-`handle()` gives and which clones, sends the node's requests, each a future of
-its response, and reaches the node's state, from any task and while the
-endpoint takes the peers' requests. Its queues are bounded, and
-`statistics()` counts what they drop. A program that batches its datagrams (`recvmmsg`, `sendmmsg`)
-drives a `Node` itself. A node sends its own requests to port 8805, and tells
-its peers apart by their addresses; with `request_port: None`, for peers on
-ports of their own, it sends them to the port that its peer sent from, and
-tells its peers apart by their addresses and ports.
+An `Endpoint` runs a node on a UDP socket, in a task of its own: the peers'
+requests come through `incoming()`. A `Handle`, which clones, sends the node's
+requests and reaches its state (`with`) from any task. A node sends its requests
+to port 8805; with `request_port: None`, to the port that its peer sent from.
 
 ```rust
 use std::net::Ipv4Addr;
@@ -191,11 +177,8 @@ PFCP Heartbeat Response (sequence 1)
 
 ## Decode a message and read its IEs
 
-A message is its header and its body: one struct for each message type of
-Table 7.3-1, with a field for each row of its table, an `Option` for an IE
-that is there once and a list for the others. Each IE has its own type, with
-the fields of its figure, and an enumeration for each value that a table
-names.
+A message is its header and its body: a struct for each message type, with a
+field for each row of its table, each IE of its own type.
 
 ```rust
 use oxirush_pfcp::*;
@@ -218,33 +201,18 @@ PFCP Session Establishment Response (SEID 0x1001, sequence 7): Request accepted 
 accepted: true
 ```
 
-What the crate cannot read in a field it keeps as octets, in its place: an IE
-of another release, a vendor IE, an IE of a null length, a repetition, a value
-that does not decode. Decoding then encoding gives the octets back, byte for
-byte, in the order in which they came. `framing::message_ies()` walks the IEs
-as slices, without decoding them.
+What the crate cannot read it keeps as octets, in its place: decoding then
+encoding gives the octets back, byte for byte.
 
 ## Check a message, and answer a faulty one
 
-`check()` says each way in which a message is not as TS 29.244 has a sender
-construct it on the interface that it names: N4, Sxa, Sxb, Sxc or N4mb, or a
-set of them, as `Interfaces::SXA_SXB` of a combined SGW/PGW (§5.2.6), on which
-a message may have the IEs of either and needs those that both need. It checks
-the mandatory IEs, the conditional IEs whose condition the IEs beside them show
-(the UP F-SEID of an accepted establishment, the Forwarding Parameters of a FAR
-that forwards, the reports that a Report Type names, two IEs of which a NOTE of
-their table needs one), the IEs that the IEs beside them have absent (the Local
-F-TEID beside a Traffic Endpoint ID, a Transport Mode of no MPQUIC: `Row::checked`
-says which rows have either), the needed IEs of a null length, the
-IEs that do not decode, repeat, or are not of the table or the interface, spare
-bits and values, reserved values, the flags of each IE with the rules of
-clause 8.2 on which of them are set, together, with a value or the Cause of the
-message, or always, and the rules of the header. Each deviation has its path, its clause, and the Cause with which a
-receiver answers a request for it.
-
-A table whose mandatory IEs differ between interfaces has a constructor for
-each: `CreatePdr::new_sxa(pdr_id, pdi)` has no Precedence, which Sxa does not
-have, and `CreatePdr::new_n4(pdr_id, precedence, pdi)` has it.
+`check()` says how a message is not as TS 29.244 has a sender construct it, on
+an interface or a set of them, as a combined SGW/PGW has (`Interfaces::SXA_SXB`):
+its missing, conditional, absent, repeated and incorrect IEs, its values, its
+flags and its header, each with its path, its clause and the Cause of the
+answer. `Row::checked` says which conditions of the tables it checks. A table
+whose mandatory IEs differ between interfaces has a constructor for each, as
+`CreatePdr::new_sxa()` and `new_n4()`.
 
 ```rust
 use std::net::Ipv4Addr;
@@ -285,17 +253,14 @@ PFCP Session Modification Response (SEID 0x1001, sequence 8): 213500170000000000
 0 deviations in the answer
 ```
 
-A mandatory IE inside a conditional grouped IE is answered with "Conditional
-IE missing", as §7.2.3.2 says.
+A mandatory IE of a conditional grouped IE is answered "Conditional IE missing"
+(§7.2.3.2).
 
 ## A message as JSON
 
 With `tree`, a message is a tree that prints as JSON, with the names of the
-specification, and a tree is read back into a message. An IE that the crate
-keeps as octets is `{"octets": ...}`. The tree, and serde's JSON, carry the
-keys and passwords of a message in hexadecimal, as the Tunnel Password, the HMAC
-Key of STAMP and the Shared Secret of OWAMP and TWAMP, which `Debug` hides: do
-not log them.
+specification, and reads back. The tree carries keys in hexadecimal, as the
+Tunnel Password, which `Debug` hides: do not log it.
 
 ```rust
 use oxirush_pfcp::Message;
@@ -339,12 +304,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 PFCP Heartbeat Request (sequence 9): 2001000c0000090000600004e8754700
 ```
 
-A tree is in the order of the tables. A receiver takes the IEs of a message in
-any order (§8.1.2), so two messages that differ only in that order have the
-same tree, and a tree, in whatever order it writes them, encodes in the order of
-the tables. The IEs of one type
-keep their order, as a list does: the first DNS Server Address is the primary
-one. To send IEs out of order, write the octets.
+A tree is in the order of the tables, the octets in that of the wire.
 
 ## Read and edit by path
 
@@ -374,33 +334,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ## Limits
 
-- `check()` checks one message: the procedures, and the conditions of the C
-  rows that need the state of a node, are not its own. Nor are the conditions
-  on the IEs of another scope, as the Weight of an access of a MAR, of the
-  Steering Mode of the MAR (Table 7.5.2.8-2), or the QFI of a PDI, absent when its
-  Traffic Endpoint has the QFIs, or who sets a flag, as CH of an F-TEID, which only
-  the CP function sets.
-- `encode()` writes any value that a type can hold, so a test tool can send
-  an invalid message.
-- A tree is in the order of the tables, and the octets in the order of the
-  wire.
-- The tables, the figures and the values are those of TS 29.244 V19.6.0
-  (Release 19). An IE of a later release stays octets, and an IE that an earlier
-  release laid out otherwise is read as Release 19 lays it out.
-- No message of a commercial UPF or SMF is among the test fixtures.
-- A `Node` is one PFCP entity, with its own associations: an SMF of several
-  entities is as many nodes, which do not share them. A request that names a
-  session or an association of the node that is not its sender's, as another
-  SMF of a set sends (§5.22), comes to the caller as `Inbound::stranger`, for
-  the caller to take or reject; a session that the caller adopts is routed, and
-  the holder of its association heartbeats its UPF.
+- `check()` checks one message: the conditions that need the state of a node,
+  or another scope, are not its own.
+- `encode()` writes any value that a type can hold, for a test tool.
+- TS 29.244 V19.6.0: an IE of a later release stays octets.
+- A `Node` is one PFCP entity. A request that names another's session or
+  association, as another SMF of a set sends (§5.22), comes to the caller as
+  `Inbound::stranger`.
 
 ## Performance
 
-On one core of an AMD Ryzen 7 5700G (Linux 7.0, Rust 1.88.0), at 5f9dd70 on
-2026-11-01, for a Session Establishment Request of 16 PDRs, 16 FARs, 8 URRs and
-a QER (2,824 octets, 347 IEs), in instructions of one round, which a shared
-machine does not change as it changes times:
+On one core of an AMD Ryzen 7 5700G, at 5f9dd70, for a Session Establishment
+Request of 16 PDRs (2,824 octets), in instructions:
 
 | Operation | Instructions | Allocations |
 |-----------|--------------|-------------|
@@ -410,64 +355,24 @@ machine does not change as it changes times:
 | `to_tree` | 580,030 | 899 |
 | `from_tree` | 421,180 | 587 |
 
+go-pfcp v0.0.24 takes 3 to 9 times as many instructions.
 [`benches/`](https://github.com/linouxis9/oxirush-pfcp/blob/main/benches/README.md)
-has every workload, with instructions and allocations, and how to run them.
+has every workload and how to run them.
 
-### Against go-pfcp
-
-The same messages, decoded, read and encoded by this crate and by go-pfcp
-v0.0.24, in instructions on one core. A ratio is go-pfcp's over this crate's.
-
-| Message | Decode | Decode, then read every value | Encode |
-|---|---|---|---|
-| Heartbeat Request (41 octets) | 2.9x | 3.6x | 4.7x |
-| Session Establishment Request, 4 PDRs (820 octets) | 4.3x | 7.4x | 8.0x |
-| Session Establishment Request, 16 PDRs (2,824 octets) | 4.4x | 8.8x | 8.0x |
-| go-pfcp's own Session Establishment Request (2,110 octets) | 4.3x | 7.9x | 8.3x |
-
-[`benches/`](https://github.com/linouxis9/oxirush-pfcp/blob/main/benches/README.md#against-go-pfcp)
-has the figures and the method.
-
-## Tests and fuzzing
+## Tests
 
 ```sh
 cargo test --all-features
 cargo +nightly fuzz run tree -- -max_total_time=60
 ```
 
-The test `spec` compares the crate with TS 29.244 V19.6.0, as
-`tests/spec/extract.py` takes it from the document: every message type and IE
-type; every row of a table with its presence, its interfaces, its IE type and
-how many IEs of it may be there; every flag and field of a figure with its
-octet, its bits and its order, the octets of each field of a fixed length, and
-the sentences that make a field there as a flag is set, but for the four
-values that the crate reads by hand, as their figures follow a type or a
-number (Node ID, FQ-CSID, MAC Addresses Detected and Removed), whose octets
-the test `codec` compares with their figures; every table of values, and the
-values that a receiver reads as another. `tests/spec/mutations.tsv` lists
-changes of the crate that it must fail on, which `tests/spec/mutate.py` makes
-in turn. `tests/spec/errata.tsv` names the 43 errata of the document that the
-crate meets, and the 3 readings of the crate where the document names no
-value, and `tests/spec/requirements.tsv` the 172 requirements of the
-procedures: 107 with the test that checks it, and 65 that are the
-application's, above the crate. `tests/spec/flag-rules.tsv` has the 58
-sentences of clause 8.2 that say which flags of an IE are set, together, with
-the value of another field or the Cause of the message, or always: 57 with the
-rule of `check()` that checks it, and 1 that a value does not show alone. The test `spec` checks
-these numbers.
-`tests/captures` has 213 messages that Open5GS and free5GC sent in lab runs:
-each decodes, encodes back to its octets, reads back from its tree, and is
-checked on its interface. Three fuzz targets, `decode`, `tree` and `node`, run
-in CI. [`tests/README.md`](tests/README.md) says what each test checks, and
-what the crate finds in other implementations.
-
-Each Rust block of this page is checked with what it prints
-([`tests/readme.rs`](tests/readme.rs) says how).
-
-A pull request comes with a test for what it changes. Sign off your commits
-(`git commit -s`): by contributing you agree to the [Developer Certificate
-of Origin](https://developercertificate.org/). [SECURITY.md](SECURITY.md)
-says how to report a vulnerability.
+[`tests/README.md`](tests/README.md) says what each test checks against the
+document and the lab captures, and what the crate finds in other
+implementations. Each Rust block of this page is checked with what it prints.
+A pull request comes with a test for what it changes; sign off your commits
+(`git commit -s`, the [Developer Certificate of
+Origin](https://developercertificate.org/)). [SECURITY.md](SECURITY.md) says how
+to report a vulnerability.
 
 ## The OxiRush family
 

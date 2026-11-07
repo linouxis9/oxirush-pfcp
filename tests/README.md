@@ -24,6 +24,19 @@ the row of bit numbers. `spec/errata.tsv` names the errata of the document that 
 meets, and what it takes instead; `spec/fields.tsv` where one field of the crate stands
 for several names of a figure.
 
+The inventory of the document that the test `spec` holds the crate to:
+
+- `spec/errata.tsv`: the errata of the document that the crate meets, and the readings of
+  the crate where the document names no value;
+- `spec/requirements.tsv`: each requirement of the procedures of clause 6, with the test
+  of `node` that checks it, or why it is the application's, above the crate;
+- `spec/flag-rules.tsv`: each sentence of clause 8.2 that says which flags of an IE are
+  set, together, with the value of another field or the Cause of the message, or always,
+  with the rule of `check()` that checks it, or why a value does not show it alone;
+- the octets of the four values that the crate reads by hand, as their figures follow a
+  type or a number (Node ID, FQ-CSID, MAC Addresses Detected and Removed), which the test
+  `codec` compares with their figures.
+
 `spec/mutations.tsv` has changes of the crate that the test `spec` must fail on: a value,
 a list, an interface, a bit, a condition, an order, a width, a constructor. `spec/mutate.py`
 makes each in a copy of the crate and runs the test, which CI does too:
