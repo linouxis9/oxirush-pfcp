@@ -22,7 +22,9 @@ The first version, of TS 29.244 V19.6.0 (2026-06).
   reliable delivery (§6.4), with the peers' retransmissions of the requests
   that it holds as events, heartbeat, associations, sessions, load and
   overload control and message priority, and what a peer does wrong as an
-  event. What it keeps of its peers is bounded, and what it drops counted.
+  event. A deletion whose usage reports follow keeps its session until the
+  last of them (§5.2.2.3.1). What it keeps of its peers is bounded, and what
+  it drops counted.
   With `SmfSet`, the requests that the SMF sets of §5.22 let come from another
   SMF of a set go to the caller, and a release keeps what MPAS keeps; with
   `other_entities`, a handover to another PFCP entity of the same SMF too,

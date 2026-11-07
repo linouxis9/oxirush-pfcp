@@ -34,7 +34,11 @@
 //!   setup makes, an update changes and a release ends, with the sessions of each.
 //! - **Sessions.** It gives the local SEIDs, keeps the peer's SEID of each session,
 //!   answers a session that it does not have with "Session context not found", and a
-//!   session without an association with "No established PFCP Association".
+//!   session without an association with "No established PFCP Association". A deletion
+//!   answered "More Usage Report to send" keeps the session on both nodes until the UP
+//!   function's last usage report, of PSDBU, and one answered with PURU keeps it on the CP
+//!   function's for its pending reports (§5.2.2.3.1), each until `keep` after the last of
+//!   them at most ([`Event::SessionEnded`]).
 //! - **Load and overload control (§6.2.3, §6.2.4).** It keeps the latest information of
 //!   each peer by its sequence number, ends an overload when its period of validity
 //!   expires, and throttles the session requests to an overloaded peer with the "Loss"
@@ -103,7 +107,9 @@ pub struct NodeConfig {
     /// How long an answered request is kept, to answer its retransmissions, a request
     /// waits for the caller's answer, past which the node forgets it, and a finished
     /// request is kept, to tell a duplicate or late response. Its peer has given the
-    /// request up after (N1 + 1) x T1 of its own.
+    /// request up after (N1 + 1) x T1 of its own. A session whose deletion waits for the
+    /// UP function's last usage reports (§5.2.2.3.1) ends `keep` after the last message of
+    /// it without the last one ([`Event::SessionEnded`]).
     pub keep: Duration,
     /// The priority of a request that has none (§6.2.4.5.2): 0 the highest, to 15.
     pub default_priority: u8,
@@ -468,6 +474,15 @@ pub enum Event {
         /// The peer that sent it.
         peer: SocketAddr,
     },
+    /// A session whose deletion waited for the UP function's last usage reports
+    /// (§5.2.2.3.1), which the node ended `keep` after the last message of it, without the
+    /// report of PSDBU that ends it otherwise. The caller ends one sooner, when it has the
+    /// number of reports that the Additional Usage Reports Information of the deletion's
+    /// response said, with [`Node::end_session`].
+    SessionEnded {
+        /// Its local SEID.
+        local_seid: u64,
+    },
     /// A peer's retransmission of a request that the node holds (§6.4): one that waits
     /// for the caller's answer, which the node does not give the caller again, or one that
     /// has its answer, the caller's or a rejection of the node's own, which the node sent
@@ -697,12 +712,14 @@ impl Node {
     }
 
     /// When [`handle_timeout`](Self::handle_timeout) is next due: a retransmission, a
-    /// heartbeat, or the end of an overload.
+    /// heartbeat, the end of an overload, or of a session whose deletion waits for its last
+    /// usage reports.
     pub fn poll_timeout(&self) -> Option<Duration> {
         let retransmission = self.deadlines.first().map(|(deadline, _)| *deadline);
         let heartbeat = self.heartbeats.first();
         let overload = self.overload.first_end();
-        [retransmission, heartbeat, overload]
+        let session = self.sessions.first_end();
+        [retransmission, heartbeat, overload, session]
             .into_iter()
             .flatten()
             .min()
@@ -898,6 +915,7 @@ impl Node {
             None => made.filter(|_| establishment).map(|(_, mark)| mark),
         };
         let id = self.send(now, to, message, false, local_seid, mark, change)?;
+        self.put_off(now, local_seid);
         if let Some((seid, mark)) = made {
             let node = self
                 .association_of(to)
@@ -910,6 +928,7 @@ impl Node {
                 reserved: false,
                 mark,
                 adopted: false,
+                until: None,
             };
             self.sessions.insert(seid, session);
         }
@@ -1058,6 +1077,7 @@ impl Node {
             reserved: false,
             mark: self.mark(),
             adopted,
+            until: None,
         };
         self.sessions.insert(local_seid, session);
         Ok(())
@@ -1858,6 +1878,7 @@ impl Node {
             // Full of requests that wait for their answer: the peer sends it again.
             return;
         }
+        self.put_off(now, inbound.seid);
         self.note_controls(now, from, octets, &message.body, inbound.seid);
         self.events.push_back(Event::Request {
             request: inbound,
@@ -2026,6 +2047,23 @@ impl Node {
         }
         self.answers.prune(now);
         self.sessions.prune(now);
+        for local_seid in self.sessions.ended(now) {
+            self.events.push_back(Event::SessionEnded { local_seid });
+        }
+    }
+
+    /// Put off the end of a session whose deletion waits for its last usage reports to
+    /// `keep` after a message of it (§5.2.2.3.1).
+    fn put_off(&mut self, now: Duration, local_seid: Option<u64>) {
+        if let Some(local) = local_seid
+            && self
+                .sessions
+                .get(&local)
+                .is_some_and(|session| session.until.is_some())
+        {
+            self.sessions
+                .end_at(local, now.saturating_add(self.config.keep));
+        }
     }
 
     /// The association of `peer` (§4.2.2): of its address, or of its address and port for
@@ -2437,6 +2475,7 @@ impl Node {
                                     reserved: false,
                                     mark,
                                     adopted: false,
+                                    until: None,
                                 },
                             );
                         }
@@ -2444,10 +2483,19 @@ impl Node {
                     }
                 }
             }
-            // The session of the request, whatever SEID the header of the response has.
+            // The session of the request, whatever SEID the header of the response has. A
+            // deletion answered "More Usage Report to send", or with PURU, keeps it for the
+            // UP function's last usage reports (§5.2.2.3.1).
             _ if accepted && request.change == Change::Ends => {
                 if let Some(local) = self.session_of(request) {
-                    self.sessions.remove(&local);
+                    match reports_follow(&message.body, true) {
+                        true => self
+                            .sessions
+                            .end_at(local, now.saturating_add(self.config.keep)),
+                        false => {
+                            self.sessions.remove(&local);
+                        }
+                    }
                 }
             }
             Body::SessionModificationResponse(_) if accepted => {
@@ -2555,6 +2603,7 @@ impl Node {
                             reserved: false,
                             mark,
                             adopted: false,
+                            until: None,
                         },
                     );
                 }
@@ -2574,6 +2623,15 @@ impl Node {
                     )
                 {
                     self.sessions.set_node(local, key);
+                }
+            }
+            // A deletion answered "More Usage Report to send" keeps the session for the
+            // reports that the caller sends, the last with PSDBU (§5.2.2.3.1); one answered
+            // with PURU alone does not, as its pending reports are the node's requests.
+            (Body::SessionDeletionResponse(_), _) if reports_follow(&message.body, false) => {
+                if let Some(local) = self.answered_session(request) {
+                    self.sessions
+                        .end_at(local, now.saturating_add(self.config.keep));
                 }
             }
             (Body::SessionDeletionResponse(_), _)
@@ -2740,6 +2798,24 @@ impl Node {
 fn accepts(body: &Body) -> bool {
     body.cause()
         .is_some_and(|cause| (1..64).contains(&cause.effective().value()))
+}
+
+/// Whether the response to a deletion says that the UP function's usage reports of the
+/// session follow it (§5.2.2.3.1): "More Usage Report to send", and, with `pending`, the
+/// PURU flag of reports that the CP function has not acknowledged.
+fn reports_follow(body: &Body, pending: bool) -> bool {
+    let Body::SessionDeletionResponse(response) = body else {
+        return false;
+    };
+    let more = response
+        .cause
+        .as_ref()
+        .is_some_and(|cause| cause.value.effective() == CauseValue::MoreUsageReportToSend);
+    let puru = response
+        .pfcpsdrsp_flags
+        .as_ref()
+        .is_some_and(|flags| flags.puru);
+    more || pending && puru
 }
 
 /// The address of a peer: of its IP address alone, port 0, for a node of a `request_port`.
