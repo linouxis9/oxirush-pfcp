@@ -4,37 +4,18 @@ All notable changes to `oxirush-pfcp` are recorded here.
 
 ## 0.1.0 - unreleased
 
-The first version, of TS 29.244 V19.6.0 (2026-06).
+The first version, of TS 29.244 V19.6.0 (2026-06): every message and IE type, decoded and
+encoded back byte for byte; `check()`, with the clause and the Cause of each deviation;
+trees, paths and serde; `Node`, a PFCP entity without I/O; `Endpoint`, a node on a Tokio
+socket. `no_std` with an allocator; Rust 1.88.
 
-- Every message of Table 7.3-1 and every IE type of Table 8.1.2-1, decoded
-  and encoded back byte for byte: an IE that its table does not have, a
-  repeated one and a value that does not decode are kept as their octets, in
-  their place. A message is built with `new()`, or `new_sxa()` to
-  `new_n4mb()` where the mandatory IEs of the interfaces differ, and
-  `with_*()`.
-- `check(interface)`: what a message breaks of its tables and of its values,
-  the rules of clause 8.2 on which flags are set, together, with a value or
-  the Cause of the message, or always, on an interface or a set of them, with the clause, and the Cause
-  and the Offending IE that its receiver answers with (§7.6).
-- `tree` and `serde`: a message as a tree, read and edited by path, and as
-  JSON.
-- `node`: a PFCP entity without I/O, for an SMF, a UPF or a test tool:
-  reliable delivery (§6.4), with the peers' retransmissions of the requests
-  that it holds as events, heartbeat, associations, sessions, load and
-  overload control, message priority and bundling, and what a peer does
-  wrong as an event. A deletion whose usage reports follow keeps its session until the
-  last of them (§5.2.2.3.1). What it keeps of its peers is bounded, and what
-  it drops counted; its sessions, associations, loads and overloads are
-  listed.
-  A request that names a session or an association of the node that is not
-  its sender's, as another SMF of a set sends (§5.22), goes to the caller as a
-  stranger's (`Inbound::stranger`): the node answers no such request "No
-  established PFCP Association" itself. A release keeps what MPAS keeps, and
-  bundling needs BUNDL, as both peers announce them in their association
-  messages.
-- `endpoint`: a node on a Tokio UDP socket. The `Endpoint` takes the peers'
-  requests and the events, and a `Handle`, which clones, sends the node's
-  requests and reaches its state, from any task.
-- `no_std` with an allocator. The minimum supported Rust version is 1.88.
-- The test `spec` compares the crate with the fixtures that
-  `tests/spec/extract.py` takes from the document.
+What the node decides itself changed before the release:
+
+- A request that names a session or an association that is not its sender's, as another
+  SMF of a set sends (§5.22), goes to the caller as `Inbound::stranger`. The node no
+  longer answers those of set members "No established PFCP Association" itself, and
+  `SmfSet`, `NodeConfig::smf_set` and `NodeConfig::other_entities` are gone.
+- The node reads its own BUNDL and MPAS from the features that the caller writes in its
+  association messages: `NodeConfig::bundling` is gone.
+- A session that the caller adopts is routed; the holder of its association heartbeats
+  its peer.

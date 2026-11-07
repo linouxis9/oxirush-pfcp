@@ -21,8 +21,8 @@
 use crate::enums::{CauseValue, DestinationInterfaceValue, SteeringFunctionalityValue};
 use crate::macros::{pfcp_ies, pfcp_table};
 use crate::values::*;
-use crate::values_gen::*;
-use crate::values_hand::*;
+use crate::values_clauses::*;
+use crate::values_figures::*;
 
 // The conditions of the C rows that a scope alone shows (§7.6.6), beside their rows.
 

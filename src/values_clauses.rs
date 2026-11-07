@@ -15,8 +15,8 @@
    limitations under the License.
 */
 
-//! The values of the layouts of clause 8.2 that their figures alone do not say: written
-//! by hand from the clauses, which give the conditions of their fields.
+//! The values of the layouts of clause 8.2 that their figures alone do not say, as their
+//! clauses give the conditions of their fields.
 
 use alloc::vec::Vec;
 use core::fmt;

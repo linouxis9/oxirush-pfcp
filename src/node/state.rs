@@ -61,7 +61,7 @@ impl SetOf {
     /// What a peer says: the features of its function, and the FQDN of its SMF Set ID.
     pub(crate) fn new(
         features: Option<Features>,
-        id: Option<&crate::values_hand::SmfSetId>,
+        id: Option<&crate::values_clauses::SmfSetId>,
     ) -> Self {
         Self {
             features: features.unwrap_or_default(),

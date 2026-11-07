@@ -15,8 +15,8 @@
    limitations under the License.
 */
 
-//! The values of the layouts of clause 8.2 that are numbers, octets of bits, or octets:
-//! written from the figures by a script, then reviewed.
+//! The values of the layouts of clause 8.2 that are numbers, octets of bits, or octets, as
+//! their figures lay them out, which the test `spec` compares them with.
 
 use alloc::vec::Vec;
 use core::net::{Ipv4Addr, Ipv6Addr};
@@ -28,7 +28,7 @@ use crate::ie::{Codec, listed_value};
 use crate::macros::{pfcp_bits, pfcp_layout};
 use crate::octets::Octets;
 use crate::values::*;
-use crate::values_hand::{DigitsLv8, TextLv8};
+use crate::values_clauses::{DigitsLv8, TextLv8};
 
 pfcp_number! {
     /// Cause (§8.2.1).

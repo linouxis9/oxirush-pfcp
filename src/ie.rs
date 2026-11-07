@@ -124,7 +124,7 @@ pub(crate) const UNKNOWN_OCTETS: &str = "unknown octets";
 /// Whether an IE of `ie_type` may hold a key: one of a key, or a grouped IE that a table
 /// gives one, at any depth.
 fn holds_secret(ie_type: u16, depth: u8) -> bool {
-    if crate::values_hand::SECRETS.contains(&ie_type) {
+    if crate::values_clauses::SECRETS.contains(&ie_type) {
         return true;
     }
     let Some(info) = crate::registry::ie_type_info(ie_type) else {

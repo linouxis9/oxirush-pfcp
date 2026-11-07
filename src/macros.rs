@@ -744,7 +744,7 @@ macro_rules! pfcp_messages {
             }
 
             /// The names of the messages, in the order of their types.
-            #[allow(dead_code)]
+            #[cfg(feature = "tree")]
             pub(crate) fn names() -> [&'static str; [$($code),*].len()] {
                 [$( crate::registry::$ty::table().name ),*]
             }

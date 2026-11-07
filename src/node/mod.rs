@@ -53,7 +53,7 @@ use crate::message::{
 };
 use crate::registry::*;
 use crate::values::*;
-use crate::values_gen::*;
+use crate::values_figures::*;
 
 pub use controls::{LoadControl, OverloadControl};
 use controls::{Overloads, Scope};

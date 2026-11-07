@@ -58,8 +58,8 @@ mod table;
 #[cfg_attr(docsrs, doc(cfg(feature = "tree")))]
 pub mod tree;
 mod values;
-mod values_gen;
-mod values_hand;
+mod values_clauses;
+mod values_figures;
 
 use alloc::string::{String, ToString};
 use core::fmt;
@@ -76,8 +76,8 @@ pub use octets::Octets;
 pub use registry::*;
 pub use table::{Interfaces, Presence, Repeat, Role, Row, Table};
 pub use values::*;
-pub use values_gen::*;
-pub use values_hand::*;
+pub use values_clauses::*;
+pub use values_figures::*;
 
 /// The examples of the README, which the documentation tests compile and run.
 #[cfg(all(doctest, feature = "serde", feature = "endpoint"))]
