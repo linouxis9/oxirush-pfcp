@@ -5810,6 +5810,50 @@ fn the_controls_of_an_adopted_peer_apply_to_it() {
     }
 }
 
+/// §4.2.2: the node sends its requests to a peer of a session that it adopts at port
+/// 8805, whatever port the request that handed the session over came from, as it does to
+/// a peer of an association or of an established session; without `request_port`, to the
+/// port of the peer. Its modifications and its heartbeats go there.
+#[test]
+fn an_adopted_session_takes_the_port_of_the_requests() {
+    for request_port in [Some(PORT), None] {
+        let mut other = Node::new(NodeConfig {
+            smf_set: SmfSet {
+                mpas: true,
+                ..SmfSet::default()
+            },
+            other_entities: true,
+            heartbeat: Some(Duration::from_secs(60)),
+            request_port,
+            ..config(OTHER, Function::Cp)
+        });
+        let from = SocketAddr::new(UPF.ip(), 40000);
+        let to = SocketAddr::new(UPF.ip(), request_port.unwrap_or(40000));
+        other.handle_datagram(at(1), from, &handover_report().encode().unwrap());
+        let (mut inbound, _) = request(&mut other);
+        other.adopt_session(0x55, inbound.from, 0x66).unwrap();
+        assert_eq!(other.session(0x55).map(|session| session.peer), Some(to));
+        inbound.seid = Some(0x55);
+        other
+            .respond(at(1), &inbound, SessionReportResponse::new(accepted()))
+            .unwrap();
+        assert_eq!(
+            sent(&mut other)[0].to,
+            from,
+            "the answer to the request's port"
+        );
+        other
+            .session_request(at(2), 0x55, SessionModificationRequest::default())
+            .unwrap();
+        other.handle_timeout(at(2));
+        let requests: Vec<(SocketAddr, u8)> = sent(&mut other)
+            .iter()
+            .map(|transmit| (transmit.to, decoded(transmit).body.message_type()))
+            .collect();
+        assert_eq!(requests, [(to, 52), (to, 1)]);
+    }
+}
+
 /// An establishment holds its session from when it is sent: another request of the
 /// session that ends without its response, cancelled here, leaves it, and the
 /// establishment's accepted response establishes it.
