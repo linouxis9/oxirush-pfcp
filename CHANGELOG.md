@@ -21,8 +21,8 @@ The first version, of TS 29.244 V19.6.0 (2026-06).
 - `node`: a PFCP entity without I/O, for an SMF, a UPF or a test tool:
   reliable delivery (§6.4), with the peers' retransmissions of the requests
   that it holds as events, heartbeat, associations, sessions, load and
-  overload control and message priority, and what a peer does wrong as an
-  event. A deletion whose usage reports follow keeps its session until the
+  overload control, message priority and bundling, and what a peer does
+  wrong as an event. A deletion whose usage reports follow keeps its session until the
   last of them (§5.2.2.3.1). What it keeps of its peers is bounded, and what
   it drops counted; its sessions, associations, loads and overloads are
   listed.

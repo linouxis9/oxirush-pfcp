@@ -85,7 +85,8 @@ A `Node` is a PFCP entity on one local address: datagrams and time go in, and
 datagrams to send, events and the next timer come out. It numbers each
 request and sends it again after T1, up to N1 times; matches each response
 by its sequence number, its peer and its type; answers a retransmitted
-request with the answer that it gave; answers heartbeats; and keeps the
+request with the answer that it gave; answers heartbeats; takes each message
+of a bundle on its own, when both peers announced BUNDL (§6.5); and keeps the
 associations, the sessions and the load and overload of each peer. It
 answers itself only what the clauses leave no choice in, as a request of a
 peer without an association; every other request of a peer is an event,
