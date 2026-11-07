@@ -67,7 +67,8 @@ use crate::node::{
 /// The largest datagram that the endpoint takes.
 const DATAGRAM: usize = 65_535;
 
-/// How many entries each queue of the endpoint holds.
+/// How many entries each queue of the endpoint holds: at least one, which a queue of
+/// none is taken as.
 #[derive(Debug, Clone, Copy)]
 pub struct Queues {
     /// The commands of the caller to the task.
@@ -310,9 +311,10 @@ impl Endpoint {
     ) -> io::Result<Self> {
         let socket = UdpSocket::bind(address).await?;
         let local = socket.local_addr()?;
-        let (commands, command_rx) = mpsc::channel(queues.commands);
-        let (incoming_tx, incoming) = mpsc::channel(queues.incoming);
-        let (events_tx, events) = mpsc::channel(queues.events);
+        // A channel of no entry is none to tokio: one, as the node takes its zeroes.
+        let (commands, command_rx) = mpsc::channel(queues.commands.max(1));
+        let (incoming_tx, incoming) = mpsc::channel(queues.incoming.max(1));
+        let (events_tx, events) = mpsc::channel(queues.events.max(1));
         let (forgetting, forgets) = mpsc::unbounded_channel();
         let (cancels, cancelled) = mpsc::unbounded_channel();
         let (stop, stopped) = oneshot::channel();

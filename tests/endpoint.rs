@@ -768,3 +768,22 @@ async fn an_entity_of_the_smf_takes_a_session_over() {
     assert_eq!(response.body.cause(), Some(CauseValue::RequestAccepted));
     drop(incoming);
 }
+
+/// Queues of no entry are of one, as a node takes its zeroes: the endpoint runs, and its
+/// requests come in.
+#[tokio::test]
+async fn queues_of_no_entry_hold_one() {
+    let queues = Queues {
+        commands: 0,
+        incoming: 0,
+        events: 0,
+    };
+    let mut upf = Endpoint::bind_with(ANY, config(Function::Up), queues)
+        .await
+        .unwrap();
+    let peer = tokio::net::UdpSocket::bind(ANY).await.unwrap();
+    peer.send_to(&setup(1), upf.local_addr()).await.unwrap();
+    let incoming = within(upf.incoming()).await.unwrap();
+    assert_eq!(incoming.request.sequence, 1);
+    assert!(within(upf.handle().counters()).await.is_ok());
+}
