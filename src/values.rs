@@ -33,6 +33,9 @@ use crate::octets::Octets;
 pub trait Field: Sized {
     /// How many octets it has, when they are fixed.
     const OCTETS: Option<usize> = None;
+    /// The cells narrower than an octet that it lays out, which the test `spec` compares
+    /// with the figure: none for a field of whole octets.
+    const CELLS: &'static [NarrowCell] = &[];
     /// Read the field, and step over it.
     fn read(octets: &mut &[u8]) -> Option<Self>;
     /// Write the field.
@@ -90,15 +93,32 @@ pub struct Bits {
     pub width: u8,
 }
 
-/// A field of octets: its octets when they are fixed, and when it is there.
+/// A field of octets: its octets when they are fixed, its cells narrower than an octet,
+/// and when it is there.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Member {
     /// Its name in the figure.
     pub name: &'static str,
     /// How many octets it has, when they are fixed.
     pub octets: Option<usize>,
+    /// The cells narrower than an octet that it lays out ([`Field::CELLS`]).
+    pub cells: &'static [NarrowCell],
     /// When it is there, as the crate writes it of the flags: `true` for always.
     pub condition: &'static str,
+}
+
+/// A cell of a figure narrower than an octet that a field lays out: a value of the low
+/// bits of its octet, whose others are spare, or a part of a field of its own layout.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct NarrowCell {
+    /// Its name in the figure: `None` for the field itself.
+    pub name: Option<&'static str>,
+    /// Its octet, from 0 for the first of the field.
+    pub octet: usize,
+    /// Its lowest bit, from 1.
+    pub bit: u8,
+    /// How many bits it has.
+    pub width: u8,
 }
 
 /// A rule of clause 8.2 on which flags of a value go together, which `broken` breaks:
@@ -221,6 +241,12 @@ impl<E: Narrowable> Narrow<E> {
 
 impl<E: Narrowable> Field for Narrow<E> {
     const OCTETS: Option<usize> = Some(1);
+    const CELLS: &'static [NarrowCell] = &[NarrowCell {
+        name: None,
+        octet: 0,
+        bit: 1,
+        width: E::BITS as u8,
+    }];
     fn read(octets: &mut &[u8]) -> Option<Self> {
         let octet = u8::read(octets)?;
         Some(Self {
@@ -284,6 +310,50 @@ impl<E: Narrowable> Field for Narrow<E> {
             );
         }
         Ok(narrow)
+    }
+}
+
+/// A number of the low `BITS` bits of its octet, as a [`Narrow`] field reads it.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Number<const BITS: u32>(pub u8);
+
+/// A number of the six low bits of its octet, whose two others are spare: the Paging
+/// Policy Indication value and the QFI of a Downlink Data Service Information (§8.2.27), a
+/// DSCP value of a DSCP to PPI Mapping Information (§8.2.214).
+pub type SixBits = Narrow<Number<6>>;
+
+impl<const BITS: u32> Narrowable for Number<BITS> {
+    const BITS: u32 = BITS;
+    fn from_value(value: u8) -> Self {
+        Self(value)
+    }
+    fn value(self) -> u8 {
+        self.0
+    }
+}
+
+/// A whole octet; [`Narrow`] keeps its spare bits apart.
+impl<const BITS: u32> Field for Number<BITS> {
+    const OCTETS: Option<usize> = Some(1);
+    fn read(octets: &mut &[u8]) -> Option<Self> {
+        u8::read(octets).map(Self)
+    }
+    fn write(&self, out: &mut Vec<u8>) {
+        out.push(self.0);
+    }
+    fn size(&self) -> usize {
+        1
+    }
+    #[cfg(feature = "tree")]
+    fn to_tree(&self) -> oxirush_utils::tree::Value {
+        oxirush_utils::tree::unsigned(self.0.into())
+    }
+    #[cfg(feature = "tree")]
+    fn from_tree(
+        value: &oxirush_utils::tree::Value,
+        reading: &mut oxirush_utils::tree::Reading,
+    ) -> Result<Self, oxirush_utils::tree::Refused> {
+        u8::from_tree(value, reading).map(Self)
     }
 }
 
@@ -578,6 +648,7 @@ impl<T: Field> Field for Counted<T> {
 pub struct Each<T>(pub Vec<T>);
 
 impl<T: Field> Field for Each<T> {
+    const CELLS: &'static [NarrowCell] = T::CELLS;
     fn read(octets: &mut &[u8]) -> Option<Self> {
         let mut values = Vec::new();
         while !octets.is_empty() {
@@ -634,6 +705,45 @@ impl From<oxirush_utils::identity::Plmn> for PlmnId {
 
 impl Field for PlmnId {
     const OCTETS: Option<usize> = Some(3);
+    /// Its digits, by two in an octet (TS 24.008 clause 10.5.1.3).
+    const CELLS: &'static [NarrowCell] = &[
+        NarrowCell {
+            name: Some("MCC digit 2"),
+            octet: 0,
+            bit: 5,
+            width: 4,
+        },
+        NarrowCell {
+            name: Some("MCC digit 1"),
+            octet: 0,
+            bit: 1,
+            width: 4,
+        },
+        NarrowCell {
+            name: Some("MNC digit 3"),
+            octet: 1,
+            bit: 5,
+            width: 4,
+        },
+        NarrowCell {
+            name: Some("MCC digit 3"),
+            octet: 1,
+            bit: 1,
+            width: 4,
+        },
+        NarrowCell {
+            name: Some("MNC digit 2"),
+            octet: 2,
+            bit: 5,
+            width: 4,
+        },
+        NarrowCell {
+            name: Some("MNC digit 1"),
+            octet: 2,
+            bit: 1,
+            width: 4,
+        },
+    ];
     fn read(octets: &mut &[u8]) -> Option<Self> {
         take(octets).map(Self)
     }
@@ -705,6 +815,20 @@ impl From<core::net::IpAddr> for TypedAddress {
 }
 
 impl Field for TypedAddress {
+    const CELLS: &'static [NarrowCell] = &[
+        NarrowCell {
+            name: Some("Address Type"),
+            octet: 0,
+            bit: 7,
+            width: 2,
+        },
+        NarrowCell {
+            name: Some("Address Length"),
+            octet: 0,
+            bit: 1,
+            width: 6,
+        },
+    ];
     fn read(octets: &mut &[u8]) -> Option<Self> {
         let (&first, rest) = octets.split_first()?;
         let (address, rest) = rest.split_at_checked(usize::from(first & 0x3f))?;
@@ -898,7 +1022,7 @@ macro_rules! pfcp_number {
             pub const LAYOUT: Option<&'static Layout> = Some(&Layout {
                 head: &[],
                 bits: &[],
-                fields: &[Member { name: $field, octets: <$t as Field>::OCTETS, condition: "true" }],
+                fields: &[Member { name: $field, octets: <$t as Field>::OCTETS, cells: <$t as Field>::CELLS, condition: "true" }],
             });
 
             /// The value.
@@ -1378,6 +1502,7 @@ impl NetworkInstance {
         fields: &[Member {
             name: "Network Instance",
             octets: None,
+            cells: &[],
             condition: "true",
         }],
     });
@@ -1438,7 +1563,7 @@ macro_rules! pfcp_fields {
             pub const LAYOUT: Option<&'static Layout> = Some(&Layout {
                 head: &[],
                 bits: &[],
-                fields: &[$(Member { name: $name, octets: <$kind as Field>::OCTETS, condition: "true" }),*],
+                fields: &[$(Member { name: $name, octets: <$kind as Field>::OCTETS, cells: <$kind as Field>::CELLS, condition: "true" }),*],
             });
         }
 
@@ -1737,7 +1862,7 @@ macro_rules! pfcp_octets {
             /// None: its tree is its octets.
             pub const MEMBERS: &'static [&'static str] = &[];
             /// Its layout.
-            pub const LAYOUT: Option<&'static Layout> = Some(&Layout { head: &[], bits: &[], fields: &[Member { name: $name, octets: None, condition: "true" }] });
+            pub const LAYOUT: Option<&'static Layout> = Some(&Layout { head: &[], bits: &[], fields: &[Member { name: $name, octets: None, cells: &[], condition: "true" }] });
         }
 
         impl Codec for $ty {

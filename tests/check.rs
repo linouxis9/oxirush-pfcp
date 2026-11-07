@@ -1515,3 +1515,32 @@ fn the_reserved_bit_of_reporting_frequency() {
     );
     assert_eq!(value_found::<ReportingFrequency>("03"), []);
 }
+
+/// §8.1.2, §8.2.27 and §8.2.214: the Paging Policy Indication value and the QFI of a
+/// Downlink Data Service Information, and each DSCP value of a DSCP to PPI Mapping
+/// Information, have the six low bits of their octet, whose two others are spare; and "X
+/// shall not be larger than 63" of the DSCP values.
+#[test]
+fn the_spare_bits_of_an_octet_of_six_bits() {
+    let spare = || ("8.1.2", DeviationKind::SpareBits);
+    assert_eq!(
+        value_found::<DownlinkDataServiceInformation>("01c1"),
+        [spare()]
+    );
+    assert_eq!(
+        value_found::<DownlinkDataServiceInformation>("0241"),
+        [spare()]
+    );
+    assert_eq!(value_found::<DownlinkDataServiceInformation>("033f3f"), []);
+    assert_eq!(
+        value_found::<DscpToPpiMappingInformation>("01c1"),
+        [spare()]
+    );
+    assert_eq!(value_found::<DscpToPpiMappingInformation>("012e3f00"), []);
+    let dscp = |count: usize| format!("01{}", "2e".repeat(count));
+    assert_eq!(value_found::<DscpToPpiMappingInformation>(&dscp(63)), []);
+    assert_eq!(
+        value_found::<DscpToPpiMappingInformation>(&dscp(64)),
+        [("8.2.214", DeviationKind::Rule("more than 63 DSCP values"))]
+    );
+}

@@ -122,7 +122,7 @@ macro_rules! pfcp_layout {
             const HEAD_OCTETS: usize = 0 $($( + crate::values::octets_of(<$hkind as crate::values::Field>::OCTETS) )*)?;
             /// Its layout.
             pub const LAYOUT: Option<&'static crate::values::Layout> = Some(&crate::values::Layout {
-                head: &[$($(crate::values::Member { name: $head_name, octets: <$hkind as crate::values::Field>::OCTETS, condition: "true" }),*)?],
+                head: &[$($(crate::values::Member { name: $head_name, octets: <$hkind as crate::values::Field>::OCTETS, cells: <$hkind as crate::values::Field>::CELLS, condition: "true" }),*)?],
                 bits: &[$(crate::values::Bits {
                     name: $flag_name,
                     ident: stringify!($flag),
@@ -130,7 +130,7 @@ macro_rules! pfcp_layout {
                     bit: ($bit - 1) % 8 + 1,
                     width: pfcp_layout!(@fwidth $($width)?),
                 }),*],
-                fields: &[$(crate::values::Member { name: $field_name, octets: <$kind $(<$param>)? as crate::values::Field>::OCTETS, condition: stringify!($cond) }),*],
+                fields: &[$(crate::values::Member { name: $field_name, octets: <$kind $(<$param>)? as crate::values::Field>::OCTETS, cells: <$kind $(<$param>)? as crate::values::Field>::CELLS, condition: stringify!($cond) }),*],
             });
             /// The clause of the layout.
             pub const CLAUSE: &'static str = $clause;

@@ -105,8 +105,12 @@ session-modification-response_test.go	Single IE	Created Bridge/Router Info is no
 session-modification-response_test.go	Single IE	spare bits are not zero (TS 29.244 8.1.2), at /pfcp/Usage Report/0/Usage Report Trigger
 session-modification-response_test.go	Multiple IEs	Created Bridge/Router Info is no IE of this table (TS 29.244 7.6.9), at /pfcp/Created Bridge/Router Info
 session-modification-response_test.go	Multiple IEs	spare bits are not zero (TS 29.244 8.1.2), at /pfcp/Usage Report/0/Usage Report Trigger
+session-report-request_test.go	Single IE	spare bits are not zero (TS 29.244 8.1.2), at /pfcp/Downlink Data Report/Downlink Data Service Information/0
+session-report-request_test.go	Single IE	spare bits are not zero (TS 29.244 8.1.2), at /pfcp/Downlink Data Report/Downlink Data Service Information/0
 session-report-request_test.go	Single IE	spare bits are not zero (TS 29.244 8.1.2), at /pfcp/Usage Report/0/Usage Report Trigger
 session-report-request_test.go	Single IE	Access Availability Control Information is no IE of this table (TS 29.244 7.6.9), at /pfcp/Session Report/0/Access Availability Control Information
+session-report-request_test.go	Multiple IEs	spare bits are not zero (TS 29.244 8.1.2), at /pfcp/Downlink Data Report/Downlink Data Service Information/0
+session-report-request_test.go	Multiple IEs	spare bits are not zero (TS 29.244 8.1.2), at /pfcp/Downlink Data Report/Downlink Data Service Information/0
 session-report-request_test.go	Multiple IEs	spare bits are not zero (TS 29.244 8.1.2), at /pfcp/Usage Report/0/Usage Report Trigger
 session-report-request_test.go	Multiple IEs	Access Availability Control Information is no IE of this table (TS 29.244 7.6.9), at /pfcp/Session Report/0/Access Availability Control Information
 session-report-request_test.go	Multiple IEs	Access Availability Control Information is no IE of this table (TS 29.244 7.6.9), at /pfcp/Session Report/1/Access Availability Control Information

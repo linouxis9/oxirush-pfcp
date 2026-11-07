@@ -1296,13 +1296,35 @@ fn keys_are_not_printed() {
     );
 }
 
+/// §8.2.27 and §8.2.214: a QFI, a Paging Policy Indication value and a DSCP value have the
+/// six low bits of their octet, whose two others are spare: a tree has them apart, and
+/// has no number that six bits cannot hold.
+#[test]
+fn a_number_of_six_bits_in_a_tree() {
+    let service = DownlinkDataServiceInformation::decode(&[0x03, 0xc1, 0x41]).unwrap();
+    let written = tree!({
+        "QFII": true,
+        "PPI": true,
+        "Paging Policy Indication value": {"value": 1, "Spare": 192},
+        "QFI": {"value": 1, "Spare": 64}
+    });
+    assert_eq!(tree::Tree::to_tree(&service), written);
+    let read: DownlinkDataServiceInformation = tree::from_value(&written).unwrap();
+    assert_eq!(read, service);
+    let wide = tree!({"QFII": true, "QFI": 65});
+    assert!(tree::from_value::<DownlinkDataServiceInformation>(&wide).is_err());
+    let mapping = DscpToPpiMappingInformation::decode(&[0x01, 0x2e, 0xc1]).unwrap();
+    let written = tree!({"PPI Value": 1, "DSCP Value": [46, {"value": 1, "Spare": 192}]});
+    assert_eq!(tree::Tree::to_tree(&mapping), written);
+}
+
 /// Values that the crate once misread: each as its clause has it.
 #[test]
 fn values_as_their_clauses_have_them() {
     // Table 7.5.8.2-1: a Downlink Data Service Information for each PDR ID
     let service = DownlinkDataServiceInformation {
         ppi: true,
-        paging_policy_indication: Some(3),
+        paging_policy_indication: Some(Narrow::new(Number(3))),
         ..Default::default()
     };
     let report = DownlinkDataReport::new(PdrId::new(1))
