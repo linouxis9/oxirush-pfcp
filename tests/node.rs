@@ -3588,6 +3588,68 @@ fn a_request_of_another_peers_node_id() {
     assert!(upf.association(SMF).is_some());
 }
 
+/// The node judges a request by the IEs that it decodes: the first Node ID or CP F-SEID,
+/// and not another after a first one of a null length, which the receiver ignores
+/// (§7.6.10). A release of a null Node ID and of another association's is no stranger's,
+/// nor one of a null Node ID and of one of no association rejected; an establishment of a
+/// null CP F-SEID and of one of SEID 0 is not rejected for that SEID, and a report of SEID
+/// 0 whose first Old CP F-SEID is null is of no session.
+#[test]
+fn a_request_is_judged_by_the_first_ie_of_each_type() {
+    let (mut smf, mut upf) = associated(at(0));
+    upf.handle_datagram(at(0), OTHER, &setup_of(OTHER, 1, 1000));
+    let (inbound, _) = request(&mut upf);
+    upf.respond(at(0), &inbound, setup_answer()).unwrap();
+    sent(&mut upf);
+    let release = |second: [u8; 4]| {
+        let mut release = AssociationReleaseRequest::default();
+        release.raw.push(RawIe::new(60, Vec::new()));
+        release.raw.push(RawIe::new(60, [&[0], &second[..]].concat()));
+        Message {
+            header: Header::node(5),
+            body: release.into(),
+        }
+    };
+    for second in [[10, 0, 0, 3], [10, 0, 0, 7]] {
+        upf.handle_datagram(at(1), SMF, &release(second).encode().unwrap());
+        let (inbound, message) = request(&mut upf);
+        assert!(!inbound.stranger);
+        assert_eq!(inbound.node_id, None);
+        let Body::AssociationReleaseRequest(body) = &message.body else {
+            panic!("{message}")
+        };
+        assert_eq!(body.node_id, None);
+        upf.forget(&inbound);
+    }
+    let Body::SessionEstablishmentRequest(mut body) = establishment(9).body else {
+        panic!("an establishment")
+    };
+    body.cp_f_seid = None;
+    body.raw.push(RawIe::new(57, Vec::new()));
+    body.raw.push(RawIe::new(57, [2, 0, 0, 0, 0, 0, 0, 0, 0, 10, 0, 0, 1]));
+    let null_first = Message {
+        header: Header::session(0, 6),
+        body: Body::SessionEstablishmentRequest(body),
+    };
+    assert_eq!(taken(&mut upf, SMF, null_first), Ok(false));
+    let (cp_seid, _) = established(&mut smf, &mut upf, at(0));
+    let mut report = SessionReportRequest::new(ReportType {
+        dldr: true,
+        ..Default::default()
+    });
+    report.raw.push(RawIe::new(57, Vec::new()));
+    let old = [&[2u8][..], &cp_seid.to_be_bytes(), &[10, 0, 0, 1]].concat();
+    report.raw.push(RawIe::new(57, old));
+    let report = Message {
+        header: Header::session(0, 7),
+        body: report.into(),
+    };
+    assert_eq!(
+        taken(&mut smf, UPF, report),
+        Err(vec![ViolationKind::UnknownSeid])
+    );
+}
+
 /// A session request is of a session of the host's, which is established: one of a
 /// session of another, of a host with an association or without, is a stranger's, which
 /// the caller takes or rejects, and one of a session not established yet is answered

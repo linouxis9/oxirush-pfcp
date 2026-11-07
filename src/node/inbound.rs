@@ -711,8 +711,9 @@ pub(super) fn rejection_body(
     })
 }
 
-/// The Node ID and the SEID of the CP F-SEID of a request, read from its IEs alone:
-/// the first of each that decodes, as the decode of its table takes them.
+/// The Node ID and the SEID of the CP F-SEID of a request, read from its IEs alone, as
+/// the decode of its table takes them: the first IE of each type, `None` for one of a null
+/// length or that does not decode, and not the IEs of its type after it (§7.6.10).
 pub(super) fn names(octets: &[u8]) -> (Option<NodeId>, Option<u64>) {
     use crate::ie::Codec;
     let Ok((_, _, ies)) = crate::framing::message_ies(octets) else {
@@ -721,12 +722,13 @@ pub(super) fn names(octets: &[u8]) -> (Option<NodeId>, Option<u64>) {
     let (mut node_id, mut f_seid) = (None, None);
     for ie in ies.map_while(Result::ok) {
         match ie.ie_type {
-            60 if node_id.is_none() => node_id = NodeId::decode(ie.value),
-            57 if f_seid.is_none() => f_seid = FSeid::decode(ie.value),
+            60 if node_id.is_none() => node_id = Some(NodeId::decode(ie.value)),
+            57 if f_seid.is_none() => f_seid = Some(FSeid::decode(ie.value)),
             _ => {}
         }
     }
-    (node_id, f_seid.and_then(|f_seid| f_seid.seid))
+    let f_seid = f_seid.flatten().and_then(|f_seid| f_seid.seid);
+    (node_id.flatten(), f_seid)
 }
 
 /// The Node ID that a node related request carries.
