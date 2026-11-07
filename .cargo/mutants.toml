@@ -14,4 +14,10 @@ exclude_re = [
     # place that they know (a row, a list, a field, a member of a field), and a place that
     # they know nothing of (a message of no table, an IE kept as octets) is always there.
     'src/tree\.rs:\d+:\d+: delete match arm \(_, Of::Nothing\) in <impl tree::Family for Paths>::step$',
+    # The spare bits and the value of a Narrow are of disjoint bits of its octet, which
+    # their | and their ^ write alike.
+    'src/values\.rs:\d+:\d+: replace \| with \^ in <impl Field for Narrow<E>>::write$',
+    # The Node-ID Type of an FQ-CSID, of four bits once checked, and the number of its CSIDs,
+    # fifteen at most, are of the two halves of their octet, which | and ^ write alike.
+    'src/values_clauses\.rs:\d+:\d+: replace \| with \^ in <impl Codec for FqCsid>::encode$',
 ]

@@ -290,7 +290,8 @@ impl Node {
         self.by_peer.insert(self.peer_key(peer), key.clone());
         let mut ended = Vec::new();
         if let Some(old) = &replaced {
-            if old.peer != peer && self.association_of(old.peer).is_none() {
+            // The heartbeats go to the new address, also of the same peer on another port.
+            if old.peer != peer {
                 self.heartbeats.remove(&old.peer);
             }
             if let Some(retained) = retained {

@@ -1431,6 +1431,11 @@ fn the_values_read_by_hand_have_the_places_of_their_figures() {
     reserved.encode(&mut out).unwrap();
     assert_eq!(out, [0x31, 10, 0, 0, 1, 2, 0, 1]);
     assert_eq!(FqCsid::decode(&out), None);
+    let last = FqCsid {
+        node_id_type: 15,
+        ..reserved.clone()
+    };
+    assert!(last.encode(&mut Vec::new()).is_ok());
     let wide = FqCsid {
         node_id_type: 16,
         ..reserved
@@ -1439,6 +1444,20 @@ fn the_values_read_by_hand_have_the_places_of_their_figures() {
         wide.encode(&mut Vec::new()),
         Err(Error::FieldLength { .. })
     ));
+    // Fifteen CSIDs at most, which four bits count, and the Node-Address of a known type
+    let csids = |count: u16, address: Vec<u8>| FqCsid {
+        node_id_type: 0,
+        node_address: address,
+        csids: (0..count).collect(),
+        ..Default::default()
+    };
+    assert!(csids(15, vec![10, 0, 0, 1]).encode(&mut Vec::new()).is_ok());
+    for refused in [csids(16, vec![10, 0, 0, 1]), csids(1, vec![10, 0, 0, 1, 2])] {
+        assert!(matches!(
+            refused.encode(&mut Vec::new()),
+            Err(Error::Inconsistent { .. })
+        ));
+    }
     // MAC Addresses Detected and Removed: the number of MAC addresses in octet 5, each
     // address of 6 octets, then the C-TAG and the S-TAG, each after its length
     let octets = [
@@ -1538,6 +1557,9 @@ fn the_fqdn_of_an_smf_set_id_as_its_name() {
     for name in ["", "smf..set", &"a".repeat(254)] {
         assert_eq!(Fqdn::new(name), None, "{name:?}");
     }
+    // Decoded: the spare octet, then the labels, the rest of the IE
+    let decoded = SmfSetId::decode(b"\x00\x03smf\x03set").unwrap();
+    assert_eq!(decoded.fqdn, Fqdn::new("smf.set").unwrap());
 }
 
 /// §8.2.38: a Node ID as its receiver takes it, the spare bits of its type and the octets

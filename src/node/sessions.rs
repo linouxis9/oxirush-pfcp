@@ -188,7 +188,8 @@ impl Node {
                 self.violation(from, ViolationKind::SeidZero, octets);
                 self.abandon(request);
             }
-            (true, Some(f_seid)) if f_seid.seid.is_some() => {
+            // A decoded F-SEID has its SEID, of no flag.
+            (true, Some(f_seid)) => {
                 let node = self
                     .association_of(from)
                     .map(|association| association.key.clone())

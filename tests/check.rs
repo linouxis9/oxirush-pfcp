@@ -647,6 +647,10 @@ fn a_semantically_invalid_mandatory_ie_is_incorrect() {
     let long = [&[2][..], &label, &label, &label, &label].concat();
     let fits = [&long[..193], &[61], &[b'a'; 61]].concat();
     assert_eq!(found(&node_message(5, &[ie(60, &fits), ie(96, &RTS)])), []);
+    // An address of its type with an octet after it, which a later release may add
+    // (§8.1.2)
+    let longer = node_message(5, &[ie(60, &[0, 10, 0, 0, 1, 0xff]), ie(96, &RTS)]);
+    assert_eq!(found(&longer), []);
     let too_long = [&long[..193], &[62], &[b'a'; 62]].concat();
     for node_id in [
         &[0, 10, 0][..],
@@ -1057,8 +1061,21 @@ fn a_needed_ie_of_a_null_length_is_the_senders_deviation() {
         [null(19)]
     );
     assert_eq!(
-        found(&session_message(51, 1, &[node, ie(19, &[1]), ie(57, &[])])),
+        found(&session_message(
+            51,
+            1,
+            &[node.clone(), ie(19, &[1]), ie(57, &[])]
+        )),
         [null(57)]
+    );
+    // One that is there and does not decode is incorrect, not of a null length
+    assert_eq!(
+        found(&session_message(51, 1, &[node, ie(19, &[1]), ie(57, &[2])])),
+        [(
+            DeviationKind::ConditionalIncorrect { ie_type: 57 },
+            None,
+            None
+        )]
     );
 }
 
@@ -1305,6 +1322,14 @@ fn the_absence_rules_that_their_scope_shows() {
     for (found, expected) in cases {
         assert_eq!(found, expected);
     }
+    // A Transport Level Marking that the scope keeps as octets is there; an IE of
+    // another type is not it
+    let mut kept = forwarding()
+        .with_extended_transport_level_marking(ExtendedTransportLevelMarking::default());
+    kept.raw.push(RawIe::new(116, vec![1]));
+    assert_eq!(excluded(&kept), Vec::<String>::new());
+    kept.raw.push(RawIe::new(30, vec![0xfc]));
+    assert_eq!(excluded(&kept), ["Transport Level Marking"]);
     // The Network Instance of a UE IP address that the UP function allocates, without a
     // Traffic Endpoint ID
     assert_eq!(
