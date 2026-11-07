@@ -65,7 +65,8 @@ pub trait Field: Sized {
         reading: &mut oxirush_utils::tree::Reading,
     ) -> Result<Self, oxirush_utils::tree::Refused>;
     /// What its tree may hold below it, which a path below it is judged by where a value
-    /// lacks it: nothing for a field whose tree is a scalar.
+    /// lacks it, and in either form of a tree of two: nothing for a field whose tree is a
+    /// scalar.
     #[cfg(feature = "tree")]
     const BELOW: &'static crate::tree::Below = &crate::tree::Below::Scalar;
 }
@@ -246,10 +247,13 @@ impl<E: Narrowable> Narrow<E> {
 impl<E: Narrowable> Field for Narrow<E> {
     const OCTETS: Option<usize> = Some(1);
     #[cfg(feature = "tree")]
-    const BELOW: &'static crate::tree::Below = &crate::tree::Below::Object(&[
-        ("value", &crate::tree::Below::Scalar),
-        ("Spare", &crate::tree::Below::Scalar),
-    ]);
+    const BELOW: &'static crate::tree::Below = &crate::tree::Below::Either(
+        Some("value"),
+        &[
+            ("value", &crate::tree::Below::Scalar),
+            ("Spare", &crate::tree::Below::Scalar),
+        ],
+    );
     const CELLS: &'static [NarrowCell] = &[NarrowCell {
         name: None,
         octet: 0,
@@ -829,10 +833,13 @@ impl From<core::net::IpAddr> for TypedAddress {
 
 impl Field for TypedAddress {
     #[cfg(feature = "tree")]
-    const BELOW: &'static crate::tree::Below = &crate::tree::Below::Object(&[
-        ("Address Type", &crate::tree::Below::Scalar),
-        ("Address", &crate::tree::Below::Scalar),
-    ]);
+    const BELOW: &'static crate::tree::Below = &crate::tree::Below::Either(
+        Some("Address"),
+        &[
+            ("Address Type", &crate::tree::Below::Scalar),
+            ("Address", &crate::tree::Below::Scalar),
+        ],
+    );
     const CELLS: &'static [NarrowCell] = &[
         NarrowCell {
             name: Some("Address Type"),

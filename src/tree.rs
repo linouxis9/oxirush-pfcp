@@ -330,17 +330,46 @@ fn no_such_ie(table: &crate::table::Table, names: &[&str], written: &str) -> Str
 
 /// What the tree of a field of a value may hold below it, as the crate writes it
 /// ([`Field::BELOW`](crate::Field::BELOW)): what [`select`] judges a name by below a field
-/// that a value lacks, or below an entry past the end of a list of them.
+/// that a value lacks, below an entry past the end of a list of them, and below a field
+/// whose tree takes either of two forms.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum Below {
     /// Nothing: a flag, or a field whose tree is a scalar.
     Scalar,
-    /// The members of an object, each with what it may hold below it: those of a value
-    /// with spare bits, or of an address of another type than IPv4 and IPv6.
+    /// The members of an object, each with what it may hold below it: those of a Source
+    /// Specific IP Multicast Address.
     Object(&'static [(&'static str, &'static Below)]),
+    /// A scalar or an object, as the value is: the scalar is the member that it names, if
+    /// any, of the members of the object, each with what it may hold below it. A value
+    /// without spare bits is its `value`, and one with them `{"value": ..., "Spare": ...}`;
+    /// an IPv4 or IPv6 address is its `Address`, another `{"Address Type": ..., "Address":
+    /// ...}`; an identity of digits or text is none of them, one of other octets
+    /// `{"octets": ...}`.
+    Either(
+        Option<&'static str>,
+        &'static [(&'static str, &'static Below)],
+    ),
     /// The entries of a list, with what each may hold below it.
     List(&'static Below),
+}
+
+impl Below {
+    /// The members of an object that the tree may have.
+    fn members(&self) -> &'static [(&'static str, &'static Below)] {
+        match self {
+            Self::Object(members) | Self::Either(_, members) => members,
+            _ => &[],
+        }
+    }
+
+    /// What the member `name` of the object may hold below it.
+    fn member(&self, name: &str) -> Option<&'static Below> {
+        self.members()
+            .iter()
+            .find(|(member, _)| tree::same_name(member, name))
+            .map(|(_, below)| *below)
+    }
 }
 
 /// What the tree of the field `name` of a value of `info` may hold below it.
@@ -358,7 +387,9 @@ fn below_member(info: &IeTypeInfo, name: &str) -> &'static Below {
 /// there, where another name is no member, also below what is not there: below a field
 /// that a value or the header lacks, and an entry past the end of a list, a name is
 /// judged by what the tree of the field may hold ([`Below`]), and nothing is below a
-/// scalar. A value that its tree writes as a scalar has the one field that it is.
+/// scalar. A value that its tree writes as a scalar has the one field that it is, and so
+/// has a field whose tree is a scalar or an object ([`Below::Either`]): the member that
+/// the scalar is, if any, selects it, and the others of the object select nothing.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Paths;
 
@@ -500,6 +531,27 @@ impl tree::Family for Paths {
                     Err(tree::Error::new(ErrorKind::NoSuchMember, "", reason))
                 }
             },
+            // A field written as the scalar of its two forms: the member that it is selects
+            // it, another member of the object selects nothing, and another name is none.
+            (Some(value), Of::Below(below @ Below::Either(scalar, _))) if !value.is_object() => {
+                if scalar.is_some_and(|scalar| tree::same_name(scalar, segment)) {
+                    let inside = below.member(segment).unwrap_or(&Below::Scalar);
+                    next.stay(place, Shape(Of::Below(inside)));
+                    return Ok(Step::Taken);
+                }
+                match below.member(segment) {
+                    Some(inside) => {
+                        next.absent(segment, Shape(Of::Below(inside)));
+                        Ok(Step::Taken)
+                    }
+                    None => {
+                        let reason = alloc::format!(
+                            "{segment:?} is no member of this field, of either form"
+                        );
+                        Err(tree::Error::new(ErrorKind::NoSuchMember, "", reason))
+                    }
+                }
+            }
             (Some(value), Of::Value(info)) if !value.is_object() => {
                 if scalar_field(info).is_some_and(|field| tree::same_name(field, segment)) {
                     next.stay(place, Shape(Of::Nothing));
@@ -554,10 +606,7 @@ impl tree::Family for Paths {
             {
                 Of::Below(below_member(info, name))
             }
-            Of::Below(Below::Object(members)) => members
-                .iter()
-                .find(|(member, _)| tree::same_name(member, name))
-                .map_or(Of::Nothing, |(_, below)| Of::Below(below)),
+            Of::Below(below) => below.member(name).map_or(Of::Nothing, Of::Below),
             _ => Of::Nothing,
         })
     }
@@ -580,9 +629,7 @@ impl tree::Family for Paths {
                 .members
                 .iter()
                 .any(|member| tree::same_name(member, name)),
-            Of::Below(Below::Object(members)) => members
-                .iter()
-                .any(|(member, _)| tree::same_name(member, name)),
+            Of::Below(below) => below.member(name).is_some(),
             _ => false,
         };
         match there {
@@ -596,7 +643,8 @@ impl tree::Family for Paths {
 /// grouped IE lacks, and a member that a value or the header lacks of those that its tree
 /// may have ([`IeTypeInfo::members`]), select nothing; a name that is none of them is an
 /// error, also below what is not there: a row, a flag or a field, of what its tree may
-/// hold ([`Below`]), and an entry past the end of a list.
+/// hold ([`Below`]), and an entry past the end of a list. A field whose tree is a scalar
+/// or an object takes the same names in either form ([`Below::Either`]).
 ///
 /// # Errors
 ///
