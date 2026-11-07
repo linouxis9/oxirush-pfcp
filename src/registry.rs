@@ -1003,9 +1003,9 @@ pfcp_table! {
     /// GTP-U Path QoS Control Information within PFCP Association Setup Request (Table 7.4.4.1.3-1).
     group GtpUPathQoSControlInformation = 238, "GTP-U Path QoS Control Information", "7.4.4.1.3-1" {
         // NOTE: "At least one Remote GTP-U Peer IE or GTP-U Path Interface Type IE shall be
-        // present", the condition of each on the other.
+        // present", one deviation, at the first.
         remote_gtp_u_peer: "Remote GTP-U Peer" C* RemoteGtpUPeer [N4] if |s| s.gtp_u_path_interface_type.is_none(),
-        gtp_u_path_interface_type: "GTP-U Path Interface Type" C GtpUPathInterfaceType [N4] if |s| s.remote_gtp_u_peer.is_empty(),
+        gtp_u_path_interface_type: "GTP-U Path Interface Type" C GtpUPathInterfaceType [N4],
         qos_report_trigger: "QoS Report Trigger" M QoSReportTrigger [N4],
         dscp: "DSCP" C* TransportLevelMarking [N4],
         measurement_period: "Measurement Period" C MeasurementPeriod [N4] if |s| s.qos_report_trigger.as_ref().is_some_and(|t| t.per),
@@ -1124,9 +1124,9 @@ pfcp_table! {
         time_stamp: "Time Stamp" M TimeStamp [N4],
         start_time: "Start Time" C StartTime [N4],
         // NOTE: "Either the N6 Delay Measurement Information IE or the N6 Delay Measurement
-        // Failure Information IE shall be present", the condition of each on the other.
+        // Failure Information IE shall be present", one deviation, at the first.
         n6_delay_measurement_information: "N6 Delay Measurement Information" C N6DelayMeasurementInformation [N4] if |s| s.n6_delay_measurement_failure_information.is_none(),
-        n6_delay_measurement_failure_information: "N6 Delay Measurement Failure Information" C N6DelayMeasurementFailureInformation [N4] if |s| s.n6_delay_measurement_information.is_none(),
+        n6_delay_measurement_failure_information: "N6 Delay Measurement Failure Information" C N6DelayMeasurementFailureInformation [N4],
         measurement_endpoint_port_number: "Measurement EndPoint Port Number" O MeasurementEndpointPortNumber [N4],
     }
 }
@@ -1568,8 +1568,8 @@ pfcp_table! {
         n3gpp_access_forwarding_action_information: "3GPP Access Forwarding Action Information" C ThreeGppAccessForwardingActionInformation [N4],
         non_3gpp_access_forwarding_action_information: "Non-3GPP Access Forwarding Action Information" C NonThreeGppAccessForwardingActionInformation [N4],
         // NOTE 2: "The Threshold Values IE and the Steering Mode Indicator IE shall not be
-        // present together".
-        threshold_values: "Threshold Values" C Thresholds [N4] absent(|s| s.steering_mode_indicator.is_some()),
+        // present together", one deviation, at the second.
+        threshold_values: "Threshold Values" C Thresholds [N4],
         steering_mode_indicator: "Steering Mode Indicator" C SteeringModeIndicator [N4] absent(|s| s.threshold_values.is_some()),
         // Of the MPQUIC functionalities; "In all other cases, this IE shall be absent".
         transport_mode: "Transport Mode" C TransportMode [N4] absent(|s| !mpquic(&s.steering_functionality)) if |s| mpquic(&s.steering_functionality),
@@ -1651,10 +1651,10 @@ pfcp_table! {
         qfi: "QFI" M* Qfi [N4],
         traffic_parameter_measurement_indication: "Traffic Parameter Measurement Indication" M TrafficParameterMeasurementIndication [N4],
         // NOTE: "Either a Measurement Period or a Traffic Parameter Threshold shall be
-        // present", the condition of each on the other.
+        // present", one deviation, at the first.
         measurement_period: "Measurement Period" C MeasurementPeriod [N4] if |s| s.traffic_parameter_threshold.is_none(),
         dl_periodicity: "DL Periodicity" C DlPeriodicity [N4],
-        traffic_parameter_threshold: "Traffic Parameter Threshold" C TrafficParameterThreshold [N4] if |s| s.measurement_period.is_none(),
+        traffic_parameter_threshold: "Traffic Parameter Threshold" C TrafficParameterThreshold [N4],
     }
 }
 

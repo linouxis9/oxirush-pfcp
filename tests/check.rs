@@ -1316,7 +1316,7 @@ fn the_absence_rules_that_their_scope_shows() {
                         .with_threshold_values(Thresholds::default())
                         .with_steering_mode_indicator(SteeringModeIndicator::default()),
                 ),
-                &["Threshold Values", "Steering Mode Indicator"],
+                &["Steering Mode Indicator"],
             ),
         ];
     for (found, expected) in cases {
@@ -1459,7 +1459,6 @@ fn the_conditions_that_their_scope_shows() {
         &path,
         &[
             "Remote GTP-U Peer",
-            "GTP-U Path Interface Type",
             "Measurement Period",
         ],
     );
@@ -1488,13 +1487,7 @@ fn the_conditions_that_their_scope_shows() {
     shown(&n6, &[]);
     // Table 7.4.5.1.8-1: an N6 delay report has its information or its failure
     let mut report = N6DelayMeasurementReport::default();
-    shown(
-        &report,
-        &[
-            "N6 Delay Measurement Information",
-            "N6 Delay Measurement Failure Information",
-        ],
-    );
+    shown(&report, &["N6 Delay Measurement Information"]);
     report.n6_delay_measurement_failure_information =
         Some(N6DelayMeasurementFailureInformation::default());
     shown(&report, &[]);
@@ -1617,10 +1610,7 @@ fn the_conditions_that_their_scope_shows() {
     }
     // Table 7.5.2.9-5: a period or a threshold
     let mut traffic = TrafficParameterMeasurementControlInformation::default();
-    shown(
-        &traffic,
-        &["Measurement Period", "Traffic Parameter Threshold"],
-    );
+    shown(&traffic, &["Measurement Period"]);
     traffic.measurement_period = Some(MeasurementPeriod::new(10));
     shown(&traffic, &[]);
     // Tables 7.5.5.2-1, 7.5.7.2-1 and 7.5.8.3-1: a usage report has its start and end
