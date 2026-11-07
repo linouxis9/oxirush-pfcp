@@ -98,8 +98,13 @@ pub(crate) struct Sessions {
     by_peer: BTreeSet<(u64, u64)>,
     /// The local SEID of each session by its mark, wherever it moved.
     by_mark: BTreeMap<u64, u64>,
-    /// How many adopted sessions each peer has.
+    /// The port of the node's requests, by which it tells its peers apart.
+    request_port: Option<u16>,
+    /// How many adopted sessions each peer has, as the node tells peers apart.
     adopted: BTreeMap<SocketAddr, usize>,
+    /// The peers whose first adopted session began, or whose last ended, since the node
+    /// last took them.
+    flipped: BTreeSet<SocketAddr>,
     /// A previous local SEID of a session, after a change of its CP F-SEID: the mark of
     /// the session, until when.
     aliases: BTreeMap<u64, (u64, Duration)>,
@@ -110,6 +115,14 @@ pub(crate) struct Sessions {
 }
 
 impl Sessions {
+    /// The sessions of a node of `request_port`.
+    pub(crate) fn new(request_port: Option<u16>) -> Self {
+        Self {
+            request_port,
+            ..Self::default()
+        }
+    }
+
     pub(crate) fn get(&self, local: &u64) -> Option<&Session> {
         self.by_local.get(local)
     }
@@ -128,7 +141,12 @@ impl Sessions {
         }
         let mark = session.mark;
         if session.adopted {
-            *self.adopted.entry(session.peer).or_default() += 1;
+            let peer = super::peer_key(self.request_port, session.peer);
+            let count = self.adopted.entry(peer).or_default();
+            *count += 1;
+            if *count == 1 {
+                self.flipped.insert(peer);
+            }
         }
         let until = session.until;
         if let Some(old) = self.by_local.insert(local, session) {
@@ -153,24 +171,28 @@ impl Sessions {
 
     /// Count a session that goes no more among the adopted sessions of its peer.
     fn unadopt(&mut self, session: &Session) {
+        let peer = super::peer_key(self.request_port, session.peer);
         if session.adopted
-            && let Some(count) = self.adopted.get_mut(&session.peer)
+            && let Some(count) = self.adopted.get_mut(&peer)
         {
             *count -= 1;
             if *count == 0 {
-                self.adopted.remove(&session.peer);
+                self.adopted.remove(&peer);
+                self.flipped.insert(peer);
             }
         }
     }
 
     /// Whether `peer` has an adopted session.
     pub(crate) fn adopts(&self, peer: SocketAddr) -> bool {
-        self.adopted.contains_key(&peer)
+        self.adopted
+            .contains_key(&super::peer_key(self.request_port, peer))
     }
 
-    /// The peers of the adopted sessions.
-    pub(crate) fn adopted_peers(&self) -> impl Iterator<Item = SocketAddr> + '_ {
-        self.adopted.keys().copied()
+    /// The peers whose first adopted session began, or whose last ended, since the last
+    /// call, as the node tells peers apart.
+    pub(crate) fn flipped(&mut self) -> BTreeSet<SocketAddr> {
+        core::mem::take(&mut self.flipped)
     }
 
     pub(crate) fn remove(&mut self, local: &u64) -> Option<Session> {
@@ -768,6 +790,29 @@ mod tests {
         assert_eq!(sessions.of_mark(9), Some(2));
         sessions.insert(3, session(10, false));
         assert_eq!(sessions.of_mark(9), Some(2));
+    }
+
+    /// The peers whose first adopted session begins or whose last ends are told once, as
+    /// the node tells peers apart: of their addresses alone, with a port of the requests.
+    #[test]
+    fn the_peers_of_adopted_sessions_that_begin_or_end_are_told() {
+        let mut sessions = Sessions::new(Some(8805));
+        let key = SocketAddr::from(([10, 0, 0, 2], 0));
+        sessions.insert(1, session(7, true));
+        sessions.insert(
+            2,
+            Session {
+                peer: SocketAddr::from(([10, 0, 0, 2], 40000)),
+                ..session(8, true)
+            },
+        );
+        assert_eq!(sessions.flipped().into_iter().collect::<Vec<_>>(), [key]);
+        assert!(sessions.adopts(SocketAddr::from(([10, 0, 0, 2], 1))));
+        sessions.remove(&1);
+        assert!(sessions.flipped().is_empty());
+        sessions.remove(&2);
+        assert_eq!(sessions.flipped().into_iter().collect::<Vec<_>>(), [key]);
+        assert!(!sessions.adopts(key));
     }
 
     /// A session that another replaces at its local SEID leaves the peer's SEID of the new

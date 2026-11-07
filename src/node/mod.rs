@@ -119,13 +119,13 @@ pub struct NodeConfig {
     /// while it can (§6.2.4.5.1): `None` for none.
     pub priority_up_to: Option<u8>,
     /// How many requests of the peers the node keeps for their retransmissions, and how
-    /// many Recovery Time Stamps of peers without an association, so that a flood of
-    /// datagrams bounds what the node holds. A request that waits for its answer stays
-    /// until the caller answers or forgets it ([`Node::forget`]), or `keep` has passed;
-    /// beyond it, a rejection of
-    /// the node's own goes first, then the oldest answer, and a request that finds every
-    /// place waiting is dropped: [`Node::counters`] counts both. A Heartbeat Request is
-    /// answered from the state, and not kept.
+    /// many Recovery Time Stamps of peers without an association, the oldest of which goes
+    /// first in a time that does not grow with them, so that a flood of datagrams bounds
+    /// what the node holds. A request that waits for its answer stays until the caller
+    /// answers or forgets it ([`Node::forget`]), or `keep` has passed; beyond it, a
+    /// rejection of the node's own goes first, then the oldest answer, and a request that
+    /// finds every place waiting is dropped: [`Node::counters`] counts both. A Heartbeat
+    /// Request is answered from the state, and not kept.
     pub capacity: usize,
     /// The UDP port of the requests that the node sends to a peer of its own accord, a
     /// heartbeat or a session request: 8805 (§4.2.2), whatever port the peer sends its
@@ -638,8 +638,11 @@ pub struct Node {
     by_peer: BTreeMap<SocketAddr, Vec<u8>>,
     sessions: Sessions,
     /// The Recovery Time Stamp of each peer, as [`Node::same_peer`] tells them apart, and
-    /// when the node last had it.
-    recovery: BTreeMap<SocketAddr, (u32, Duration)>,
+    /// the turn in which the node last had it; and the peers with neither an association
+    /// nor an adopted session by that turn, the first of which goes first.
+    recovery: BTreeMap<SocketAddr, (u32, u64)>,
+    aging: BTreeMap<u64, SocketAddr>,
+    next_turn: u64,
     heartbeats: Heartbeats,
     load: BTreeMap<Scope, LoadControl>,
     overload: Overloads,
@@ -654,6 +657,7 @@ impl Node {
         const LEAST: Duration = Duration::from_millis(1);
         config.t1 = config.t1.max(LEAST);
         config.heartbeat = config.heartbeat.map(|interval| interval.max(LEAST));
+        let sessions = Sessions::new(config.request_port);
         Self {
             config,
             next_sequence: 1,
@@ -671,8 +675,10 @@ impl Node {
             answers: Answers::default(),
             associations: BTreeMap::new(),
             by_peer: BTreeMap::new(),
-            sessions: Sessions::default(),
+            sessions,
             recovery: BTreeMap::new(),
+            aging: BTreeMap::new(),
+            next_turn: 0,
             heartbeats: Heartbeats::default(),
             load: BTreeMap::new(),
             overload: Overloads::default(),
@@ -1736,7 +1742,7 @@ impl Node {
     ) {
         let sequence = message.header.sequence;
         let message_type = message.body.message_type();
-        self.note_recovery(now, from, &message.body);
+        self.note_recovery(from, &message.body);
         let effect = match &message.body {
             // A PFCP Session Retention Information of a null length keeps every session.
             Body::AssociationSetupRequest(request)
@@ -1899,7 +1905,7 @@ impl Node {
         let request = self.take(sequence).expect("outstanding");
         self.deadlines.remove(&(request.deadline, sequence));
         self.finish(now, sequence, from, false);
-        self.note_recovery(now, from, &message.body);
+        self.note_recovery(from, &message.body);
         self.note_controls(now, from, octets, &message.body, request.local_seid);
         self.response_effects(now, from, octets, &request, &message);
         if !request.heartbeat {
@@ -2047,6 +2053,7 @@ impl Node {
         }
         self.answers.prune(now);
         self.sessions.prune(now);
+        self.reage_flipped();
         for local_seid in self.sessions.ended(now) {
             self.events.push_back(Event::SessionEnded { local_seid });
         }
@@ -2172,7 +2179,7 @@ impl Node {
     }
 
     /// The Recovery Time Stamp that a message carries: a change is a restart (§6.2.2).
-    fn note_recovery(&mut self, now: Duration, from: SocketAddr, body: &Body) {
+    fn note_recovery(&mut self, from: SocketAddr, body: &Body) {
         let stamp = match body {
             Body::HeartbeatRequest(message) => message.recovery_time_stamp.as_ref(),
             Body::HeartbeatResponse(message) => message.recovery_time_stamp.as_ref(),
@@ -2183,28 +2190,29 @@ impl Node {
         let Some(stamp) = stamp.map(|stamp| stamp.value) else {
             return;
         };
-        // The stamps of peers without an association are bounded, the oldest first.
-        if !self.recovery.contains_key(&self.peer_key(from))
-            && self.recovery.len() >= self.config.capacity.max(1)
-        {
-            let associated: BTreeSet<SocketAddr> = self
-                .associations
-                .values()
-                .map(|association| association.peer)
-                .chain(self.sessions.adopted_peers())
-                .map(|peer| self.peer_key(peer))
-                .collect();
-            let oldest = self
-                .recovery
-                .iter()
-                .filter(|(peer, _)| !associated.contains(peer))
-                .min_by_key(|(_, (_, seen))| *seen)
-                .map(|(peer, _)| *peer);
-            if let Some(oldest) = oldest {
-                self.recovery.remove(&oldest);
+        // The stamps of peers with neither an association nor an adopted session are
+        // bounded, the oldest first, which their index gives at once.
+        self.reage_flipped();
+        let key = self.peer_key(from);
+        let turn = self.next_turn;
+        self.next_turn += 1;
+        let full = self.recovery.len() >= self.config.capacity.max(1);
+        let known = self.recovery.insert(key, (stamp, turn));
+        match known {
+            Some((_, before)) => {
+                self.aging.remove(&before);
             }
+            None if full => {
+                if let Some((_, oldest)) = self.aging.pop_first() {
+                    self.recovery.remove(&oldest);
+                }
+            }
+            None => {}
         }
-        if let Some((known, _)) = self.recovery.insert(self.peer_key(from), (stamp, now))
+        if !self.keeps_stamp(key) {
+            self.aging.insert(turn, key);
+        }
+        if let Some((known, _)) = known
             && known != stamp
         {
             // Load and overload of the peer start again (§6.2.3.3.2, §6.2.4.3.2).
@@ -2220,6 +2228,31 @@ impl Node {
                 peer: from,
                 recovery_time_stamp: stamp,
             });
+        }
+    }
+
+    /// Index the stamp of `peer`, as the node tells peers apart, among those that go first
+    /// when the node is full, or not, as it has an association or an adopted session.
+    fn reage(&mut self, peer: SocketAddr) {
+        if let Some(&(_, turn)) = self.recovery.get(&peer) {
+            match self.keeps_stamp(peer) {
+                true => self.aging.remove(&turn),
+                false => self.aging.insert(turn, peer),
+            };
+        }
+    }
+
+    /// Whether the node keeps the stamp of `peer`, as it tells peers apart, through a
+    /// flood: of an association, or of an adopted session.
+    fn keeps_stamp(&self, peer: SocketAddr) -> bool {
+        self.by_peer.contains_key(&peer) || self.sessions.adopts(peer)
+    }
+
+    /// Index again the stamps of the peers whose first adopted session began, or whose last
+    /// ended, since the node last did.
+    fn reage_flipped(&mut self) {
+        for peer in self.sessions.flipped() {
+            self.reage(peer);
         }
     }
 
@@ -2723,6 +2756,10 @@ impl Node {
         if let Some(interval) = self.config.heartbeat {
             self.heartbeats.insert(peer, now.saturating_add(interval));
         }
+        self.reage(self.peer_key(peer));
+        if let Some(old) = &replaced {
+            self.reage(self.peer_key(old.peer));
+        }
         self.events.push_back(Event::Associated {
             peer,
             node_id,
@@ -2739,6 +2776,7 @@ impl Node {
         if self.by_peer.get(&self.peer_key(peer)).map(Vec::as_slice) == Some(key) {
             self.by_peer.remove(&self.peer_key(peer));
         }
+        self.reage(self.peer_key(peer));
         // The sessions of the association: those of its key, and those of its peer's
         // address that no live association owns. A session that another association took
         // over (its node is that of a live association) stays with it (§5.22.3 bullet 3).
