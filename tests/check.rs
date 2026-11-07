@@ -801,6 +801,51 @@ fn a_reserved_node_id_type_of_an_fq_csid_is_incorrect() {
     );
 }
 
+/// §8.2.131: the FQDN of an SMF Set ID is labels as RFC 1035 writes them, without the
+/// trailing zero byte, and of 255 octets at most with it: dotted text is none, nor are
+/// labels that run past their end or are too many.
+#[test]
+fn the_fqdn_of_an_smf_set_id_is_labels() {
+    let setup = |fqdn: Fqdn| Message {
+        header: Header::node(1),
+        body: AssociationSetupRequest::new(NodeId::Ipv4(SMF), RecoveryTimeStamp::new(1))
+            .with_cp_function_features(CpFunctionFeatures {
+                mpas: true,
+                ..Default::default()
+            })
+            .with_smf_set_id(SmfSetId {
+                fqdn,
+                ..Default::default()
+            })
+            .into(),
+    };
+    let label = |length: u8| [&[length][..], &vec![b'a'; usize::from(length)]].concat();
+    let labels = |last| [label(63), label(63), label(63), label(last)].concat();
+    for (fqdn, broken) in [
+        (Fqdn::new("smf.set").unwrap(), false),
+        (Fqdn(b"smf.set".to_vec().into()), true),
+        (Fqdn(b"\x09set".to_vec().into()), true),
+        (Fqdn(Octets::new()), true),
+        (Fqdn(labels(61).into()), false),
+        (Fqdn(labels(62).into()), true),
+    ] {
+        let found: Vec<_> = setup(fqdn.clone())
+            .check(Interfaces::N4)
+            .into_iter()
+            .map(|deviation| (deviation.path, deviation.clause, deviation.cause))
+            .collect();
+        let expected = match broken {
+            true => vec![(
+                "/pfcp/SMF Set ID".to_string(),
+                "8.2.131",
+                Some(CauseValue::MandatoryIeIncorrect),
+            )],
+            false => vec![],
+        };
+        assert_eq!(found, expected, "{fqdn:?}");
+    }
+}
+
 /// §7.6.8: a verifiable conditional IE that does not decode is semantically invalid, as one
 /// that decodes and breaks a rule of its clause: in a request, "Mandatory IE incorrect"
 /// with its type, and so is one of a mandatory list beyond those that it needs. Only an
@@ -1168,7 +1213,7 @@ fn the_conditions_that_their_scope_shows() {
         [DeviationKind::ConditionalMissing { ie_type: 180 }]
     );
     let set = SmfSetId {
-        fqdn: Rest(b"\x03set".to_vec()),
+        fqdn: Fqdn(b"\x03set".to_vec().into()),
         ..Default::default()
     };
     let message = Message {

@@ -1911,7 +1911,7 @@ impl Node {
                 );
                 match (features, request.smf_set_id.as_ref()) {
                     (None, None) => Effect::Nothing,
-                    (features, id) => Effect::Update(features, id.map(|id| id.fqdn.0.clone())),
+                    (features, id) => Effect::Update(features, id.map(|id| id.fqdn.0.to_vec())),
                 }
             }
             Body::SessionEstablishmentRequest(request) => match request.cp_f_seid.as_ref() {

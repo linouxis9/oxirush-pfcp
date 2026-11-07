@@ -69,7 +69,7 @@ impl SetOf {
             sset,
             mpas,
             bundl,
-            id: id.map(|id| id.fqdn.0.clone()),
+            id: id.map(|id| id.fqdn.0.to_vec()),
         }
     }
 }

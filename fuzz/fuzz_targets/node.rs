@@ -82,7 +82,7 @@ fn of_set(features: u8) -> (CpFunctionFeatures, SmfSetId) {
         ..Default::default()
     };
     let id = SmfSetId {
-        fqdn: Rest(vec![b's', b'0' + (features >> 2) % 2]),
+        fqdn: Fqdn(vec![1, b's', b'0' + (features >> 2) % 2].into()),
         ..Default::default()
     };
     (cp, id)

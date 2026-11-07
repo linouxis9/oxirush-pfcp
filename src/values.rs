@@ -1309,11 +1309,7 @@ impl Check for NodeId {
         let broken = match (kind, value.len()) {
             (0, 0..4) | (1, 0..16) => Some("a Node ID value shorter than its type"),
             (0 | 1, _) => None,
-            (2, 0) => Some("an FQDN without a label"),
-            (2, _) if !fqdn_valid(value) => Some(
-                "labels that are no FQDN of RFC 1035: each of 1 to 63 octets, after its length, and 255 octets at most with the trailing zero byte",
-            ),
-            (2, _) => None,
+            (2, _) => fqdn_broken(value),
             _ => {
                 Some("a Node ID Type that Table 8.2.38-2 has as spare: the Node ID cannot be read")
             }
@@ -1321,6 +1317,18 @@ impl Check for NodeId {
         if let Some(broken) = broken {
             found.push(rule(broken));
         }
+    }
+}
+
+/// What the labels of an FQDN break of RFC 1035, as §8.2.38 and §8.2.131 have them
+/// written: `None` for labels of 1 to 63 octets, each after its length.
+fn fqdn_broken(labels: &[u8]) -> Option<&'static str> {
+    match labels {
+        [] => Some("an FQDN without a label"),
+        _ if !fqdn_valid(labels) => Some(
+            "labels that are no FQDN of RFC 1035: each of 1 to 63 octets, after its length, and 255 octets at most with the trailing zero byte",
+        ),
+        _ => None,
     }
 }
 
@@ -1357,6 +1365,109 @@ fn fqdn_labels(mut octets: &[u8]) -> Option<Vec<&[u8]>> {
         octets = tail;
     }
     (octets.is_empty() && !labels.is_empty()).then_some(labels)
+}
+
+/// The labels of `name`, each after its length: `None` for an empty label, a label of
+/// more than 63 octets, or more than [`FQDN_OCTETS`] of labels.
+fn fqdn_of(name: &str) -> Option<Vec<u8>> {
+    if name.len() + 1 > FQDN_OCTETS {
+        return None;
+    }
+    let mut labels = Vec::with_capacity(name.len() + 1);
+    for label in name.split('.') {
+        let length = u8::try_from(label.len())
+            .ok()
+            .filter(|length| (1..=63).contains(length))?;
+        labels.push(length);
+        labels.extend_from_slice(label.as_bytes());
+    }
+    Some(labels)
+}
+
+/// The name of labels, with dots: `None` for labels that are not each of 1 to 63 octets
+/// of UTF-8 without a dot, or more than [`FQDN_OCTETS`], which the name would not give
+/// back.
+fn fqdn_name(octets: &[u8]) -> Option<String> {
+    let mut text = String::new();
+    for label in fqdn_labels(octets)? {
+        let label = core::str::from_utf8(label)
+            .ok()
+            .filter(|label| !label.contains('.'))?;
+        if !text.is_empty() {
+            text.push('.');
+        }
+        text.push_str(label);
+    }
+    Some(text)
+}
+
+/// An FQDN as a DNS message writes it (RFC 1035 §3.1), without the trailing zero byte:
+/// its labels, each after its length, the rest of the IE, as the SMF Set ID has it
+/// (§8.2.131). Its tree is the name, `"smf.example"`, or `{"octets": ...}` for octets
+/// that are no such labels.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Fqdn(pub Octets);
+
+impl Fqdn {
+    /// The labels of a name, `smf.example`: `None` for a name with an empty label, a
+    /// label of more than 63 octets, or of more than 253 octets, whose labels are more
+    /// than 255 with the trailing zero byte (RFC 1035 §2.3.4).
+    pub fn new(name: &str) -> Option<Self> {
+        fqdn_of(name).map(|labels| Self(labels.into()))
+    }
+
+    /// The name, its labels with dots: `None` for octets that are no labels of 1 to 63
+    /// octets of UTF-8 without a dot, which the name would not give back.
+    pub fn name(&self) -> Option<String> {
+        fqdn_name(&self.0)
+    }
+}
+
+impl Field for Fqdn {
+    #[cfg(feature = "tree")]
+    const BELOW: &'static crate::tree::Below =
+        &crate::tree::Below::Either(None, &[("octets", &crate::tree::Below::Scalar)]);
+    fn read(octets: &mut &[u8]) -> Option<Self> {
+        Some(Self(Octets::wire(core::mem::take(octets))))
+    }
+    fn write(&self, out: &mut Vec<u8>) {
+        out.extend_from_slice(&self.0);
+    }
+    fn size(&self) -> usize {
+        self.0.len()
+    }
+    fn check(&self, path: &crate::check::Path, clause: &'static str, found: &mut Vec<Deviation>) {
+        if let Some(broken) = fqdn_broken(&self.0) {
+            found.push(Deviation::new(path, clause, DeviationKind::Rule(broken)));
+        }
+    }
+    #[cfg(feature = "tree")]
+    fn to_tree(&self) -> oxirush_utils::tree::Value {
+        use oxirush_utils::tree;
+        match self.name() {
+            Some(name) => tree::text(&name),
+            None => tree::alternative("octets", tree::octets(&self.0)),
+        }
+    }
+    #[cfg(feature = "tree")]
+    fn from_tree(
+        value: &oxirush_utils::tree::Value,
+        reading: &mut oxirush_utils::tree::Reading,
+    ) -> Result<Self, oxirush_utils::tree::Refused> {
+        if let Some(name) = value.as_str() {
+            return Self::new(name).ok_or_else(|| {
+                reading.mismatch(
+                    "a name of 253 octets at most, of labels of 1 to 63 octets with dots between them",
+                    value,
+                )
+            });
+        }
+        let (_, content) = reading.alternative(value, &["octets"])?;
+        let octets = reading.within("octets", content, |content, reading| {
+            reading.octets(content)
+        })?;
+        Ok(Self(octets.into()))
+    }
 }
 
 impl NodeId {
@@ -1403,18 +1514,7 @@ impl NodeId {
     /// label of more than 63 octets, or labels of more than 255 octets with the trailing
     /// zero byte that the IE leaves out (RFC 1035 §2.3.4): a text of more than 253.
     pub fn from_fqdn(name: &str) -> Option<Self> {
-        if name.len() + 1 > FQDN_OCTETS {
-            return None;
-        }
-        let mut labels = Vec::with_capacity(name.len() + 1);
-        for label in name.split('.') {
-            let length = u8::try_from(label.len())
-                .ok()
-                .filter(|length| (1..=63).contains(length))?;
-            labels.push(length);
-            labels.extend_from_slice(label.as_bytes());
-        }
-        Some(Self::Fqdn(labels.into()))
+        fqdn_of(name).map(|labels| Self::Fqdn(labels.into()))
     }
 
     /// The FQDN as text, its labels with dots: `None` for labels that are not each of 1
@@ -1424,17 +1524,7 @@ impl NodeId {
         let Self::Fqdn(octets) = self else {
             return None;
         };
-        let mut text = String::new();
-        for label in fqdn_labels(octets)? {
-            let label = core::str::from_utf8(label)
-                .ok()
-                .filter(|label| !label.contains('.'))?;
-            if !text.is_empty() {
-                text.push('.');
-            }
-            text.push_str(label);
-        }
-        Some(text)
+        fqdn_name(octets)
     }
 
     #[cfg(feature = "tree")]

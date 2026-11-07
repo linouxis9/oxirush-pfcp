@@ -440,7 +440,7 @@ pfcp_fields! {
     /// UE IP address Pool Identity (§8.2.128).
     pub struct UeIpAddressPoolIdentity "8.2.128" { ue_ip_address_pool_identity "UE IP address Pool Identity": Lv16 }
     /// SMF Set ID (§8.2.131): a spare octet, then the FQDN.
-    pub struct SmfSetId "8.2.131" { spare_octet "Spare": Spare, fqdn "FQDN": Rest }
+    pub struct SmfSetId "8.2.131" { spare_octet "Spare": Spare, fqdn "FQDN": Fqdn }
     /// Offending IE Information (§8.2.185).
     pub struct OffendingIeInformation "8.2.185" { type_of_the_offending_ie "Type of the offending IE": u16, value_of_the_offending_ie "Value of the offending IE": Rest }
     /// DNS Query/Response Filter (§8.2.201).

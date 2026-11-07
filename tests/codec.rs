@@ -1422,6 +1422,43 @@ fn an_fqdn_node_id_from_its_text() {
     }
 }
 
+/// §8.2.131: the FQDN of an SMF Set ID is labels as RFC 1035 writes them, as that of a
+/// Node ID: its tree is the name, and octets that are no labels are `{"octets": ...}`,
+/// each read back to its octets.
+#[test]
+fn the_fqdn_of_an_smf_set_id_as_its_name() {
+    let fqdn = Fqdn::new("smf.set").unwrap();
+    assert_eq!(fqdn, Fqdn(b"\x03smf\x03set".to_vec().into()));
+    assert_eq!(fqdn.name().as_deref(), Some("smf.set"));
+    let request = |fqdn: Fqdn| Message {
+        header: Header::node(1),
+        body: AssociationSetupRequest::new(
+            NodeId::Ipv4(Ipv4Addr::new(10, 0, 0, 1)),
+            RecoveryTimeStamp::new(1),
+        )
+        .with_smf_set_id(SmfSetId {
+            fqdn,
+            ..Default::default()
+        })
+        .into(),
+    };
+    for (fqdn, tree) in [
+        (fqdn, tree!("smf.set")),
+        (
+            Fqdn(b"smf.set".to_vec().into()),
+            tree!({"octets": "736d662e736574"}),
+        ),
+    ] {
+        let message = request(fqdn);
+        let written = message.to_tree();
+        assert_eq!(select(&written, "/pfcp/SMF Set ID/FQDN").unwrap(), [&tree]);
+        assert_eq!(Message::from_tree(&written).unwrap(), message);
+    }
+    for name in ["", "smf..set", &"a".repeat(254)] {
+        assert_eq!(Fqdn::new(name), None, "{name:?}");
+    }
+}
+
 /// §8.2.38: a Node ID as its receiver takes it, the spare bits of its type and the octets
 /// after its value ignored (§8.1.2); and its tree, which reads back to its octets in each
 /// form (the FQDN forms found by a fuzz target that compares octets).

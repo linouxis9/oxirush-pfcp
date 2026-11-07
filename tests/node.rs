@@ -4059,7 +4059,7 @@ fn setup_of_set(node_id: NodeId, features: CpFunctionFeatures, set: Option<&str>
         .with_cp_function_features(features);
     if let Some(set) = set {
         request = request.with_smf_set_id(SmfSetId {
-            fqdn: Rest(set.as_bytes().to_vec()),
+            fqdn: Fqdn::new(set).unwrap(),
             ..Default::default()
         });
     }
@@ -4710,7 +4710,7 @@ fn mpas_of_associations_that_the_upf_sets_up() {
             AssociationSetupResponse::new(node_id(smf), accepted(), RecoveryTimeStamp::new(1000))
                 .with_cp_function_features(mpas())
                 .with_smf_set_id(SmfSetId {
-                    fqdn: Rest(b"set".to_vec()),
+                    fqdn: Fqdn::new("set").unwrap(),
                     ..Default::default()
                 });
         let response = Message {
