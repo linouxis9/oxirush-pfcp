@@ -130,7 +130,8 @@ pub struct Row {
     /// The rows that share the field, when several do.
     pub roles: &'static [Role],
     /// Whether `check()` checks the condition of the row: a C row whose condition the
-    /// message alone shows (§7.6.6).
+    /// IEs of its scope show (§7.6.6), as each of two IEs of which a NOTE of the table
+    /// needs one.
     pub checked: bool,
 }
 

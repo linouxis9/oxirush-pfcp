@@ -239,7 +239,8 @@ fn block_5() {
 
     fn main() -> Result<(), Box<dyn std::error::Error>> {
         // A modification that creates PDR 3 and removes it, and a Create PDR without its PDR ID
-        let mut pdr = CreatePdr::new_n4(PdrId::new(3), Precedence::new(32), Pdi::new(SourceInterface::new(SourceInterfaceValue::Core)));
+        let mut pdr = CreatePdr::new_n4(PdrId::new(3), Precedence::new(32), Pdi::new(SourceInterface::new(SourceInterfaceValue::Core)))
+            .with_far_id(FarId::new(3));
         let modification = SessionModificationRequest::default()
             .with_create_pdr(pdr.clone())
             .with_remove_pdr(RemovePdr::new(PdrId::new(3)));

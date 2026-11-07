@@ -1035,6 +1035,310 @@ fn the_conditions_that_a_message_shows() {
     missing(message, 31, Some(CauseValue::ConditionalIeMissing));
 }
 
+/// The rows of a grouped IE, checked on its own, that are missing where their condition
+/// holds.
+fn missing_where_shown(value: &impl Check) -> Vec<String> {
+    let mut found = Vec::new();
+    Check::check(value, &Path::Root(""), &mut found);
+    found
+        .into_iter()
+        .filter(|deviation| matches!(deviation.kind, DeviationKind::ConditionalMissing { .. }))
+        .map(|deviation| deviation.path.trim_start_matches('/').to_string())
+        .collect()
+}
+
+/// §7.6.6: the conditions of the C rows that the IEs beside them show, each where it
+/// holds and where it does not; the NOTEs of Tables 7.4.4.1.3-1, 7.4.5.1.8-1 and 7.5.2.9-5,
+/// of one IE or another, as the condition of each on the other.
+#[test]
+fn the_conditions_that_their_scope_shows() {
+    // Table 7.4.4.1-1 and 7.4.4.2-1: an SMF of MPAS gives its SMF Set ID
+    let mpas = CpFunctionFeatures {
+        mpas: true,
+        ..Default::default()
+    };
+    let setup = AssociationSetupRequest::new(NodeId::Ipv4(SMF), RecoveryTimeStamp::new(1))
+        .with_cp_function_features(mpas.clone());
+    let message = Message {
+        header: Header::node(1),
+        body: setup.clone().into(),
+    };
+    assert_eq!(
+        kinds(&message, Interfaces::N4),
+        [DeviationKind::ConditionalMissing { ie_type: 180 }]
+    );
+    let set = SmfSetId {
+        fqdn: Rest(b"\x03set".to_vec()),
+        ..Default::default()
+    };
+    let message = Message {
+        header: Header::node(1),
+        body: setup.with_smf_set_id(set).into(),
+    };
+    assert_eq!(kinds(&message, Interfaces::N4), []);
+    let response = AssociationSetupResponse::new(
+        NodeId::Ipv4(SMF),
+        Cause::new(CauseValue::RequestAccepted),
+        RecoveryTimeStamp::new(1),
+    )
+    .with_cp_function_features(mpas);
+    let message = Message {
+        header: Header::node(1),
+        body: response.into(),
+    };
+    assert_eq!(
+        kinds(&message, Interfaces::N4),
+        [DeviationKind::ConditionalMissing { ie_type: 180 }]
+    );
+    // Table 7.4.4.1.2-1: the thresholds of what the Clock Drift Control Information asks
+    let mut clock = ClockDriftControlInformation {
+        requested_clock_drift_information: Some(RequestedClockDriftInformation {
+            rrto: true,
+            rrcr: true,
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    assert_eq!(
+        missing_where_shown(&clock),
+        ["Time Offset Threshold", "Cumulative rateRatio Threshold"]
+    );
+    clock.requested_clock_drift_information = Some(RequestedClockDriftInformation {
+        rrcr: true,
+        ..Default::default()
+    });
+    assert_eq!(
+        missing_where_shown(&clock),
+        ["Cumulative rateRatio Threshold"]
+    );
+    // Table 7.4.4.1.3-1: a periodic report has its period; a peer or an interface type
+    let mut path = GtpUPathQoSControlInformation {
+        qos_report_trigger: Some(QoSReportTrigger {
+            per: true,
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    assert_eq!(
+        missing_where_shown(&path),
+        [
+            "Remote GTP-U Peer",
+            "GTP-U Path Interface Type",
+            "Measurement Period"
+        ]
+    );
+    path.gtp_u_path_interface_type = Some(GtpUPathInterfaceType {
+        n3: true,
+        ..Default::default()
+    });
+    path.measurement_period = Some(MeasurementPeriod::new(10));
+    assert_eq!(missing_where_shown(&path), Vec::<String>::new());
+    path.gtp_u_path_interface_type = None;
+    path.remote_gtp_u_peer.push(RemoteGtpUPeer::default());
+    assert_eq!(missing_where_shown(&path), Vec::<String>::new());
+    // Table 7.4.4.1.4-1: a periodic N6 delay measurement has its period
+    let mut n6 = N6DelayMeasurementControlInformation {
+        measurement_reporting_type: Some(MeasurementReportingType {
+            per: true,
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    assert_eq!(missing_where_shown(&n6), ["Measurement Period"]);
+    n6.measurement_reporting_type = Some(MeasurementReportingType {
+        evt: true,
+        ..Default::default()
+    });
+    assert_eq!(missing_where_shown(&n6), Vec::<String>::new());
+    // Table 7.4.5.1.8-1: an N6 delay report has its information or its failure
+    let mut report = N6DelayMeasurementReport::default();
+    assert_eq!(
+        missing_where_shown(&report),
+        [
+            "N6 Delay Measurement Information",
+            "N6 Delay Measurement Failure Information"
+        ]
+    );
+    report.n6_delay_measurement_failure_information =
+        Some(N6DelayMeasurementFailureInformation::default());
+    assert_eq!(missing_where_shown(&report), Vec::<String>::new());
+    // Table 7.5.2.2-1: a PDR without a predefined rule or a MAR has its FAR
+    let mut pdr = CreatePdr::new_n4(
+        PdrId::new(1),
+        Precedence::new(1),
+        Pdi::new(SourceInterface::new(SourceInterfaceValue::Access)),
+    );
+    assert_eq!(missing_where_shown(&pdr), ["FAR ID"]);
+    pdr.mar_id = Some(MarId::new(1));
+    assert_eq!(missing_where_shown(&pdr), Vec::<String>::new());
+    pdr.mar_id = None;
+    pdr.activate_predefined_rules
+        .push(ActivatePredefinedRules(b"rule".to_vec().into()));
+    assert_eq!(missing_where_shown(&pdr), Vec::<String>::new());
+    // Tables 7.5.2.2-8 and 7.5.2.2-9: an RTP header extension has its ID, an RTP payload
+    // format its payload type
+    let extension = RtpHeaderExtensionInformation {
+        rtp_header_extension_type: Some(RtpHeaderExtensionType::default()),
+        ..Default::default()
+    };
+    assert_eq!(missing_where_shown(&extension), ["RTP Header Extension ID"]);
+    let payload = RtpPayloadInformation {
+        rtp_payload_format: Some(RtpPayloadFormat::default()),
+        ..Default::default()
+    };
+    assert_eq!(missing_where_shown(&payload), ["RTP Payload Type"]);
+    // Table 7.5.2.3-1: a FAR that forwards and duplicates for redundant transmission
+    let mut far = far(1);
+    far.apply_action = Some(ApplyAction {
+        forw: true,
+        dfrt: true,
+        ..Default::default()
+    });
+    assert_eq!(
+        missing_where_shown(&far),
+        ["Redundant Transmission Forwarding Parameters"]
+    );
+    far.forwarding_parameters = None;
+    assert_eq!(missing_where_shown(&far), ["Forwarding Parameters"]);
+    // Table 7.5.2.3-2: forwarding to SGi-LAN/N6-LAN has a Forwarding Policy
+    let forwarding = ForwardingParameters::new(DestinationInterface::new(
+        DestinationInterfaceValue::SgiLanN6Lan,
+    ));
+    assert_eq!(missing_where_shown(&forwarding), ["Forwarding Policy"]);
+    let forwarding =
+        ForwardingParameters::new(DestinationInterface::new(DestinationInterfaceValue::Core));
+    assert_eq!(missing_where_shown(&forwarding), Vec::<String>::new());
+    // Table 7.5.2.3-9: a header handling without a reference says it all
+    let mut handling = HeaderHandlingControlInformation {
+        header_handling_control_id: Some(HeaderHandlingControlId::default()),
+        ..Default::default()
+    };
+    assert_eq!(
+        missing_where_shown(&handling),
+        [
+            "Header Handling Action",
+            "Header Information",
+            "Header Value",
+            "Header Handling Condition"
+        ]
+    );
+    handling.header_handling_control_reference = Some(HeaderHandlingControlReference::default());
+    assert_eq!(missing_where_shown(&handling), Vec::<String>::new());
+    // Table 7.5.2.8-1: an MPQUIC steering functionality has its transport mode
+    let mar = |value| CreateMar {
+        steering_functionality: Some(SteeringFunctionality {
+            steering_functionality_value: value,
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    for value in [
+        SteeringFunctionalityValue::MpquicUdp,
+        SteeringFunctionalityValue::MpquicIp,
+        SteeringFunctionalityValue::MpquicE,
+    ] {
+        assert_eq!(missing_where_shown(&mar(value)), ["Transport Mode"]);
+    }
+    assert_eq!(
+        missing_where_shown(&mar(SteeringFunctionalityValue::Mptcp)),
+        Vec::<String>::new()
+    );
+    // Table 7.5.2.9-3: periodic QoS monitoring has its period, event triggered its minimum
+    // wait time, and of congestion or data rate its thresholds
+    let monitoring = |frequency, requested| QoSMonitoringPerQoSFlowControlInformation {
+        reporting_frequency: Some(frequency),
+        requested_qos_monitoring: Some(requested),
+        ..Default::default()
+    };
+    let periodic = ReportingFrequency {
+        perio: true,
+        ..Default::default()
+    };
+    let event = ReportingFrequency {
+        evett: true,
+        ..Default::default()
+    };
+    let delay = RequestedQoSMonitoring {
+        dlpd: true,
+        ..Default::default()
+    };
+    assert_eq!(
+        missing_where_shown(&monitoring(periodic, delay.clone())),
+        ["Measurement Period"]
+    );
+    assert_eq!(
+        missing_where_shown(&monitoring(event.clone(), delay)),
+        ["Minimum Wait Time"]
+    );
+    for requested in [
+        RequestedQoSMonitoring {
+            ulci: true,
+            ..Default::default()
+        },
+        RequestedQoSMonitoring {
+            dldr: true,
+            ..Default::default()
+        },
+    ] {
+        assert_eq!(
+            missing_where_shown(&monitoring(event.clone(), requested)),
+            ["Minimum Wait Time", "Reporting Thresholds"]
+        );
+    }
+    // Table 7.5.2.9-5: a period or a threshold
+    let mut traffic = TrafficParameterMeasurementControlInformation::default();
+    assert_eq!(
+        missing_where_shown(&traffic),
+        ["Measurement Period", "Traffic Parameter Threshold"]
+    );
+    traffic.measurement_period = Some(MeasurementPeriod::new(10));
+    assert_eq!(missing_where_shown(&traffic), Vec::<String>::new());
+    // Tables 7.5.5.2-1, 7.5.7.2-1 and 7.5.8.3-1: a usage report has its start and end
+    // times, but of the start or stop of traffic, or of MAC addresses
+    let periodic = UsageReportTrigger {
+        perio: true,
+        ..Default::default()
+    };
+    let start = UsageReportTrigger {
+        start: true,
+        ..Default::default()
+    };
+    let times = ["Start Time", "End Time"];
+    let report = |trigger| UsageReport::new(UrrId::new(1), UrSeqn::new(0), trigger);
+    assert_eq!(missing_where_shown(&report(periodic.clone())), times);
+    assert_eq!(
+        missing_where_shown(&report(start.clone())),
+        Vec::<String>::new()
+    );
+    for trigger in [
+        UsageReportTrigger {
+            stopt: true,
+            ..Default::default()
+        },
+        UsageReportTrigger {
+            macar: true,
+            ..Default::default()
+        },
+    ] {
+        assert_eq!(missing_where_shown(&report(trigger)), Vec::<String>::new());
+    }
+    let modification = UsageReportModification {
+        usage_report_trigger: Some(periodic.clone()),
+        ..Default::default()
+    };
+    assert_eq!(missing_where_shown(&modification), times);
+    let deletion = UsageReportDeletion {
+        usage_report_trigger: Some(periodic),
+        ..Default::default()
+    };
+    assert_eq!(missing_where_shown(&deletion), times);
+    let deletion = UsageReportDeletion {
+        usage_report_trigger: Some(start),
+        ..Default::default()
+    };
+    assert_eq!(missing_where_shown(&deletion), Vec::<String>::new());
+}
+
 /// The rows whose condition `check()` checks are those that say so.
 #[test]
 fn the_rows_whose_condition_is_checked() {
@@ -1233,7 +1537,9 @@ fn messages_of_each_interface() {
             perio: true,
             ..Default::default()
         },
-    );
+    )
+    .with_start_time(StartTime::new(1))
+    .with_end_time(EndTime::new(2));
     let pfd = PfdContents {
         fd: true,
         spare_octet: Some(Spare(0)),
@@ -1320,7 +1626,8 @@ fn messages_of_each_interface() {
                         PdrId::new(1),
                         Precedence::new(1),
                         pdi().with_application_id(ApplicationId(b"app".to_vec().into())),
-                    ),
+                    )
+                    .with_far_id(FarId::new(1)),
                     CreateFar::new(
                         FarId::new(1),
                         ApplyAction {
@@ -1340,7 +1647,8 @@ fn messages_of_each_interface() {
                 body: SessionEstablishmentRequest::new_n4mb(
                     node.clone(),
                     seid,
-                    CreatePdr::new_n4mb(PdrId::new(1), Precedence::new(1), pdi()),
+                    CreatePdr::new_n4mb(PdrId::new(1), Precedence::new(1), pdi())
+                        .with_far_id(FarId::new(1)),
                     CreateFar::new(
                         FarId::new(1),
                         ApplyAction {
@@ -1722,4 +2030,45 @@ fn the_mask_of_a_transport_level_marking() {
     assert_eq!(value_found::<TransportLevelMarking>("00fc"), []);
     assert_eq!(value_found::<TransportLevelMarking>("b800"), [mask()]);
     assert_eq!(value_found::<TransportLevelMarking>("b8ff"), [mask()]);
+}
+
+/// §8.2.103 and §8.2.104: the C-TAG and the S-TAG of MAC Addresses Detected and Removed,
+/// after their lengths, "encoded as the Customer-VLAN tag defined in clause 8.2.94" and
+/// the Service-VLAN tag of §8.2.95, "excluding octets 1 to 4": of three octets, the more
+/// of a later release as the tag has them (Table 8.1.2-1), with at least one of PCP, DEI
+/// and VID set, and spare bits of 0. A length of 0 says that the field is absent.
+#[test]
+fn the_tags_of_mac_addresses() {
+    let mac = "01aabbccddeeff";
+    let detected = |tags: &str| value_found::<MacAddressesDetected>(&format!("{mac}{tags}"));
+    assert_eq!(detected(""), []);
+    assert_eq!(detected("03040064"), []);
+    assert_eq!(detected("0304006403040064"), []);
+    assert_eq!(detected("0003040064"), []);
+    assert_eq!(detected("0404006400"), []);
+    let rule = |rule| ("8.2.103", DeviationKind::Rule(rule));
+    assert_eq!(
+        detected("020400"),
+        [rule("a C-TAG field of fewer than three octets")]
+    );
+    assert_eq!(
+        detected("03000064"),
+        [rule("a C-TAG field with none of PCP, DEI and VID set")]
+    );
+    assert_eq!(
+        detected("03040064020400"),
+        [rule("an S-TAG field of fewer than three octets")]
+    );
+    assert_eq!(
+        detected("0304006403000064"),
+        [rule("an S-TAG field with none of PCP, DEI and VID set")]
+    );
+    assert_eq!(detected("030c0064"), [("8.1.2", DeviationKind::SpareBits)]);
+    assert_eq!(
+        value_found::<MacAddressesRemoved>(&format!("{mac}03000064")),
+        [(
+            "8.2.104",
+            DeviationKind::Rule("a C-TAG field with none of PCP, DEI and VID set")
+        )]
+    );
 }

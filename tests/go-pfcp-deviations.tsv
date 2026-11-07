@@ -14,6 +14,9 @@ association-setup-request_test.go	Multiple IEs	Measurement Method is no IE of th
 association-setup-request_test.go	Multiple IEs	a ToS/Traffic Class mask other than 0xFC (TS 29.244 8.2.12), at /pfcp/GTP-U Path QoS Control Information/0/DSCP/0: the answer is "Mandatory IE incorrect"
 association-setup-request_test.go	Multiple IEs	a ToS/Traffic Class mask other than 0xFC (TS 29.244 8.2.12), at /pfcp/GTP-U Path QoS Control Information/1/DSCP/0: the answer is "Mandatory IE incorrect"
 association-setup-request_test.go	Single IEs	a ToS/Traffic Class mask other than 0xFC (TS 29.244 8.2.12), at /pfcp/GTP-U Path QoS Control Information/0/DSCP/0: the answer is "Mandatory IE incorrect"
+association-setup-request_test.go	Single IEs	Measurement Period is missing where its condition holds (TS 29.244 7.4.4.1.3-1), at /pfcp/GTP-U Path QoS Control Information/0/Measurement Period: the answer is "Conditional IE missing"
+association-setup-request_test.go	Multiple IEs	Measurement Period is missing where its condition holds (TS 29.244 7.4.4.1.3-1), at /pfcp/GTP-U Path QoS Control Information/0/Measurement Period: the answer is "Conditional IE missing"
+association-setup-request_test.go	Multiple IEs	Measurement Period is missing where its condition holds (TS 29.244 7.4.4.1.3-1), at /pfcp/GTP-U Path QoS Control Information/1/Measurement Period: the answer is "Conditional IE missing"
 association-setup-response_test.go	Single IE	the mandatory UE IP address Pool Identity does not decode (TS 29.244 7.4.4.1-3), at /pfcp/UE IP address Pool Information/0/UE IP address Pool Identity
 association-setup-response_test.go	Single IE	Measurement Method is no IE of this table (TS 29.244 7.6.9), at /pfcp/GTP-U Path QoS Control Information/0/Measurement Method
 association-setup-response_test.go	Multiple IEs	the mandatory UE IP address Pool Identity does not decode (TS 29.244 7.4.4.1-3), at /pfcp/UE IP address Pool Information/0/UE IP address Pool Identity
@@ -23,6 +26,11 @@ association-setup-response_test.go	Multiple IEs	Measurement Method is no IE of t
 association-setup-response_test.go	Multiple IEs	a ToS/Traffic Class mask other than 0xFC (TS 29.244 8.2.12), at /pfcp/GTP-U Path QoS Control Information/0/DSCP/0
 association-setup-response_test.go	Multiple IEs	a ToS/Traffic Class mask other than 0xFC (TS 29.244 8.2.12), at /pfcp/GTP-U Path QoS Control Information/1/DSCP/0
 association-setup-response_test.go	Single IE	a ToS/Traffic Class mask other than 0xFC (TS 29.244 8.2.12), at /pfcp/GTP-U Path QoS Control Information/0/DSCP/0
+association-setup-response_test.go	Single IE	Measurement Period is missing where its condition holds (TS 29.244 7.4.4.1.3-1), at /pfcp/GTP-U Path QoS Control Information/0/Measurement Period
+association-setup-response_test.go	Single IE	SMF Set ID is missing where its condition holds (TS 29.244 7.4.4.2-1), at /pfcp/SMF Set ID
+association-setup-response_test.go	Multiple IEs	Measurement Period is missing where its condition holds (TS 29.244 7.4.4.1.3-1), at /pfcp/GTP-U Path QoS Control Information/0/Measurement Period
+association-setup-response_test.go	Multiple IEs	Measurement Period is missing where its condition holds (TS 29.244 7.4.4.1.3-1), at /pfcp/GTP-U Path QoS Control Information/1/Measurement Period
+association-setup-response_test.go	Multiple IEs	SMF Set ID is missing where its condition holds (TS 29.244 7.4.4.2-1), at /pfcp/SMF Set ID
 association-update-request_test.go	Single IE	the mandatory UE IP address Pool Identity does not decode (TS 29.244 7.4.4.1-3), at /pfcp/UE IP address Pool Information/0/UE IP address Pool Identity
 association-update-request_test.go	Single IE	Measurement Method is no IE of this table (TS 29.244 7.6.9), at /pfcp/GTP-U Path QoS Control Information/0/Measurement Method
 association-update-request_test.go	Single IE	UE IP address Pool Identity does not decode, and is taken as absent (TS 29.244 7.6.8), at /pfcp/UE IP Address Usage Information/0/UE IP Address Pool Id
@@ -34,6 +42,9 @@ association-update-request_test.go	Multiple IEs	UE IP address Pool Identity does
 association-update-request_test.go	Multiple IEs	a ToS/Traffic Class mask other than 0xFC (TS 29.244 8.2.12), at /pfcp/GTP-U Path QoS Control Information/0/DSCP/0: the answer is "Mandatory IE incorrect"
 association-update-request_test.go	Multiple IEs	a ToS/Traffic Class mask other than 0xFC (TS 29.244 8.2.12), at /pfcp/GTP-U Path QoS Control Information/1/DSCP/0: the answer is "Mandatory IE incorrect"
 association-update-request_test.go	Single IE	a ToS/Traffic Class mask other than 0xFC (TS 29.244 8.2.12), at /pfcp/GTP-U Path QoS Control Information/0/DSCP/0: the answer is "Mandatory IE incorrect"
+association-update-request_test.go	Single IE	Measurement Period is missing where its condition holds (TS 29.244 7.4.4.1.3-1), at /pfcp/GTP-U Path QoS Control Information/0/Measurement Period: the answer is "Conditional IE missing"
+association-update-request_test.go	Multiple IEs	Measurement Period is missing where its condition holds (TS 29.244 7.4.4.1.3-1), at /pfcp/GTP-U Path QoS Control Information/0/Measurement Period: the answer is "Conditional IE missing"
+association-update-request_test.go	Multiple IEs	Measurement Period is missing where its condition holds (TS 29.244 7.4.4.1.3-1), at /pfcp/GTP-U Path QoS Control Information/1/Measurement Period: the answer is "Conditional IE missing"
 generic_test.go	Normal	the mandatory Node ID is missing (TS 29.244 7.5.2.1-1), at /pfcp/Node ID: the answer is "Mandatory IE missing"
 generic_test.go	Normal	the mandatory F-SEID is missing (TS 29.244 7.5.2.1-1), at /pfcp/CP F-SEID: the answer is "Mandatory IE missing"
 generic_test.go	Normal	the mandatory Create PDR is missing (TS 29.244 7.5.2.1-1), at /pfcp/Create PDR: the answer is "Mandatory IE missing"
