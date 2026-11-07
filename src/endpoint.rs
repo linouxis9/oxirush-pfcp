@@ -509,11 +509,11 @@ impl Handle {
         self.on(move |node, _| node.new_session()).await
     }
 
-    /// Take over a session that the node did not establish, with the UP function at `peer`
-    /// and its SEID ([`Node::adopt_session`]): as an SMF of a set, the session of a UP
-    /// function's report of SEID 0, which comes with [`Inbound::of_smf_set`]. The caller
-    /// then sets the report's [`Inbound::seid`], in its [`Incoming`], to `local_seid`
-    /// before it answers.
+    /// Take over a session that the node did not establish, with the UP function at `peer`,
+    /// on the port of the node's requests, and its SEID ([`Node::adopt_session`]): as an
+    /// SMF of a set, the session of a UP function's report of SEID 0, which comes with
+    /// [`Inbound::of_smf_set`]. The caller then sets the report's [`Inbound::seid`], in its
+    /// [`Incoming`], to `local_seid` before it answers.
     ///
     /// # Errors
     ///

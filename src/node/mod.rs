@@ -1051,9 +1051,11 @@ impl Node {
 
     /// A session that the node did not establish, of the caller's own: one that an SMF of
     /// a set takes over (§5.22), with the UP function at `peer` and its SEID. The node
-    /// then takes its requests and sends the caller's. To answer the request that handed
-    /// the session over to the session's SEID, the caller sets that request's
-    /// [`Inbound::seid`] to the local SEID before [`respond`](Self::respond).
+    /// then takes its requests and sends the caller's, to port 8805 of `peer` (§4.2.2), as
+    /// [`NodeConfig::request_port`] has it, whatever port the request that handed the
+    /// session over came from. To answer the request that handed the session over to the
+    /// session's SEID, the caller sets that request's [`Inbound::seid`] to the local SEID
+    /// before [`respond`](Self::respond).
     ///
     /// A `peer` without an association with the node is one whose association another
     /// SMF of the set, or another PFCP entity of the SMF, holds, as the caller knows
@@ -1077,6 +1079,7 @@ impl Node {
         if self.in_use(local_seid) || self.sessions.contains_key(&local_seid) {
             return Err(NodeError::SeidInUse);
         }
+        let peer = self.request_address(peer);
         let node = self
             .association_of(peer)
             .map(|association| association.key.clone());
