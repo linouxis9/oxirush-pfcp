@@ -971,6 +971,62 @@ fn controls_go_with_the_sessions_and_the_association_that_set_them() {
     );
 }
 
+/// What a node keeps is listed: its sessions, with the address of the node's F-SEID of
+/// each, its associations, and its loads and overloads with whose they are.
+#[test]
+fn the_state_of_a_node_is_listed() {
+    let (mut smf, mut upf) = associated(at(0));
+    let (cp_seid, up_seid) = established(&mut smf, &mut upf, at(0));
+    let sessions: Vec<(u64, Option<std::net::IpAddr>)> = smf
+        .sessions()
+        .map(|(seid, session)| (seid, session.local_address))
+        .collect();
+    assert_eq!(sessions, [(cp_seid, Some(SMF.ip()))]);
+    let sessions: Vec<(u64, Option<std::net::IpAddr>)> = upf
+        .sessions()
+        .map(|(seid, session)| (seid, session.local_address))
+        .collect();
+    assert_eq!(sessions, [(up_seid, Some(UPF.ip()))]);
+    let peers: Vec<NodeId> = smf
+        .associations()
+        .map(|association| association.node_id.clone())
+        .collect();
+    assert_eq!(peers, [node_id(UPF)]);
+    let response = with_load(1, 40);
+    modified(&mut smf, &mut upf, cp_seid, at(1), response);
+    modified(
+        &mut smf,
+        &mut upf,
+        cp_seid,
+        at(2),
+        with_overload(1, 50, 30, false),
+    );
+    modified(
+        &mut smf,
+        &mut upf,
+        cp_seid,
+        at(3),
+        with_overload(1, 60, 30, true),
+    );
+    let loads: Vec<(ControlScope, u8)> = smf
+        .loads()
+        .map(|(scope, load)| (scope, load.metric))
+        .collect();
+    assert_eq!(loads, [(ControlScope::Node(node_id(UPF)), 40)]);
+    let overloads: Vec<(ControlScope, u8)> = smf
+        .overloads()
+        .map(|(scope, overload)| (scope, overload.metric))
+        .collect();
+    let address = Ipv4Addr::new(10, 0, 0, 2).into_socket(0);
+    assert_eq!(
+        overloads,
+        [
+            (ControlScope::Address(address), 50),
+            (ControlScope::Node(node_id(UPF)), 60)
+        ]
+    );
+}
+
 /// §8.2.34: a Metric above 100 is read as 0: an Overload Reduction Metric of 200 throttles
 /// nothing, and a Load Metric of 250 is a load of 0.
 #[test]
