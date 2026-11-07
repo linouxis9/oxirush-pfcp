@@ -971,6 +971,43 @@ fn controls_go_with_the_sessions_and_the_association_that_set_them() {
     );
 }
 
+/// §6.5: a modification that changes the CP F-SEID, to another SEID or to another address
+/// of the same, gives the session the address where the UP function then sends its
+/// messages, once it is accepted.
+#[test]
+fn a_new_cp_f_seid_gives_its_session_its_address() {
+    let (mut smf, mut upf) = associated(at(0));
+    let (cp_seid, _) = established(&mut smf, &mut upf, at(0));
+    let local = |smf: &Node, seid| smf.session(seid).and_then(|session| session.local_address);
+    assert_eq!(local(&smf, cp_seid), Some(SMF.ip()));
+    let f_seid = |seid, last| FSeid {
+        v4: true,
+        seid: Some(seid),
+        ipv4: Some(Ipv4Addr::new(10, 0, 0, last)),
+        ..Default::default()
+    };
+    let new = smf.new_session();
+    for (seid, last, now) in [(new, 11, 1), (new, 12, 2)] {
+        let modification = SessionModificationRequest::default().with_cp_f_seid(f_seid(seid, last));
+        let at_seid = if now == 1 { cp_seid } else { new };
+        smf.session_request(at(now), at_seid, modification).unwrap();
+        pass(&mut smf, &mut upf, UPF, at(now));
+        let (inbound, _) = request(&mut upf);
+        upf.respond(
+            at(now),
+            &inbound,
+            SessionModificationResponse::new(accepted()),
+        )
+        .unwrap();
+        pass(&mut upf, &mut smf, SMF, at(now));
+        assert_eq!(
+            local(&smf, seid),
+            Some(Ipv4Addr::new(10, 0, 0, last).into()),
+            "at {now} s"
+        );
+    }
+}
+
 /// What a node keeps is listed: its sessions, with the address of the node's F-SEID of
 /// each, its associations, and its loads and overloads with whose they are.
 #[test]

@@ -826,6 +826,23 @@ fn a_conditional_ie_that_does_not_decode_is_incorrect() {
             Some(84)
         )]
     );
+    // A mandatory IE that does not decode, alone: the row of the table says it, once
+    let mut message = establishment();
+    request_with(&mut message, |request| {
+        request.cp_f_seid = None;
+        request
+            .raw
+            .push(cut(57, &[2, 0, 0, 0, 0, 0, 0, 0x10, 0x01]));
+    });
+    assert_eq!(
+        checked(&message),
+        [(
+            "/pfcp/CP F-SEID".to_string(),
+            DeviationKind::MandatoryIncorrect { ie_type: 57 },
+            Some(CauseValue::MandatoryIeIncorrect),
+            Some(57)
+        )]
+    );
     // A second Create PDR, whose IEs do not frame
     let mut message = establishment();
     request_with(&mut message, |request| {
