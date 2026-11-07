@@ -800,7 +800,9 @@ impl Node {
     /// §5.22.3), and may be throttled for its overload. The SEID of the
     /// CP F-SEID of an establishment is the local SEID of its session, from
     /// [`new_session`](Self::new_session) or of the caller's own, which no other session
-    /// then takes until the establishment ends.
+    /// then takes until the establishment ends. The new SEID of a modification that changes
+    /// the CP F-SEID is the session's from when it is sent: the UP function's requests to
+    /// it before the response are of the session (Table 7.5.4.1-1, CP F-SEID).
     ///
     /// # Errors
     ///
@@ -941,6 +943,11 @@ impl Node {
         }
         if let Some(seid) = held {
             self.sessions.reserve(seid, true);
+        }
+        // The UP function may send to the new SEID of a move before its response (Table
+        // 7.5.4.1-1, CP F-SEID): of the session that moves.
+        if let (Change::Moves(new), Some(mark)) = (change, mark) {
+            self.sessions.hold_for(new, mark);
         }
         Ok(id)
     }
