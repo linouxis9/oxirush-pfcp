@@ -65,8 +65,15 @@ pub enum DeviationKind {
         /// Its IE type.
         ie_type: u16,
     },
-    /// An optional or conditional IE whose value does not decode as its type: the
-    /// receiver takes it as absent (§7.6.8).
+    /// A conditional IE that is there, and whose value does not decode as its type: a
+    /// verifiable conditional IE of a semantically invalid value (§7.6.8), which the
+    /// receiver of a request answers with "Mandatory IE incorrect".
+    ConditionalIncorrect {
+        /// Its IE type.
+        ie_type: u16,
+    },
+    /// An optional IE whose value does not decode as its type: the receiver takes it as
+    /// absent (§7.6.8).
     Incorrect {
         /// Its IE type.
         ie_type: u16,
@@ -184,6 +191,7 @@ impl Deviation {
             DeviationKind::MandatoryMissing { ie_type }
             | DeviationKind::MandatoryIncorrect { ie_type }
             | DeviationKind::ConditionalMissing { ie_type }
+            | DeviationKind::ConditionalIncorrect { ie_type }
             | DeviationKind::FixedLength { ie_type, .. } => Some(ie_type),
             _ => self.ie_type,
         };
@@ -203,6 +211,9 @@ impl fmt::Display for Deviation {
             }
             DeviationKind::ConditionalMissing { ie_type } => {
                 write!(f, "{} is missing where its condition holds", name(*ie_type))
+            }
+            DeviationKind::ConditionalIncorrect { ie_type } => {
+                write!(f, "the conditional {} does not decode", name(*ie_type))
             }
             DeviationKind::Incorrect { ie_type } => write!(
                 f,
@@ -666,9 +677,10 @@ fn mandatory_missing<S: Scope>(
     found.push(deviation);
 }
 
-/// The IEs that a scope keeps as octets: of no row, repeated (§7.6.10), or incorrect and
-/// taken as absent (§7.6.8). Of a row there once, the first IE is the one handled, and
-/// the others are repetitions; an IE of a null length is no error (§8.1.2).
+/// The IEs that a scope keeps as octets: of no row, repeated (§7.6.10), or incorrect
+/// (§7.6.8): a conditional one semantically invalid, an optional one taken as absent. Of a
+/// row there once, the first IE is the one handled, and the others are repetitions; an IE
+/// of a null length is no error (§8.1.2).
 #[cold]
 #[inline(never)]
 fn raw_deviations<S: Scope>(
@@ -712,13 +724,22 @@ fn raw_deviations<S: Scope>(
             (true, true) => continue,
             // An incorrect mandatory IE is reported as such.
             (true, false) if mandatory(row, context) > scope.count(row.ie_type) => continue,
-            (true, false) => Deviation::new(
-                here(),
-                "7.6.8",
-                DeviationKind::Incorrect {
-                    ie_type: row.ie_type,
-                },
-            ),
+            // One of a mandatory list beyond those that it needs, or a verifiable
+            // conditional IE: semantically invalid, as one that decodes and breaks a rule
+            // (§7.6.8). An optional one is taken as absent.
+            (true, false) => {
+                let ie_type = row.ie_type;
+                let kind = match row.presence_on(context.interface) {
+                    Presence::Mandatory => DeviationKind::MandatoryIncorrect { ie_type },
+                    Presence::Conditional => DeviationKind::ConditionalIncorrect { ie_type },
+                    Presence::Optional => DeviationKind::Incorrect { ie_type },
+                };
+                let mut deviation = Deviation::new(here(), "7.6.8", kind);
+                if !matches!(deviation.kind, DeviationKind::Incorrect { .. }) {
+                    deviation.cause = context.cause(false);
+                }
+                deviation
+            }
             (false, true) if row.repeat != Repeat::Once => continue,
             (false, _) => Deviation::new(
                 here(),

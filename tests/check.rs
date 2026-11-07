@@ -784,6 +784,125 @@ fn a_reserved_node_id_type_of_an_fq_csid_is_incorrect() {
     );
 }
 
+/// §7.6.8: a verifiable conditional IE that does not decode is semantically invalid, as one
+/// that decodes and breaks a rule of its clause: in a request, "Mandatory IE incorrect"
+/// with its type, and so is one of a mandatory list beyond those that it needs. Only an
+/// optional IE is taken as absent. Without a Cause in a response, and in an optional
+/// grouped IE, whose IEs the receiver takes as optional (§7.2.3.2).
+#[test]
+fn a_conditional_ie_that_does_not_decode_is_incorrect() {
+    let cut = |ie_type, octets: &[u8]| RawIe {
+        ie_type,
+        enterprise_id: None,
+        length: None,
+        octets: octets.to_vec().into(),
+    };
+    let checked = |message: &Message| {
+        Message::decode(&message.encode().unwrap())
+            .unwrap()
+            .check(Interfaces::N4)
+            .into_iter()
+            .map(|found| {
+                let offending = found.offending_ie();
+                (found.path, found.kind, found.cause, offending)
+            })
+            .collect::<Vec<_>>()
+    };
+    // An Outer Header Creation of GTP-U/UDP/IPv4 cut after its TEID
+    let mut message = establishment();
+    request_with(&mut message, |request| {
+        let forwarding = request.create_far[0]
+            .forwarding_parameters
+            .as_mut()
+            .unwrap();
+        forwarding.raw.push(cut(84, &[1, 0, 0, 0, 0, 1]));
+    });
+    assert_eq!(
+        checked(&message),
+        [(
+            "/pfcp/Create FAR/0/Forwarding Parameters/Outer Header Creation".to_string(),
+            DeviationKind::ConditionalIncorrect { ie_type: 84 },
+            Some(CauseValue::MandatoryIeIncorrect),
+            Some(84)
+        )]
+    );
+    // A second Create PDR, whose IEs do not frame
+    let mut message = establishment();
+    request_with(&mut message, |request| {
+        request.raw.push(cut(1, &[0, 56, 0, 9]));
+    });
+    assert_eq!(
+        checked(&message),
+        [(
+            "/pfcp/Create PDR".to_string(),
+            DeviationKind::MandatoryIncorrect { ie_type: 1 },
+            Some(CauseValue::MandatoryIeIncorrect),
+            Some(1)
+        )]
+    );
+    // In an optional Ethernet Packet Filter, an Ethernet Filter ID of two octets
+    let mut message = establishment();
+    request_with(&mut message, |request| {
+        let mut filter = EthernetPacketFilter::default();
+        filter.raw.push(cut(138, &[0, 1]));
+        let pdi = request.create_pdr[0].pdi.as_mut().unwrap();
+        pdi.ethernet_packet_filter.push(filter);
+    });
+    assert_eq!(
+        checked(&message),
+        [(
+            "/pfcp/Create PDR/0/PDI/Ethernet Packet Filter/0/Ethernet Filter ID".to_string(),
+            DeviationKind::ConditionalIncorrect { ie_type: 138 },
+            None,
+            None
+        )]
+    );
+    // An optional IE is taken as absent: the Ethertype of the filter
+    let mut message = establishment();
+    request_with(&mut message, |request| {
+        let mut filter = EthernetPacketFilter::default();
+        filter.raw.push(cut(136, &[8]));
+        let pdi = request.create_pdr[0].pdi.as_mut().unwrap();
+        pdi.ethernet_packet_filter.push(filter);
+    });
+    assert_eq!(
+        checked(&message),
+        [(
+            "/pfcp/Create PDR/0/PDI/Ethernet Packet Filter/0/Ethertype".to_string(),
+            DeviationKind::Incorrect { ie_type: 136 },
+            None,
+            None
+        )]
+    );
+    // In a response, a Local F-TEID of Created PDR without its TEID
+    let mut created = CreatedPdr::new(PdrId::new(1));
+    created.raw.push(cut(21, &[1]));
+    let response = Message {
+        header: Header::session(0x1001, 7),
+        body: SessionEstablishmentResponse::new(
+            NodeId::Ipv4(SMF),
+            Cause::new(CauseValue::RequestAccepted),
+        )
+        .with_up_f_seid(FSeid {
+            v4: true,
+            seid: Some(0x2001),
+            ipv4: Some(SMF),
+            ..Default::default()
+        })
+        .with_created_pdr(created)
+        .into(),
+    };
+    assert_eq!(
+        checked(&response),
+        [(
+            "/pfcp/Created PDR/0/F-TEID".to_string(),
+            DeviationKind::ConditionalIncorrect { ie_type: 21 },
+            None,
+            None
+        )]
+    );
+}
+
 /// §8.1.2: an IE of a null length is no error, and a mandatory one is there.
 #[test]
 fn a_mandatory_ie_of_a_null_length_is_there() {
