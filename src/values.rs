@@ -1017,9 +1017,10 @@ impl<const N: u16> oxirush_utils::tree::Tree for Raw<N> {
     }
 }
 
-/// A value that is one number, then the octets that a later release adds.
+/// A value that is one number, then the octets that a later release adds, and the rules
+/// of its clause that follow it.
 macro_rules! pfcp_number {
-    ($( $(#[$meta:meta])* $ty:ident($t:ty) $field:literal $clause:literal; )*) => {$(
+    ($( $(#[$meta:meta])* $ty:ident($t:ty) $field:literal $clause:literal $( check($this:ident, $path:ident, $found:ident) $rules:block )?; )*) => {$(
         $(#[$meta])*
         #[derive(Debug, Clone, Default, PartialEq, Eq)]
         pub struct $ty {
@@ -1070,6 +1071,10 @@ macro_rules! pfcp_number {
         impl Check for $ty {
             fn check(&self, path: &crate::check::Path, found: &mut Vec<crate::check::Deviation>) {
                 Field::check(&self.value, path, $clause, found);
+                $(
+                    let ($this, $path, $found) = (self, path, found);
+                    $rules
+                )?
             }
         }
 
@@ -1485,8 +1490,14 @@ impl oxirush_utils::tree::Tree for NodeId {
 pfcp_number! {
     /// BAR ID (§8.2.57).
     BarId(u8) "BAR ID value" "8.2.57";
-    /// Transport Level Marking (§8.2.12): the ToS/Traffic Class, and its mask.
-    TransportLevelMarking(u16) "ToS/Traffic Class" "8.2.12";
+    /// Transport Level Marking (§8.2.12): the ToS/Traffic Class, and its mask, of 0xFC.
+    TransportLevelMarking(u16) "ToS/Traffic Class" "8.2.12" check(this, path, found) {
+        // The second octet is the mask, "which shall be set to "0xFC"".
+        if this.value & 0xff != 0xfc {
+            let rule = DeviationKind::Rule("a ToS/Traffic Class mask other than 0xFC");
+            found.push(Deviation::new(path, "8.2.12", rule));
+        }
+    };
     /// Time Threshold (§8.2.14), in seconds.
     TimeThreshold(u32) "Time Threshold" "8.2.14";
     /// Monitoring Time (§8.2.15), in the NTP timestamp of its seconds.

@@ -302,6 +302,9 @@ pfcp_bits! {
     pub struct EthernetPduSessionInformation "8.2.102" octets 1 min 1 {
         ethi "ETHI": 0 1 1,
     }
+    check(this, path, found) {
+        flag_rule(!this.ethi, path, "8.2.102", "ETHI is not set", found);
+    }
 }
 
 pfcp_bits! {

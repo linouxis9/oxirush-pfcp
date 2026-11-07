@@ -1544,3 +1544,19 @@ fn the_spare_bits_of_an_octet_of_six_bits() {
         [("8.2.214", DeviationKind::Rule("more than 63 DSCP values"))]
     );
 }
+
+/// §8.2.12: the second octet of the ToS/Traffic Class of a Transport Level Marking is its
+/// mask, "which shall be set to "0xFC""; the first, the DSCP value, is any.
+#[test]
+fn the_mask_of_a_transport_level_marking() {
+    let mask = || {
+        (
+            "8.2.12",
+            DeviationKind::Rule("a ToS/Traffic Class mask other than 0xFC"),
+        )
+    };
+    assert_eq!(value_found::<TransportLevelMarking>("b8fc"), []);
+    assert_eq!(value_found::<TransportLevelMarking>("00fc"), []);
+    assert_eq!(value_found::<TransportLevelMarking>("b800"), [mask()]);
+    assert_eq!(value_found::<TransportLevelMarking>("b8ff"), [mask()]);
+}

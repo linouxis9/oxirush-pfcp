@@ -28,6 +28,7 @@
 8.2.86	1	at least one
 8.2.94	1	at least one
 8.2.95	1	at least one
+8.2.102	1	always set
 8.2.137	1	one and only one
 8.2.145	1	at least one
 8.2.152	1	at least one
@@ -37,6 +38,10 @@
 8.2.171	1	at least one
 8.2.171	2	shall not be set
 8.2.177	1	at least one
+8.2.187	1	flags of a value
+8.2.187	2	flags of a value
+8.2.187	3	flags of a value
+8.2.187	4	flags of a value
 8.2.196	1	at least one
 8.2.197	1	shall not be set
 8.2.200	1	at least one
