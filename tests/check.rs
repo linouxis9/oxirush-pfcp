@@ -639,10 +639,22 @@ fn the_first_of_a_repeated_ie_is_the_one_handled() {
 
 /// §7.6.8: a mandatory IE whose value is semantically invalid is answered "Mandatory IE
 /// incorrect", with its type: a Node ID of a length that its type does not have, an empty
-/// FQDN, a spare Node ID Type, an F-SEID with no address.
+/// FQDN, one of more than 255 octets with the trailing zero byte (RFC 1035 §2.3.4), a
+/// spare Node ID Type, an F-SEID with no address.
 #[test]
 fn a_semantically_invalid_mandatory_ie_is_incorrect() {
-    for node_id in [&[0, 10, 0][..], &[2], &[5, 1, 2, 3, 4], &[2, 3, b'u', b'p']] {
+    let label = [&[63][..], &[b'a'; 63]].concat();
+    let long = [&[2][..], &label, &label, &label, &label].concat();
+    let fits = [&long[..193], &[61], &[b'a'; 61]].concat();
+    assert_eq!(found(&node_message(5, &[ie(60, &fits), ie(96, &RTS)])), []);
+    let too_long = [&long[..193], &[62], &[b'a'; 62]].concat();
+    for node_id in [
+        &[0, 10, 0][..],
+        &[2],
+        &[5, 1, 2, 3, 4],
+        &[2, 3, b'u', b'p'],
+        &too_long,
+    ] {
         let octets = node_message(5, &[ie(60, node_id), ie(96, &RTS)]);
         let found = found(&octets);
         assert_eq!(found.len(), 1, "{node_id:?}: {found:?}");
