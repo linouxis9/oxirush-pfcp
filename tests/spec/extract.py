@@ -23,9 +23,10 @@ script:
     flag-sentences.tsv  the sentences of clause 8.2 that say which flags of an IE are set
                         together: "at least one", "one and only one", "only one of", "may
                         only be set", "shall be set to "1" if the ... flag is set", "shall
-                        not be set", "either ... shall be set" or "exclusive", by their
-                        clause and their number in it, which flag-rules.tsv lists with the
-                        rule that checks each
+                        not be set", "either ... shall be set" or "exclusive", with a value
+                        ("if ... is 1, then the ... flags shall be set"), or always ("this
+                        bit shall be set to "1"."), by their clause and their number in it,
+                        which flag-rules.tsv lists with the rule that checks each
     value-tables.tsv    the tables of clause 8.2 that name values, or bits as octet/bit; a
                         value that a table reserves is named <reserved>
     read-as.tsv         the values of those tables that a receiver reads as another: the
@@ -320,6 +321,11 @@ FLAG_PHRASES = [
     ('shall not be set', re.compile(r'(?i)\bs?shall not be set\b')),
     ('either', re.compile(r'(?i)\beither\b[^.]*\b(?:bit|flag)s?\b[^.]*\bshall be set\b')),
     ('exclusive', re.compile(r'(?i)\bexclusive\b')),
+    # Of the flags that a value of another field has set: "If Proxy Authen Type Value is
+    # 1, then the PAN and PAR flags shall be set".
+    ('flags of a value', re.compile(r'(?i)\bif [A-Za-z /-]+ is \d+, then the [A-Za-z0-9, -]+ flags? shall be set\b')),
+    # Of a flag that is always set: "This bit shall be set to "1"." alone, not "to "1" if".
+    ('always set', re.compile(r'(?i)\bthis (?:bit|flag) shall be set to ["“]1["”]\s*\.')),
 ]
 
 

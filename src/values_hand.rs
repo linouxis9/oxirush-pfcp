@@ -476,6 +476,15 @@ pfcp_layout! {
         proxy_authen_response_value "Proxy Authen Response Value": SecretLv8 if par,
         proxy_authen_id "Proxy Authen ID": u8 if pai,
     }
+    check(this, path, found) {
+        // The flags that a Proxy Authen Type has set.
+        let kind = this.proxy_authen_type_value;
+        let (name, challenge, response, id) = (this.pan, this.pac, this.par, this.pai);
+        flag_rule(kind == 1 && !(name && response), path, "8.2.187", "a Proxy Authen Type of 1 lacks PAN or PAR", found);
+        flag_rule(kind == 2 && !(name && challenge && response && id), path, "8.2.187", "a Proxy Authen Type of 2 lacks PAN, PAC, PAR or PAI", found);
+        flag_rule(kind == 3 && !(name && response && id), path, "8.2.187", "a Proxy Authen Type of 3 lacks PAN, PAR or PAI", found);
+        flag_rule(kind == 5 && !(name && challenge && response && id), path, "8.2.187", "a Proxy Authen Type of 5 lacks PAN, PAC, PAR or PAI", found);
+    }
 }
 
 pfcp_number! {

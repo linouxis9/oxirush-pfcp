@@ -1,7 +1,8 @@
-# The sentences of clause 8.2 of TS 29.244 V19.6.0 that say which flags of an IE are set
-# together, as flag-sentences.tsv numbers them in their clauses: "at least one", "one and
+# The sentences of clause 8.2 of TS 29.244 V19.6.0 that say which flags of an IE are set,
+# as flag-sentences.tsv numbers them in their clauses: together, "at least one", "one and
 # only one", "only one of", "may only be set", "shall be set to "1" if the ... flag is
-# set", "shall not be set", "either ... shall be set" and "exclusive". A sentence of who
+# set", "shall not be set", "either ... shall be set" and "exclusive"; with the value of
+# another field, "flags of a value"; and always, "always set". A sentence of who
 # sets a bit ("shall only be set by the CP function") is not of them. Each row gives the rule of check() that checks the sentence,
 # in its words, with the octets of values of the IE of the clause that break it and that
 # keep it, or `none:` and why check() cannot:
@@ -45,6 +46,7 @@
 8.2.86	1	at least one	no bit is set	00	010000000000000400
 8.2.94	1	at least one	none of PCP, DEI and VID is set	000000	040064
 8.2.95	1	at least one	none of PCP, DEI and VID is set	000000	040064
+8.2.102	1	always set	ETHI is not set	00	01
 8.2.137	1	one and only one	none, or more than one, of V6, V4 and A is set	00 0ae0000001	08 02e0000001 06e0000001e00000ff
 8.2.145	1	at least one	no bit is set	00	01
 8.2.152	1	at least one	no bit is set	00	01
@@ -54,6 +56,10 @@
 8.2.171	1	at least one	no bit is set	00	08
 8.2.171	2	shall not be set	PLMF is set with a packet delay	090000000a	010000000a 08
 8.2.177	1	at least one	neither V4 nor V6 is set	00	01 03
+8.2.187	1	flags of a value	a Proxy Authen Type of 1 lacks PAN or PAR	000100 0001010161	00010501610172 000400
+8.2.187	2	flags of a value	a Proxy Authen Type of 2 lacks PAN, PAC, PAR or PAI	000200 0002010161	00020f01610163017207
+8.2.187	3	flags of a value	a Proxy Authen Type of 3 lacks PAN, PAR or PAI	000300 00030501610172	00030d0161017207
+8.2.187	4	flags of a value	a Proxy Authen Type of 5 lacks PAN, PAC, PAR or PAI	000500 00050d0161017207	00050f01610163017207
 8.2.196	1	at least one	no bit is set	00	010064
 8.2.197	1	shall not be set	ALBI and UEAI are both set	03	01
 8.2.200	1	at least one	neither UMN6RS nor an IP address is set	00 041f90	010a000001 40

@@ -4,7 +4,7 @@
 
 | Test | What it checks |
 |---|---|
-| `spec` | The crate against TS 29.244 V19.6.0: every message type and IE type; every row of a table, with its presence, interfaces, IE type and repetition, and its bound; every flag and field of a figure, with its octet, bits, order and width, and the conditions that the sentences of its clause give; the sentences of clause 8.2 on which flags go together, each with the rule that checks it (`spec/flag-rules.tsv`); every table of values, and the values that a receiver reads as another; the constructors by interface; and the requirements of clause 6 (`spec/`) |
+| `spec` | The crate against TS 29.244 V19.6.0: every message type and IE type; every row of a table, with its presence, interfaces, IE type and repetition, and its bound; every flag and field of a figure, with its octet, bits, order and width, and the conditions that the sentences of its clause give; the sentences of clause 8.2 on which flags are set, together, with the value of another field or always, each with the rule that checks it (`spec/flag-rules.tsv`); every table of values, and the values that a receiver reads as another; the constructors by interface; and the requirements of clause 6 (`spec/`) |
 | `captures` | The 213 messages of the lab runs (`captures/`): each decodes, encodes back byte for byte, has a tree that reads back, and is checked on its interface |
 | `check` | What `check()` finds on each interface, with the clause and the Cause of each |
 | `node` | The procedures of clause 6 on a `Node`: one test for each requirement of `spec/requirements.tsv` that names it |
@@ -99,6 +99,10 @@ test `codec` expects them (`other_vectors_round_trip`, with `--ignored` and
   Application ID, Provide ATSSS Control Information and Created Bridge/Router Info where
   they are, and IE type 116, which no table of Release 19 has.
 - Access Type 3, which Table 8.2.153-1 has as spare.
+- Transport Level Marking of 0x1111, whose mask, the second octet, §8.2.12 has "set to
+  "0xFC"" (`ie.NewTransportLevelMarking(0x1111)` in the tests of `message/`), in
+  Forwarding Parameters, Duplicating Parameters and their updates, and as the DSCP of
+  GTP-U Path QoS Control Information and of QoS Information.
 - Session Establishment Requests with a SEID other than 0 in their header, where the
   peer's SEID is not known yet (§7.2.2.4.2).
 - Session Report Requests with a SEID other than 0 in their header and an Old CP F-SEID,

@@ -1088,6 +1088,8 @@ fn flag_checked(ie_type: u16, octets: &[u8]) -> Option<Vec<(&'static str, Deviat
         MeasurementReportingType,
         PduSetImportance,
         ExpeditedTransferIndication,
+        EthernetPduSessionInformation,
+        L2tpUserAuthentication,
     );
     None
 }
@@ -1591,7 +1593,7 @@ fn the_readme_counts() {
         (
             &readme,
             format!(
-                "has the {} sentences of clause 8.2 that say which flags of an IE go together: {} with the rule of `check()` that checks it, and {unchecked} that a value does not show alone",
+                "has the {} sentences of clause 8.2 that say which flags of an IE are set, together, with the value of another field, or always: {} with the rule of `check()` that checks it, and {unchecked} that a value does not show alone",
                 flags.len(),
                 flags.len() - unchecked
             ),
