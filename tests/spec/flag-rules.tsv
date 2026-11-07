@@ -2,7 +2,8 @@
 # as flag-sentences.tsv numbers them in their clauses: together, "at least one", "one and
 # only one", "only one of", "may only be set", "shall be set to "1" if the ... flag is
 # set", "shall not be set", "either ... shall be set" and "exclusive"; with the value of
-# another field, "flags of a value"; and always, "always set". A sentence of who
+# another field, "flags of a value"; with the Cause of the message, "with the Cause"; and
+# always, "always set". A sentence of who
 # sets a bit ("shall only be set by the CP function") is not of them. Each row gives the rule of check() that checks the sentence,
 # in its words, with the octets of values of the IE of the clause that break it and that
 # keep it, or `none:` and why check() cannot:
@@ -10,7 +11,7 @@
 #   rule     the words of the Rule deviation of the clause that check() gives a value
 #            that breaks the sentence
 #   breaks   values that break the sentence and nothing else: check() gives that
-#            deviation alone
+#            deviation alone; of a sentence "with the Cause", messages, checked on N4
 #   keeps    values that keep it: check() gives no deviation
 #
 # The test `flag_rules` fails on a sentence without its row, a row of no sentence, and a
@@ -43,6 +44,7 @@
 8.2.68	1	at least one	no bit is set	00	01
 8.2.69	1	at least one	no bit is set	00	01
 8.2.70	1	either	neither V4 nor V6 is set	00	020a000001
+8.2.76	1	with the Cause	an Overload Control Information of a rejected establishment without AOCI	21330030000000000000000100000100003c0005000a000002001300014b00360012003400040000000100350001320037000101 21330035000000000000000100000100003c0005000a000002001300014b00360017003400040000000100350001320037000101006e000100	21330035000000000000000100000100003c0005000a000002001300014b00360017003400040000000100350001320037000101006e000101 21330041000000000000000100000100003c0005000a00000200130001010039000d0200000000000000020a00000200360012003400040000000100350001320037000101
 8.2.86	1	at least one	no bit is set	00	010000000000000400
 8.2.94	1	at least one	none of PCP, DEI and VID is set	000000	040064
 8.2.95	1	at least one	none of PCP, DEI and VID is set	000000	040064
