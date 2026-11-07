@@ -24,7 +24,7 @@
 //! with a report of SEID 0, which the SMF may adopt; a session moves to a new SEID; a
 //! request is forgotten, cancelled, or answered late; a sequence number is reserved and
 //! given back. Answers accept or reject, through `respond` or as a probe's message of any
-//! type and delivery. What the nodes send each other is delivered. What a node sends
+//! type and delivery, and a deletion's may say that usage reports follow. What the nodes send each other is delivered. What a node sends
 //! decodes and encodes back to its octets; a datagram gets at most one answer for each of
 //! its messages; a timer that is due moves on; nothing panics.
 #![no_main]
@@ -204,7 +204,21 @@ fn answer(node: &mut Node, now: Duration, how: u8, kept: &mut Vec<Inbound>) {
             Body::SessionModificationRequest(_) => {
                 SessionModificationResponse::new(cause.clone()).into()
             }
-            Body::SessionDeletionRequest(_) => SessionDeletionResponse::new(cause.clone()).into(),
+            // Usage reports that follow the deletion (§5.2.2.3.1)
+            Body::SessionDeletionRequest(_) => {
+                let more = Cause::new(CauseValue::MoreUsageReportToSend);
+                let deleted =
+                    SessionDeletionResponse::new(if how & 2 != 0 { more } else { cause.clone() });
+                match how & 4 {
+                    0 => deleted.into(),
+                    _ => deleted
+                        .with_pfcpsdrsp_flags(PFCPSDRspFlags {
+                            puru: true,
+                            ..Default::default()
+                        })
+                        .into(),
+                }
+            }
             Body::SessionReportRequest(_) => SessionReportResponse::new(cause.clone()).into(),
             _ => continue,
         };
