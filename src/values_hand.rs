@@ -914,7 +914,7 @@ impl FqCsid {
     /// Read by hand: its layout depends on its type.
     pub const LAYOUT: Option<&'static Layout> = None;
 
-    /// The length of the Node-Address of a Node-ID Type: `None` for a spare type.
+    /// The length of the Node-Address of a Node-ID Type: `None` for a reserved type.
     fn address_length(node_id_type: u8) -> Option<usize> {
         match node_id_type {
             0 | 2 => Some(4),
@@ -986,11 +986,12 @@ impl Codec for FqCsid {
 
 impl Check for FqCsid {
     fn check(&self, path: &crate::check::Path, found: &mut Vec<Deviation>) {
+        // "Other values of Node-Address Type are reserved": an incorrect value (§7.6.8).
         if Self::address_length(self.node_id_type).is_none() {
             found.push(Deviation::new(
                 path,
                 "8.2.43",
-                crate::check::DeviationKind::SpareValue {
+                crate::check::DeviationKind::ReservedValue {
                     value: self.node_id_type.into(),
                 },
             ));
