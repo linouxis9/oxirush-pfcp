@@ -5854,6 +5854,56 @@ fn an_adopted_session_takes_the_port_of_the_requests() {
     }
 }
 
+/// §6.2.2.2: an association of a Node ID that another address replaces leaves the
+/// heartbeats of the old address while the node has a session adopted from it, as a
+/// release does. A UPF of a session that the SMF adopted sets up an association, then
+/// sets it up again from another address: both addresses are heartbeated.
+#[test]
+fn a_replaced_association_keeps_the_heartbeats_of_an_adopted_peer() {
+    let mut smf = Node::new(NodeConfig {
+        heartbeat: Some(Duration::from_secs(60)),
+        ..config(SMF, Function::Cp)
+    });
+    smf.adopt_session(0x55, UPF, 0x66).unwrap();
+    let setup = |sequence: u32| {
+        let request =
+            AssociationSetupRequest::new(fqdn("upf.example"), RecoveryTimeStamp::new(1000));
+        Message {
+            header: Header::node(sequence),
+            body: request.into(),
+        }
+        .encode()
+        .unwrap()
+    };
+    let elsewhere = Ipv4Addr::new(10, 0, 0, 7).into_socket(8805);
+    for (now, from) in [(1, UPF), (2, elsewhere)] {
+        smf.handle_datagram(at(now), from, &setup(now as u32));
+        let (inbound, _) = request(&mut smf);
+        let answer =
+            AssociationSetupResponse::new(node_id(SMF), accepted(), RecoveryTimeStamp::new(1000));
+        smf.respond(at(now), &inbound, answer).unwrap();
+        sent(&mut smf);
+        events(&mut smf);
+    }
+    assert_eq!(smf.association(UPF), None);
+    for now in [62, 122] {
+        smf.handle_timeout(at(now));
+        let mut beaten: Vec<SocketAddr> = Vec::new();
+        for transmit in sent(&mut smf) {
+            let request = decoded(&transmit);
+            assert!(matches!(request.body, Body::HeartbeatRequest(_)));
+            let response = Message {
+                header: Header::node(request.header.sequence),
+                body: HeartbeatResponse::new(RecoveryTimeStamp::new(1000)).into(),
+            };
+            smf.handle_datagram(at(now), transmit.to, &response.encode().unwrap());
+            beaten.push(transmit.to);
+        }
+        beaten.sort();
+        assert_eq!(beaten, [UPF, elsewhere], "at {now} s");
+    }
+}
+
 /// An establishment holds its session from when it is sent: another request of the
 /// session that ends without its response, cancelled here, leaves it, and the
 /// establishment's accepted response establishes it.
