@@ -62,14 +62,11 @@ pub trait Codec: Sized {
     fn encoded_len(&self) -> usize;
 }
 
-/// The values of a row that is a list of a type: a [`List`](crate::List) for a value,
-/// which keeps one in place, or a vector for a grouped IE, which is large.
+/// How a row of a type is held: a list is a vector, and a row that is there once an
+/// `Option` of a value, or of a box for a grouped IE, which is large.
 pub trait Listed: Codec {
-    /// The field of a row that is a list of values of the type.
-    type List: Default + Clone + PartialEq + core::fmt::Debug;
-
     /// Decode at the end of the field of a row that is a list.
-    fn decode_push(list: &mut Self::List, octets: &[u8]) -> bool;
+    fn decode_push(list: &mut Vec<Self>, octets: &[u8]) -> bool;
 
     /// The field of a row that is conditional or optional and there once: an `Option` of
     /// a value, or of a box for a grouped IE.
@@ -83,14 +80,13 @@ pub trait Listed: Codec {
 macro_rules! listed_value {
     ($($ty:ident),* $(,)?) => {$(
         impl crate::ie::Listed for $ty {
-            type List = crate::list::List<Self>;
             type Slot = Option<Self>;
             #[inline]
             fn decode_slot(slot: &mut Self::Slot, octets: &[u8]) -> bool {
                 <Self as crate::ie::Codec>::decode_into(slot, octets)
             }
             #[inline]
-            fn decode_push(list: &mut Self::List, octets: &[u8]) -> bool {
+            fn decode_push(list: &mut alloc::vec::Vec<Self>, octets: &[u8]) -> bool {
                 match <Self as crate::ie::Codec>::decode(octets) {
                     Some(value) => {
                         list.push(value);

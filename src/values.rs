@@ -1980,14 +1980,13 @@ listed_value!(
 );
 
 impl<const N: u16> crate::ie::Listed for Raw<N> {
-    type List = crate::list::List<Self>;
     type Slot = Option<Self>;
     fn decode_slot(slot: &mut Self::Slot, octets: &[u8]) -> bool {
         *slot = Some(Self(Octets::wire(octets)));
         true
     }
     #[inline]
-    fn decode_push(list: &mut Self::List, octets: &[u8]) -> bool {
+    fn decode_push(list: &mut Vec<Self>, octets: &[u8]) -> bool {
         list.push(Self(Octets::wire(octets)));
         true
     }

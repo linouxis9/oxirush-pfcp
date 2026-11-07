@@ -178,20 +178,6 @@ impl<T> FieldValues<T> for Option<alloc::boxed::Box<T>> {
     }
 }
 
-impl<T> FieldValues<T> for crate::list::List<T> {
-    #[inline(always)]
-    fn values(&self) -> &[T] {
-        self.as_slice()
-    }
-    #[inline(always)]
-    fn first(&self) -> Option<&T> {
-        self.as_slice().first()
-    }
-    fn add(&mut self, value: T) {
-        self.push(value);
-    }
-}
-
 impl<T> FieldValues<T> for Vec<T> {
     #[inline(always)]
     fn values(&self) -> &[T] {

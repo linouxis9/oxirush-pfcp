@@ -1766,19 +1766,10 @@ fn the_unknown_octets_of_an_ie() {
     assert_eq!(tree::from_value::<Precedence>(&tree).unwrap(), precedence);
 }
 
-/// A list is equal to another of the same values, however it holds them: a message
-/// read back from its tree is equal to the one decoded.
+/// A message read back from its tree is equal to the one decoded: an FQ-CSID of IPv6
+/// whose content frames as IEs, and one that does not decode.
 #[test]
-fn a_list_equals_by_its_values() {
-    let mut reserved: List<u16> = List::new();
-    reserved.reserve_exact(2);
-    reserved.push(7);
-    assert_eq!(reserved, List::from(vec![7]));
-    assert_eq!(
-        format!("{reserved:?}"),
-        format!("{:?}", List::from(vec![7]))
-    );
-    // An FQ-CSID of IPv6 whose content frames as IEs, and one that does not decode
+fn a_message_read_back_equals_the_one_decoded() {
     let mut address = [0; 16];
     address[2] = 15;
     let fq_csid = FqCsid {

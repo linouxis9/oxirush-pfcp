@@ -46,7 +46,6 @@ mod enums;
 pub mod framing;
 mod header;
 mod ie;
-mod list;
 mod macros;
 mod message;
 #[cfg(feature = "node")]
@@ -70,7 +69,6 @@ pub use check::{Check, Deviation, DeviationKind, Path};
 pub use enums::*;
 pub use header::Header;
 pub use ie::{Codec, IeFault, IeType, Listed, Placed, RawIe, VENDOR};
-pub use list::List;
 pub use message::{
     Body, MESSAGE_TYPES, Message, MessageTypeInfo, is_node_related, is_request, message_type_info,
 };

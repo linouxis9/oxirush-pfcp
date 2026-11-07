@@ -1101,7 +1101,7 @@ macro_rules! pfcp_table {
     (@field [] Ci ($t:ty)) => { Option<$t> };
     (@field [] Oi ($t:ty)) => { Option<$t> };
     (@field [] $p:ident ($t:ty)) => { <$t as crate::ie::Listed>::Slot };
-    (@field [* $($max:literal)?] $p:ident ($t:ty)) => { <$t as crate::ie::Listed>::List };
+    (@field [* $($max:literal)?] $p:ident ($t:ty)) => { alloc::vec::Vec<$t> };
     (@presence M) => { crate::table::Presence::Mandatory };
     (@presence C) => { crate::table::Presence::Conditional };
     (@presence O) => { crate::table::Presence::Optional };
@@ -1186,7 +1186,6 @@ macro_rules! pfcp_table {
         }
 
         impl crate::ie::Listed for $ty {
-            type List = alloc::vec::Vec<Self>;
             type Slot = Option<alloc::boxed::Box<Self>>;
 
             fn decode_slot(slot: &mut Self::Slot, octets: &[u8]) -> bool {
@@ -1198,7 +1197,7 @@ macro_rules! pfcp_table {
                 true
             }
 
-            fn decode_push(list: &mut Self::List, octets: &[u8]) -> bool {
+            fn decode_push(list: &mut alloc::vec::Vec<Self>, octets: &[u8]) -> bool {
                 list.push(Self::default());
                 let last = list.len() - 1;
                 if crate::table::decode_scope_into(&mut list[last], octets).is_err() {
