@@ -106,27 +106,47 @@ fn associated(now: Duration) -> (Node, Node) {
 /// An SMF of `smf` associated with a UPF.
 fn associated_as(smf: NodeConfig, now: Duration) -> (Node, Node) {
     let (mut smf, mut upf) = (Node::new(smf), node(UPF, Function::Up));
-    let setup = AssociationSetupRequest::new(node_id(SMF), RecoveryTimeStamp::new(1000));
-    smf.request(
-        now,
-        UPF,
-        Message {
-            header: Header::node(0),
-            body: setup.into(),
-        },
-    )
-    .unwrap();
-    pass(&mut smf, &mut upf, UPF, now);
-    let (inbound, _) = request(&mut upf);
-    upf.respond(
-        now,
-        &inbound,
-        AssociationSetupResponse::new(node_id(UPF), accepted(), RecoveryTimeStamp::new(1000)),
-    )
-    .unwrap();
-    pass(&mut upf, &mut smf, SMF, now);
+    set_up(&mut smf, &mut upf, now, cp_features(), up_features());
     events(&mut smf);
     (smf, upf)
+}
+
+/// The SMF sets up its association with the UPF at `now`, with `cp` in its CP Function
+/// Features, and the UPF accepts it, with `up` in its UP Function Features: those of no
+/// feature are not written.
+fn set_up(
+    smf: &mut Node,
+    upf: &mut Node,
+    now: Duration,
+    cp: CpFunctionFeatures,
+    up: UpFunctionFeatures,
+) {
+    let mut setup = AssociationSetupRequest::new(node_id(SMF), RecoveryTimeStamp::new(1000));
+    if cp != cp_features() {
+        setup = setup.with_cp_function_features(cp);
+    }
+    let message = Message {
+        header: Header::node(0),
+        body: setup.into(),
+    };
+    smf.request(now, UPF, message).unwrap();
+    pass(smf, upf, UPF, now);
+    let (inbound, _) = request(upf);
+    let mut answer = setup_answer();
+    if up != up_features() {
+        answer = answer.with_up_function_features(up);
+    }
+    upf.respond(now, &inbound, answer).unwrap();
+    pass(upf, smf, SMF, now);
+}
+
+/// CP and UP Function Features of none.
+fn cp_features() -> CpFunctionFeatures {
+    CpFunctionFeatures::default()
+}
+
+fn up_features() -> UpFunctionFeatures {
+    UpFunctionFeatures::default()
 }
 
 /// A session between them: the SMF's SEID and the UPF's.
@@ -948,23 +968,7 @@ fn controls_go_with_the_sessions_and_the_association_that_set_them() {
         (None, None)
     );
     // A new association of the same Node ID starts without them
-    let setup = AssociationSetupRequest::new(node_id(SMF), RecoveryTimeStamp::new(1000));
-    let body = setup.into();
-    smf.request(
-        at(4),
-        UPF,
-        Message {
-            header: Header::node(0),
-            body,
-        },
-    )
-    .unwrap();
-    pass(&mut smf, &mut upf, UPF, at(4));
-    let (inbound, _) = request(&mut upf);
-    let response =
-        AssociationSetupResponse::new(node_id(UPF), accepted(), RecoveryTimeStamp::new(1000));
-    upf.respond(at(4), &inbound, response).unwrap();
-    pass(&mut upf, &mut smf, SMF, at(4));
+    set_up(&mut smf, &mut upf, at(4), cp_features(), up_features());
     assert_eq!(
         (smf.load_control(UPF), smf.overload_control(UPF)),
         (None, None)
@@ -1678,26 +1682,15 @@ fn bundle(messages: &[Message]) -> Vec<u8> {
 /// Features (§8.2.25, §8.2.58).
 fn bundling(now: Duration) -> (Node, Node) {
     let (mut smf, mut upf) = (node(SMF, Function::Cp), node(UPF, Function::Up));
-    let features = CpFunctionFeatures {
+    let cp = CpFunctionFeatures {
         bundl: true,
-        ..Default::default()
+        ..cp_features()
     };
-    let setup = AssociationSetupRequest::new(node_id(SMF), RecoveryTimeStamp::new(1000))
-        .with_cp_function_features(features);
-    let header = Header::node(0);
-    let body = setup.into();
-    smf.request(now, UPF, Message { header, body }).unwrap();
-    pass(&mut smf, &mut upf, UPF, now);
-    let (inbound, _) = request(&mut upf);
-    let features = UpFunctionFeatures {
+    let up = UpFunctionFeatures {
         bundl: true,
-        ..Default::default()
+        ..up_features()
     };
-    let response =
-        AssociationSetupResponse::new(node_id(UPF), accepted(), RecoveryTimeStamp::new(1000))
-            .with_up_function_features(features);
-    upf.respond(now, &inbound, response).unwrap();
-    pass(&mut upf, &mut smf, SMF, now);
+    set_up(&mut smf, &mut upf, now, cp, up);
     events(&mut smf);
     events(&mut upf);
     (smf, upf)
@@ -1745,22 +1738,13 @@ fn bundling_needs_both_to_announce_it() {
         let (mut smf, mut upf) = (node(SMF, Function::Cp), node(UPF, Function::Up));
         let cp = CpFunctionFeatures {
             bundl: smf_bundles,
-            ..Default::default()
+            ..cp_features()
         };
-        let setup = AssociationSetupRequest::new(node_id(SMF), RecoveryTimeStamp::new(1000))
-            .with_cp_function_features(cp);
-        let body = setup.into();
-        let header = Header::node(0);
-        smf.request(at(0), UPF, Message { header, body }).unwrap();
-        pass(&mut smf, &mut upf, UPF, at(0));
-        let (inbound, _) = request(&mut upf);
         let up = UpFunctionFeatures {
             bundl: upf_bundles,
-            ..Default::default()
+            ..up_features()
         };
-        let response = setup_answer().with_up_function_features(up);
-        upf.respond(at(0), &inbound, response).unwrap();
-        pass(&mut upf, &mut smf, SMF, at(0));
+        set_up(&mut smf, &mut upf, at(0), cp, up);
         let (cp_seid, up_seid) = established(&mut smf, &mut upf, at(0));
         upf.handle_datagram(at(1), SMF, &modifications(up_seid, 20));
         let report = |sequence| Message {
@@ -4670,35 +4654,16 @@ fn a_cp_takes_the_mpas_of_a_upf_update() {
 #[test]
 fn a_cp_keeps_released_sessions_only_with_an_mpas_upf() {
     let outcome = |cp_mpas: bool, up_mpas: bool| {
-        let mut smf = node(SMF, Function::Cp);
-        let mut upf = node(UPF, Function::Up);
-        let features = CpFunctionFeatures {
+        let (mut smf, mut upf) = (node(SMF, Function::Cp), node(UPF, Function::Up));
+        let cp = CpFunctionFeatures {
             mpas: cp_mpas,
-            ..Default::default()
+            ..cp_features()
         };
-        smf.request(
-            at(0),
-            UPF,
-            Message {
-                header: Header::node(0),
-                body: AssociationSetupRequest::new(node_id(SMF), RecoveryTimeStamp::new(1000))
-                    .with_cp_function_features(features)
-                    .into(),
-            },
-        )
-        .unwrap();
-        pass(&mut smf, &mut upf, UPF, at(0));
-        let (inbound, _) = request(&mut upf);
-        let mut answer =
-            AssociationSetupResponse::new(node_id(UPF), accepted(), RecoveryTimeStamp::new(1000));
-        if up_mpas {
-            answer = answer.with_up_function_features(UpFunctionFeatures {
-                mpas: true,
-                ..Default::default()
-            });
-        }
-        upf.respond(at(0), &inbound, answer).unwrap();
-        pass(&mut upf, &mut smf, SMF, at(0));
+        let up = UpFunctionFeatures {
+            mpas: up_mpas,
+            ..up_features()
+        };
+        set_up(&mut smf, &mut upf, at(0), cp, up);
         events(&mut smf);
         let (cp_seid, _) = established(&mut smf, &mut upf, at(0));
         assert!(smf.end_association(UPF));
@@ -5298,30 +5263,12 @@ fn handover_report() -> Message {
 /// sends it an update, which the UPF answers with `cause` and its UP Function Features of
 /// MPAS `after`; whether a release then keeps a session.
 fn cp_keeps_after_an_update_answered_with(before: bool, after: bool, cause: CauseValue) -> bool {
-    let mut smf = node(SMF, Function::Cp);
-    let mut upf = node(UPF, Function::Up);
+    let (mut smf, mut upf) = (node(SMF, Function::Cp), node(UPF, Function::Up));
     let up_mpas = |mpas| UpFunctionFeatures {
         mpas,
-        ..Default::default()
+        ..up_features()
     };
-    let setup = AssociationSetupRequest::new(node_id(SMF), RecoveryTimeStamp::new(1000))
-        .with_cp_function_features(mpas());
-    smf.request(
-        at(0),
-        UPF,
-        Message {
-            header: Header::node(0),
-            body: setup.into(),
-        },
-    )
-    .unwrap();
-    pass(&mut smf, &mut upf, UPF, at(0));
-    let (inbound, _) = request(&mut upf);
-    let answer =
-        AssociationSetupResponse::new(node_id(UPF), accepted(), RecoveryTimeStamp::new(1000))
-            .with_up_function_features(up_mpas(before));
-    upf.respond(at(0), &inbound, answer).unwrap();
-    pass(&mut upf, &mut smf, SMF, at(0));
+    set_up(&mut smf, &mut upf, at(0), mpas(), up_mpas(before));
     events(&mut smf);
     let (cp_seid, _) = established(&mut smf, &mut upf, at(0));
     smf.request(

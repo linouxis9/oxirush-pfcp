@@ -1356,6 +1356,11 @@ fn the_absence_rules_that_their_scope_shows() {
     );
 }
 
+/// That the rows of `value` missing where their conditions show are `expected`.
+fn shown(value: &impl Check, expected: &[&str]) {
+    assert_eq!(missing_where_shown(value), expected);
+}
+
 /// §7.6.6: the conditions of the C rows that the IEs beside them show, each where it
 /// holds and where it does not; the NOTEs of Tables 7.4.4.1.3-1, 7.4.5.1.8-1 and 7.5.2.9-5,
 /// of one IE or another, as the condition of each on the other.
@@ -1408,18 +1413,15 @@ fn the_conditions_that_their_scope_shows() {
         }),
         ..Default::default()
     };
-    assert_eq!(
-        missing_where_shown(&clock),
-        ["Time Offset Threshold", "Cumulative rateRatio Threshold"]
+    shown(
+        &clock,
+        &["Time Offset Threshold", "Cumulative rateRatio Threshold"],
     );
     clock.requested_clock_drift_information = Some(RequestedClockDriftInformation {
         rrcr: true,
         ..Default::default()
     });
-    assert_eq!(
-        missing_where_shown(&clock),
-        ["Cumulative rateRatio Threshold"]
-    );
+    shown(&clock, &["Cumulative rateRatio Threshold"]);
     // Table 7.4.4.1.3-1: a periodic report has its period; a peer or an interface type
     let mut path = GtpUPathQoSControlInformation {
         qos_report_trigger: Some(QoSReportTrigger {
@@ -1428,23 +1430,23 @@ fn the_conditions_that_their_scope_shows() {
         }),
         ..Default::default()
     };
-    assert_eq!(
-        missing_where_shown(&path),
-        [
+    shown(
+        &path,
+        &[
             "Remote GTP-U Peer",
             "GTP-U Path Interface Type",
-            "Measurement Period"
-        ]
+            "Measurement Period",
+        ],
     );
     path.gtp_u_path_interface_type = Some(GtpUPathInterfaceType {
         n3: true,
         ..Default::default()
     });
     path.measurement_period = Some(MeasurementPeriod::new(10));
-    assert_eq!(missing_where_shown(&path), Vec::<String>::new());
+    shown(&path, &[]);
     path.gtp_u_path_interface_type = None;
     path.remote_gtp_u_peer.push(RemoteGtpUPeer::default());
-    assert_eq!(missing_where_shown(&path), Vec::<String>::new());
+    shown(&path, &[]);
     // Table 7.4.4.1.4-1: a periodic N6 delay measurement has its period
     let mut n6 = N6DelayMeasurementControlInformation {
         measurement_reporting_type: Some(MeasurementReportingType {
@@ -1453,49 +1455,49 @@ fn the_conditions_that_their_scope_shows() {
         }),
         ..Default::default()
     };
-    assert_eq!(missing_where_shown(&n6), ["Measurement Period"]);
+    shown(&n6, &["Measurement Period"]);
     n6.measurement_reporting_type = Some(MeasurementReportingType {
         evt: true,
         ..Default::default()
     });
-    assert_eq!(missing_where_shown(&n6), Vec::<String>::new());
+    shown(&n6, &[]);
     // Table 7.4.5.1.8-1: an N6 delay report has its information or its failure
     let mut report = N6DelayMeasurementReport::default();
-    assert_eq!(
-        missing_where_shown(&report),
-        [
+    shown(
+        &report,
+        &[
             "N6 Delay Measurement Information",
-            "N6 Delay Measurement Failure Information"
-        ]
+            "N6 Delay Measurement Failure Information",
+        ],
     );
     report.n6_delay_measurement_failure_information =
         Some(N6DelayMeasurementFailureInformation::default());
-    assert_eq!(missing_where_shown(&report), Vec::<String>::new());
+    shown(&report, &[]);
     // Table 7.5.2.2-1: a PDR without a predefined rule or a MAR has its FAR
     let mut pdr = CreatePdr::new_n4(
         PdrId::new(1),
         Precedence::new(1),
         Pdi::new(SourceInterface::new(SourceInterfaceValue::Access)),
     );
-    assert_eq!(missing_where_shown(&pdr), ["FAR ID"]);
+    shown(&pdr, &["FAR ID"]);
     pdr.mar_id = Some(MarId::new(1));
-    assert_eq!(missing_where_shown(&pdr), Vec::<String>::new());
+    shown(&pdr, &[]);
     pdr.mar_id = None;
     pdr.activate_predefined_rules
         .push(ActivatePredefinedRules(b"rule".to_vec().into()));
-    assert_eq!(missing_where_shown(&pdr), Vec::<String>::new());
+    shown(&pdr, &[]);
     // Tables 7.5.2.2-8 and 7.5.2.2-9: an RTP header extension has its ID, an RTP payload
     // format its payload type
     let extension = RtpHeaderExtensionInformation {
         rtp_header_extension_type: Some(RtpHeaderExtensionType::default()),
         ..Default::default()
     };
-    assert_eq!(missing_where_shown(&extension), ["RTP Header Extension ID"]);
+    shown(&extension, &["RTP Header Extension ID"]);
     let payload = RtpPayloadInformation {
         rtp_payload_format: Some(RtpPayloadFormat::default()),
         ..Default::default()
     };
-    assert_eq!(missing_where_shown(&payload), ["RTP Payload Type"]);
+    shown(&payload, &["RTP Payload Type"]);
     // Table 7.5.2.3-1: a FAR that forwards and duplicates for redundant transmission
     let mut far = far(1);
     far.apply_action = Some(ApplyAction {
@@ -1503,36 +1505,33 @@ fn the_conditions_that_their_scope_shows() {
         dfrt: true,
         ..Default::default()
     });
-    assert_eq!(
-        missing_where_shown(&far),
-        ["Redundant Transmission Forwarding Parameters"]
-    );
+    shown(&far, &["Redundant Transmission Forwarding Parameters"]);
     far.forwarding_parameters = None;
-    assert_eq!(missing_where_shown(&far), ["Forwarding Parameters"]);
+    shown(&far, &["Forwarding Parameters"]);
     // Table 7.5.2.3-2: forwarding to SGi-LAN/N6-LAN has a Forwarding Policy
     let forwarding = ForwardingParameters::new(DestinationInterface::new(
         DestinationInterfaceValue::SgiLanN6Lan,
     ));
-    assert_eq!(missing_where_shown(&forwarding), ["Forwarding Policy"]);
+    shown(&forwarding, &["Forwarding Policy"]);
     let forwarding =
         ForwardingParameters::new(DestinationInterface::new(DestinationInterfaceValue::Core));
-    assert_eq!(missing_where_shown(&forwarding), Vec::<String>::new());
+    shown(&forwarding, &[]);
     // Table 7.5.2.3-9: a header handling without a reference says it all
     let mut handling = HeaderHandlingControlInformation {
         header_handling_control_id: Some(HeaderHandlingControlId::default()),
         ..Default::default()
     };
-    assert_eq!(
-        missing_where_shown(&handling),
-        [
+    shown(
+        &handling,
+        &[
             "Header Handling Action",
             "Header Information",
             "Header Value",
-            "Header Handling Condition"
-        ]
+            "Header Handling Condition",
+        ],
     );
     handling.header_handling_control_reference = Some(HeaderHandlingControlReference::default());
-    assert_eq!(missing_where_shown(&handling), Vec::<String>::new());
+    shown(&handling, &[]);
     // Table 7.5.2.8-1: an MPQUIC steering functionality has its transport mode
     let mar = |value| CreateMar {
         steering_functionality: Some(SteeringFunctionality {
@@ -1546,12 +1545,9 @@ fn the_conditions_that_their_scope_shows() {
         SteeringFunctionalityValue::MpquicIp,
         SteeringFunctionalityValue::MpquicE,
     ] {
-        assert_eq!(missing_where_shown(&mar(value)), ["Transport Mode"]);
+        shown(&mar(value), &["Transport Mode"]);
     }
-    assert_eq!(
-        missing_where_shown(&mar(SteeringFunctionalityValue::Mptcp)),
-        Vec::<String>::new()
-    );
+    shown(&mar(SteeringFunctionalityValue::Mptcp), &[]);
     // Table 7.5.2.9-3: periodic QoS monitoring has its period, event triggered its minimum
     // wait time, and of congestion or data rate its thresholds
     let monitoring = |frequency, requested| QoSMonitoringPerQoSFlowControlInformation {
@@ -1596,12 +1592,12 @@ fn the_conditions_that_their_scope_shows() {
     }
     // Table 7.5.2.9-5: a period or a threshold
     let mut traffic = TrafficParameterMeasurementControlInformation::default();
-    assert_eq!(
-        missing_where_shown(&traffic),
-        ["Measurement Period", "Traffic Parameter Threshold"]
+    shown(
+        &traffic,
+        &["Measurement Period", "Traffic Parameter Threshold"],
     );
     traffic.measurement_period = Some(MeasurementPeriod::new(10));
-    assert_eq!(missing_where_shown(&traffic), Vec::<String>::new());
+    shown(&traffic, &[]);
     // Tables 7.5.5.2-1, 7.5.7.2-1 and 7.5.8.3-1: a usage report has its start and end
     // times, but of the start or stop of traffic, or of MAC addresses
     let periodic = UsageReportTrigger {
@@ -1629,7 +1625,7 @@ fn the_conditions_that_their_scope_shows() {
             ..Default::default()
         },
     ] {
-        assert_eq!(missing_where_shown(&report(trigger)), Vec::<String>::new());
+        shown(&report(trigger), &[]);
     }
     let modification = UsageReportModification {
         usage_report_trigger: Some(periodic.clone()),
@@ -1645,7 +1641,7 @@ fn the_conditions_that_their_scope_shows() {
         usage_report_trigger: Some(start),
         ..Default::default()
     };
-    assert_eq!(missing_where_shown(&deletion), Vec::<String>::new());
+    shown(&deletion, &[]);
 }
 
 /// The rows whose condition `check()` checks are those that say so.
