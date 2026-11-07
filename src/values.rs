@@ -891,6 +891,9 @@ macro_rules! pfcp_number {
         impl $ty {
             /// The name of its field.
             pub const FIELDS: &'static [&'static str] = &[$field];
+            /// The members that its tree may have: its field and its unknown octets. Without
+            /// them, its tree is the number alone.
+            pub const MEMBERS: &'static [&'static str] = &[$field, crate::ie::UNKNOWN_OCTETS];
             /// Its layout.
             pub const LAYOUT: Option<&'static Layout> = Some(&Layout {
                 head: &[],
@@ -949,7 +952,7 @@ macro_rules! pfcp_number {
                 if !value.is_object() {
                     return Ok(Self::new(<$t as Field>::from_tree(value, reading)?));
                 }
-                let read = reading.members(value, &[$field, crate::ie::UNKNOWN_OCTETS])?;
+                let read = reading.members(value, Self::MEMBERS)?;
                 Ok(Self {
                     value: reading.member(&read, 0, <$t as Field>::from_tree)?,
                     extra: reading.optional(&read, 1, |value, reading| reading.octets(value))?.map(Octets::from).unwrap_or_default(),
@@ -1211,6 +1214,9 @@ fn fqdn_labels(mut octets: &[u8]) -> Option<Vec<&[u8]>> {
 impl NodeId {
     /// The names of its fields.
     pub const FIELDS: &'static [&'static str] = &["Node ID Type", "Node ID value"];
+    /// The members that its tree may have: the FQDN, or the octets of a Node ID that is no
+    /// text. The tree of an address is the address alone.
+    pub const MEMBERS: &'static [&'static str] = &["FQDN", "Node ID value"];
     /// Read by hand: its layout depends on its type.
     pub const LAYOUT: Option<&'static Layout> = None;
 
@@ -1299,7 +1305,7 @@ impl oxirush_utils::tree::Tree for NodeId {
             }
             return Err(reading.mismatch("an IPv4 or IPv6 address, or {\"FQDN\": name}", value));
         }
-        let (which, content) = reading.alternative(value, &["FQDN", "Node ID value"])?;
+        let (which, content) = reading.alternative(value, Self::MEMBERS)?;
         match which {
             0 => reading.within("FQDN", content, |content, reading| {
                 let name = reading.text(content)?;
@@ -1363,6 +1369,8 @@ pub struct NetworkInstance(pub Octets);
 impl NetworkInstance {
     /// The name of its field.
     pub const FIELDS: &'static [&'static str] = &["Network Instance"];
+    /// None: its tree is its octets.
+    pub const MEMBERS: &'static [&'static str] = &[];
     /// Its layout.
     pub const LAYOUT: Option<&'static Layout> = Some(&Layout {
         head: &[],
@@ -1424,6 +1432,8 @@ macro_rules! pfcp_fields {
         impl $ty {
             /// The names of its fields.
             pub const FIELDS: &'static [&'static str] = &[$($name),*];
+            /// The members that its tree may have: its fields and its unknown octets.
+            pub const MEMBERS: &'static [&'static str] = &[$($name,)* crate::ie::UNKNOWN_OCTETS];
             /// Its layout.
             pub const LAYOUT: Option<&'static Layout> = Some(&Layout {
                 head: &[],
@@ -1481,7 +1491,7 @@ macro_rules! pfcp_fields {
                 value: &oxirush_utils::tree::Value,
                 reading: &mut oxirush_utils::tree::Reading,
             ) -> Result<Self, oxirush_utils::tree::Refused> {
-                let read = reading.members(value, &[$($name,)* crate::ie::UNKNOWN_OCTETS])?;
+                let read = reading.members(value, Self::MEMBERS)?;
                 let mut at = 0;
                 $(
                     let $field = reading.member(&read, at, <$kind as Field>::from_tree)?;
@@ -1724,6 +1734,8 @@ macro_rules! pfcp_octets {
         impl $ty {
             /// The name of its field.
             pub const FIELDS: &'static [&'static str] = &[$name];
+            /// None: its tree is its octets.
+            pub const MEMBERS: &'static [&'static str] = &[];
             /// Its layout.
             pub const LAYOUT: Option<&'static Layout> = Some(&Layout { head: &[], bits: &[], fields: &[Member { name: $name, octets: None, condition: "true" }] });
         }

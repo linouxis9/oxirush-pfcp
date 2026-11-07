@@ -188,6 +188,96 @@ fn what_a_message_lacks_selects_nothing() {
     assert_eq!(source, Some(Ipv4Addr::new(10, 0, 0, 9)));
 }
 
+/// The members that a tree prints only where a value has them select nothing where it
+/// lacks them, as the flags and fields do: `Spare`, `length` and `unknown octets` of a
+/// value, the FQDN of a Node ID that is an address, the members of a value that its tree
+/// writes as a scalar, and the members of the header. A name that is no member of a value
+/// is `NoSuchMember`, also below a row that a message lacks.
+#[test]
+fn what_a_value_lacks_selects_nothing() {
+    let nothing = |tree: &tree::Value, path: &str| {
+        assert_eq!(
+            select(tree, path).map_err(|error| error.kind()),
+            Ok(vec![]),
+            "{path}"
+        );
+    };
+    let failing = |tree: &tree::Value, path: &str, kind: tree::ErrorKind| {
+        let found = select(tree, path).map_err(|error| error.kind());
+        assert_eq!(found, Err(kind), "{path}");
+    };
+    let misspelt = |tree: &tree::Value, path: &str| {
+        failing(tree, path, tree::ErrorKind::NoSuchMember);
+    };
+    // The response of the README, and the same with a spare bit and an octet more
+    let response = "2133002b000000000000100100000700003c0005000a00000200130001010039000d0200000000000020010a000002";
+    let response = Message::decode(&hex::decode(response).unwrap())
+        .unwrap()
+        .to_tree();
+    let more = "2133002c000000000000100100000700003c0005000a00000200130001010039000e8200000000000020010a000002ff";
+    let more = Message::decode(&hex::decode(more).unwrap())
+        .unwrap()
+        .to_tree();
+    nothing(&response, "/pfcp/UP F-SEID/Spare");
+    nothing(&response, "/pfcp/UP F-SEID/unknown octets");
+    assert_eq!(
+        select(&more, "/pfcp/UP F-SEID/Spare").unwrap(),
+        [&tree!(128)]
+    );
+    let unknown = select(&more, "/pfcp/UP F-SEID/unknown octets").unwrap();
+    assert_eq!(unknown, [&tree!("ff")]);
+    // A Node ID that is an address has no FQDN, one that is an FQDN no octets, and their
+    // trees no Node ID Type
+    nothing(&response, "/pfcp/Node ID/FQDN");
+    nothing(&response, "/pfcp/Node ID/Node ID value");
+    failing(
+        &response,
+        "/pfcp/Node ID/Node ID Type",
+        tree::ErrorKind::Scalar,
+    );
+    let name = b"\x03upf\x07example".to_vec();
+    let setup = Message {
+        header: Header::node(1),
+        body: AssociationSetupRequest::new(NodeId::Fqdn(name.into()), RecoveryTimeStamp::new(7))
+            .into(),
+    };
+    let setup = setup.to_tree();
+    let fqdn = select(&setup, "/pfcp/Node ID/FQDN").unwrap();
+    assert_eq!(fqdn, [&tree!("upf.example")]);
+    nothing(&setup, "/pfcp/Node ID/Node ID value");
+    misspelt(&setup, "/pfcp/Node ID/Node ID Type");
+    // The header
+    nothing(&response, "/Message Priority");
+    nothing(&response, "/FO");
+    let heartbeat = Message {
+        header: Header::node(1),
+        body: HeartbeatRequest::new(RecoveryTimeStamp::new(7)).into(),
+    };
+    let heartbeat = heartbeat.to_tree();
+    nothing(&heartbeat, "/SEID");
+    nothing(&heartbeat, "/Spare");
+    misspelt(&heartbeat, "/Bogus");
+    // The length of a value of octets of bits that lacks some, and the spare bits of one
+    let establishment = establishment().to_tree();
+    nothing(&establishment, "/pfcp/Create FAR/0/Apply Action/length");
+    nothing(&establishment, "/pfcp/Create FAR/0/Apply Action/Spare");
+    misspelt(&establishment, "/pfcp/Create FAR/0/Apply Action/Bogus");
+    // A value that its tree writes as a scalar: what it lacks selects nothing, and the
+    // one field that it is selects it
+    nothing(&establishment, "/pfcp/Create PDR/0/PDR ID/unknown octets");
+    let rule = select(&establishment, "/pfcp/Create PDR/0/PDR ID/Rule ID").unwrap();
+    assert_eq!(rule, [&tree!(1)]);
+    failing(
+        &establishment,
+        "/pfcp/Create PDR/0/PDR ID/Bogus",
+        tree::ErrorKind::Scalar,
+    );
+    // An edit takes the plain rule: into a scalar, it goes nowhere
+    let mut edited = establishment.clone();
+    assert!(set(&mut edited, "/pfcp/Create PDR/0/PDR ID/Rule ID", 5).is_err());
+    assert_eq!(edited, establishment);
+}
+
 #[test]
 fn what_the_table_does_not_have_is_kept_in_its_place() {
     let message = establishment();
@@ -333,9 +423,116 @@ fn a_flag_that_disagrees_is_refused_where_it_is_written() {
     );
 }
 
+/// What the tree of a message holds of the members of its values: at each value of an IE
+/// that is no grouped IE, each member that it has is a member of its IE type
+/// (`IeTypeInfo::members`), and each other member of its type selects nothing, but the one
+/// field that a value written as a scalar is, which selects it; each member of the header
+/// that it lacks selects nothing. How many values it looked at.
+fn members_hold(message: &tree::Value) -> usize {
+    let members = message.as_object().unwrap();
+    let name = members.get("message").and_then(tree::Value::as_str);
+    let Some(info) = name.and_then(|name| MESSAGE_TYPES.iter().find(|info| info.name() == name))
+    else {
+        return 0;
+    };
+    let header = [
+        "Version",
+        "Spare",
+        "FO",
+        "SEID",
+        "Message Priority",
+        "Spare octet",
+        "Message Length",
+    ];
+    for member in header.iter().filter(|member| !members.contains_key(member)) {
+        let selected = select(message, &format!("/{member}"));
+        assert_eq!(
+            selected.map_err(|error| error.kind()),
+            Ok(vec![]),
+            "{member}"
+        );
+    }
+    let mut count = 0;
+    values_hold(message, &[info.table], &members["ies"], "/pfcp", &mut count);
+    count
+}
+
+/// [`members_hold`] at the IEs `ies` of the tables `tables`, at `path`.
+fn values_hold(
+    message: &tree::Value,
+    tables: &[&'static Table],
+    ies: &tree::Value,
+    path: &str,
+    count: &mut usize,
+) {
+    for (name, held) in ies.as_object().unwrap() {
+        let mut rows = tables.iter().flat_map(|table| table.rows.iter());
+        let Some(row) = rows.find(|row| tree::same_name(row.name, name)) else {
+            continue;
+        };
+        let info = ie_type_info(row.ie_type).unwrap();
+        let place = format!("{path}/{}", tree::escape(name));
+        let entries: Vec<(String, &tree::Value)> = match held {
+            tree::Value::Array(list) => list
+                .iter()
+                .enumerate()
+                .map(|(at, entry)| (format!("{place}/{at}"), entry))
+                .collect(),
+            single => vec![(place, single)],
+        };
+        for (at, entry) in entries {
+            let printed: Vec<&str> = entry
+                .as_object()
+                .map(|members| members.keys().map(String::as_str).collect())
+                .unwrap_or_default();
+            if printed.contains(&"octets") {
+                continue;
+            }
+            if info.form == Form::Grouped {
+                values_hold(message, info.tables, entry, &at, count);
+                continue;
+            }
+            *count += 1;
+            for name in &printed {
+                let known = info
+                    .members
+                    .iter()
+                    .any(|member| tree::same_name(member, name));
+                assert!(known, "{at}: {name:?} is no member of {}", info.name);
+            }
+            let lacked = info
+                .members
+                .iter()
+                .filter(|member| !printed.iter().any(|name| tree::same_name(member, name)));
+            for member in lacked {
+                let path = format!("{at}/{}", tree::escape(member));
+                let scalar_field = !entry.is_object() && info.fields == [*member];
+                let wanted = if scalar_field { vec![entry] } else { vec![] };
+                let selected = select(message, &path).map_err(|error| error.kind());
+                assert_eq!(selected, Ok(wanted), "{path}");
+            }
+        }
+    }
+}
+
+/// [`members_hold`] in each captured message, whose values are of many IE types.
+#[test]
+fn what_each_captured_value_lacks_selects_nothing() {
+    let mut values = 0;
+    for line in include_str!("captures/messages.tsv")
+        .lines()
+        .filter(|line| !line.starts_with('#'))
+    {
+        let octets = hex::decode(line.split('\t').nth(5).unwrap()).unwrap();
+        values += members_hold(&Message::decode(&octets).unwrap().to_tree());
+    }
+    assert!(values > 1500, "{values} values");
+}
+
 /// The vectors of go-pfcp, in the file that `PFCP_VECTORS` names, which
-/// tests/go-pfcp-vectors.py writes: each decodes and encodes back to its octets, and its
-/// tree, in the order of its tables, reads back to itself; what check() finds in them is
+/// tests/go-pfcp-vectors.py writes: each decodes and encodes back to its octets, its
+/// tree, in the order of its tables, reads back to itself, and what its values lack of
+/// their members selects nothing ([`members_hold`]); what check() finds in them is
 /// what `go-pfcp-deviations.tsv` lists. A fourth column names the interface to check the
 /// message on; without it, on N4 with the IEs of any interface. CI runs it with
 /// `--ignored`.
@@ -383,6 +580,7 @@ fn other_vectors_round_trip() {
             if !matches!(message.body, Body::Other { .. }) {
                 read += 1;
                 println!("{} {}: {tree}", fields[0], fields[1]);
+                members_hold(&tree);
                 let interface = match fields.get(3).copied() {
                     Some("Sxa") => Interfaces::SXA,
                     Some("Sxb") => Interfaces::SXB,

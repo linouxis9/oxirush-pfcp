@@ -32,6 +32,7 @@ macro_rules! pfcp_ies {
                 fixed: pfcp_ies!(@fixed $($fixed)?),
                 clause: $clause,
                 fields: pfcp_ies!(@fields $form $($($ty),+)?),
+                members: pfcp_ies!(@members $form $($($ty),+)?),
                 layout: pfcp_ies!(@layout $form $($($ty),+)?),
                 tables: pfcp_ies!(@tables $form $($($ty),+)?),
             }, )*
@@ -57,6 +58,8 @@ macro_rules! pfcp_ies {
     (@length $form:ident $(($fixed:literal))?) => { None };
     (@fields grouped $($ty:ident),+) => { &[] };
     (@fields $form:ident $ty:ident) => { $ty::FIELDS };
+    (@members grouped $($ty:ident),+) => { &[] };
+    (@members $form:ident $ty:ident) => { $ty::MEMBERS };
     (@layout grouped $($ty:ident),+) => { None };
     (@layout $form:ident $ty:ident) => { $ty::LAYOUT };
     (@layout $form:ident) => { None };
@@ -112,6 +115,9 @@ macro_rules! pfcp_layout {
             const FLAGS: $fk = 0 $( | pfcp_layout!(@fmask $bit $(, $width)?) )*;
             /// The names of its flags and fields.
             pub const FIELDS: &'static [&'static str] = &[$($($head_name,)*)? $($flag_name,)* $($field_name),*];
+            /// The members that its tree may have: its flags and fields, its spare bits and
+            /// its unknown octets.
+            pub const MEMBERS: &'static [&'static str] = &[$($($head_name,)*)? $($flag_name,)* "Spare", $($field_name,)* crate::ie::UNKNOWN_OCTETS];
             /// The octets of the fields before its flags.
             const HEAD_OCTETS: usize = 0 $($( + crate::values::octets_of(<$hkind as crate::values::Field>::OCTETS) )*)?;
             /// Its layout.
@@ -270,8 +276,7 @@ macro_rules! pfcp_layout {
                 value: &oxirush_utils::tree::Value,
                 reading: &mut oxirush_utils::tree::Reading,
             ) -> Result<Self, oxirush_utils::tree::Refused> {
-                const NAMES: &[&str] = &[$($($head_name,)*)? $($flag_name,)* "Spare", $($field_name,)* crate::ie::UNKNOWN_OCTETS];
-                let read = reading.members(value, NAMES)?;
+                let read = reading.members(value, Self::MEMBERS)?;
                 let mut at = 0;
                 $($(
                     let $head = reading.optional(&read, at, <$hkind as crate::values::Field>::from_tree)?.unwrap_or_default();
@@ -405,6 +410,9 @@ macro_rules! pfcp_bits {
             pub const CLAUSE: &'static str = $clause;
             /// The names of its flags and fields.
             pub const FIELDS: &'static [&'static str] = &[$($name),*];
+            /// The members that its tree may have: its flags and fields, its spare bits, the
+            /// number of the octets of its fields that it has, and its unknown octets.
+            pub const MEMBERS: &'static [&'static str] = &[$($name,)* "Spare", "length", crate::ie::UNKNOWN_OCTETS];
             /// Its layout.
             pub const LAYOUT: Option<&'static crate::values::Layout> = Some(&crate::values::Layout {
                 head: &[],
@@ -547,13 +555,12 @@ macro_rules! pfcp_bits {
                 value: &oxirush_utils::tree::Value,
                 reading: &mut oxirush_utils::tree::Reading,
             ) -> Result<Self, oxirush_utils::tree::Refused> {
-                const NAMES: &[&str] = &[$($name,)* "Spare", "length", crate::ie::UNKNOWN_OCTETS];
                 let mut bits = Self::default();
                 if Self::BARE && !value.is_object() {
                     $( bits.$field = pfcp_bits!(@get $width [$($kind)? $(+ $octet2 $low2 $width2)?] value, reading)?; )*
                     return Ok(bits);
                 }
-                let read = reading.members(value, NAMES)?;
+                let read = reading.members(value, Self::MEMBERS)?;
                 let mut at = 0;
                 $(
                     if let Some(value) = reading.optional(&read, at, |value, reading| pfcp_bits!(@get $width [$($kind)? $(+ $octet2 $low2 $width2)?] value, reading))? {

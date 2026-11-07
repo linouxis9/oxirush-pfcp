@@ -123,7 +123,6 @@ pub struct RawIe {
 
 /// The member of a tree that holds the octets after the fields of an IE: those of a later
 /// release, which the receiver ignores, "the unknown octets" of §8.1.2.
-#[cfg(feature = "tree")]
 pub(crate) const UNKNOWN_OCTETS: &str = "unknown octets";
 
 /// Whether an IE of `ie_type` may hold a key: one of a key, or a grouped IE that a table

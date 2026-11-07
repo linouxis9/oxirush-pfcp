@@ -733,6 +733,8 @@ macro_rules! pfcp_secret {
         impl $ty {
             /// The name of its field.
             pub const FIELDS: &'static [&'static str] = &[$name];
+            /// None: its tree is its octets.
+            pub const MEMBERS: &'static [&'static str] = &[];
             /// Its layout.
             pub const LAYOUT: Option<&'static Layout> = Some(&Layout { head: &[], bits: &[], fields: &[Member { name: $name, octets: None, condition: "true" }] });
         }
@@ -868,6 +870,14 @@ impl FqCsid {
         "Node-Address",
         "PDN Connection Set Identifiers",
         "Node Type",
+    ];
+    /// The members that its tree may have: its fields and its unknown octets.
+    pub const MEMBERS: &'static [&'static str] = &[
+        "FQ-CSID Node-ID Type",
+        "Node-Address",
+        "PDN Connection Set Identifiers",
+        "Node Type",
+        crate::ie::UNKNOWN_OCTETS,
     ];
     /// Read by hand: its layout depends on its type.
     pub const LAYOUT: Option<&'static Layout> = None;
@@ -1007,16 +1017,7 @@ impl oxirush_utils::tree::Tree for FqCsid {
         value: &oxirush_utils::tree::Value,
         reading: &mut oxirush_utils::tree::Reading,
     ) -> Result<Self, oxirush_utils::tree::Refused> {
-        let read = reading.members(
-            value,
-            &[
-                "FQ-CSID Node-ID Type",
-                "Node-Address",
-                "PDN Connection Set Identifiers",
-                "Node Type",
-                crate::ie::UNKNOWN_OCTETS,
-            ],
-        )?;
+        let read = reading.members(value, Self::MEMBERS)?;
         let node_id_type =
             reading.member(&read, 0, |value, reading| reading.unsigned(value, 0, 15))? as u8;
         let node_address = reading.member(&read, 1, |value, reading| {
@@ -1083,6 +1084,8 @@ macro_rules! mac_addresses {
         impl $ty {
             /// The names of its fields.
             pub const FIELDS: &'static [&'static str] = &["MAC address values", "C-TAG", "S-TAG"];
+            /// The members that its tree may have: its fields and its unknown octets.
+            pub const MEMBERS: &'static [&'static str] = &["MAC address values", "C-TAG", "S-TAG", crate::ie::UNKNOWN_OCTETS];
             /// Read by hand: a list after its number, then fields after their lengths.
             pub const LAYOUT: Option<&'static Layout> = None;
         }
@@ -1146,7 +1149,7 @@ macro_rules! mac_addresses {
                 value: &oxirush_utils::tree::Value,
                 reading: &mut oxirush_utils::tree::Reading,
             ) -> Result<Self, oxirush_utils::tree::Refused> {
-                let read = reading.members(value, &["MAC address values", "C-TAG", "S-TAG", crate::ie::UNKNOWN_OCTETS])?;
+                let read = reading.members(value, Self::MEMBERS)?;
                 let mac_addresses = reading.member(&read, 0, |value, reading| reading.list(value, |value, reading| reading.octet_array::<6>(value)))?;
                 let c_tag = reading.optional(&read, 1, Lv8::from_tree)?;
                 let s_tag = reading.optional(&read, 2, Lv8::from_tree)?;
