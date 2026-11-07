@@ -873,6 +873,7 @@ mod tests {
         let mut sessions = Sessions::new(Some(8805));
         let key = SocketAddr::from(([10, 0, 0, 2], 0));
         sessions.insert(1, session(7, true));
+        assert_eq!(sessions.flipped().into_iter().collect::<Vec<_>>(), [key]);
         sessions.insert(
             2,
             Session {
@@ -880,13 +881,31 @@ mod tests {
                 ..session(8, true)
             },
         );
-        assert_eq!(sessions.flipped().into_iter().collect::<Vec<_>>(), [key]);
+        assert!(sessions.flipped().is_empty(), "the second is told nothing");
         assert!(sessions.adopts(SocketAddr::from(([10, 0, 0, 2], 1))));
         sessions.remove(&1);
         assert!(sessions.flipped().is_empty());
         sessions.remove(&2);
         assert_eq!(sessions.flipped().into_iter().collect::<Vec<_>>(), [key]);
         assert!(!sessions.adopts(key));
+    }
+
+    /// The peers whose last session ends are told once, whatever their sessions, and a peer
+    /// has sessions while one remains, as the node tells peers apart.
+    #[test]
+    fn the_peers_whose_last_session_ends_are_told() {
+        let mut sessions = Sessions::new(Some(8805));
+        let key = SocketAddr::from(([10, 0, 0, 2], 0));
+        sessions.insert(1, session(7, false));
+        sessions.insert(2, session(8, true));
+        assert!(sessions.has(key));
+        sessions.remove(&1);
+        assert!(sessions.emptied().is_empty() && sessions.has(key));
+        sessions.insert(2, session(9, false));
+        assert!(sessions.emptied().is_empty());
+        sessions.remove(&2);
+        assert_eq!(sessions.emptied().into_iter().collect::<Vec<_>>(), [key]);
+        assert!(!sessions.has(key));
     }
 
     /// A session that another replaces at its local SEID leaves the peer's SEID of the new
