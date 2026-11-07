@@ -2034,3 +2034,26 @@ fn an_ip_multicast_address_has_its_end_with_a_range() {
     single.encode(&mut octets).unwrap();
     assert_eq!(octets, [0x02, 224, 0, 0, 1]);
 }
+
+/// A value of one field that is no flag is built from it, as a Timer from its unit and its
+/// value: without spare bits, of the octets of this release.
+#[test]
+fn small_values_from_their_fields() {
+    assert_eq!(
+        Qfi::new(5),
+        Qfi {
+            qfi_value: 5,
+            ..Default::default()
+        }
+    );
+    let steering = SteeringFunctionality::new(SteeringFunctionalityValue::MpquicIp);
+    assert_eq!(
+        steering.steering_functionality_value,
+        SteeringFunctionalityValue::MpquicIp
+    );
+    let timer = Timer::new(TimerUnit::OneMinute, 30);
+    let mut octets = Vec::new();
+    Codec::encode(&timer, &mut octets).unwrap();
+    assert_eq!(octets, [0x20 | 30]);
+    assert_eq!(Timer::decode(&octets), Some(timer));
+}

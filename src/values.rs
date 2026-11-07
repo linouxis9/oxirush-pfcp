@@ -1139,26 +1139,6 @@ pfcp_bits! {
     }
 }
 
-impl SourceInterface {
-    /// The interface.
-    pub fn new(interface_value: SourceInterfaceValue) -> Self {
-        Self {
-            interface_value,
-            ..Self::default()
-        }
-    }
-}
-
-impl DestinationInterface {
-    /// The interface.
-    pub fn new(interface_value: DestinationInterfaceValue) -> Self {
-        Self {
-            interface_value,
-            ..Self::default()
-        }
-    }
-}
-
 pfcp_layout! {
     /// F-TEID (§8.2.3): a TEID with its addresses, or a request that the UP function
     /// choose one (CH).

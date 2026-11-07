@@ -424,6 +424,8 @@ macro_rules! pfcp_bits {
             }
         }
 
+        pfcp_bits!(@new $ty $([$field $name $width [$($kind)? $(+ $octet2 $low2 $width2)?]])*);
+
         impl $ty {
             /// The clause of the layout.
             pub const CLAUSE: &'static str = $clause;
@@ -614,6 +616,17 @@ macro_rules! pfcp_bits {
     (@wide $width:tt [] $value:expr) => { u16::from($value) >= (1u16 << $width) };
     (@wide $width:tt [$kind:ident] $value:expr) => { u16::from($value.value()) >= (1u16 << $width) };
     (@wide $width:tt [+ $octet2:literal $low2:literal $width2:tt] $value:expr) => { u32::from($value) >= (1u32 << ($width + $width2)) };
+    // A value of one field that is no flag is built from it.
+    (@new $ty:ident [$field:ident $name:literal 1 []]) => {};
+    (@new $ty:ident [$field:ident $name:literal $width:tt [$($kind:tt)*]]) => {
+        impl $ty {
+            #[doc = concat!("A value of its ", $name, " field, without spare bits.")]
+            pub fn new($field: pfcp_bits!(@type $width [$($kind)*])) -> Self {
+                Self { $field, ..Self::default() }
+            }
+        }
+    };
+    (@new $ty:ident $($fields:tt)*) => {};
     (@type 1 []) => { bool };
     (@type $width:tt []) => { u8 };
     (@type $width:tt [$kind:ident]) => { $kind };
