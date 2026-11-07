@@ -38,26 +38,37 @@ pub struct Association {
     pub(crate) set: SetOf,
 }
 
-/// What a peer says of its SMF set in an Association Setup (§5.22): the SSET and MPAS
-/// of the features of its function, and its SMF Set ID.
+/// What the node keeps of the features of a peer's function (§8.2.25, §8.2.58): SSET and
+/// MPAS of the SMF sets (§5.22), and BUNDL (§6.5).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(crate) struct Features {
+    pub(crate) sset: bool,
+    pub(crate) mpas: bool,
+    pub(crate) bundl: bool,
+}
+
+/// What a peer says of itself in an Association Setup: of its SMF set (§5.22), the SSET
+/// and MPAS of the features of its function and its SMF Set ID, and whether it bundles
+/// (BUNDL, §6.5).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct SetOf {
     pub(crate) sset: bool,
     pub(crate) mpas: bool,
+    pub(crate) bundl: bool,
     pub(crate) id: Option<Vec<u8>>,
 }
 
 impl SetOf {
-    /// A peer's SMF set: the SSET and MPAS of the features of its function, and the FQDN
-    /// of its SMF Set ID.
+    /// What a peer says: the features of its function, and the FQDN of its SMF Set ID.
     pub(crate) fn new(
-        features: Option<(bool, bool)>,
+        features: Option<Features>,
         id: Option<&crate::values_hand::SmfSetId>,
     ) -> Self {
-        let (sset, mpas) = features.unwrap_or_default();
+        let Features { sset, mpas, bundl } = features.unwrap_or_default();
         Self {
             sset,
             mpas,
+            bundl,
             id: id.map(|id| id.fqdn.0.clone()),
         }
     }
@@ -71,6 +82,11 @@ pub struct Session {
     pub peer: SocketAddr,
     /// The peer's SEID: the SEID of the header of what goes to it.
     pub peer_seid: Option<u64>,
+    /// The address of the node's own F-SEID of the session, of the family of the peer:
+    /// where the peer sends the messages of the session, which it bundles with those of
+    /// sessions of the same address alone (§6.5). `None` while the node does not know it:
+    /// a session adopted before the answer that gives its CP F-SEID.
+    pub local_address: Option<IpAddr>,
     pub(crate) node: Vec<u8>,
     /// An establishment of the node's, or a move of a session to it, is outstanding for
     /// it: no other may take it.
@@ -248,6 +264,13 @@ impl Sessions {
         self.by_mark.get(&mark).copied()
     }
 
+    /// The address of the node's own F-SEID of the session of `local`.
+    pub(crate) fn set_local_address(&mut self, local: u64, address: IpAddr) {
+        if let Some(session) = self.by_local.get_mut(&local) {
+            session.local_address = Some(address);
+        }
+    }
+
     /// Change where the messages of a session go, and the peer's SEID.
     pub(crate) fn set_peer(&mut self, local: u64, peer: SocketAddr, peer_seid: Option<u64>) {
         if let Some(mut session) = self.remove(&local) {
@@ -389,6 +412,9 @@ pub(crate) struct Outstanding {
     /// session only.
     pub(crate) mark: Option<u64>,
     pub(crate) change: Change,
+    /// The address of the node's F-SEID that the request gives the peer: of the CP F-SEID
+    /// of an establishment or a modification, of the family of the peer.
+    pub(crate) local_address: Option<IpAddr>,
 }
 
 /// What the answer to a request of a peer changes, once accepted.
@@ -401,10 +427,9 @@ pub(crate) enum Effect {
     /// Information, and an empty list for all of them (§6.2.6.2.2); and the SMF set that
     /// the CP function says.
     Setup(Option<Vec<IpAddr>>, SetOf),
-    /// An association update (§5.22.3): the set features of the peer's new function
-    /// features, `None` for none in the update, and the FQDN of a new SMF Set ID, `None`
-    /// for none.
-    Update(Option<(bool, bool)>, Option<Vec<u8>>),
+    /// An association update (§5.22.3): the features of the peer's new function features,
+    /// `None` for none in the update, and the FQDN of a new SMF Set ID, `None` for none.
+    Update(Option<Features>, Option<Vec<u8>>),
     /// The peer's F-SEID of an establishment, or the new CP F-SEID of a modification.
     PeerFSeid(u64, IpAddr),
     /// A report of a session that the UP function deleted (PSDBU, §5.18).
@@ -778,6 +803,7 @@ mod tests {
         Session {
             peer: SocketAddr::from(([10, 0, 0, 2], 8805)),
             peer_seid: Some(0x66),
+            local_address: None,
             node: Vec::new(),
             reserved: false,
             mark,

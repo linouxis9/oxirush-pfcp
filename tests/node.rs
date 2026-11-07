@@ -1492,30 +1492,144 @@ fn bundle(messages: &[Message]) -> Vec<u8> {
     octets
 }
 
+/// An SMF and a UPF associated, each of `NodeConfig::bundling`, which announce BUNDL in
+/// their CP and UP Function Features (§8.2.25, §8.2.58).
+fn bundling(now: Duration) -> (Node, Node) {
+    let bundling = |address, function| NodeConfig {
+        bundling: true,
+        ..config(address, function)
+    };
+    let (mut smf, mut upf) = (
+        Node::new(bundling(SMF, Function::Cp)),
+        Node::new(bundling(UPF, Function::Up)),
+    );
+    let features = CpFunctionFeatures {
+        bundl: true,
+        ..Default::default()
+    };
+    let setup = AssociationSetupRequest::new(node_id(SMF), RecoveryTimeStamp::new(1000))
+        .with_cp_function_features(features);
+    let header = Header::node(0);
+    let body = setup.into();
+    smf.request(now, UPF, Message { header, body }).unwrap();
+    pass(&mut smf, &mut upf, UPF, now);
+    let (inbound, _) = request(&mut upf);
+    let features = UpFunctionFeatures {
+        bundl: true,
+        ..Default::default()
+    };
+    let response =
+        AssociationSetupResponse::new(node_id(UPF), accepted(), RecoveryTimeStamp::new(1000))
+            .with_up_function_features(features);
+    upf.respond(now, &inbound, response).unwrap();
+    pass(&mut upf, &mut smf, SMF, now);
+    events(&mut smf);
+    events(&mut upf);
+    (smf, upf)
+}
+
+/// The sequence numbers of the requests that a node gives its caller.
+fn sequences(node: &mut Node) -> Vec<u32> {
+    events(node)
+        .into_iter()
+        .filter_map(|event| match event {
+            Event::Request { request, .. } => Some(request.sequence),
+            _ => None,
+        })
+        .collect()
+}
+
 #[test]
 fn bundled_datagram_each_message() {
-    let (mut smf, mut upf) = associated(at(0));
+    let (mut smf, mut upf) = bundling(at(0));
     let (_, up_seid) = established(&mut smf, &mut upf, at(0));
     let modification = |sequence| Message {
         header: Header::session(up_seid, sequence),
         body: SessionModificationRequest::default().into(),
     };
     upf.handle_datagram(at(1), SMF, &bundle(&[modification(20), modification(21)]));
-    let requests: Vec<u32> = events(&mut upf)
-        .into_iter()
-        .filter_map(|event| match event {
-            Event::Request { request, .. } => Some(request.sequence),
-            _ => None,
-        })
-        .collect();
-    assert_eq!(requests, [20, 21]);
+    assert_eq!(sequences(&mut upf), [20, 21]);
+}
+
+/// §6.5: bundling "may be used if both the CP function and the UP function have
+/// indicated support of the corresponding feature": the node takes what a peer bundles
+/// when it announces BUNDL itself (`NodeConfig::bundling`) and the peer did in its
+/// Association Setup or Update, and discards it otherwise.
+#[test]
+fn bundling_needs_both_to_announce_it() {
+    let modifications = |up_seid, first: u32| {
+        let modification = |sequence| Message {
+            header: Header::session(up_seid, sequence),
+            body: SessionModificationRequest::default().into(),
+        };
+        bundle(&[modification(first), modification(first + 1)])
+    };
+    let refused = [ViolationKind::BundlingNotAgreed];
+    // Neither announced it
+    let (mut smf, mut upf) = associated(at(0));
+    let (_, up_seid) = established(&mut smf, &mut upf, at(0));
+    upf.handle_datagram(at(1), SMF, &modifications(up_seid, 20));
+    assert_eq!(violations(&mut upf), refused);
+    // The UPF did, the SMF did not
+    let (mut smf, upf) = associated(at(0));
+    let mut upf = Node::new(NodeConfig {
+        bundling: true,
+        ..upf.config().clone()
+    });
+    let setup = AssociationSetupRequest::new(node_id(SMF), RecoveryTimeStamp::new(1000));
+    let body = setup.into();
+    smf.request(
+        at(0),
+        UPF,
+        Message {
+            header: Header::node(0),
+            body,
+        },
+    )
+    .unwrap();
+    pass(&mut smf, &mut upf, UPF, at(0));
+    let (inbound, _) = request(&mut upf);
+    let response =
+        AssociationSetupResponse::new(node_id(UPF), accepted(), RecoveryTimeStamp::new(1000));
+    upf.respond(at(0), &inbound, response).unwrap();
+    pass(&mut upf, &mut smf, SMF, at(0));
+    let (_, up_seid) = established(&mut smf, &mut upf, at(0));
+    upf.handle_datagram(at(1), SMF, &modifications(up_seid, 20));
+    assert_eq!(violations(&mut upf), refused);
+    // Both did, then the SMF's update takes BUNDL back
+    let (mut smf, mut upf) = bundling(at(0));
+    let (_, up_seid) = established(&mut smf, &mut upf, at(0));
+    upf.handle_datagram(at(1), SMF, &modifications(up_seid, 20));
+    assert_eq!(sequences(&mut upf), [20, 21]);
+    let update = AssociationUpdateRequest::new(node_id(SMF))
+        .with_cp_function_features(CpFunctionFeatures::default());
+    let body = update.into();
+    smf.request(
+        at(2),
+        UPF,
+        Message {
+            header: Header::node(0),
+            body,
+        },
+    )
+    .unwrap();
+    pass(&mut smf, &mut upf, UPF, at(2));
+    let (inbound, _) = request(&mut upf);
+    upf.respond(
+        at(2),
+        &inbound,
+        AssociationUpdateResponse::new(node_id(UPF), accepted()),
+    )
+    .unwrap();
+    upf.handle_datagram(at(3), SMF, &modifications(up_seid, 30));
+    assert_eq!(violations(&mut upf), refused);
 }
 
 /// §7.6.2: a bundled message of another version is answered, and what follows it, whose
 /// framing the node does not know, is discarded.
 #[test]
 fn bundled_message_of_another_version() {
-    let (mut smf, mut upf) = associated(at(0));
+    let (mut smf, mut upf) = bundling(at(0));
     let (_, up_seid) = established(&mut smf, &mut upf, at(0));
     let modification = |sequence| Message {
         header: Header::session(up_seid, sequence),
@@ -1539,12 +1653,33 @@ fn bundled_message_of_another_version() {
     );
 }
 
+/// §6.5: the messages of a bundle are of sessions "with the peer's F-SEID having the same
+/// IP address ... when being sent to that peer PFCP entity": of one address of the
+/// receiver's F-SEIDs, whatever the addresses of the sender's. A UPF of two addresses
+/// bundles the reports of its sessions of each to the SMF's one address, which takes them;
+/// an SMF that bundles modifications of sessions of the UPF's two addresses breaks the
+/// rule, and the UPF discards the second.
 #[test]
 fn bundled_messages_of_one_peer() {
-    let (mut smf, mut upf) = associated(at(0));
-    let (_, up_seid) = established(&mut smf, &mut upf, at(0));
-    let other_seid = 0x900;
-    upf.adopt_session(other_seid, OTHER, 0x99).unwrap();
+    let (mut smf, mut upf) = bundling(at(0));
+    let (cp_first, up_first) =
+        established_on(&mut smf, &mut upf, at(0), Ipv4Addr::new(10, 0, 0, 2));
+    let (cp_second, up_second) =
+        established_on(&mut smf, &mut upf, at(0), Ipv4Addr::new(10, 0, 0, 22));
+    let report = |seid, sequence| Message {
+        header: Header::session(seid, sequence),
+        body: SessionReportRequest::new(ReportType {
+            upir: true,
+            ..Default::default()
+        })
+        .into(),
+    };
+    smf.handle_datagram(
+        at(1),
+        UPF,
+        &bundle(&[report(cp_first, 100), report(cp_second, 101)]),
+    );
+    assert_eq!(sequences(&mut smf), [100, 101]);
     let modification = |seid, sequence| Message {
         header: Header::session(seid, sequence),
         body: SessionModificationRequest::default().into(),
@@ -1552,9 +1687,57 @@ fn bundled_messages_of_one_peer() {
     upf.handle_datagram(
         at(1),
         SMF,
-        &bundle(&[modification(up_seid, 20), modification(other_seid, 21)]),
+        &bundle(&[modification(up_first, 20), modification(up_second, 21)]),
     );
-    assert_eq!(violations(&mut upf), [ViolationKind::BundledPeers]);
+    let events = events(&mut upf);
+    assert_eq!(requests_of(&events), 1);
+    assert_eq!(kinds_of(&events), [ViolationKind::BundledPeers]);
+}
+
+/// §6.5 and §5.22: the peer of a session that the node adopted without an association, whose
+/// association another PFCP entity of the SMF holds, bundles its messages as an associated
+/// peer does: the node takes them when it announces BUNDL. A host of neither has not agreed
+/// on bundling.
+#[test]
+fn an_adopted_peer_bundles_as_an_associated_one() {
+    let entity = |bundling| {
+        let mut entity = Node::new(NodeConfig {
+            smf_set: SmfSet {
+                mpas: true,
+                ..SmfSet::default()
+            },
+            other_entities: true,
+            bundling,
+            ..config(OTHER, Function::Cp)
+        });
+        entity.adopt_session(0x55, UPF, 0x66).unwrap();
+        events(&mut entity);
+        entity
+    };
+    let report = |sequence| Message {
+        header: Header::session(0x55, sequence),
+        body: SessionReportRequest::new(ReportType {
+            dldr: true,
+            ..Default::default()
+        })
+        .into(),
+    };
+    let reports = bundle(&[report(10), report(11)]);
+    let mut taking = entity(true);
+    taking.handle_datagram(at(1), UPF, &reports);
+    assert_eq!(sequences(&mut taking), [10, 11]);
+    let mut refusing = entity(false);
+    refusing.handle_datagram(at(1), UPF, &reports);
+    assert_eq!(
+        violations(&mut refusing),
+        [ViolationKind::BundlingNotAgreed]
+    );
+    let stranger = Ipv4Addr::new(10, 0, 0, 8).into_socket(8805);
+    taking.handle_datagram(at(1), stranger, &reports);
+    assert_eq!(
+        violations(&mut taking),
+        [ViolationKind::BundledWithoutAssociation]
+    );
 }
 
 /// §6.5: node related messages are not bundled, and a peer without an association has
@@ -1578,8 +1761,7 @@ fn bundled_node_message_reported() {
         [ViolationKind::BundledWithoutAssociation]
     );
     assert!(sent(&mut lone).is_empty());
-    let (_, mut upf) = associated(at(0));
-    events(&mut upf);
+    let (_, mut upf) = bundling(at(0));
     upf.handle_datagram(at(0), SMF, &heartbeats);
     assert_eq!(
         violations(&mut upf),
@@ -1970,7 +2152,7 @@ fn a_sequence_number_again_after_its_answer() {
 /// answered from the cache.
 #[test]
 fn a_retransmission_alone_of_a_bundled_request() {
-    let (mut smf, mut upf) = associated(at(0));
+    let (mut smf, mut upf) = bundling(at(0));
     let (_, up_seid) = established(&mut smf, &mut upf, at(0));
     let modification = |sequence: u32, follow_on: bool| {
         let header = Header {
