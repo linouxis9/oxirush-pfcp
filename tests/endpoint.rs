@@ -131,12 +131,7 @@ async fn an_smf_and_a_upf_set_up_an_association_and_a_session() {
     .unwrap();
     assert_eq!(response.header.seid, Some(seid), "to the SMF's SEID");
     let upf = within(answering).await.unwrap();
-    assert_eq!(
-        upf.statistics()
-            .incoming_dropped
-            .load(std::sync::atomic::Ordering::Relaxed),
-        0
-    );
+    assert_eq!(upf.statistics().incoming_dropped, 0);
 }
 
 /// Poll a future once, and drop it: a caller that cancels it before the task of the
@@ -384,7 +379,6 @@ fn setup(sequence: u32) -> Vec<u8> {
 /// retransmission, and is answered then.
 #[tokio::test]
 async fn a_request_dropped_for_a_full_queue_comes_again() {
-    use std::sync::atomic::Ordering;
     let queues = Queues {
         commands: 16,
         incoming: 1,
@@ -397,7 +391,7 @@ async fn a_request_dropped_for_a_full_queue_comes_again() {
     peer.send_to(&setup(1), upf.local_addr()).await.unwrap();
     peer.send_to(&setup(2), upf.local_addr()).await.unwrap();
     tokio::time::sleep(Duration::from_millis(100)).await;
-    assert_eq!(upf.statistics().incoming_dropped.load(Ordering::Relaxed), 1);
+    assert_eq!(upf.statistics().incoming_dropped, 1);
     assert_eq!(upf.incoming().await.unwrap().request.sequence, 1);
     peer.send_to(&setup(2), upf.local_addr()).await.unwrap();
     let second = tokio::time::timeout(Duration::from_millis(500), upf.incoming())
@@ -424,10 +418,9 @@ async fn a_request_dropped_for_a_full_queue_comes_again() {
     );
 }
 
-/// What the node drops to bound what it keeps is in the statistics of the endpoint.
+/// What the node drops to bound what it keeps is in its counters, through a handle.
 #[tokio::test]
 async fn a_request_refused_by_a_full_node_is_counted() {
-    use std::sync::atomic::Ordering;
     let upf_config = NodeConfig {
         capacity: 1,
         ..config(Function::Up)
@@ -438,9 +431,8 @@ async fn a_request_refused_by_a_full_node_is_counted() {
     let first = upf.incoming().await.unwrap();
     peer.send_to(&setup(2), upf.local_addr()).await.unwrap();
     tokio::time::sleep(Duration::from_millis(100)).await;
-    let statistics = upf.statistics();
-    assert_eq!(statistics.requests_refused.load(Ordering::Relaxed), 1);
-    assert_eq!(statistics.answers_evicted.load(Ordering::Relaxed), 0);
+    let counters = upf.handle().with(|node| node.counters()).await.unwrap();
+    assert_eq!((counters.refused, counters.evicted), (1, 0));
     drop(first);
 }
 

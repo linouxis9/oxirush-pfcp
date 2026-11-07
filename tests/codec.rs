@@ -659,7 +659,7 @@ fn check_names_the_clause() {
     )));
     assert!(said.iter().any(|said| said.contains("no SEID")));
     assert_eq!(
-        found[1].cause(),
+        found[1].cause,
         Some(CauseValue::MandatoryIeMissing),
         "{}",
         found[1]

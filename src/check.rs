@@ -42,7 +42,7 @@ pub struct Deviation {
     /// `None` for a deviation that the receiver ignores, and in a response.
     pub cause: Option<CauseValue>,
     /// The IE type of the IE at `path`, when the deviation is in its value.
-    pub ie_type: Option<u16>,
+    pub(crate) ie_type: Option<u16>,
 }
 
 /// What a deviation is.
@@ -191,12 +191,6 @@ impl Deviation {
             cause: None,
             ie_type: None,
         }
-    }
-
-    /// The Cause with which the receiver of a request answers it: `None` for a deviation
-    /// that the receiver ignores, and in a response.
-    pub fn cause(&self) -> Option<CauseValue> {
-        self.cause
     }
 
     /// The IE type that the Offending IE of the answer carries, with its Cause: the IE

@@ -164,7 +164,7 @@ fn the_cause_follows_the_presence_of_the_grouped_ie() {
     });
     let found = message.check(Interfaces::N4);
     assert_eq!(
-        found[0].cause(),
+        found[0].cause,
         Some(CauseValue::MandatoryIeMissing),
         "{found:?}"
     );
@@ -182,7 +182,7 @@ fn the_cause_follows_the_presence_of_the_grouped_ie() {
         DeviationKind::MandatoryMissing { ie_type: 56 },
         "{found:?}"
     );
-    assert_eq!(found[0].cause(), Some(CauseValue::ConditionalIeMissing));
+    assert_eq!(found[0].cause, Some(CauseValue::ConditionalIeMissing));
 
     let mut establishment = establishment();
     request_with(&mut establishment, |request| {
@@ -194,7 +194,7 @@ fn the_cause_follows_the_presence_of_the_grouped_ie() {
         DeviationKind::MandatoryMissing { ie_type: 88 },
         "{found:?}"
     );
-    assert_eq!(found[0].cause(), None, "an optional grouped IE");
+    assert_eq!(found[0].cause, None, "an optional grouped IE");
 
     let response = SessionEstablishmentResponse::default();
     let message = Message {
@@ -205,7 +205,7 @@ fn the_cause_follows_the_presence_of_the_grouped_ie() {
         message
             .check(Interfaces::N4)
             .iter()
-            .all(|deviation| deviation.cause().is_none())
+            .all(|deviation| deviation.cause.is_none())
     );
 }
 
@@ -455,7 +455,7 @@ fn reserved_values_and_fixed_lengths() {
         },
         "{found:?}"
     );
-    assert_eq!(found[0].cause(), None, "an optional IE");
+    assert_eq!(found[0].cause, None, "an optional IE");
 }
 
 /// Table 7.3-1: after 11, Version Not Supported Response, a request has an even type: 12
@@ -481,7 +481,7 @@ fn a_request_by_the_name_of_its_type() {
     let causes: Vec<_> = request
         .check(Interfaces::N4)
         .iter()
-        .map(Deviation::cause)
+        .map(|deviation| deviation.cause)
         .collect();
     assert_eq!(causes, [Some(CauseValue::MandatoryIeMissing); 2]);
     let response = Message {
@@ -492,7 +492,7 @@ fn a_request_by_the_name_of_its_type() {
         response
             .check(Interfaces::N4)
             .iter()
-            .all(|deviation| deviation.cause().is_none())
+            .all(|deviation| deviation.cause.is_none())
     );
 }
 
@@ -541,7 +541,7 @@ fn found(octets: &[u8]) -> Vec<(DeviationKind, Option<CauseValue>, Option<u16>)>
         .map(|deviation| {
             (
                 deviation.kind.clone(),
-                deviation.cause(),
+                deviation.cause,
                 deviation.offending_ie(),
             )
         })
@@ -689,7 +689,7 @@ fn a_semantically_invalid_mandatory_ie_is_incorrect() {
             .unwrap()
             .check(Interfaces::N4)
             .iter()
-            .all(|deviation| deviation.cause().is_none())
+            .all(|deviation| deviation.cause.is_none())
     );
 }
 
@@ -707,7 +707,7 @@ fn a_reserved_value_follows_the_presence_of_its_own_row() {
     assert_eq!(
         (
             found[0].kind.clone(),
-            found[0].cause(),
+            found[0].cause,
             found[0].offending_ie()
         ),
         (DeviationKind::ReservedValue { value: 0 }, None, None)
@@ -728,7 +728,7 @@ fn a_reserved_value_follows_the_presence_of_its_own_row() {
         "/pfcp/Create FAR/0/Forwarding Parameters/Outer Header Creation"
     );
     assert_eq!(
-        (found[0].cause(), found[0].offending_ie()),
+        (found[0].cause, found[0].offending_ie()),
         (Some(CauseValue::MandatoryIeIncorrect), Some(84)),
         "{found:?}"
     );
@@ -746,7 +746,7 @@ fn a_reserved_value_follows_the_presence_of_its_own_row() {
         message
             .check(Interfaces::N4)
             .iter()
-            .map(Deviation::cause)
+            .map(|deviation| deviation.cause)
             .collect::<Vec<_>>(),
         [None]
     );
@@ -772,7 +772,7 @@ fn a_reserved_node_id_type_of_an_fq_csid_is_incorrect() {
     assert_eq!(
         (
             found[0].kind.clone(),
-            found[0].cause(),
+            found[0].cause,
             found[0].offending_ie()
         ),
         (
@@ -1077,7 +1077,7 @@ fn the_conditions_that_a_message_shows() {
             "{message}: {found:?}"
         );
         assert_eq!(
-            (found[0].cause(), found[0].offending_ie()),
+            (found[0].cause, found[0].offending_ie()),
             (cause, cause.map(|_| ie_type)),
             "{message}: {found:?}"
         );
@@ -2162,7 +2162,7 @@ fn the_flag_rules_of_clause_8_2_in_a_message() {
             .check(Interfaces::N4)
             .into_iter()
             .filter_map(|deviation| match deviation.kind {
-                DeviationKind::Rule(rule) => Some((deviation.clause, rule, deviation.cause())),
+                DeviationKind::Rule(rule) => Some((deviation.clause, rule, deviation.cause)),
                 _ => None,
             })
             .collect()

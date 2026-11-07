@@ -251,9 +251,9 @@ fn block_5() {
         }
 
         // The answer to the first deviation that has a Cause
-        let deviation = request.check(Interfaces::N4).into_iter().find(|deviation| deviation.cause().is_some()).ok_or("none")?;
+        let deviation = request.check(Interfaces::N4).into_iter().find(|deviation| deviation.cause.is_some()).ok_or("none")?;
         let response = SessionModificationResponse {
-            cause: deviation.cause().map(Cause::new),
+            cause: deviation.cause.map(Cause::new),
             offending_ie: deviation.offending_ie().map(OffendingIe::new),
             ..Default::default()
         };

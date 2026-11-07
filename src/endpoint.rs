@@ -85,27 +85,48 @@ impl Default for Queues {
     }
 }
 
-/// What the endpoint dropped or could not send, since it started.
-#[derive(Debug, Default)]
+/// What the endpoint sent, received and dropped, since it started. What its node drops
+/// is in [`Node::counters`].
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct Statistics {
     /// Requests of peers dropped for a full incoming queue.
-    pub incoming_dropped: AtomicU64,
+    pub incoming_dropped: u64,
     /// Events dropped for a full event queue.
-    pub events_dropped: AtomicU64,
+    pub events_dropped: u64,
     /// Datagrams that the socket did not send.
-    pub send_errors: AtomicU64,
+    pub send_errors: u64,
     /// Errors of the socket when it received.
-    pub receive_errors: AtomicU64,
+    pub receive_errors: u64,
     /// Datagrams received.
-    pub received: AtomicU64,
+    pub received: u64,
     /// Datagrams sent.
-    pub sent: AtomicU64,
-    /// Answers that the node dropped before `keep` to make room:
-    /// [`Counters::evicted`](crate::node::Counters::evicted).
-    pub answers_evicted: AtomicU64,
-    /// Requests that the node dropped, full of requests that wait for their answer:
-    /// [`Counters::refused`](crate::node::Counters::refused).
-    pub requests_refused: AtomicU64,
+    pub sent: u64,
+}
+
+/// The counts of [`Statistics`], which the task adds to.
+#[derive(Debug, Default)]
+struct Counts {
+    incoming_dropped: AtomicU64,
+    events_dropped: AtomicU64,
+    send_errors: AtomicU64,
+    receive_errors: AtomicU64,
+    received: AtomicU64,
+    sent: AtomicU64,
+}
+
+impl Counts {
+    fn snapshot(&self) -> Statistics {
+        let read = |count: &AtomicU64| count.load(Ordering::Relaxed);
+        Statistics {
+            incoming_dropped: read(&self.incoming_dropped),
+            events_dropped: read(&self.events_dropped),
+            send_errors: read(&self.send_errors),
+            receive_errors: read(&self.receive_errors),
+            received: read(&self.received),
+            sent: read(&self.sent),
+        }
+    }
 }
 
 /// Why a request of the endpoint has no response.
@@ -281,7 +302,7 @@ pub struct Handle {
     commands: mpsc::Sender<Command>,
     cancels: mpsc::UnboundedSender<u64>,
     tokens: Arc<AtomicU64>,
-    statistics: Arc<Statistics>,
+    statistics: Arc<Counts>,
 }
 
 impl Endpoint {
@@ -314,7 +335,7 @@ impl Endpoint {
         let (forgetting, forgets) = mpsc::unbounded_channel();
         let (cancels, cancelled) = mpsc::unbounded_channel();
         let (stop, stopped) = oneshot::channel();
-        let statistics = Arc::new(Statistics::default());
+        let statistics = Arc::new(Counts::default());
         let task = Task {
             socket,
             node: Node::new(config),
@@ -368,8 +389,8 @@ impl Endpoint {
     }
 
     /// What the endpoint dropped and sent.
-    pub fn statistics(&self) -> &Statistics {
-        &self.handle.statistics
+    pub fn statistics(&self) -> Statistics {
+        self.handle.statistics.snapshot()
     }
 
     /// The next request of a peer: `None` once the endpoint has ended.
@@ -411,8 +432,8 @@ impl Handle {
     }
 
     /// What the endpoint dropped and sent.
-    pub fn statistics(&self) -> &Statistics {
-        &self.statistics
+    pub fn statistics(&self) -> Statistics {
+        self.statistics.snapshot()
     }
 
     /// Send a request to `to`, and wait for its response ([`Node::request`]). Dropping
@@ -532,7 +553,7 @@ struct Task {
     /// the tokens.
     pending: BTreeMap<RequestId, (Reply, u64)>,
     tokens: BTreeMap<u64, RequestId>,
-    statistics: Arc<Statistics>,
+    statistics: Arc<Counts>,
 }
 
 impl Task {
@@ -554,9 +575,6 @@ impl Task {
                             self.statistics.received.fetch_add(1, Ordering::Relaxed);
                             let now = self.start.elapsed();
                             self.node.handle_datagram(now, from, &buffer[..length]);
-                            let counters = self.node.counters();
-                            self.statistics.answers_evicted.store(counters.evicted, Ordering::Relaxed);
-                            self.statistics.requests_refused.store(counters.refused, Ordering::Relaxed);
                         }
                         Err(_) => {
                             self.statistics.receive_errors.fetch_add(1, Ordering::Relaxed);
@@ -750,7 +768,7 @@ mod tests {
             commands,
             cancels,
             tokens: Arc::new(AtomicU64::new(0)),
-            statistics: Arc::new(Statistics::default()),
+            statistics: Arc::new(Counts::default()),
         };
         let heartbeat = Message {
             header: crate::Header::node(0),
