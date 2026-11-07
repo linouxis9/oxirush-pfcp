@@ -30,7 +30,7 @@ use crate::macros::{pfcp_bits, pfcp_layout};
 use crate::octets::Octets;
 
 /// A field of a layout: its octets, read in network order.
-pub trait Field: Sized {
+pub(crate) trait Field: Sized {
     /// How many octets it has, when they are fixed.
     const OCTETS: Option<usize> = None;
     /// The cells narrower than an octet that it lays out, which the test `spec` compares
@@ -106,7 +106,7 @@ pub struct Member {
     pub name: &'static str,
     /// How many octets it has, when they are fixed.
     pub octets: Option<usize>,
-    /// The cells narrower than an octet that it lays out ([`Field::CELLS`]).
+    /// The cells narrower than an octet that it lays out.
     pub cells: &'static [NarrowCell],
     /// When it is there, as the crate writes it of the flags: `true` for always.
     pub condition: &'static str,
@@ -215,7 +215,7 @@ macro_rules! signed_field {
 signed_field!(i32, i64);
 
 /// An enumeration of the tables of values, as a [`Narrow`] field reads it.
-pub trait Narrowable: Copy + Field {
+pub(crate) trait Narrowable: Copy + Field {
     /// The width of its field, in bits.
     const BITS: u32;
     /// The value of a number.
@@ -235,19 +235,22 @@ pub struct Narrow<E> {
     pub spare: u8,
 }
 
-impl<E: Narrowable> Narrow<E> {
-    const MASK: u8 = ((1u16 << E::BITS) - 1) as u8;
-
+impl<E> Narrow<E> {
     /// The value, without spare bits.
     pub fn new(value: E) -> Self {
         Self { value, spare: 0 }
     }
 }
 
+/// The bits of the octet of a [`Narrow`] value that are its value.
+const fn mask<E: Narrowable>() -> u8 {
+    ((1u16 << E::BITS) - 1) as u8
+}
+
 impl<E: Narrowable> Field for Narrow<E> {
     const OCTETS: Option<usize> = Some(1);
     #[cfg(feature = "tree")]
-    const BELOW: &'static crate::tree::Below = &crate::tree::Below::Either(
+    const BELOW: &'static crate::tree::Below = &crate::tree::Below::Object(
         Some("value"),
         &[
             ("value", &crate::tree::Below::Scalar),
@@ -263,18 +266,18 @@ impl<E: Narrowable> Field for Narrow<E> {
     fn read(octets: &mut &[u8]) -> Option<Self> {
         let octet = u8::read(octets)?;
         Some(Self {
-            value: E::from_value(octet & Self::MASK),
-            spare: octet & !Self::MASK,
+            value: E::from_value(octet & mask::<E>()),
+            spare: octet & !mask::<E>(),
         })
     }
     fn write(&self, out: &mut Vec<u8>) {
-        out.push(self.spare & !Self::MASK | self.value.value() & Self::MASK);
+        out.push(self.spare & !mask::<E>() | self.value.value() & mask::<E>());
     }
     fn size(&self) -> usize {
         1
     }
     fn fits(&self) -> bool {
-        self.value.value() <= Self::MASK && self.spare & Self::MASK == 0
+        self.value.value() <= mask::<E>() && self.spare & mask::<E>() == 0
     }
     fn check(&self, path: &crate::check::Path, clause: &'static str, found: &mut Vec<Deviation>) {
         if !self.fits() {
@@ -833,7 +836,7 @@ impl From<core::net::IpAddr> for TypedAddress {
 
 impl Field for TypedAddress {
     #[cfg(feature = "tree")]
-    const BELOW: &'static crate::tree::Below = &crate::tree::Below::Either(
+    const BELOW: &'static crate::tree::Below = &crate::tree::Below::Object(
         Some("Address"),
         &[
             ("Address Type", &crate::tree::Below::Scalar),
@@ -1426,7 +1429,7 @@ impl Fqdn {
 impl Field for Fqdn {
     #[cfg(feature = "tree")]
     const BELOW: &'static crate::tree::Below =
-        &crate::tree::Below::Either(None, &[("octets", &crate::tree::Below::Scalar)]);
+        &crate::tree::Below::Object(None, &[("octets", &crate::tree::Below::Scalar)]);
     fn read(octets: &mut &[u8]) -> Option<Self> {
         Some(Self(Octets::wire(core::mem::take(octets))))
     }
@@ -1475,7 +1478,7 @@ impl NodeId {
     pub const FIELDS: &'static [&'static str] = &["Node ID Type", "Node ID value"];
     /// The members that its tree may have: the FQDN, or the octets of a Node ID that is no
     /// text. The tree of an address is the address alone.
-    pub const MEMBERS: &'static [&'static str] = &["FQDN", "Node ID value"];
+    pub const MEMBERS: &'static [&'static str] = &["FQDN", "octets"];
     /// What the tree of each field may hold below it: nothing, of scalars alone.
     #[cfg(feature = "tree")]
     pub(crate) const MEMBERS_BELOW: &'static [(&'static str, &'static crate::tree::Below)] = &[];
@@ -1538,7 +1541,8 @@ impl NodeId {
 #[cfg(feature = "serde")]
 oxirush_utils::impl_serde!(NodeId);
 
-/// An address as text, or `{"FQDN": "upf.example"}`, or the octets of another Node ID.
+/// An address as text, or `{"FQDN": "upf.example"}`, or `{"octets": ...}` for another
+/// Node ID, its octets after the Length.
 #[cfg(feature = "tree")]
 impl oxirush_utils::tree::Tree for NodeId {
     const NAME: &'static str = "Node ID";
@@ -1549,7 +1553,7 @@ impl oxirush_utils::tree::Tree for NodeId {
             Self::Ipv6(address) => tree::Value::String(alloc::format!("{address}")),
             Self::Fqdn(_) | Self::Other(..) => match self.fqdn() {
                 Some(text) => tree::alternative("FQDN", tree::text(&text)),
-                None => tree::alternative("Node ID value", tree::octets(&self.encoded())),
+                None => tree::alternative("octets", tree::octets(&self.encoded())),
             },
         }
     }
@@ -1578,7 +1582,7 @@ impl oxirush_utils::tree::Tree for NodeId {
                 })
             }),
             // The octets of a Node ID that the text does not give: read as they decode.
-            _ => reading.within("Node ID value", content, |content, reading| {
+            _ => reading.within("octets", content, |content, reading| {
                 let octets = reading.octets(content)?;
                 Self::decode(&octets).ok_or_else(|| reading.mismatch("one octet at least", content))
             }),
@@ -2045,3 +2049,27 @@ macro_rules! pfcp_octets {
 }
 
 pub(crate) use {pfcp_fields, pfcp_number, pfcp_octets};
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A Number of six bits is, as a field of its own, its whole octet, which a Narrow parts
+    /// into the number and the spare bits.
+    #[test]
+    fn a_number_of_six_bits_as_a_field() {
+        let mut octets: &[u8] = &[0x2e, 0xc1];
+        assert_eq!(Number::<6>::read(&mut octets), Some(Number(0x2e)));
+        assert_eq!(octets, [0xc1]);
+        assert_eq!(Number::<6>::read(&mut &[][..]), None);
+        let mut out = Vec::new();
+        Number::<6>(0xc1).write(&mut out);
+        assert_eq!(out, [0xc1]);
+        assert_eq!(Number::<6>(0x2e).size(), 1);
+        #[cfg(feature = "tree")]
+        assert_eq!(
+            Field::to_tree(&Number::<6>(46)),
+            oxirush_utils::tree::unsigned(46)
+        );
+    }
+}

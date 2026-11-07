@@ -294,10 +294,13 @@ pub struct SsmAddress {
 
 impl Field for SsmAddress {
     #[cfg(feature = "tree")]
-    const BELOW: &'static crate::tree::Below = &crate::tree::Below::Object(&[
-        ("IP Multicast Distribution Address", TypedAddress::BELOW),
-        ("IP Source Address", TypedAddress::BELOW),
-    ]);
+    const BELOW: &'static crate::tree::Below = &crate::tree::Below::Object(
+        None,
+        &[
+            ("IP Multicast Distribution Address", TypedAddress::BELOW),
+            ("IP Source Address", TypedAddress::BELOW),
+        ],
+    );
     fn read(octets: &mut &[u8]) -> Option<Self> {
         Some(Self {
             distribution: TypedAddress::read(octets)?,
@@ -672,7 +675,7 @@ macro_rules! identity_lv8 {
     ($($ty:ident $as_text:ident $from_text:expr),*) => {$(
         impl Field for $ty {
             #[cfg(feature = "tree")]
-            const BELOW: &'static crate::tree::Below = &crate::tree::Below::Either(
+            const BELOW: &'static crate::tree::Below = &crate::tree::Below::Object(
                 None,
                 &[("octets", &crate::tree::Below::Scalar)],
             );

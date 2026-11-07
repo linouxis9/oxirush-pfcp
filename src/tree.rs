@@ -30,7 +30,7 @@ use alloc::string::String;
 use alloc::vec::Vec;
 
 use oxirush_utils::tree::{
-    Absent, ErrorKind, Map, Members, Next, Place, Reading, Refused, Root, Step,
+    Absent, Edit, ErrorKind, Map, Members, Next, Place, Reading, Refused, Root, Step,
 };
 
 /// The engine of the trees, oxirush-utils' `tree`, and its macro `tree!`, which writes a
@@ -328,25 +328,19 @@ fn no_such_ie(table: &crate::table::Table, names: &[&str], written: &str) -> Str
     )
 }
 
-/// What the tree of a field of a value may hold below it, as the crate writes it
-/// ([`Field::BELOW`](crate::Field::BELOW)): what [`select`] judges a name by below a field
-/// that a value lacks, below an entry past the end of a list of them, and below a field
-/// whose tree takes either of two forms.
+/// What the tree of a field of a value may hold below it ([`Field::BELOW`](crate::Field)),
+/// which a path is checked against at a field that a value lacks, below an entry past the
+/// end of a list, and at a field written as a scalar.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[non_exhaustive]
-pub enum Below {
+pub(crate) enum Below {
     /// Nothing: a flag, or a field whose tree is a scalar.
     Scalar,
-    /// The members of an object, each with what it may hold below it: those of a Source
-    /// Specific IP Multicast Address.
-    Object(&'static [(&'static str, &'static Below)]),
-    /// A scalar or an object, as the value is: the scalar is the member that it names, if
-    /// any, of the members of the object, each with what it may hold below it. A value
-    /// without spare bits is its `value`, and one with them `{"value": ..., "Spare": ...}`;
-    /// an IPv4 or IPv6 address is its `Address`, another `{"Address Type": ..., "Address":
-    /// ...}`; an identity of digits or text is none of them, one of other octets
-    /// `{"octets": ...}`.
-    Either(
+    /// The members of an object, each with what it may hold below it, or a scalar: the
+    /// member that it names, if any. A value without spare bits is its `value`, and one
+    /// with them `{"value": ..., "Spare": ...}`; an IPv4 or IPv6 address is its `Address`,
+    /// another `{"Address Type": ..., "Address": ...}`; an identity of digits or text is
+    /// none of them, one of other octets `{"octets": ...}`.
+    Object(
         Option<&'static str>,
         &'static [(&'static str, &'static Below)],
     ),
@@ -355,17 +349,12 @@ pub enum Below {
 }
 
 impl Below {
-    /// The members of an object that the tree may have.
-    fn members(&self) -> &'static [(&'static str, &'static Below)] {
-        match self {
-            Self::Object(members) | Self::Either(_, members) => members,
-            _ => &[],
-        }
-    }
-
     /// What the member `name` of the object may hold below it.
     fn member(&self, name: &str) -> Option<&'static Below> {
-        self.members()
+        let Self::Object(_, members) = self else {
+            return None;
+        };
+        members
             .iter()
             .find(|(member, _)| tree::same_name(member, name))
             .map(|(_, below)| *below)
@@ -380,23 +369,20 @@ fn below_member(info: &IeTypeInfo, name: &str) -> &'static Below {
         .map_or(&Below::Scalar, |(_, below)| below)
 }
 
-/// The rules of the paths of PFCP on the engine of oxirush-utils: `/pfcp` is short for
-/// the IEs of the message, and the rest is the plain rule of a tree, which knows the
-/// tables: a row that a message or a grouped IE lacks, and a member that a value or the
-/// header lacks of those that its tree may have ([`IeTypeInfo::members`]), are not
-/// there, where another name is no member, also below what is not there: below a field
-/// that a value or the header lacks, and an entry past the end of a list, a name is
-/// judged by what the tree of the field may hold ([`Below`]), and nothing is below a
-/// scalar. A value that its tree writes as a scalar has the one field that it is, and so
-/// has a field whose tree is a scalar or an object ([`Below::Either`]): the member that
-/// the scalar is, if any, selects it, and the others of the object select nothing.
+/// The rules of the paths of PFCP, which `select` and `set` share: `/pfcp` is short for
+/// the IEs of the message, and each segment is checked against the tables and the members
+/// of the trees of the values ([`IeTypeInfo::members`]), then the tree is walked by the
+/// plain rule. A row that a scope lacks, and a member that a value lacks, select nothing,
+/// where another name is an error, also below what is not there. A value or a field that
+/// its tree writes as a scalar has the member that the scalar is, and the others of its
+/// object, which select nothing; `set` writes the object to give one of them a value.
 #[derive(Debug, Clone, Copy, Default)]
-pub struct Paths;
+pub(crate) struct Paths;
 
 /// What [`Paths`] knows of a place of the tree of a message: the tables of the IEs that it
-/// holds, or the figure of the value that it is.
+/// holds, or the members of the value that it is.
 #[derive(Debug, Clone, Copy, Default)]
-pub struct Shape(Of);
+pub(crate) struct Shape(Of);
 
 #[derive(Clone, Copy, Default)]
 enum Of {
@@ -474,6 +460,55 @@ fn scalar_field(info: &IeTypeInfo) -> Option<&'static str> {
     }
 }
 
+impl Paths {
+    /// At a value or a field that its tree writes as a scalar: the member that the scalar
+    /// is selects it, another member of its object selects nothing, or, for an edit, has
+    /// the scalar opened into its object, with the scalar as its member, and another name
+    /// is none.
+    fn at_scalar<'v>(
+        &self,
+        place: &Place<'v, Shape>,
+        scalar: &Value,
+        segment: &str,
+        next: &mut Next<'v, Shape>,
+    ) -> Result<Step<Shape>, tree::Error> {
+        let (is, member) = match place.shape().0 {
+            Of::Value(info) => {
+                let known = info
+                    .members
+                    .iter()
+                    .any(|member| tree::same_name(member, segment));
+                let member = known.then(|| Shape(Of::Below(below_member(info, segment))));
+                (scalar_field(info), member)
+            }
+            Of::Below(below @ Below::Object(is, _)) => (
+                *is,
+                below.member(segment).map(|inside| Shape(Of::Below(inside))),
+            ),
+            _ => return Ok(Step::Plain),
+        };
+        if is.is_some_and(|is| tree::same_name(is, segment)) {
+            next.stay(place, member.unwrap_or(Shape(Of::Below(&Below::Scalar))));
+            return Ok(Step::Taken);
+        }
+        let Some(inside) = member else {
+            let reason = alloc::format!("{segment:?} is no member of this value, of either form");
+            return Err(tree::Error::new(ErrorKind::NoSuchMember, "", reason));
+        };
+        match next.edit() {
+            Some(Edit::Open) => {
+                let mut members = Map::new();
+                if let Some(is) = is {
+                    members.insert(is.into(), scalar.clone());
+                }
+                next.open(place, Value::Object(members));
+            }
+            _ => next.absent(segment, inside),
+        }
+        Ok(Step::Taken)
+    }
+}
+
 impl tree::Family for Paths {
     type Shape = Shape;
 
@@ -484,20 +519,17 @@ impl tree::Family for Paths {
     /// Below what is not there, a name is judged as where the value is there: a member
     /// that it could have selects nothing, and another is refused; so is an entry past
     /// the end of a list, and a field that a value lacks, by what its tree may hold
-    /// ([`Below`]). At a value that its tree writes as a scalar, a member that it lacks
-    /// selects nothing, and the one field that it is selects it.
+    /// ([`Below`]). At a scalar, as [`Paths::at_scalar`] has it.
     fn step<'v>(
         &self,
         place: &Place<'v, Shape>,
         segment: &str,
         next: &mut Next<'v, Shape>,
     ) -> Result<Step<Shape>, tree::Error> {
-        if next.edit().is_some() {
-            return Ok(Step::Plain);
-        }
         let shape = place.shape();
         let list = matches!(shape.0, Of::List(_) | Of::Below(Below::List(_)));
-        match (place.value(), shape.0) {
+        // What is null is not there.
+        match (place.value().filter(|value| !value.is_null()), shape.0) {
             (_, Of::Nothing) => Ok(Step::Plain),
             // An entry of a list that is not there, or past the end of one, which has the
             // members of one.
@@ -531,43 +563,8 @@ impl tree::Family for Paths {
                     Err(tree::Error::new(ErrorKind::NoSuchMember, "", reason))
                 }
             },
-            // A field written as the scalar of its two forms: the member that it is selects
-            // it, another member of the object selects nothing, and another name is none.
-            (Some(value), Of::Below(below @ Below::Either(scalar, _))) if !value.is_object() => {
-                if scalar.is_some_and(|scalar| tree::same_name(scalar, segment)) {
-                    let inside = below.member(segment).unwrap_or(&Below::Scalar);
-                    next.stay(place, Shape(Of::Below(inside)));
-                    return Ok(Step::Taken);
-                }
-                match below.member(segment) {
-                    Some(inside) => {
-                        next.absent(segment, Shape(Of::Below(inside)));
-                        Ok(Step::Taken)
-                    }
-                    None => {
-                        let reason = alloc::format!(
-                            "{segment:?} is no member of this field, of either form"
-                        );
-                        Err(tree::Error::new(ErrorKind::NoSuchMember, "", reason))
-                    }
-                }
-            }
-            (Some(value), Of::Value(info)) if !value.is_object() => {
-                if scalar_field(info).is_some_and(|field| tree::same_name(field, segment)) {
-                    next.stay(place, Shape(Of::Nothing));
-                    return Ok(Step::Taken);
-                }
-                match info
-                    .members
-                    .iter()
-                    .any(|member| tree::same_name(member, segment))
-                {
-                    true => {
-                        next.absent(segment, Shape(Of::Below(below_member(info, segment))));
-                        Ok(Step::Taken)
-                    }
-                    false => Ok(Step::Plain),
-                }
+            (Some(value), _) if !value.is_object() && !value.is_array() => {
+                self.at_scalar(place, value, segment, next)
             }
             _ => Ok(Step::Plain),
         }
@@ -641,10 +638,9 @@ impl tree::Family for Paths {
 
 /// The values at `path` in the tree of a message. A row of a table that a message or a
 /// grouped IE lacks, and a member that a value or the header lacks of those that its tree
-/// may have ([`IeTypeInfo::members`]), select nothing; a name that is none of them is an
-/// error, also below what is not there: a row, a flag or a field, of what its tree may
-/// hold ([`Below`]), and an entry past the end of a list. A field whose tree is a scalar
-/// or an object takes the same names in either form ([`Below::Either`]).
+/// may have, select nothing; a name that is none of them is an error, also below what is
+/// not there, and an entry past the end of a list selects nothing. A value or a field
+/// whose tree is a scalar or an object takes the same names in either form.
 ///
 /// # Errors
 ///
@@ -655,11 +651,60 @@ pub fn select<'v>(tree: &'v Value, path: &str) -> Result<Vec<&'v Value>, tree::E
     tree::select_in(&Paths, tree, path)
 }
 
-/// Give the place at `path` the value `value`.
+/// Give the place at `path` the value `value`: a path that [`select`] takes, with what it
+/// lacks added. A member of the object of a value or a field that the tree writes as a
+/// scalar writes the object, with the scalar as its member if it is one: `{"value":
+/// "minute", "Spare": 8}` from `"minute"`. The tree is left as it was when the edit fails.
 ///
 /// # Errors
 ///
 /// Those of `oxirush_utils::tree::set_in`.
 pub fn set(tree: &mut Value, path: &str, value: impl Into<Value>) -> Result<(), tree::Error> {
-    tree::set_in(&Paths, tree, path, value)
+    let mut edited = tree.clone();
+    tree::open_in(&Paths, &mut edited, path)?;
+    tree::set_in(&Paths, &mut edited, path, value)?;
+    *tree = edited;
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{Header, HeartbeatRequest, Message, RecoveryTimeStamp};
+    use oxirush_utils::tree::Family;
+
+    /// What the paths know of a place prints the names of the message, of the tables and
+    /// of the IE types, not their rows.
+    #[test]
+    fn a_shape_prints_its_names() {
+        let heartbeat = Message {
+            header: Header::node(1),
+            body: HeartbeatRequest::new(RecoveryTimeStamp::new(7)).into(),
+        };
+        let heartbeat = heartbeat.to_tree();
+        let message = Paths.start(&heartbeat, true);
+        assert_eq!(
+            alloc::format!("{message:?}"),
+            r#"Shape(Message("PFCP Heartbeat Request"))"#
+        );
+        let ies = Paths.member(&message, "ies", Some(&heartbeat["ies"]));
+        assert_eq!(alloc::format!("{ies:?}"), r#"Shape(Ies(["7.4.2.1-1"]))"#);
+        // The header is no table of IEs: its fields are scalars
+        let sequence = Paths.member(&message, "Sequence Number", None);
+        assert_eq!(alloc::format!("{sequence:?}"), "Shape(Below(Scalar))");
+        let stamp = &heartbeat["ies"]["Recovery Time Stamp"];
+        let value = Paths.member(&ies, "Recovery Time Stamp", Some(stamp));
+        assert_eq!(
+            alloc::format!("{value:?}"),
+            r#"Shape(Value("Recovery Time Stamp"))"#
+        );
+        let empty = Value::Array(Vec::new());
+        let addresses = Paths.member(&ies, "Source IP Address", Some(&empty));
+        assert_eq!(
+            alloc::format!("{addresses:?}"),
+            r#"Shape(List("Source IP Address"))"#
+        );
+        let nothing = Paths.member(&value, "Bogus", None);
+        assert_eq!(alloc::format!("{nothing:?}"), "Shape(Nothing)");
+    }
 }

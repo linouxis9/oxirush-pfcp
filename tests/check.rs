@@ -1233,8 +1233,7 @@ fn the_absence_rules_that_their_scope_shows() {
         )
     };
     let mode = || TransportMode::new(TransportModeValue::DatagramMode1);
-    let cases: Vec<(Vec<String>, &[&str])> =
-        vec![
+    let cases: Vec<(Vec<String>, &[&str])> = vec![
             // Table 7.5.2.2-2: of a Traffic Endpoint ID, none of the four
             (
                 excluded(&pdi().with_traffic_endpoint_id(endpoint.clone())),

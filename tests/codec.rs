@@ -226,15 +226,12 @@ fn what_a_value_lacks_selects_nothing() {
     );
     let unknown = select(&more, "/pfcp/UP F-SEID/unknown octets").unwrap();
     assert_eq!(unknown, [&tree!("ff")]);
-    // A Node ID that is an address has no FQDN, one that is an FQDN no octets, and their
-    // trees no Node ID Type
+    // A Node ID that is an address has no FQDN and no octets, one that is an FQDN no
+    // octets, and their trees no Node ID Type or value, which their form says
     nothing(&response, "/pfcp/Node ID/FQDN");
-    nothing(&response, "/pfcp/Node ID/Node ID value");
-    failing(
-        &response,
-        "/pfcp/Node ID/Node ID Type",
-        tree::ErrorKind::Scalar,
-    );
+    nothing(&response, "/pfcp/Node ID/octets");
+    misspelt(&response, "/pfcp/Node ID/Node ID value");
+    misspelt(&response, "/pfcp/Node ID/Node ID Type");
     let name = b"\x03upf\x07example".to_vec();
     let setup = Message {
         header: Header::node(1),
@@ -244,7 +241,8 @@ fn what_a_value_lacks_selects_nothing() {
     let setup = setup.to_tree();
     let fqdn = select(&setup, "/pfcp/Node ID/FQDN").unwrap();
     assert_eq!(fqdn, [&tree!("upf.example")]);
-    nothing(&setup, "/pfcp/Node ID/Node ID value");
+    nothing(&setup, "/pfcp/Node ID/octets");
+    misspelt(&setup, "/pfcp/Node ID/Node ID value");
     misspelt(&setup, "/pfcp/Node ID/Node ID Type");
     // The header
     nothing(&response, "/Message Priority");
@@ -267,15 +265,141 @@ fn what_a_value_lacks_selects_nothing() {
     nothing(&establishment, "/pfcp/Create PDR/0/PDR ID/unknown octets");
     let rule = select(&establishment, "/pfcp/Create PDR/0/PDR ID/Rule ID").unwrap();
     assert_eq!(rule, [&tree!(1)]);
-    failing(
-        &establishment,
-        "/pfcp/Create PDR/0/PDR ID/Bogus",
-        tree::ErrorKind::Scalar,
+    misspelt(&establishment, "/pfcp/Create PDR/0/PDR ID/Bogus");
+}
+
+/// `set` takes each path that `select` takes, and errs on each that it errs on, with the
+/// same kind: the one field of a value written as a scalar (the Cause value), the member
+/// that a field of two forms is (the `value` of a Time Unit), the members of its object,
+/// which write the object (the `Spare` of a Time Unit, the `FQDN` of a Node ID that is an
+/// address), and what a message lacks, which `set` adds.
+#[test]
+fn set_takes_the_paths_that_select_takes() {
+    let response = "2133002b000000000000100100000700003c0005000a00000200130001010039000d0200000000000020010a000002";
+    let response = Message::decode(&hex::decode(response).unwrap())
+        .unwrap()
+        .to_tree();
+    let rate = PacketRate {
+        ulpr: true,
+        uplink_time_unit: Some(Narrow::new(TimeUnit::Minute)),
+        maximum_uplink_packet_rate: Some(10),
+        ..Default::default()
+    };
+    let qer = CreateQer::new(QerId::new(1), GateStatus::default()).with_packet_rate(rate);
+    let modification = Message {
+        header: Header::session(1, 1),
+        body: SessionModificationRequest::default()
+            .with_create_qer(qer)
+            .into(),
+    }
+    .to_tree();
+    let heartbeat = Message {
+        header: Header::node(1),
+        body: HeartbeatRequest::new(RecoveryTimeStamp::new(7)).into(),
+    }
+    .to_tree();
+    let unit = "/pfcp/Create QER/0/Packet Rate/Uplink Time Unit";
+    for (tree, path, value, written) in [
+        (
+            &response,
+            "/pfcp/Cause/Cause value",
+            tree!("Request rejected (reason not specified)"),
+            tree!("Request rejected (reason not specified)"),
+        ),
+        (
+            &response,
+            "/pfcp/Node ID/FQDN",
+            tree!("upf.example"),
+            tree!({"FQDN": "upf.example"}),
+        ),
+        (
+            &modification,
+            &format!("{unit}/value")[..],
+            tree!("hour"),
+            tree!("hour"),
+        ),
+        (
+            &modification,
+            &format!("{unit}/Spare")[..],
+            tree!(8),
+            tree!({"value": "minute", "Spare": 8}),
+        ),
+        (
+            &heartbeat,
+            "/pfcp/Source IP Address/V4",
+            tree!(true),
+            tree!({"V4": true}),
+        ),
+    ] {
+        assert!(select(tree, path).is_ok(), "{path}");
+        let mut edited = tree.clone();
+        set(&mut edited, path, value.clone()).unwrap_or_else(|error| panic!("{path}: {error}"));
+        let holder = path.rsplit_once('/').unwrap().0;
+        let holder = if written.is_object() { holder } else { path };
+        assert_eq!(select(&edited, holder).unwrap(), [&written], "{path}");
+    }
+    // What the edits write reads back
+    let mut edited = modification.clone();
+    set(&mut edited, &format!("{unit}/Spare"), 8).unwrap();
+    let Body::SessionModificationRequest(request) = Message::from_tree(&edited).unwrap().body
+    else {
+        panic!()
+    };
+    let rate = request.create_qer[0].packet_rate.clone().unwrap();
+    assert_eq!(
+        rate.uplink_time_unit,
+        Some(Narrow {
+            value: TimeUnit::Minute,
+            spare: 8
+        })
     );
-    // An edit takes the plain rule: into a scalar, it goes nowhere
-    let mut edited = establishment.clone();
-    assert!(set(&mut edited, "/pfcp/Create PDR/0/PDR ID/Rule ID", 5).is_err());
-    assert_eq!(edited, establishment);
+    let mut edited = response.clone();
+    set(&mut edited, "/pfcp/Node ID/FQDN", "upf.example").unwrap();
+    let Body::SessionEstablishmentResponse(answer) = Message::from_tree(&edited).unwrap().body
+    else {
+        panic!()
+    };
+    assert_eq!(answer.node_id, NodeId::from_fqdn("upf.example"));
+    // The same errors, and a tree left as it was
+    for (tree, path, kind) in [
+        (
+            &response,
+            "/pfcp/Node ID/Node ID value",
+            tree::ErrorKind::NoSuchMember,
+        ),
+        (
+            &response,
+            "/pfcp/Node ID/Node ID Type",
+            tree::ErrorKind::NoSuchMember,
+        ),
+        (
+            &response,
+            "/pfcp/Cause/Bogus",
+            tree::ErrorKind::NoSuchMember,
+        ),
+        (
+            &response,
+            "/pfcp/Cause/Cause value/Bogus",
+            tree::ErrorKind::Scalar,
+        ),
+        (
+            &modification,
+            &format!("{unit}/Bogus")[..],
+            tree::ErrorKind::NoSuchMember,
+        ),
+        (
+            &heartbeat,
+            "/pfcp/Source IP Address/Bogus",
+            tree::ErrorKind::NoSuchMember,
+        ),
+    ] {
+        let selected = select(tree, path).map_err(|error| error.kind());
+        assert_eq!(selected, Err(kind), "{path}");
+        let mut edited = tree.clone();
+        let set = set(&mut edited, path, 1).map_err(|error| error.kind());
+        assert_eq!(set, Err(kind), "{path}");
+        assert_eq!(&edited, tree, "{path}");
+    }
 }
 
 /// oxirush-utils' `select_in`: "a misspelt name is not a member that is absent", also
@@ -331,10 +455,6 @@ fn a_misspelt_name_below_what_a_message_lacks_is_an_error() {
     misspelt(&response, "/pfcp/Created PDR/0/F-TEID/1/Bogus");
     // A role that the wire does not tell from the others of its row is no member
     misspelt(&response, "/pfcp/Created PDR/0/Local F-TEID/CHID");
-    // An edit takes the plain rule: it adds no member below what is not there
-    let mut edited = heartbeat.clone();
-    assert!(set(&mut edited, "/pfcp/Source IP Address/V4", true).is_err());
-    assert_eq!(edited, heartbeat);
 }
 
 /// oxirush-utils' `select_in`: "a misspelt name is not a member that is absent", also
@@ -754,42 +874,6 @@ fn a_field_of_either_form_has_one_rule() {
     }
 }
 
-/// What the paths know of a place prints the names of the message, of the tables and of
-/// the IE types, not their rows.
-#[test]
-fn a_shape_prints_its_names() {
-    use tree::Family;
-    let heartbeat = Message {
-        header: Header::node(1),
-        body: HeartbeatRequest::new(RecoveryTimeStamp::new(7)).into(),
-    };
-    let heartbeat = heartbeat.to_tree();
-    let paths = oxirush_pfcp::tree::Paths;
-    let message = paths.start(&heartbeat, true);
-    assert_eq!(
-        format!("{message:?}"),
-        r#"Shape(Message("PFCP Heartbeat Request"))"#
-    );
-    let ies = paths.member(&message, "ies", Some(&heartbeat["ies"]));
-    assert_eq!(format!("{ies:?}"), r#"Shape(Ies(["7.4.2.1-1"]))"#);
-    // The header is no table of IEs: its fields are scalars
-    let sequence = paths.member(&message, "Sequence Number", Some(&tree!(1)));
-    assert_eq!(format!("{sequence:?}"), "Shape(Below(Scalar))");
-    let stamp = &heartbeat["ies"]["Recovery Time Stamp"];
-    let value = paths.member(&ies, "Recovery Time Stamp", Some(stamp));
-    assert_eq!(
-        format!("{value:?}"),
-        r#"Shape(Value("Recovery Time Stamp"))"#
-    );
-    let addresses = paths.member(&ies, "Source IP Address", Some(&tree!([])));
-    assert_eq!(
-        format!("{addresses:?}"),
-        r#"Shape(List("Source IP Address"))"#
-    );
-    let nothing = paths.member(&value, "Bogus", None);
-    assert_eq!(format!("{nothing:?}"), "Shape(Nothing)");
-}
-
 /// What the tree of a message holds of the members of its values: at each value of an IE
 /// that is no grouped IE, each member that it has is a member of its IE type
 /// (`IeTypeInfo::members`), and each other member of its type selects nothing, but the one
@@ -879,23 +963,28 @@ fn values_hold(
                 assert_eq!(selected, Ok(wanted), "{path}");
             }
             // What the tree of each field that the value has holds below it is what the
-            // paths judge a field that a value lacks by (`tree::Below`): the entries of a
-            // list, the members of an object
+            // paths judge a field that a value lacks by: with the field taken out, each
+            // member of its object, and an entry of its list, selects nothing
             for (name, field) in entry.as_object().into_iter().flatten() {
+                let below: Vec<String> = match field {
+                    tree::Value::Array(_) => vec!["0".to_string()],
+                    tree::Value::Object(members) => members
+                        .keys()
+                        .map(|member| tree::escape(member).into_owned())
+                        .collect(),
+                    _ => continue,
+                };
                 let path = format!("{at}/{}", tree::escape(name));
-                let place = tree::places_in(&oxirush_pfcp::tree::Paths, message, &path).unwrap();
-                let below = format!("{:?}", place[0].shape());
-                match field {
-                    tree::Value::Array(_) => {
-                        assert!(below.starts_with("Shape(Below(List("), "{path}: {below}");
-                    }
-                    tree::Value::Object(members) => {
-                        for member in members.keys() {
-                            let named = format!("({member:?}, ");
-                            assert!(below.contains(&named), "{path}: {member} in {below}");
-                        }
-                    }
-                    _ => {}
+                let mut lacking = message.clone();
+                let plain = path.replacen("/pfcp", "/ies", 1);
+                tree::remove(&mut lacking, &plain).unwrap();
+                for below in below {
+                    let selected = select(&lacking, &format!("{path}/{below}"));
+                    assert_eq!(
+                        selected.map_err(|error| error.kind()),
+                        Ok(vec![]),
+                        "{path}/{below}"
+                    );
                 }
             }
         }
@@ -1840,21 +1929,6 @@ fn a_number_of_six_bits_in_a_tree() {
     let mapping = DscpToPpiMappingInformation::decode(&[0x01, 0x2e, 0xc1]).unwrap();
     let written = tree!({"PPI Value": 1, "DSCP Value": [46, {"value": 1, "Spare": 192}]});
     assert_eq!(tree::Tree::to_tree(&mapping), written);
-}
-
-/// A Number of six bits is, as a field of its own, its whole octet, which a Narrow parts
-/// into the number and the spare bits.
-#[test]
-fn a_number_of_six_bits_as_a_field() {
-    let mut octets: &[u8] = &[0x2e, 0xc1];
-    assert_eq!(Number::<6>::read(&mut octets), Some(Number(0x2e)));
-    assert_eq!(octets, [0xc1]);
-    assert_eq!(Number::<6>::read(&mut &[][..]), None);
-    let mut out = Vec::new();
-    Number::<6>(0xc1).write(&mut out);
-    assert_eq!(out, [0xc1]);
-    assert_eq!(Number::<6>(0x2e).size(), 1);
-    assert_eq!(Field::to_tree(&Number::<6>(46)), tree!(46));
 }
 
 /// Values that the crate once misread: each as its clause has it.

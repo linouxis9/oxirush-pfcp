@@ -349,16 +349,10 @@ one. To send IEs out of order, write the octets.
 
 ## Read and edit by path
 
-`tree::select` and `tree::set` take paths on the tree of a message: `/pfcp`
-stands for its IEs, a list has the positions of its entries, `*` stands for
-each, and names go in any case. A row that a message lacks, or a member that a
-value lacks of those that its tree may have (`IeTypeInfo::members`: its flags,
-its fields, `Spare`, `length`, `unknown octets`), selects nothing; a name that
-is none of them is an error, also below what a message lacks: a row, a flag or
-a field, of what the tree of the field may hold (`tree::Below`), and an entry
-past the end of a list. A field that its tree writes as a scalar or as an
-object, as a value with spare bits or not, takes the same names in either
-form: the member that the scalar is selects it.
+`tree::select` and `tree::set` take the same paths on the tree of a message:
+`/pfcp` stands for its IEs, a list has the positions of its entries, `*` stands
+for each, and names go in any case. What a message lacks selects nothing, and
+`set` adds it; a misspelt name is an error.
 
 ```rust
 use oxirush_pfcp::*;
