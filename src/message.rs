@@ -201,110 +201,9 @@ impl Message {
     /// of a combined SGW/PGW (§5.2.6), a message may have the IEs of any of them, and
     /// needs those that each of them needs.
     pub fn check(&self, interface: Interfaces) -> Vec<Deviation> {
-        let mut found = Vec::new();
-        let header = &self.header;
+        let mut found = self.header_deviations(interface);
         let message_type = self.body.message_type();
-        let node = is_node_related(message_type);
-        let known = !matches!(self.body, Body::Other { .. });
-        let path = "/header";
-        if header.version != 1 {
-            found.push(Deviation::new(
-                path,
-                "7.2.2.4.1",
-                DeviationKind::Rule("the version is not 1"),
-            ));
-        }
-        if let Some((field, _)) = header.overflow() {
-            let rule = match field {
-                "Version" => "a version of more than 3 bits",
-                "Spare" => "spare bits of octet 1 of more than 2 bits",
-                "Sequence Number" => "a sequence number of more than 24 bits",
-                "Message Priority" => "a message priority of more than 4 bits",
-                _ => "spare bits of the last octet of more than its bits",
-            };
-            found.push(Deviation::new(path, "7.2.2.1", DeviationKind::Rule(rule)));
-        }
-        // The last octet is spare, or its bits after the priority are (§7.2.2.3).
-        if header.spare != 0 || header.spare_last != 0 {
-            found.push(Deviation::new(path, "7.2.2.1", DeviationKind::SpareBits));
-        }
-        if known && node && header.seid.is_some() {
-            found.push(Deviation::new(
-                path,
-                "7.2.2.2",
-                DeviationKind::Rule("a node related message has the S flag"),
-            ));
-        }
-        if known && !node && header.seid.is_none() {
-            found.push(Deviation::new(
-                path,
-                "7.2.2.4.1",
-                DeviationKind::Rule("a session related message has no SEID"),
-            ));
-        }
-        if known && node && header.priority.is_some() {
-            found.push(Deviation::new(
-                path,
-                "7.2.2.2",
-                DeviationKind::Rule("a node related message has the MP flag"),
-            ));
-        }
-        if known && node && header.follow_on {
-            found.push(Deviation::new(
-                path,
-                "6.5",
-                DeviationKind::Rule("a node related message is bundled"),
-            ));
-        }
-        // An establishment has SEID 0, the peer's SEID being not known yet, but on N4mb,
-        // which a set of interfaces with it allows.
-        if message_type == 50
-            && header.seid.is_some_and(|seid| seid != 0)
-            && !interface.has(Interfaces::N4MB)
-        {
-            found.push(Deviation::new(
-                path,
-                "7.2.2.4.2",
-                DeviationKind::Rule("a Session Establishment Request of a SEID other than 0"),
-            ));
-        }
-        let cause = self.body.cause();
-        // SEID 0: an establishment, a report to another SMF, or an answer to a session
-        // that the node does not have or to a request that it rejects (§7.2.2.4.2).
-        let rejection = cause.is_some_and(|cause| cause.value() >= 64);
-        if header.seid == Some(0) && matches!(message_type, 52 | 54)
-            || header.seid == Some(0) && cause.is_some() && !rejection
-        {
-            found.push(Deviation::new(
-                path,
-                "7.2.2.4.2",
-                DeviationKind::Rule("SEID 0 where the peer's SEID is known"),
-            ));
-        }
-        // A Session Report Request of SEID 0 moves the session to another SMF of the set
-        // and carries the Old CP F-SEID of the previous one; one of a known SEID has none
-        // (§7.2.2.4.2 bullet 4, §5.22.2 bullet 4, Table 7.5.8.1-1).
-        if let Body::SessionReportRequest(request) = &self.body {
-            let old = request.old_cp_f_seid.is_some();
-            if header.seid == Some(0) && !old {
-                found.push(Deviation::new(
-                    path,
-                    "7.2.2.4.2",
-                    DeviationKind::Rule(
-                        "a Session Report Request of SEID 0 without the Old CP F-SEID",
-                    ),
-                ));
-            }
-            if header.seid.is_some_and(|seid| seid != 0) && old {
-                found.push(Deviation::new(
-                    path,
-                    "7.2.2.4.2",
-                    DeviationKind::Rule(
-                        "a Session Report Request of a SEID other than 0 with the Old CP F-SEID",
-                    ),
-                ));
-            }
-        }
+        let rejection = self.body.cause().is_some_and(|cause| cause.value() >= 64);
         // "This flag shall be set to "1" by the UP function, if the "Overload Control
         // Information" is included in the PFCP Session Establishment Response and the Cause
         // IE is set to a rejection cause value" (§8.2.76): AOCI, which the value of the IE
@@ -359,6 +258,65 @@ impl Message {
             ));
         }
         found
+    }
+
+    /// The deviations of the header (§7.2.2), and of the SEID, which the message type and
+    /// the Cause decide (§7.2.2.4.2), each a rule of a table: whether it is broken, where,
+    /// the clause and what.
+    fn header_deviations(&self, interface: Interfaces) -> Vec<Deviation> {
+        use DeviationKind::Rule;
+        let header = &self.header;
+        let message_type = self.body.message_type();
+        let known = !matches!(self.body, Body::Other { .. });
+        let node = known && is_node_related(message_type);
+        let session = known && !node;
+        let seid = header.seid;
+        let cause = self.body.cause();
+        // SEID 0: an establishment, a report to another SMF, or an answer to a session
+        // that the node does not have or to a request that it rejects (§7.2.2.4.2).
+        let rejection = cause.is_some_and(|cause| cause.value() >= 64);
+        let seid_zero_known = seid == Some(0) && matches!(message_type, 52 | 54)
+            || seid == Some(0) && cause.is_some() && !rejection;
+        // A Session Report Request of SEID 0 moves the session to another SMF of the set
+        // and carries the Old CP F-SEID of the previous one; one of a known SEID has none
+        // (§7.2.2.4.2 bullet 4, §5.22.2 bullet 4, Table 7.5.8.1-1).
+        let old = match &self.body {
+            Body::SessionReportRequest(request) => Some(request.old_cp_f_seid.is_some()),
+            _ => None,
+        };
+        let overflow = header.overflow().map(|(field, _)| match field {
+            "Version" => "a version of more than 3 bits",
+            "Spare" => "spare bits of octet 1 of more than 2 bits",
+            "Sequence Number" => "a sequence number of more than 24 bits",
+            "Message Priority" => "a message priority of more than 4 bits",
+            _ => "spare bits of the last octet of more than its bits",
+        });
+        let establishment = message_type == 50 && !interface.has(Interfaces::N4MB);
+        let spare = header.spare != 0 || header.spare_last != 0;
+        // Whether each rule is broken, where, its clause and what it is. An establishment
+        // has SEID 0, the peer's SEID being not known yet, but on N4mb. The last octet is
+        // spare, or its bits after the priority are (§7.2.2.3).
+        #[rustfmt::skip]
+        let rules = [
+            (header.version != 1, "/header", "7.2.2.4.1", Rule("the version is not 1")),
+            (overflow.is_some(), "/header", "7.2.2.1", Rule(overflow.unwrap_or_default())),
+            (spare, "/header", "7.2.2.1", DeviationKind::SpareBits),
+            (node && seid.is_some(), "/header", "7.2.2.2", Rule("a node related message has the S flag")),
+            (session && seid.is_none(), "/header", "7.2.2.4.1", Rule("a session related message has no SEID")),
+            (node && header.priority.is_some(), "/header", "7.2.2.2", Rule("a node related message has the MP flag")),
+            (node && header.follow_on, "/header", "6.5", Rule("a node related message is bundled")),
+            (establishment && seid.is_some_and(|seid| seid != 0), "/header", "7.2.2.4.2",
+                Rule("a Session Establishment Request of a SEID other than 0")),
+            (seid_zero_known, "/header", "7.2.2.4.2", Rule("SEID 0 where the peer's SEID is known")),
+            (seid == Some(0) && old == Some(false), "/header", "7.2.2.4.2",
+                Rule("a Session Report Request of SEID 0 without the Old CP F-SEID")),
+            (seid.is_some_and(|seid| seid != 0) && old == Some(true), "/header", "7.2.2.4.2",
+                Rule("a Session Report Request of a SEID other than 0 with the Old CP F-SEID")),
+        ];
+        let broken = rules.into_iter().filter(|(broken, ..)| *broken);
+        broken
+            .map(|(_, path, clause, kind)| Deviation::new(path, clause, kind))
+            .collect()
     }
 }
 
