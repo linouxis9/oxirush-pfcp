@@ -138,9 +138,10 @@ pub struct NodeConfig {
     /// Association Setup Requests, the session requests of a host of a session's F-SEID
     /// address, with SSET those of an SMF of the set, and on an SMF of SSET, or of MPAS
     /// and `other_entities`, a UP function's report of SEID 0 that hands a session over.
-    /// The requests of a session that the caller adopted, from its peer, are not counted
-    /// ([`Node::adopt_session`]). Beyond, one is dropped before it is decoded, as
-    /// [`Counters::refused`] counts, and its sender sends it again.
+    /// The session requests of a session that the caller adopted, from its peer, are not
+    /// counted ([`Node::adopt_session`]): a node related request with its SEID is. Beyond,
+    /// one is dropped before it is decoded, as [`Counters::refused`] counts, and its sender
+    /// sends it again.
     pub strangers: usize,
     /// The SMF sets that the node takes part in, as its CP or UP Function Features say
     /// them (§8.2.25, §8.2.58), which the caller writes in its Association Setup
@@ -1557,7 +1558,7 @@ impl Node {
             // A host without an association has only so many requests waiting; its
             // heartbeat, answered from the state, waits for nothing.
             if message_type != 1
-                && self.stranger(from, header.seid)
+                && self.stranger(from, message_type, header.seid)
                 && self.answers.strangers() >= self.config.strangers
             {
                 self.answers.refuse();
@@ -1872,7 +1873,7 @@ impl Node {
             }
             return;
         }
-        let stranger = self.stranger(from, message.header.seid);
+        let stranger = self.stranger(from, message_type, message.header.seid);
         if !self.answers.wait(
             (from, sequence),
             Digest::of(octets),
@@ -2093,16 +2094,17 @@ impl Node {
         self.association_of(peer).is_some() || self.sessions.adopts(peer)
     }
 
-    /// Whether a request of `from` to the SEID `seid`, which [`screen`](Self::screen) lets
-    /// through, waits in the room of [`NodeConfig::strangers`]: from a host without an
-    /// association, and of no adopted session, whose requests it lets through from its
-    /// peer alone.
-    fn stranger(&self, from: SocketAddr, seid: Option<u64>) -> bool {
-        self.association_of(from).is_none()
-            && !seid
+    /// Whether a request of `message_type` of `from` to the SEID `seid`, which
+    /// [`screen`](Self::screen) lets through, waits in the room of
+    /// [`NodeConfig::strangers`]: from a host without an association, and no session
+    /// request of an adopted session from its peer, which does not wait.
+    fn stranger(&self, from: SocketAddr, message_type: u8, seid: Option<u64>) -> bool {
+        let adopted = !is_node_related(message_type)
+            && seid
                 .and_then(|seid| self.sessions.resolve(seid))
                 .and_then(|seid| self.sessions.get(&seid))
-                .is_some_and(|session| session.adopted)
+                .is_some_and(|session| session.adopted && self.same_peer(session.peer, from));
+        self.association_of(from).is_none() && !adopted
     }
 
     /// The address of a peer as [`same_peer`](Self::same_peer) tells them apart.
