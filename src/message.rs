@@ -137,8 +137,8 @@ impl Message {
     /// each on its own (§6.5): a message that does not decode is the error of
     /// [`decode`](Self::decode) in its place, and the next one is decoded after it. The
     /// message without the FO flag is the rest of the datagram, which has no octets after
-    /// it (§7.6.3); after an FO flag, a datagram that has no octets left ends with
-    /// [`Error::TooShort`]. A Message Length that runs past the datagram ends it.
+    /// it (§7.6.3), and so is one whose FO flag says that another follows where the
+    /// datagram ends. A Message Length that runs past the datagram ends it.
     pub fn decode_datagram(octets: &[u8]) -> Vec<Result<Self, Error>> {
         datagram_parts(octets)
             .into_iter()
@@ -370,7 +370,8 @@ pub(crate) fn datagram_parts(mut octets: &[u8]) -> Vec<&[u8]> {
             return messages;
         };
         let end = 4 + usize::from(length);
-        let whole = header.follow_on && end <= octets.len() && end >= header.len();
+        // An FO flag where the datagram ends follows on to nothing (§7.2.1A).
+        let whole = header.follow_on && end < octets.len() && end >= header.len();
         let this = if whole { &octets[..end] } else { octets };
         messages.push(this);
         if !whole {

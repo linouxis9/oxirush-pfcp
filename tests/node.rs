@@ -1922,6 +1922,42 @@ fn an_adopted_peer_bundles_as_an_associated_one() {
     );
 }
 
+/// §7.2.1A: the FO flag of a message that ends its datagram follows on to nothing: the
+/// message is one on its own, which the node takes whether bundling was agreed or not,
+/// and a stranger's Heartbeat Request is answered.
+#[test]
+fn a_lone_message_with_the_fo_flag_is_one_message() {
+    let lone = |message: Message| {
+        let mut message = message;
+        message.header.follow_on = true;
+        message.encode().unwrap()
+    };
+    for agreed in [true, false] {
+        let (mut smf, mut upf) = if agreed {
+            bundling(at(0))
+        } else {
+            associated(at(0))
+        };
+        let (_, up_seid) = established(&mut smf, &mut upf, at(0));
+        let modification = Message {
+            header: Header::session(up_seid, 20),
+            body: SessionModificationRequest::default().into(),
+        };
+        upf.handle_datagram(at(1), SMF, &lone(modification));
+        let events = events(&mut upf);
+        assert_eq!(requests_of(&events), 1, "{events:?}");
+        assert_eq!(events.len(), 1, "{events:?}");
+    }
+    let mut upf = node(UPF, Function::Up);
+    upf.handle_datagram(at(0), OTHER, &lone(heartbeat()));
+    assert!(events(&mut upf).is_empty());
+    let answers: Vec<Message> = sent(&mut upf).iter().map(decoded).collect();
+    assert!(
+        matches!(&answers[..], [Message { body: Body::HeartbeatResponse(_), .. }]),
+        "{answers:?}"
+    );
+}
+
 /// §6.5: node related messages are not bundled, and a peer without an association has
 /// not agreed on bundling: what they bundle is discarded, and answered not at all.
 #[test]

@@ -1492,8 +1492,7 @@ fn bundled(message_type: u8, follow_on: bool, ies: &[u8]) -> Vec<u8> {
 
 /// §6.5, §7.2.1A, §7.6.3: each message of a datagram is decoded on its own; one that does
 /// not decode is an error in its place, and does not take the others with it. The last
-/// message is the rest of the datagram, and an FO flag on it says that a message follows
-/// that is not there.
+/// message is the rest of the datagram, whatever its FO flag says.
 #[test]
 fn each_message_of_a_datagram_on_its_own() {
     let heartbeat = Message {
@@ -1522,10 +1521,8 @@ fn each_message_of_a_datagram_on_its_own() {
         &Message::decode_datagram(&cut)[..],
         [Ok(_), Err(Error::TooShort { octets: 4 })]
     ));
-    assert!(matches!(
-        &Message::decode_datagram(&first)[..],
-        [Ok(_), Err(Error::TooShort { octets: 0 })]
-    ));
+    // An FO flag on the last message follows on to nothing
+    assert!(matches!(&Message::decode_datagram(&first)[..], [Ok(_)]));
     // An IE that runs past its message, then a message that decodes
     let broken = [
         bundled(52, true, &[0, 60, 0, 9, 0]),
