@@ -265,7 +265,7 @@ pub struct Inbound {
     /// Whether it said its priority, which the response then says too.
     pub prioritized: bool,
     /// The SEID of its header: the local SEID of its session when it came. Its answer goes
-    /// to that session, where it moved since, while it lasts.
+    /// to that session, wherever it moved since, while it lasts.
     pub seid: Option<u64>,
     /// The SEID of the peer's F-SEID, of an establishment.
     pub peer_seid: Option<u64>,
@@ -921,26 +921,22 @@ impl Node {
             || self.sessions.is_alias(seid)
     }
 
-    /// The local SEID of the session that a request of the node is of, while it is that
-    /// session: where it moved since, and not a session that took its SEID after it ended
-    /// (§6.3.3, Table 7.5.4.1-1 NOTE 2).
+    /// The local SEID of the session that a request of the node is of, by its mark, while
+    /// it lasts: wherever it moved since, and not a session that took its SEID after it
+    /// ended (§6.3.3, Table 7.5.4.1-1 NOTE 2).
     fn session_of(&self, request: &Outstanding) -> Option<u64> {
-        let local = self.sessions.resolve(request.local_seid?)?;
-        let session = self.sessions.get(&local)?;
-        (Some(session.mark) == request.mark).then_some(local)
+        self.sessions.of_mark(request.mark?)
     }
 
-    /// The local SEID of the session that a request of a peer is of, while it is that
-    /// session: where it moved since the request came, and not a session that took its SEID
+    /// The local SEID of the session that a request of a peer is of, by its mark, while it
+    /// lasts: wherever it moved since the request came, and not a session that took its SEID
     /// after it ended. A request that came of no session is of the one of its `seid`, which
     /// the caller sets to answer a handover ([`adopt_session`](Self::adopt_session)).
     fn answered_session(&self, request: &Inbound) -> Option<u64> {
-        let local = self.sessions.resolve(request.seid?)?;
-        let session = self.sessions.get(&local)?;
-        request
-            .mark
-            .is_none_or(|mark| mark == session.mark)
-            .then_some(local)
+        match request.mark {
+            Some(mark) => self.sessions.of_mark(mark),
+            None => self.sessions.resolve(request.seid?),
+        }
     }
 
     /// A request that ends without its response, or with a rejection: an establishment
@@ -2425,6 +2421,7 @@ impl Node {
                     .and_then(|local| self.sessions.remove(&local).map(|session| (local, session)));
                 match moved {
                     Some((local, session)) => {
+                        let mark = session.mark;
                         self.sessions.insert(new, session);
                         // The UP function may still send to the previous SEID, for longer
                         // than twice N1 x T1 (Table 7.5.4.1-1, NOTE 2).
@@ -2432,7 +2429,7 @@ impl Node {
                             .config
                             .t1
                             .saturating_mul(2 * (u32::from(self.config.n1) + 1));
-                        self.sessions.alias(local, new, now.saturating_add(window));
+                        self.sessions.alias(local, mark, now.saturating_add(window));
                     }
                     // A move of no session, or of one that ended meanwhile, frees its SEID.
                     None => self.abandon(request),

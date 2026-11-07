@@ -5192,6 +5192,118 @@ fn a_retransmission_of_a_held_request_is_an_event() {
     assert!(events(&mut upf).is_empty());
 }
 
+/// Move the SMF's session of `from` to the local SEID `to`, a move that the UPF accepts.
+fn move_session(smf: &mut Node, upf: &mut Node, from: u64, to: u64, now: Duration) {
+    let moved = FSeid {
+        v4: true,
+        seid: Some(to),
+        ipv4: Some(Ipv4Addr::new(10, 0, 0, 1)),
+        ..Default::default()
+    };
+    smf.session_request(
+        now,
+        from,
+        SessionModificationRequest::default().with_cp_f_seid(moved),
+    )
+    .unwrap();
+    pass(smf, upf, UPF, now);
+    answer_all(upf, now);
+    pass(upf, smf, SMF, now);
+    events(smf);
+    assert!(smf.session(to).is_some(), "the session moved to {to:#x}");
+}
+
+/// §5.18 and §7.2.2.4.2: the answer to a peer's request goes to its session for as long as
+/// the node keeps the request, also once the previous SEID of a move is forgotten. The SMF
+/// keeps requests for 60 s, longer than the 24 s of the previous SEID of a move; the UPF
+/// reports a session that it deleted, the session moves, and the SMF answers 30 s later: to
+/// the UPF's SEID, and the session ends where it went.
+#[test]
+fn an_answer_after_the_previous_seid_is_forgotten_goes_to_its_session() {
+    let smf_config = NodeConfig {
+        keep: Duration::from_secs(60),
+        ..config(SMF, Function::Cp)
+    };
+    let (mut smf, mut upf) = associated_as(smf_config, at(0));
+    let (cp_seid, up_seid) = established(&mut smf, &mut upf, at(0));
+    upf.session_request(at(1), up_seid, deleted_report())
+        .unwrap();
+    pass(&mut upf, &mut smf, SMF, at(1));
+    let (report, _) = request(&mut smf);
+    move_session(&mut smf, &mut upf, cp_seid, 0x77, at(1));
+    smf.handle_timeout(at(30));
+    smf.respond(at(30), &report, SessionReportResponse::new(accepted()))
+        .unwrap();
+    assert_eq!(decoded(&sent(&mut smf)[0]).header.seid, Some(up_seid));
+    assert!(
+        smf.session(0x77).is_none(),
+        "the session that the UPF deleted stays at its new SEID"
+    );
+}
+
+/// Table 7.5.4.1-1 NOTE 2: the session of a request is the same through any number of
+/// moves. The UPF reports a session that it deleted, and the session moves twice before
+/// the SMF answers: the answer goes to the UPF's SEID, and the session ends. A request of
+/// the UPF to the first SEID, within the time of the first move, is of the session too.
+#[test]
+fn an_answer_after_two_moves_goes_to_its_session() {
+    let (mut smf, mut upf) = associated(at(0));
+    let (cp_seid, up_seid) = established(&mut smf, &mut upf, at(0));
+    upf.session_request(at(1), up_seid, deleted_report())
+        .unwrap();
+    pass(&mut upf, &mut smf, SMF, at(1));
+    let (report, _) = request(&mut smf);
+    move_session(&mut smf, &mut upf, cp_seid, 0x77, at(1));
+    move_session(&mut smf, &mut upf, 0x77, 0x88, at(1));
+    // The UPF still sends to the first SEID (NOTE 2)
+    let earlier = Message {
+        header: Header::session(cp_seid, 77),
+        body: SessionReportRequest::new(ReportType {
+            dldr: true,
+            ..Default::default()
+        })
+        .into(),
+    };
+    smf.handle_datagram(at(2), UPF, &earlier.encode().unwrap());
+    let (inbound, _) = request(&mut smf);
+    assert_eq!(inbound.seid, Some(0x88));
+    smf.respond(at(2), &report, SessionReportResponse::new(accepted()))
+        .unwrap();
+    assert_eq!(decoded(&sent(&mut smf)[0]).header.seid, Some(up_seid));
+    assert!(
+        smf.session(0x88).is_none(),
+        "the session that the UPF deleted stays at its last SEID"
+    );
+}
+
+/// §6.3.3: the accepted response to a request of the node acts on its session through any
+/// number of moves: a deletion outstanding while the session moves twice ends it where it
+/// went.
+#[test]
+fn a_response_after_two_moves_acts_on_its_session() {
+    let (mut smf, mut upf) = associated(at(0));
+    let (cp_seid, _) = established(&mut smf, &mut upf, at(0));
+    smf.session_request(at(1), cp_seid, SessionDeletionRequest::default())
+        .unwrap();
+    let deletion = sent(&mut smf);
+    move_session(&mut smf, &mut upf, cp_seid, 0x77, at(1));
+    move_session(&mut smf, &mut upf, 0x77, 0x88, at(1));
+    for transmit in &deletion {
+        upf.handle_datagram(at(1), SMF, &transmit.octets);
+    }
+    answer_all(&mut upf, at(1));
+    pass(&mut upf, &mut smf, SMF, at(1));
+    let responses = events(&mut smf)
+        .into_iter()
+        .filter(|event| matches!(event, Event::Response { .. }))
+        .count();
+    assert_eq!(responses, 1);
+    assert!(
+        smf.session(0x88).is_none(),
+        "the deleted session stays at its last SEID"
+    );
+}
+
 trait IntoSocket {
     fn into_socket(self, port: u16) -> SocketAddr;
 }
