@@ -81,15 +81,17 @@ pub struct Session {
     pub(crate) mark: u64,
 }
 
-/// The sessions of the node by their local SEIDs, with the peer's SEID of each and the
-/// previous local SEIDs of the sessions that moved.
+/// The sessions of the node by their local SEIDs, with the peer's SEID and the mark of
+/// each, and the previous local SEIDs of the sessions that moved.
 #[derive(Debug, Default)]
 pub(crate) struct Sessions {
     by_local: BTreeMap<u64, Session>,
     /// (peer's SEID, local SEID) of each session that has a peer's SEID.
     by_peer: BTreeSet<(u64, u64)>,
-    /// A previous local SEID of a session, after a change of its CP F-SEID: to the new
-    /// one, until when.
+    /// The local SEID of each session by its mark, wherever it moved.
+    by_mark: BTreeMap<u64, u64>,
+    /// A previous local SEID of a session, after a change of its CP F-SEID: the mark of
+    /// the session, until when.
     aliases: BTreeMap<u64, (u64, Duration)>,
     aliasing: BTreeSet<(Duration, u64)>,
 }
@@ -111,12 +113,18 @@ impl Sessions {
         if let Some(seid) = session.peer_seid {
             self.by_peer.insert((seid, local));
         }
-        if let Some(old) = self.by_local.insert(local, session)
-            && let Some(seid) = old.peer_seid
-            && self.by_local[&local].peer_seid != Some(seid)
-        {
-            self.by_peer.remove(&(seid, local));
+        let mark = session.mark;
+        if let Some(old) = self.by_local.insert(local, session) {
+            if let Some(seid) = old.peer_seid
+                && self.by_local[&local].peer_seid != Some(seid)
+            {
+                self.by_peer.remove(&(seid, local));
+            }
+            if old.mark != mark && self.by_mark.get(&old.mark) == Some(&local) {
+                self.by_mark.remove(&old.mark);
+            }
         }
+        self.by_mark.insert(mark, local);
     }
 
     pub(crate) fn remove(&mut self, local: &u64) -> Option<Session> {
@@ -124,7 +132,15 @@ impl Sessions {
         if let Some(seid) = session.peer_seid {
             self.by_peer.remove(&(seid, *local));
         }
+        if self.by_mark.get(&session.mark) == Some(local) {
+            self.by_mark.remove(&session.mark);
+        }
         Some(session)
+    }
+
+    /// The local SEID of the session of `mark`, wherever it moved.
+    pub(crate) fn of_mark(&self, mark: u64) -> Option<u64> {
+        self.by_mark.get(&mark).copied()
     }
 
     /// Change where the messages of a session go, and the peer's SEID.
@@ -156,9 +172,9 @@ impl Sessions {
             .map(|(_, local)| *local)
     }
 
-    /// Keep `old` as a SEID of the session of `new` until `until`.
-    pub(crate) fn alias(&mut self, old: u64, new: u64, until: Duration) {
-        if let Some((_, before)) = self.aliases.insert(old, (new, until)) {
+    /// Keep `old` as a SEID of the session of `mark` until `until`, wherever it moves.
+    pub(crate) fn alias(&mut self, old: u64, mark: u64, until: Duration) {
+        if let Some((_, before)) = self.aliases.insert(old, (mark, until)) {
             self.aliasing.remove(&(before, old));
         }
         self.aliasing.insert((until, old));
@@ -169,15 +185,14 @@ impl Sessions {
     }
 
     /// The local SEID of the session of a SEID that a header has: its own, or the one it
-    /// moved to.
+    /// moved to since, through any number of moves.
     pub(crate) fn resolve(&self, seid: u64) -> Option<u64> {
         match self.by_local.contains_key(&seid) {
             true => Some(seid),
             false => self
                 .aliases
                 .get(&seid)
-                .map(|(new, _)| *new)
-                .filter(|new| self.by_local.contains_key(new)),
+                .and_then(|(mark, _)| self.of_mark(*mark)),
         }
     }
 
