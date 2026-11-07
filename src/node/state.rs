@@ -118,6 +118,10 @@ pub(crate) struct Sessions {
     request_port: Option<u16>,
     /// How many adopted sessions each peer has, as the node tells peers apart.
     adopted: BTreeMap<SocketAddr, usize>,
+    /// How many sessions each peer has, as the node tells peers apart, and the peers whose
+    /// last session ended since the node last took them.
+    by_address: BTreeMap<SocketAddr, usize>,
+    emptied: BTreeSet<SocketAddr>,
     /// The peers whose first adopted session began, or whose last ended, since the node
     /// last took them.
     flipped: BTreeSet<SocketAddr>,
@@ -159,6 +163,10 @@ impl Sessions {
             self.by_peer.insert((seid, local));
         }
         let mark = session.mark;
+        *self
+            .by_address
+            .entry(super::peer_key(self.request_port, session.peer))
+            .or_default() += 1;
         if session.adopted {
             let peer = super::peer_key(self.request_port, session.peer);
             let count = self.adopted.entry(peer).or_default();
@@ -189,9 +197,17 @@ impl Sessions {
         self.by_mark.insert(mark, local);
     }
 
-    /// Count a session that goes no more among the adopted sessions of its peer.
+    /// Count a session that goes no more among the sessions of its peer, and its adopted
+    /// sessions.
     fn unadopt(&mut self, session: &Session) {
         let peer = super::peer_key(self.request_port, session.peer);
+        if let Some(count) = self.by_address.get_mut(&peer) {
+            *count -= 1;
+            if *count == 0 {
+                self.by_address.remove(&peer);
+                self.emptied.insert(peer);
+            }
+        }
         if session.adopted
             && let Some(count) = self.adopted.get_mut(&peer)
         {
@@ -201,6 +217,17 @@ impl Sessions {
                 self.flipped.insert(peer);
             }
         }
+    }
+
+    /// Whether `peer`, as the node tells peers apart, has a session.
+    pub(crate) fn has(&self, peer: SocketAddr) -> bool {
+        self.by_address.contains_key(&peer)
+    }
+
+    /// The peers, as the node tells them apart, whose last session ended since the last
+    /// call.
+    pub(crate) fn emptied(&mut self) -> BTreeSet<SocketAddr> {
+        core::mem::take(&mut self.emptied)
     }
 
     /// Whether `peer` has an adopted session.

@@ -882,6 +882,95 @@ fn controls_of_a_peer_without_an_association_are_not_kept() {
         .unwrap();
 }
 
+/// What the node keeps of the load and overload of its peers is bounded by their sessions
+/// and associations: the overload of the address of a UP F-SEID goes with the last session
+/// of that address, even of an infinite Period of Validity, and the load and overload of a
+/// Node ID with its association.
+#[test]
+fn controls_go_with_the_sessions_and_the_association_that_set_them() {
+    let (mut smf, mut upf) = associated(at(0));
+    let infinite = Timer {
+        timer_unit: TimerUnit::Infinite,
+        timer_value: 1,
+        ..Default::default()
+    };
+    let overload = |aoci| {
+        let overload = OverloadControlInformation::new(
+            SequenceNumber::new(1),
+            Metric::new(Percent(50)),
+            infinite.clone(),
+        );
+        match aoci {
+            false => overload,
+            true => overload.with_overload_control_information_flags(OciFlags {
+                aoci: true,
+                ..Default::default()
+            }),
+        }
+    };
+    let addresses = [21, 22, 23].map(|last| Ipv4Addr::new(10, 0, 0, last));
+    let mut sessions = Vec::new();
+    for address in addresses {
+        let (cp_seid, up_seid) = established_on(&mut smf, &mut upf, at(0), address);
+        let report = SessionReportRequest::new(ReportType {
+            upir: true,
+            ..Default::default()
+        })
+        .with_overload_control_information(overload(false));
+        upf.session_request(at(1), up_seid, report).unwrap();
+        pass(&mut upf, &mut smf, SMF, at(1));
+        let (inbound, _) = request(&mut smf);
+        smf.respond(at(1), &inbound, SessionReportResponse::new(accepted()))
+            .unwrap();
+        sessions.push(cp_seid);
+    }
+    let kept = |smf: &Node| {
+        addresses
+            .iter()
+            .filter(|address| smf.overload_control(address.into_socket(8805)).is_some())
+            .count()
+    };
+    assert_eq!(kept(&smf), 3);
+    smf.end_session(sessions[0]);
+    assert_eq!(kept(&smf), 2);
+    smf.end_sessions_of(addresses[1].into_socket(8805));
+    smf.handle_timeout(at(2));
+    assert_eq!(kept(&smf), 1);
+    // The load and overload of the Node ID of the association
+    let (cp_seid, _) = established(&mut smf, &mut upf, at(2));
+    let response = with_load(1, 40).with_overload_control_information(overload(true));
+    modified(&mut smf, &mut upf, cp_seid, at(3), response);
+    assert!(smf.load_control(UPF).is_some() && smf.overload_control(UPF).is_some());
+    smf.end_association(UPF);
+    assert_eq!(kept(&smf), 0);
+    assert_eq!(
+        (smf.load_control(UPF), smf.overload_control(UPF)),
+        (None, None)
+    );
+    // A new association of the same Node ID starts without them
+    let setup = AssociationSetupRequest::new(node_id(SMF), RecoveryTimeStamp::new(1000));
+    let body = setup.into();
+    smf.request(
+        at(4),
+        UPF,
+        Message {
+            header: Header::node(0),
+            body,
+        },
+    )
+    .unwrap();
+    pass(&mut smf, &mut upf, UPF, at(4));
+    let (inbound, _) = request(&mut upf);
+    let response =
+        AssociationSetupResponse::new(node_id(UPF), accepted(), RecoveryTimeStamp::new(1000));
+    upf.respond(at(4), &inbound, response).unwrap();
+    pass(&mut upf, &mut smf, SMF, at(4));
+    assert_eq!(
+        (smf.load_control(UPF), smf.overload_control(UPF)),
+        (None, None)
+    );
+}
+
 /// §8.2.34: a Metric above 100 is read as 0: an Overload Reduction Metric of 200 throttles
 /// nothing, and a Load Metric of 250 is a load of 0.
 #[test]
