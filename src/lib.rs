@@ -35,7 +35,7 @@
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
 extern crate alloc;
-#[cfg(feature = "std")]
+#[cfg(feature = "endpoint")]
 extern crate std;
 
 mod check;

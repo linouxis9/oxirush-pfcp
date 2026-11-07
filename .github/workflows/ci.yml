@@ -23,10 +23,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      # Each set of features: all, the default (`std`), and none
+      # With every feature, and with none
       - run: cargo test --all-features
       - run: cargo test
-      - run: cargo test --no-default-features
       # The test of every sequence number reserved, which takes 2^24 of them, and the
       # one that times 70,000 heartbeats of new hosts
       - run: cargo test --release --all-features --test node -- --ignored no_sequence_number_left a_new_host_costs_the_same_once_the_stamps_fill_the_node
@@ -46,9 +45,9 @@ jobs:
         with:
           targets: ${{ matrix.target }}
       - uses: Swatinem/rust-cache@v2
-      - run: cargo build --target ${{ matrix.target }} --no-default-features
-      - run: cargo build --target ${{ matrix.target }} --no-default-features --features node
-      - run: cargo build --target ${{ matrix.target }} --no-default-features --features serde,node
+      - run: cargo build --target ${{ matrix.target }}
+      - run: cargo build --target ${{ matrix.target }} --features node
+      - run: cargo build --target ${{ matrix.target }} --features serde,node
 
   msrv:
     name: MSRV (1.88)
@@ -58,7 +57,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@1.88.0
       - uses: Swatinem/rust-cache@v2
       - run: cargo test --all-features
-      - run: cargo build --no-default-features --features node
+      - run: cargo build --features node
 
   lint:
     name: Format, Clippy and documentation

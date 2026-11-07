@@ -67,15 +67,13 @@ hex = "0.4" # for the examples of this page
 
 | Feature | Adds | Needs |
 | ------- | ---- | ----- |
-| `std`, the default | the standard library | |
 | `tree` | a message and its IEs as trees, read and edited by path | `oxirush-utils` with `tree` |
 | `serde` | `Serialize` and `Deserialize`, through the trees | `oxirush-utils` with `serde` |
 | `node` | `Node`, a PFCP entity without I/O | no dependency |
 | `endpoint` | `Endpoint`, a `Node` on a UDP socket | a Tokio runtime |
 
-`serde` turns on `tree`, and `endpoint` turns on `node` and `std`. Without
-its default features the crate is `no_std` and needs an allocator; so does
-`node`.
+`serde` turns on `tree`, and `endpoint` turns on `node`. The crate is `no_std`
+and needs an allocator, but with `endpoint`.
 
 The minimum supported Rust version is 1.88.
 

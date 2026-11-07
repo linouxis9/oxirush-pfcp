@@ -26,10 +26,8 @@ include = [
     "/LICENSE",
 ]
 
+# The crate is `no_std` and needs an allocator, but with `endpoint`.
 [features]
-default = ["std"]
-# The standard library. Without it the crate is `no_std` and needs an allocator.
-std = []
 # The tree of a message, its paths and its edits, on the engine of oxirush-utils.
 tree = ["oxirush-utils/tree"]
 # `Serialize` and `Deserialize` for a message and each of its IEs, through its tree.
@@ -38,7 +36,7 @@ serde = ["tree", "oxirush-utils/serde"]
 # overload control.
 node = []
 # A node on a Tokio UDP socket, run by a task of its own.
-endpoint = ["node", "std", "dep:tokio"]
+endpoint = ["node", "dep:tokio"]
 
 [dependencies]
 pastey = "0.2"
