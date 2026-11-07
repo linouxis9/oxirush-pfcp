@@ -27,8 +27,9 @@ jobs:
       - run: cargo test --all-features
       - run: cargo test
       - run: cargo test --no-default-features
-      # The test of every sequence number reserved, which takes 2^24 of them
-      - run: cargo test --release --all-features --test node -- --ignored no_sequence_number_left
+      # The test of every sequence number reserved, which takes 2^24 of them, and the
+      # one that times 70,000 heartbeats of new hosts
+      - run: cargo test --release --all-features --test node -- --ignored no_sequence_number_left a_new_host_costs_the_same_once_the_stamps_fill_the_node
 
   # Targets without the standard library: the crate and each set of features
   # that is `no_std` build there.

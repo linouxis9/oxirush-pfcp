@@ -2244,6 +2244,46 @@ fn no_sequence_number_left() {
     assert_eq!(decoded(&sent(&mut smf)[0]).header.sequence, given_back);
 }
 
+/// §6.2.2.2 and `NodeConfig::capacity`: a heartbeat of a new host, which the node answers
+/// from anyone, costs about the same once the Recovery Time Stamps of the hosts without an
+/// association fill the node as before, though each then evicts the oldest: not a walk of
+/// them all, nor of the peers that the node keeps the stamps of. Of the batches of a
+/// thousand new hosts before and after, the quickest of each. CI runs it, with `--ignored`.
+#[test]
+#[ignore = "times 70,000 heartbeats: run with --release"]
+fn a_new_host_costs_the_same_once_the_stamps_fill_the_node() {
+    let mut upf = Node::new(NodeConfig {
+        heartbeat: None,
+        ..NodeConfig::new(node_id(UPF), Function::Up, 1000)
+    });
+    let capacity = upf.config().capacity as u32;
+    let address = |n: u32| SocketAddr::new(Ipv4Addr::from(0x0b00_0000 + n).into(), 8805);
+    for n in 0..1000 {
+        upf.adopt_session(u64::from(n) + 1, address(capacity * 2 + n), 0x66)
+            .unwrap();
+    }
+    let beat = heartbeat().encode().unwrap();
+    let mut hosts = 0..;
+    let mut batch = |upf: &mut Node| {
+        let start = std::time::Instant::now();
+        for n in hosts.by_ref().take(1000) {
+            upf.handle_datagram(at(1), address(n), &beat);
+            while upf.poll_transmit().is_some() {}
+            while upf.poll_event().is_some() {}
+        }
+        start.elapsed()
+    };
+    for _ in 0..capacity / 1000 - 5 {
+        batch(&mut upf);
+    }
+    let before = (0..5).map(|_| batch(&mut upf)).min().unwrap();
+    let after = (0..5).map(|_| batch(&mut upf)).min().unwrap();
+    assert!(
+        after < before * 10,
+        "a thousand new hosts: {before:?} before the stamps fill the node, {after:?} after"
+    );
+}
+
 /// A sequence number reserved and given back is free again; one that was not reserved is
 /// not given back.
 #[test]
@@ -5581,6 +5621,48 @@ fn an_adopted_peer_keeps_its_recovery_time_stamp() {
             .iter()
             .any(|event| matches!(event, Event::PeerRestarted { peer: UPF, .. }))
     );
+}
+
+/// The Recovery Time Stamps that a flood of hosts without an association spares are
+/// those of the peers of an association or of an adopted session while they last: once
+/// the association is released, or the adopted session ends, the peer's stamp goes before
+/// the others, and a new one of it is no restart.
+#[test]
+fn the_stamps_that_a_flood_spares_follow_the_associations_and_adoptions() {
+    let (mut smf, _) = associated_as(
+        NodeConfig {
+            capacity: 2,
+            ..config(SMF, Function::Cp)
+        },
+        at(0),
+    );
+    smf.adopt_session(0x55, OTHER, 0x66).unwrap();
+    let beat = |smf: &mut Node, from: SocketAddr, stamp: u32| {
+        let request = Message {
+            header: Header::node(7),
+            body: HeartbeatRequest::new(RecoveryTimeStamp::new(stamp)).into(),
+        };
+        smf.handle_datagram(at(1), from, &request.encode().unwrap());
+        sent(smf);
+        events(smf)
+            .iter()
+            .any(|event| matches!(event, Event::PeerRestarted { peer, .. } if *peer == from))
+    };
+    let mut hosts = (10..).map(|host| Ipv4Addr::new(10, 0, 1, host).into_socket(8805));
+    let mut flood = |smf: &mut Node| {
+        for host in hosts.by_ref().take(4) {
+            beat(smf, host, 1000);
+        }
+    };
+    assert!(!beat(&mut smf, OTHER, 1000));
+    flood(&mut smf);
+    assert!(beat(&mut smf, UPF, 2000));
+    assert!(beat(&mut smf, OTHER, 2000));
+    assert!(smf.end_association(UPF));
+    assert!(smf.end_session(0x55).is_some());
+    flood(&mut smf);
+    assert!(!beat(&mut smf, UPF, 3000));
+    assert!(!beat(&mut smf, OTHER, 3000));
 }
 
 /// §5.22.3 bullet 6, and 4119cdf: an adoption gives no more to a host that it does not
