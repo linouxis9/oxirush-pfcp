@@ -882,39 +882,38 @@ impl Node {
             };
         }
         // The SEID of an establishment, even one of the caller's own, and the new SEID of a
-        // move, are theirs until they end.
+        // move, are theirs until they end: a session of a fresh mark, made once the request
+        // is sent, where none is.
         let held = match change {
             Change::Moves(new) => Some(new),
             _ => local_seid.filter(|_| establishment),
         };
+        let made = held
+            .filter(|seid| !self.sessions.contains_key(seid))
+            .map(|seid| (seid, self.mark()));
         // The session that the request is of, which its response acts on: that of an
         // establishment is the one that it holds.
         let mark = match local_seid.and_then(|seid| self.sessions.get(&seid)) {
             Some(session) => Some(session.mark),
-            None if establishment && local_seid.is_some() => Some(self.mark()),
-            None => None,
+            None => made.filter(|_| establishment).map(|(_, mark)| mark),
         };
         let id = self.send(now, to, message, false, local_seid, mark, change)?;
+        if let Some((seid, mark)) = made {
+            let node = self
+                .association_of(to)
+                .map(|association| association.key.clone())
+                .unwrap_or_default();
+            let session = Session {
+                peer: to,
+                peer_seid: None,
+                node,
+                reserved: false,
+                mark,
+                adopted: false,
+            };
+            self.sessions.insert(seid, session);
+        }
         if let Some(seid) = held {
-            if !self.sessions.contains_key(&seid) {
-                let node = self
-                    .association_of(to)
-                    .map(|association| association.key.clone())
-                    .unwrap_or_default();
-                let mark = match establishment {
-                    true => mark.expect("of the establishment"),
-                    false => self.mark(),
-                };
-                let session = Session {
-                    peer: to,
-                    peer_seid: None,
-                    node,
-                    reserved: false,
-                    mark,
-                    adopted: false,
-                };
-                self.sessions.insert(seid, session);
-            }
             self.sessions.reserve(seid, true);
         }
         Ok(id)

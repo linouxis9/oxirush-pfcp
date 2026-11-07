@@ -5602,6 +5602,40 @@ fn mpas_an_adopted_session_is_none_of_a_strangers() {
     assert_eq!(other.counters().refused, 1);
 }
 
+/// An establishment holds its session from when it is sent: another request of the
+/// session that ends without its response, cancelled here, leaves it, and the
+/// establishment's accepted response establishes it.
+#[test]
+fn a_request_that_ends_leaves_an_establishment_its_session() {
+    let (mut smf, mut upf) = associated(at(0));
+    let cp_seid = smf.new_session();
+    smf.request(at(0), UPF, establishment(cp_seid)).unwrap();
+    let modification = smf
+        .session_request(at(0), cp_seid, SessionModificationRequest::default())
+        .unwrap();
+    assert!(smf.cancel(at(0), modification));
+    let transmits = sent(&mut smf);
+    upf.handle_datagram(at(0), SMF, &transmits[0].octets);
+    let (inbound, _) = request(&mut upf);
+    let up_f_seid = FSeid {
+        v4: true,
+        seid: Some(0x99),
+        ipv4: Some(Ipv4Addr::new(10, 0, 0, 2)),
+        ..Default::default()
+    };
+    upf.respond(
+        at(0),
+        &inbound,
+        SessionEstablishmentResponse::new(node_id(UPF), accepted()).with_up_f_seid(up_f_seid),
+    )
+    .unwrap();
+    pass(&mut upf, &mut smf, SMF, at(0));
+    assert_eq!(
+        smf.session(cp_seid).and_then(|session| session.peer_seid),
+        Some(0x99)
+    );
+}
+
 trait IntoSocket {
     fn into_socket(self, port: u16) -> SocketAddr;
 }
