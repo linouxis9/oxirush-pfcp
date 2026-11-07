@@ -64,12 +64,6 @@ impl Octets {
         }
     }
 
-    /// The octets of a value of a decoded message.
-    #[inline]
-    pub(crate) fn wire(octets: &[u8]) -> Self {
-        Self::copied(octets)
-    }
-
     /// The octets as a slice.
     #[inline]
     pub fn as_slice(&self) -> &[u8] {

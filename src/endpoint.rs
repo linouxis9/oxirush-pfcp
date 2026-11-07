@@ -383,29 +383,16 @@ impl Endpoint {
         self.handle.clone()
     }
 
-    /// The address of the socket.
-    pub fn local_addr(&self) -> SocketAddr {
-        self.handle.local
-    }
-
-    /// What the endpoint dropped and sent.
-    pub fn statistics(&self) -> Statistics {
-        self.handle.statistics.snapshot()
-    }
-
     /// The next request of a peer: `None` once the endpoint has ended.
     pub async fn incoming(&mut self) -> Option<Incoming> {
         self.incoming.recv().await
     }
 
-    /// The next other event: associations, restarts, retransmissions, violations.
+    /// The next other event: associations, restarts, retransmissions, violations. A
+    /// caller selects over it as over [`incoming`](Self::incoming): an event that it
+    /// does not take stays queued.
     pub async fn event(&mut self) -> Option<Event> {
         self.events.recv().await
-    }
-
-    /// The receiver of the other events, for a caller that selects over it.
-    pub fn events(&mut self) -> &mut mpsc::Receiver<Event> {
-        &mut self.events
     }
 }
 

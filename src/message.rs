@@ -152,8 +152,8 @@ impl Message {
         })?;
         let end = 4 + usize::from(length);
         let Some(content) = octets
-            .get(header.len()..end)
-            .filter(|_| end >= header.len())
+            .get(header.encoded_len()..end)
+            .filter(|_| end >= header.encoded_len())
         else {
             return Err(Error::MessageLength {
                 header,
@@ -180,7 +180,7 @@ impl Message {
     /// for its Length ([`Error::TooLong`], [`Error::MessageTooLong`]).
     pub fn encode(&self) -> Result<Vec<u8>, Error> {
         // The IEs after room for the header, which their length then completes.
-        let header = self.header.len();
+        let header = self.header.encoded_len();
         let expected = self.body.encoded_len();
         let mut out = Vec::with_capacity(header + expected);
         out.resize(header, 0);
@@ -339,7 +339,7 @@ pub(crate) fn datagram_parts(mut octets: &[u8]) -> Vec<&[u8]> {
         };
         let end = 4 + usize::from(length);
         // An FO flag where the datagram ends follows on to nothing (§7.2.1A).
-        let whole = header.follow_on && end < octets.len() && end >= header.len();
+        let whole = header.follow_on && end < octets.len() && end >= header.encoded_len();
         let this = if whole { &octets[..end] } else { octets };
         messages.push(this);
         if !whole {

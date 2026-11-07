@@ -198,7 +198,7 @@ macro_rules! pfcp_layout {
                     $( $flag, )*
                     spare: first & !Self::FLAGS,
                     $( $field, )*
-                    extra: crate::octets::Octets::wire(rest),
+                    extra: crate::octets::Octets::copied(rest),
                 })
             }
 
@@ -503,7 +503,7 @@ macro_rules! pfcp_bits {
                     $( $field: pfcp_bits!(@read $width [$($kind)? $(+ $octet2 $low2 $width2)?] at, $octet, $low), )*
                     spare,
                     present: present as u8,
-                    extra: crate::octets::Octets::wire(&octets[present..]),
+                    extra: crate::octets::Octets::copied(&octets[present..]),
                 })
             }
 
@@ -761,7 +761,7 @@ macro_rules! pfcp_messages {
                         crate::table::decode_scope_sized(&mut *body, octets, true)?;
                         Self::$ty(body)
                     } )*
-                    other => Self::Other { message_type: other, octets: crate::octets::Octets::wire(octets) },
+                    other => Self::Other { message_type: other, octets: crate::octets::Octets::copied(octets) },
                 })
             }
 

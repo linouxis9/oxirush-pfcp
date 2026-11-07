@@ -56,7 +56,7 @@ fuzz_target!(|octets: &[u8]| {
     assert_eq!(back.to_tree(), tree);
     let encoded = back.encode().expect("a tree's message encodes");
     assert_eq!(Message::decode(&encoded).expect("its octets decode").to_tree(), tree);
-    let header = message.header.len();
+    let header = message.header.encoded_len();
     assert_eq!(octets[..header], encoded[..header], "the header");
     assert!(scope(&octets[header..]) == scope(&encoded[header..]), "the tree changed the IEs:\n{}\n{}", hex(octets), hex(&encoded));
 });

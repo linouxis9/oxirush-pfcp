@@ -1004,7 +1004,7 @@ impl<const N: u16> IeType for Raw<N> {
 
 impl<const N: u16> Codec for Raw<N> {
     fn decode(octets: &[u8]) -> Option<Self> {
-        Some(Self(Octets::wire(octets)))
+        Some(Self(Octets::copied(octets)))
     }
     fn encode(&self, out: &mut Vec<u8>) -> Result<(), Error> {
         out.extend_from_slice(&self.0);
@@ -1072,7 +1072,7 @@ macro_rules! pfcp_number {
         impl Codec for $ty {
             fn decode(mut octets: &[u8]) -> Option<Self> {
                 let value = Field::read(&mut octets)?;
-                Some(Self { value, extra: Octets::wire(octets) })
+                Some(Self { value, extra: Octets::copied(octets) })
             }
             fn encode(&self, out: &mut Vec<u8>) -> Result<(), Error> {
                 Field::write(&self.value, out);
@@ -1267,8 +1267,8 @@ impl Codec for NodeId {
         Some(match (first, rest.len()) {
             (0, 4) => Self::Ipv4(Ipv4Addr::from(<[u8; 4]>::try_from(rest).ok()?)),
             (1, 16) => Self::Ipv6(Ipv6Addr::from(<[u8; 16]>::try_from(rest).ok()?)),
-            (2, 1..) => Self::Fqdn(Octets::wire(rest)),
-            _ => Self::Other(first, Octets::wire(rest)),
+            (2, 1..) => Self::Fqdn(Octets::copied(rest)),
+            _ => Self::Other(first, Octets::copied(rest)),
         })
     }
     fn encode(&self, out: &mut Vec<u8>) -> Result<(), Error> {
@@ -1437,7 +1437,7 @@ impl Field for Fqdn {
     const BELOW: &'static crate::tree::Below =
         &crate::tree::Below::Object(None, &[("octets", &crate::tree::Below::Scalar)]);
     fn read(octets: &mut &[u8]) -> Option<Self> {
-        Some(Self(Octets::wire(core::mem::take(octets))))
+        Some(Self(Octets::copied(core::mem::take(octets))))
     }
     fn write(&self, out: &mut Vec<u8>) {
         out.extend_from_slice(&self.0);
@@ -1661,7 +1661,7 @@ impl NetworkInstance {
 
 impl Codec for NetworkInstance {
     fn decode(octets: &[u8]) -> Option<Self> {
-        Some(Self(Octets::wire(octets)))
+        Some(Self(Octets::copied(octets)))
     }
     fn encode(&self, out: &mut Vec<u8>) -> Result<(), Error> {
         out.extend_from_slice(&self.0);
@@ -1726,7 +1726,7 @@ macro_rules! pfcp_fields {
         impl Codec for $ty {
             fn decode(mut octets: &[u8]) -> Option<Self> {
                 $( let $field = <$kind as Field>::read(&mut octets)?; )*
-                Some(Self { $($field,)* extra: Octets::wire(octets) })
+                Some(Self { $($field,)* extra: Octets::copied(octets) })
             }
             fn encode(&self, out: &mut Vec<u8>) -> Result<(), Error> {
                 $(
@@ -1994,12 +1994,12 @@ listed_value!(
 impl<const N: u16> crate::ie::Listed for Raw<N> {
     type Slot = Option<Self>;
     fn decode_slot(slot: &mut Self::Slot, octets: &[u8]) -> bool {
-        *slot = Some(Self(Octets::wire(octets)));
+        *slot = Some(Self(Octets::copied(octets)));
         true
     }
     #[inline]
     fn decode_push(list: &mut Vec<Self>, octets: &[u8]) -> bool {
-        list.push(Self(Octets::wire(octets)));
+        list.push(Self(Octets::copied(octets)));
         true
     }
 }
@@ -2027,7 +2027,7 @@ macro_rules! pfcp_octets {
 
         impl Codec for $ty {
             fn decode(octets: &[u8]) -> Option<Self> {
-                Some(Self(Octets::wire(octets)))
+                Some(Self(Octets::copied(octets)))
             }
             fn encode(&self, out: &mut Vec<u8>) -> Result<(), Error> {
                 out.extend_from_slice(&self.0);

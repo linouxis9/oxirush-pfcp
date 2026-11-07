@@ -73,17 +73,12 @@ impl Header {
         }
     }
 
-    /// The length of the header on the wire.
-    pub fn len(&self) -> usize {
+    /// How many octets the header has on the wire: 8, or 16 with a SEID.
+    pub fn encoded_len(&self) -> usize {
         match self.seid {
             Some(_) => SESSION_HEADER,
             None => NODE_HEADER,
         }
-    }
-
-    /// Never empty: a header has at least eight octets.
-    pub fn is_empty(&self) -> bool {
-        false
     }
 
     /// Write the header of a message of `message_type` whose IEs have `body` octets, at
@@ -134,12 +129,12 @@ impl Header {
             | u8::from(self.seid.is_some());
         let length = match self.length {
             Some(length) => length,
-            None => {
-                u16::try_from(self.len() - 4 + body).map_err(|_| crate::Error::MessageTooLong {
+            None => u16::try_from(self.encoded_len() - 4 + body).map_err(|_| {
+                crate::Error::MessageTooLong {
                     message_type,
-                    length: self.len() - 4 + body,
-                })?
-            }
+                    length: self.encoded_len() - 4 + body,
+                }
+            })?,
         };
         let mut octets = [0; SESSION_HEADER];
         octets[0] = flags;

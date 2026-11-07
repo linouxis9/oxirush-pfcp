@@ -47,7 +47,7 @@ async fn an_smf_and_a_upf_set_up_an_association_and_a_session() {
     let smf_endpoint = Endpoint::bind(ANY, config(Function::Cp)).await.unwrap();
     let smf = smf_endpoint.handle();
     let mut upf = Endpoint::bind(ANY, config(Function::Up)).await.unwrap();
-    let upf_address = upf.local_addr();
+    let upf_address = upf.handle().local_addr();
     let upf_handle = upf.handle();
 
     // The UPF answers what comes
@@ -131,7 +131,7 @@ async fn an_smf_and_a_upf_set_up_an_association_and_a_session() {
     .unwrap();
     assert_eq!(response.header.seid, Some(seid), "to the SMF's SEID");
     let upf = within(answering).await.unwrap();
-    assert_eq!(upf.statistics().incoming_dropped, 0);
+    assert_eq!(upf.handle().statistics().incoming_dropped, 0);
 }
 
 /// Poll a future once, and drop it: a caller that cancels it before the task of the
@@ -185,7 +185,7 @@ async fn answer(handle: &Handle, incoming: Incoming) {
 async fn both_ways_at_once() {
     let mut smf = Endpoint::bind(ANY, config(Function::Cp)).await.unwrap();
     let mut upf = Endpoint::bind(ANY, config(Function::Up)).await.unwrap();
-    let (smf_address, upf_address) = (smf.local_addr(), upf.local_addr());
+    let (smf_address, upf_address) = (smf.handle().local_addr(), upf.handle().local_addr());
     let node_id = NodeId::Ipv4(Ipv4Addr::LOCALHOST);
     let (smf_handle, upf_handle) = (smf.handle(), upf.handle());
     let setup = AssociationSetupRequest::new(node_id.clone(), RecoveryTimeStamp::new(7));
@@ -313,7 +313,9 @@ async fn both_ways_at_once() {
 async fn a_probe_answers_twice() {
     let mut upf = Endpoint::bind(ANY, config(Function::Up)).await.unwrap();
     let peer = tokio::net::UdpSocket::bind(ANY).await.unwrap();
-    peer.send_to(&setup(4), upf.local_addr()).await.unwrap();
+    peer.send_to(&setup(4), upf.handle().local_addr())
+        .await
+        .unwrap();
     let mut incoming = upf.incoming().await.unwrap();
     let answer = Message {
         header: Header::node(4),
@@ -375,7 +377,7 @@ async fn the_events_of_a_request_sent_with_the_node() {
     let now = smf.handle().with(|_, now| now).await.unwrap();
     assert!(now >= Duration::from_millis(20), "{now:?}");
     for (to, answered) in [
-        (upf.local_addr(), true),
+        (upf.handle().local_addr(), true),
         (silent.local_addr().unwrap(), false),
     ] {
         let heartbeat = Message {
@@ -423,12 +425,18 @@ async fn a_request_dropped_for_a_full_queue_comes_again() {
         .await
         .unwrap();
     let peer = tokio::net::UdpSocket::bind(ANY).await.unwrap();
-    peer.send_to(&setup(1), upf.local_addr()).await.unwrap();
-    peer.send_to(&setup(2), upf.local_addr()).await.unwrap();
+    peer.send_to(&setup(1), upf.handle().local_addr())
+        .await
+        .unwrap();
+    peer.send_to(&setup(2), upf.handle().local_addr())
+        .await
+        .unwrap();
     tokio::time::sleep(Duration::from_millis(100)).await;
-    assert_eq!(upf.statistics().incoming_dropped, 1);
+    assert_eq!(upf.handle().statistics().incoming_dropped, 1);
     assert_eq!(upf.incoming().await.unwrap().request.sequence, 1);
-    peer.send_to(&setup(2), upf.local_addr()).await.unwrap();
+    peer.send_to(&setup(2), upf.handle().local_addr())
+        .await
+        .unwrap();
     let second = tokio::time::timeout(Duration::from_millis(500), upf.incoming())
         .await
         .expect("the retransmission")
@@ -462,9 +470,13 @@ async fn a_request_refused_by_a_full_node_is_counted() {
     };
     let mut upf = Endpoint::bind(ANY, upf_config).await.unwrap();
     let peer = tokio::net::UdpSocket::bind(ANY).await.unwrap();
-    peer.send_to(&setup(1), upf.local_addr()).await.unwrap();
+    peer.send_to(&setup(1), upf.handle().local_addr())
+        .await
+        .unwrap();
     let first = upf.incoming().await.unwrap();
-    peer.send_to(&setup(2), upf.local_addr()).await.unwrap();
+    peer.send_to(&setup(2), upf.handle().local_addr())
+        .await
+        .unwrap();
     tokio::time::sleep(Duration::from_millis(100)).await;
     let counters = upf.handle().with(|node, _| node.counters()).await.unwrap();
     assert_eq!((counters.refused, counters.evicted), (1, 0));
@@ -477,9 +489,13 @@ async fn a_request_refused_by_a_full_node_is_counted() {
 async fn a_dropped_incoming_is_forgotten() {
     let mut upf = Endpoint::bind(ANY, config(Function::Up)).await.unwrap();
     let peer = tokio::net::UdpSocket::bind(ANY).await.unwrap();
-    peer.send_to(&setup(9), upf.local_addr()).await.unwrap();
+    peer.send_to(&setup(9), upf.handle().local_addr())
+        .await
+        .unwrap();
     drop(upf.incoming().await.unwrap());
-    peer.send_to(&setup(9), upf.local_addr()).await.unwrap();
+    peer.send_to(&setup(9), upf.handle().local_addr())
+        .await
+        .unwrap();
     let again = tokio::time::timeout(Duration::from_millis(500), upf.incoming())
         .await
         .expect("the retransmission, as a new request")
@@ -509,13 +525,17 @@ async fn an_answer_in_vain_leaves_its_request_unanswered() {
             RecoveryTimeStamp::new(7),
         )
     };
-    peer.send_to(&setup(1), upf.local_addr()).await.unwrap();
+    peer.send_to(&setup(1), upf.handle().local_addr())
+        .await
+        .unwrap();
     let incoming = upf.incoming().await.unwrap();
     // A command that fills the queue, which the task has not taken yet, and the answer,
     // which waits for room, cancelled
     assert!(once(handle.with(|node, _| node.counters())).await.is_none());
     assert!(once(incoming.respond(answer())).await.is_none());
-    peer.send_to(&setup(1), upf.local_addr()).await.unwrap();
+    peer.send_to(&setup(1), upf.handle().local_addr())
+        .await
+        .unwrap();
     let mut again = tokio::time::timeout(Duration::from_millis(500), upf.incoming())
         .await
         .expect("the retransmission, as a request")
@@ -531,7 +551,9 @@ async fn an_answer_in_vain_leaves_its_request_unanswered() {
     };
     assert!(again.respond_message(broken, Delivery::Send).await.is_err());
     drop(again);
-    peer.send_to(&setup(1), upf.local_addr()).await.unwrap();
+    peer.send_to(&setup(1), upf.handle().local_addr())
+        .await
+        .unwrap();
     let last = tokio::time::timeout(Duration::from_millis(500), upf.incoming())
         .await
         .expect("the retransmission, again")
@@ -545,7 +567,9 @@ async fn an_answer_in_vain_leaves_its_request_unanswered() {
 async fn an_answer_that_does_not_encode_is_an_error() {
     let mut upf = Endpoint::bind(ANY, config(Function::Up)).await.unwrap();
     let peer = tokio::net::UdpSocket::bind(ANY).await.unwrap();
-    peer.send_to(&setup(5), upf.local_addr()).await.unwrap();
+    peer.send_to(&setup(5), upf.handle().local_addr())
+        .await
+        .unwrap();
     let incoming = upf.incoming().await.unwrap();
     let broken = AlternativeSmfIpAddress {
         v4: true,
@@ -561,7 +585,9 @@ async fn an_answer_that_does_not_encode_is_an_error() {
         incoming.respond(response).await,
         Err(EndpointError::Node(NodeError::Encode(_)))
     ));
-    peer.send_to(&setup(6), upf.local_addr()).await.unwrap();
+    peer.send_to(&setup(6), upf.handle().local_addr())
+        .await
+        .unwrap();
     let incoming = upf.incoming().await.unwrap();
     let wrong = HeartbeatResponse::new(RecoveryTimeStamp::new(7));
     assert_eq!(
@@ -584,7 +610,7 @@ async fn a_heartbeat_of_never() {
     .unwrap();
     let smf = smf_endpoint.handle();
     let mut upf = Endpoint::bind(ANY, config(Function::Up)).await.unwrap();
-    let upf_address = upf.local_addr();
+    let upf_address = upf.handle().local_addr();
     let answering = tokio::spawn(async move {
         for _ in 0..2 {
             let incoming = upf.incoming().await.unwrap();
@@ -687,7 +713,7 @@ async fn a_request_dropped_before_the_task_takes_it_is_cancelled() {
 #[tokio::test]
 async fn close_frees_the_socket() {
     let mut upf = Endpoint::bind(ANY, config(Function::Up)).await.unwrap();
-    let address = upf.local_addr();
+    let address = upf.handle().local_addr();
     let peer = tokio::net::UdpSocket::bind(ANY).await.unwrap();
     peer.send_to(&setup(5), address).await.unwrap();
     let held = upf.incoming().await.unwrap();
@@ -741,9 +767,12 @@ async fn an_entity_of_the_smf_takes_a_session_over() {
         uisr: true,
         ..Default::default()
     };
-    upf.send_to(&report(0, 9, handover, Some(old)), smf.local_addr())
-        .await
-        .unwrap();
+    upf.send_to(
+        &report(0, 9, handover, Some(old)),
+        smf.handle().local_addr(),
+    )
+    .await
+    .unwrap();
     let mut incoming = within(smf.incoming()).await.unwrap();
     assert!(incoming.request.stranger);
     // The caller takes the session over, with the UP function's SEID that the SMF knows, at
@@ -776,9 +805,12 @@ async fn an_entity_of_the_smf_takes_a_session_over() {
         dldr: true,
         ..Default::default()
     };
-    upf.send_to(&report(local, 10, downlink, None), smf.local_addr())
-        .await
-        .unwrap();
+    upf.send_to(
+        &report(local, 10, downlink, None),
+        smf.handle().local_addr(),
+    )
+    .await
+    .unwrap();
     let incoming = within(smf.incoming()).await.unwrap();
     assert_eq!(incoming.request.seid, Some(local));
     // The entity's modification goes to the UP function
@@ -798,7 +830,7 @@ async fn an_entity_of_the_smf_takes_a_session_over() {
         header: Header::session(local, request.header.sequence),
         body: SessionModificationResponse::new(accepted()).into(),
     };
-    upf.send_to(&response.encode().unwrap(), smf.local_addr())
+    upf.send_to(&response.encode().unwrap(), smf.handle().local_addr())
         .await
         .unwrap();
     let response = within(modification).await.unwrap().unwrap();
@@ -819,7 +851,9 @@ async fn queues_of_no_entry_hold_one() {
         .await
         .unwrap();
     let peer = tokio::net::UdpSocket::bind(ANY).await.unwrap();
-    peer.send_to(&setup(1), upf.local_addr()).await.unwrap();
+    peer.send_to(&setup(1), upf.handle().local_addr())
+        .await
+        .unwrap();
     let incoming = within(upf.incoming()).await.unwrap();
     assert_eq!(incoming.request.sequence, 1);
     assert!(

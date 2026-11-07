@@ -774,7 +774,7 @@ macro_rules! pfcp_secret {
 
         impl Codec for $ty {
             fn decode(octets: &[u8]) -> Option<Self> {
-                Some(Self(Octets::wire(octets)))
+                Some(Self(Octets::copied(octets)))
             }
             fn encode(&self, out: &mut Vec<u8>) -> Result<(), Error> {
                 out.extend_from_slice(&self.0);
@@ -951,7 +951,7 @@ impl Codec for FqCsid {
             node_address: address.to_vec(),
             csids,
             node_type,
-            extra: Octets::wire(rest),
+            extra: Octets::copied(rest),
         })
     }
     // A reserved Node-ID Type has a Node-Address of no length that the clause says: the
@@ -1158,7 +1158,7 @@ macro_rules! mac_addresses {
                 }
                 let c_tag = if rest.is_empty() { None } else { Some(Lv8::read(&mut rest)?) };
                 let s_tag = if rest.is_empty() { None } else { Some(Lv8::read(&mut rest)?) };
-                Some(Self { mac_addresses, c_tag, s_tag, extra: Octets::wire(rest) })
+                Some(Self { mac_addresses, c_tag, s_tag, extra: Octets::copied(rest) })
             }
             fn encode(&self, out: &mut Vec<u8>) -> Result<(), Error> {
                 if self.mac_addresses.len() > 255 || (self.s_tag.is_some() && self.c_tag.is_none()) {

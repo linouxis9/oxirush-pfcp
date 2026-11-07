@@ -85,8 +85,8 @@ pub fn message_ies(octets: &[u8]) -> Result<(Header, u8, Ies<'_>), Error> {
         octets: octets.len(),
     })?;
     let end = 4 + usize::from(length);
-    match octets.get(header.len()..end) {
-        Some(content) if end >= header.len() => Ok((header, message_type, ies(content))),
+    match octets.get(header.encoded_len()..end) {
+        Some(content) if end >= header.encoded_len() => Ok((header, message_type, ies(content))),
         _ => Err(Error::MessageLength {
             header,
             message_type,

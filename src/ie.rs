@@ -254,13 +254,13 @@ pub(crate) fn raw(ie_type: u16, body: &[u8]) -> RawIe {
             ie_type,
             enterprise_id: Some(u16::from_be_bytes([*high, *low])),
             length: None,
-            octets: Octets::wire(rest),
+            octets: Octets::copied(rest),
         },
         _ => RawIe {
             ie_type,
             enterprise_id: None,
             length: None,
-            octets: Octets::wire(body),
+            octets: Octets::copied(body),
         },
     }
 }
