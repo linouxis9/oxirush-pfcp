@@ -616,13 +616,14 @@ impl Body {
 }
 
 #[cfg(feature = "tree")]
-mod forms {
+pub(crate) mod forms {
     use oxirush_utils::tree::{self, Members, Reading, Refused, Tree, Value};
 
     use super::{Body, Message};
     use crate::header::Header;
 
-    const NAMES: &[&str] = &[
+    /// The members that the tree of a message may have.
+    pub(crate) const NAMES: &[&str] = &[
         "message",
         "Version",
         "Spare",
