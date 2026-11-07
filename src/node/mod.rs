@@ -27,9 +27,8 @@
 //!   number, its peer and its type, and answers a retransmitted request with the response
 //!   that it gave, byte for byte, telling its caller ([`Event::Retransmission`]).
 //! - **Heartbeat (§6.2.2).** It answers each Heartbeat Request, even from an unknown
-//!   peer, sends its own to the associated peers, and to the peer of a session adopted
-//!   without an association ([`Node::adopt_session`]), and says when a peer stops
-//!   answering or restarts.
+//!   peer, sends its own to the associated peers, and says when a peer stops answering or
+//!   restarts.
 //! - **Associations (§6.2.6 to §6.2.8).** It keeps the associations that a successful
 //!   setup makes, an update changes and a release ends, with the sessions of each.
 //! - **Sessions.** It gives the local SEIDs, keeps the peer's SEID of each session,
@@ -46,20 +45,20 @@
 //! - **Message priority (§6.2.4.5).** A response has the priority of its request, a
 //!   request without one the default priority, and the highest priorities are sent first.
 //! - **Bundling (§6.5).** It takes each message of a datagram that a peer bundles on its
-//!   own, when both announced BUNDL ([`NodeConfig::bundling`]), and discards a node related
-//!   one, and one of a session whose F-SEID of the node has another address than the
-//!   bundle's.
+//!   own, when both announced BUNDL in their association messages, and discards a node
+//!   related one, and one of a session whose F-SEID of the node has another address than
+//!   the bundle's.
 //! - **What a peer does wrong** is an [`Event::Violation`]: the node does what the clause
 //!   says (discards a duplicate response, answers an unknown session), and reports it.
 //!
 //! What it answers itself is what the clauses leave no choice in: a heartbeat; a
 //! request of the wrong direction, discarded; one that does not decode, "Invalid
 //! length"; an establishment whose CP F-SEID has SEID 0, "Mandatory IE incorrect"; a
-//! session or node request of a peer without an association, or of a session
-//! that the peer does not have, as above; and, but with the [`SmfSet`] of the node, the
-//! requests that §5.22 lets come from another SMF of a set, which it otherwise takes as
-//! those of any peer. Every other request is its caller's to accept or reject, through
-//! [`Node::respond`], and so is an association, and a session.
+//! session or node request of a peer without an association, or of a session that the
+//! node does not have, as above. Every other request is its caller's to accept or reject,
+//! through [`Node::respond`], and so is an association, and a session: one that names a
+//! session or an association of the node that is not its sender's, as another SMF of an
+//! SMF set sends (§5.22), comes [`Inbound::stranger`].
 
 mod state;
 
@@ -78,8 +77,8 @@ use crate::values::*;
 use crate::values_gen::*;
 
 use state::{
-    Answers, Change, Digest, Effect, Features, Heartbeats, Outstanding, Overloads, Scope, Sessions,
-    SetOf,
+    Answers, Change, Digest, Effect, Features, Heartbeats, Outstanding, Overloads, Pending, Scope,
+    Sessions, SetOf,
 };
 pub use state::{Association, LoadControl, OverloadControl, Session};
 
@@ -140,64 +139,17 @@ pub struct NodeConfig {
     /// Stamp and its load and overload are of the peer so told apart.
     pub request_port: Option<u16>,
     /// How many requests of hosts without an association wait for their answer at once:
-    /// Association Setup Requests, the session requests of a host of a session's F-SEID
-    /// address, with SSET those of an SMF of the set, and on an SMF of SSET, or of MPAS
-    /// and `other_entities`, a UP function's report of SEID 0 that hands a session over.
-    /// The session requests of a session that the caller adopted, from its peer, are not
-    /// counted ([`Node::adopt_session`]): a node related request with its SEID is. Beyond,
-    /// one is dropped before it is decoded, as [`Counters::refused`] counts, and its sender
-    /// sends it again.
+    /// beyond, one is dropped before it is decoded, as [`Counters::refused`] counts, and its
+    /// sender sends it again. The requests of an adopted session from its peer are not
+    /// counted.
     pub strangers: usize,
-    /// The SMF sets that the node takes part in, as its CP or UP Function Features say
-    /// them (§8.2.25, §8.2.58), which the caller writes in its Association Setup
-    /// messages too: without either, the node takes the requests of a set as those of
-    /// any peer.
-    pub smf_set: SmfSet,
-    /// BUNDL, which the caller writes in its CP or UP Function Features too (§8.2.25,
-    /// §8.2.58): the node takes the messages that a peer bundles in one datagram (§6.5)
-    /// when the peer announced BUNDL in its Association Setup or Update as well, or is the
-    /// peer of a session adopted without an association ([`Node::adopt_session`]), whose
-    /// features the holder of its association knows. Without, it discards them.
-    pub bundling: bool,
-    /// A CP function of several PFCP entities, each a node with associations of its own,
-    /// of which this is one. With MPAS, a UP function hands a session over to another
-    /// entity of the same SMF too (§5.22.3 bullets 5 and 6), which has not the
-    /// association that the entity that set it up holds: its report of SEID 0 then goes
-    /// to the caller from a host without an association with this node too, with
-    /// [`Inbound::of_smf_set`], for the caller to take only from a UP function that has
-    /// an association with an entity of its SMF. Without, the node answers it "No
-    /// established PFCP Association". The session that the caller adopts is then the
-    /// node's to control ([`Node::adopt_session`]).
-    pub other_entities: bool,
-}
-
-/// The features of the SMF sets of §5.22 that a node takes part in, as the bits SSET and
-/// MPAS of its CP or UP Function Features. The node delivers to its caller the requests
-/// that a set lets come from another SMF of the set than a session's or an
-/// association's, with [`Inbound::of_smf_set`], for the caller to take, redirect or
-/// reject; and a release keeps the sessions that the set keeps.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub struct SmfSet {
-    /// SSET (§5.22.2): one association for the set, whose established sessions any SMF of
-    /// the set may modify or delete, and which it may update or release, with an
-    /// association of its own or not: an SMF without one modifies or deletes a session that
-    /// it adopted ([`Node::adopt_session`]). An establishment needs an association.
-    pub sset: bool,
-    /// MPAS (§5.22.3): an association for each SMF of the set, of the same SMF Set ID,
-    /// any of which may modify or delete the sessions of another, and whose sessions are
-    /// kept while one of the set remains (§6.2.8). A UP function hands a session over to
-    /// an SMF of the set that it has an association with, which a node of the SMF sees
-    /// when it holds the association; an SMF of several PFCP entities, each a node, says
-    /// so with [`NodeConfig::other_entities`], and the entity that adopts the session
-    /// controls it without the association ([`Node::adopt_session`]).
-    pub mpas: bool,
 }
 
 impl NodeConfig {
     /// A node of `node_id`: T1 of 3 s, N1 of 3, a heartbeat every 60 s, answers kept for
     /// 24 s, default priority 8, throttling on, no priority spared, room for 65,536
-    /// requests of the peers and 16 of hosts without an association, requests to port
-    /// 8805, no SMF set, no bundling, and no other PFCP entity.
+    /// requests of the peers and 16 of hosts without an association, and requests to port
+    /// 8805.
     pub fn new(node_id: NodeId, function: Function, recovery_time_stamp: u32) -> Self {
         Self {
             node_id,
@@ -213,9 +165,6 @@ impl NodeConfig {
             capacity: 65_536,
             request_port: Some(PORT),
             strangers: 16,
-            smf_set: SmfSet::default(),
-            bundling: false,
-            other_entities: false,
         }
     }
 }
@@ -299,15 +248,14 @@ pub struct Inbound {
     pub(crate) mark: Option<u64>,
     /// What an answer that accepts it changes.
     pub(crate) effect: Effect,
-    /// A request of another SMF of a set than the session's or the association's, which
-    /// the node's [`SmfSet`] lets come (§5.22): a modification or deletion of a session
-    /// from another association of the set (MPAS), a request of an SMF of the set without
-    /// an association (SSET), or a UP function's request of SEID 0 with the CP F-SEID of
-    /// the previous SMF, which hands a session over ([`Node::adopt_session`]). With
-    /// [`NodeConfig::other_entities`], the UP function of such a handover may have no
-    /// association with the node, and the caller takes the session only if it has one
-    /// with another PFCP entity of the SMF.
-    pub of_smf_set: bool,
+    /// A request that names a session or an association of the node that is not its
+    /// sender's: a modification or a deletion of a session of another peer, an update or a
+    /// release of another peer's association, and a report of SEID 0 with the CP F-SEID of
+    /// the previous SMF, which hands a session over ([`Node::adopt_session`]). Another SMF
+    /// of an SMF set sends them (§5.22), and so may a stranger: the caller takes, redirects
+    /// or rejects it. Accepted, a modification gives the session to the sender's
+    /// association, and an update or a release changes the association named.
+    pub stranger: bool,
     /// The request, of all that the node gave the caller.
     pub(crate) id: u64,
 }
@@ -371,11 +319,9 @@ pub enum ViolationKind {
     /// establishment: discarded (§7.6.5).
     WrongDirection,
     /// A session request, or a node related request of a node, from a peer without an
-    /// association, or that names the Node ID of another's (§6.2.6): answered with "No
-    /// established PFCP Association". A host without an association is taken for the
-    /// sessions whose F-SEID has its address, with SSET as an SMF of the set, and, by an
-    /// SMF of SSET, for a report of SEID 0 that hands a session over (§5.22.2): with
-    /// MPAS alone, the UP function that hands it over has an association (§5.22.3).
+    /// association, or that names the Node ID of another's (§6.2.6), and of no session that
+    /// the node has: answered with "No established PFCP Association". A host without an
+    /// association is taken for the sessions whose F-SEID has its address.
     SessionWithoutAssociation,
     /// A session request of a SEID that is of no established session of the peer:
     /// answered with "Session context not found" (§7.2.2.4.2).
@@ -401,8 +347,8 @@ pub enum ViolationKind {
     /// an association or one that the node adopted from the host: no agreement on bundling
     /// is of them (§6.5), and they are discarded.
     BundledWithoutAssociation,
-    /// Messages bundled by a peer when it or the node did not announce BUNDL
-    /// ([`NodeConfig::bundling`], §6.5): discarded.
+    /// Messages bundled by a peer when it or the node did not announce BUNDL in their
+    /// association messages (§6.5): discarded.
     BundlingNotAgreed,
     /// A peer's SEID of 0, which says that it is not known (§7.2.2.4.2): an
     /// establishment's response that gives it establishes no session, an establishment
@@ -479,9 +425,9 @@ pub enum Event {
         node_id: NodeId,
         /// The local SEIDs of the sessions that ended with it (§6.2.8).
         sessions: Vec<u64>,
-        /// The local SEIDs of its sessions that its SMF set keeps, with MPAS (§6.2.8): on a
-        /// UP function those that another association of the set takes, on a CP function
-        /// all of them when the UP function announced MPAS in its UP Function Features,
+        /// The local SEIDs of its sessions that its SMF set keeps, when both the node and
+        /// the peer announced MPAS in their association messages (§6.2.8): on a UP function
+        /// those that another association of the set takes, on a CP function all of them,
         /// which the caller ends unless another association of the set with the UP
         /// function remains.
         kept: Vec<u64>,
@@ -686,6 +632,9 @@ pub struct Node {
     /// The peers, as the node tells them apart, whose load and overload of their address
     /// go unless a session or an association of theirs remains.
     orphans: BTreeSet<SocketAddr>,
+    /// The features of its function that the node last announced, in an association setup
+    /// or update of its own: those that it bundles with the peers of adopted sessions by.
+    features: Features,
     transmits: [VecDeque<Transmit>; 16],
     events: VecDeque<Event>,
 }
@@ -723,6 +672,7 @@ impl Node {
             load: BTreeMap::new(),
             overload: Overloads::default(),
             orphans: BTreeSet::new(),
+            features: Features::default(),
             transmits: Default::default(),
             events: VecDeque::new(),
         }
@@ -808,9 +758,8 @@ impl Node {
             }
         }
         for peer in self.heartbeats.due(now) {
-            // A peer with neither an association nor an adopted session has no more
-            // heartbeats.
-            if !self.beats(peer) {
+            // A peer without an association has no more heartbeats.
+            if self.association_of(peer).is_none() {
                 self.heartbeats.remove(&peer);
                 continue;
             }
@@ -823,7 +772,11 @@ impl Node {
                     header: Header::node(0),
                     body: request.into(),
                 };
-                let _ = self.send(now, peer, message, true, None, None, Change::Nothing, None);
+                let heartbeat = Pending {
+                    heartbeat: true,
+                    ..Pending::default()
+                };
+                let _ = self.send(now, peer, message, heartbeat);
             }
         }
         for scope in self.overload.ended(now) {
@@ -908,8 +861,7 @@ impl Node {
         if !is_node_related(message_type) {
             // The association of the session, whose F-SEID may have another address, or the
             // caller's adoption of it from a peer whose association another SMF of the set
-            // holds (SSET, §5.22.2 bullet 3), or another PFCP entity of the SMF (MPAS,
-            // §5.22.3 bullets 3 and 5). An establishment needs an association (§6.2.6.2.1).
+            // holds (§5.22). An establishment needs an association (§6.2.6.2.1).
             let session = local_seid.and_then(|seid| self.sessions.get(&seid));
             let of_session = session.is_some_and(|session| {
                 session.adopted || self.associations.contains_key(&session.node)
@@ -972,16 +924,30 @@ impl Node {
             _ => None,
         }
         .and_then(|f_seid| fseid_address(to, f_seid));
-        let id = self.send(
-            now,
-            to,
-            message,
-            false,
+        // What the node says of its function to the peer (§8.2.25, §8.2.58).
+        let features = match &message.body {
+            Body::AssociationSetupRequest(request) => self.own_features(
+                request.cp_function_features.as_ref(),
+                request.up_function_features.as_ref(),
+            ),
+            Body::AssociationUpdateRequest(request) => self.own_features(
+                request.cp_function_features.as_ref(),
+                request.up_function_features.as_ref(),
+            ),
+            _ => None,
+        };
+        let pending = Pending {
+            heartbeat: false,
             local_seid,
             mark,
             change,
             local_address,
-        )?;
+            features,
+        };
+        let id = self.send(now, to, message, pending)?;
+        if let Some(features) = features {
+            self.features = features;
+        }
         self.put_off(now, local_seid);
         if let Some((seid, mark)) = made {
             let node = self
@@ -1118,11 +1084,10 @@ impl Node {
     /// before [`respond`](Self::respond).
     ///
     /// A `peer` without an association with the node is one whose association another
-    /// SMF of the set, or another PFCP entity of the SMF, holds, as the caller knows
-    /// (§5.22.3 bullets 3 and 5): the node takes the session's requests from it as those
-    /// of an association, outside the room of [`NodeConfig::strangers`], sends the
-    /// caller's modifications and deletions, and, while such a session of the peer lasts,
-    /// sends it Heartbeat Requests, the first at once, to tell its restart (§6.2.2.2).
+    /// SMF of the set holds, as the caller knows (§5.22): the node routes the session, as
+    /// it takes the session's requests from the peer, outside the room of
+    /// [`NodeConfig::strangers`], and sends the caller's modifications and deletions to
+    /// it. The holder of the association heartbeats the peer.
     ///
     /// # Errors
     ///
@@ -1144,9 +1109,6 @@ impl Node {
             .association_of(peer)
             .map(|association| association.key.clone());
         let adopted = node.is_none();
-        if adopted && !self.sessions.adopts(peer) && self.config.heartbeat.is_some() {
-            self.heartbeats.insert(peer, Duration::ZERO);
-        }
         let session = Session {
             peer,
             peer_seid: Some(peer_seid),
@@ -1405,23 +1367,19 @@ impl Node {
             .map(|(scope, overload)| (control_scope(scope), *overload))
     }
 
-    /// The latest load control information of a peer, by its Node ID (§6.2.3.3.1), or by
-    /// its address for the peer of an adopted session without an association, whose Node ID
-    /// the node does not know: kept while the association, or a session of the address,
-    /// lasts.
+    /// The latest load control information of a peer, by the Node ID of its association
+    /// (§6.2.3.3.1), kept while the association lasts.
     pub fn load_control(&self, peer: SocketAddr) -> Option<LoadControl> {
-        let scope = match self.association_of(peer) {
-            Some(association) => Scope::Node(association.key.clone()),
-            None => Scope::Address(self.peer_key(peer)),
-        };
-        self.load.get(&scope).copied()
+        let association = self.association_of(peer)?;
+        self.load
+            .get(&Scope::Node(association.key.clone()))
+            .copied()
     }
 
     /// The overload control information that still holds for the requests to `peer`: of
-    /// its address, as the UP F-SEID of a session has it, or of its Node ID (§6.2.4.3.1),
-    /// which the peer of an adopted session without an association has by its address. The
-    /// node keeps it while its period of validity lasts and a session of the address, or
-    /// the association, remains: what the last of them takes with it ends without
+    /// its address, as the UP F-SEID of a session has it, or of its Node ID (§6.2.4.3.1).
+    /// The node keeps it while its period of validity lasts and a session of the address,
+    /// or the association, remains: what the last of them takes with it ends without
     /// [`Event::OverloadEnded`].
     pub fn overload_control(&self, peer: SocketAddr) -> Option<OverloadControl> {
         let node = self
@@ -1495,12 +1453,12 @@ impl Node {
                 self.violation(from, ViolationKind::BundledPeers, this);
                 continue;
             }
-            let Some(of_smf_set) = self.screen(now, from, this, header, message_type) else {
+            let Some(stranger) = self.screen(now, from, this, header, message_type) else {
                 continue;
             };
             match Message::decode(this) {
                 Ok(message) => match is_request(message_type) {
-                    true => self.handle_request(now, from, this, message, of_smf_set),
+                    true => self.handle_request(now, from, this, message, stranger),
                     false => self.handle_response(now, from, this, message),
                 },
                 Err(error) => self.malformed(now, from, error),
@@ -1512,7 +1470,7 @@ impl Node {
     /// What the node tells from the header of a message, and from the IEs that name the
     /// peer of a request, before it decodes the rest: a message that it discards or
     /// rejects costs it no more than its octets. `None` for a message that it handled, and
-    /// whether a request is of another SMF of a set (§5.22) for one to decode.
+    /// whether a request is a stranger's ([`Inbound::stranger`]) for one to decode.
     fn screen(
         &mut self,
         now: Duration,
@@ -1606,50 +1564,23 @@ impl Node {
         let of_host = session.is_some_and(|session| {
             self.same_peer(session.peer, from) || association.as_ref() == Some(&session.node)
         });
-        // What a set lets come from another SMF of the set than the session's or the
-        // association's, which the node gives its caller (§5.22.2, §5.22.3).
-        let set = self.config.smf_set;
-        let of = |key: &[u8]| {
-            self.associations
-                .get(key)
-                .map(|association| &association.set)
-        };
-        let theirs = association.as_deref().and_then(of);
-        let of_smf_set = match message_type {
-            // An update or a release of the set's association, by an SMF of the set
-            // without one of its own (SSET).
+        // What another SMF of a set sends (§5.22), the caller's to take: an update or a
+        // release of an association of the node that is not the host's, a modification or
+        // a deletion of a session that is not the host's, and a UP function's report of
+        // SEID 0 with the CP F-SEID of the previous SMF, which hands a session over.
+        let stranger = match message_type {
             7 | 9 => {
-                let named = node_id.as_ref().and_then(|node_id| of(&key_of(node_id)));
-                set.sset && association.is_none() && named.is_some_and(|named| named.sset)
+                !known_node
+                    && node_id
+                        .as_ref()
+                        .is_some_and(|node_id| self.associations.contains_key(&key_of(node_id)))
             }
-            // A modification or a deletion of a session of another association of the set
-            // (MPAS), or by an SMF of the set without one (SSET).
-            52 | 54 if !of_host => session.is_some_and(|session| {
-                let owner = of(&session.node);
-                let mpas = set.mpas
-                    && owner.is_some_and(|owner| owner.mpas && owner.id.is_some())
-                    && theirs.is_some_and(|theirs| {
-                        theirs.mpas && theirs.id == owner.and_then(|owner| owner.id.clone())
-                    });
-                let sset =
-                    set.sset && association.is_none() && owner.is_some_and(|owner| owner.sset);
-                mpas || sset
-            }),
-            // A UP function's request of SEID 0 with the CP F-SEID of the previous SMF,
-            // which hands the session over (§5.22.2 and §5.22.3, bullet 5). With SSET the
-            // set has one association, which another SMF of the set holds, so the taking
-            // SMF needs none of its own; with MPAS, the UP function hands it to an SMF of
-            // the set that it has an association with (§5.22.3 bullet 6), which another
-            // PFCP entity of the SMF may hold, for the caller to tell.
-            56 => {
-                (set.sset || set.mpas && (association.is_some() || self.config.other_entities))
-                    && header.seid == Some(0)
-                    && peer_seid.is_some()
-            }
+            52 | 54 => session.is_some() && !of_host,
+            56 => header.seid == Some(0) && peer_seid.is_some(),
             _ => false,
         };
         let rejection = match message_type {
-            _ if of_smf_set => None,
+            _ if stranger => None,
             7 | 9 if !known_node => Some((
                 CauseValue::NoEstablishedPfcpAssociation,
                 ViolationKind::UnknownNode,
@@ -1676,13 +1607,13 @@ impl Node {
             // A host without an association has only so many requests waiting; its
             // heartbeat, answered from the state, waits for nothing.
             if message_type != 1
-                && self.stranger(from, message_type, header.seid)
+                && self.unassociated(from, message_type, header.seid)
                 && self.answers.strangers() >= self.config.strangers
             {
                 self.answers.refuse();
                 return None;
             }
-            return Some(of_smf_set);
+            return Some(stranger);
         };
         self.violation(from, kind, octets);
         let inbound = Inbound {
@@ -1696,7 +1627,7 @@ impl Node {
             node_id,
             mark: None,
             effect: Effect::Nothing,
-            of_smf_set: false,
+            stranger: false,
             id: 0,
         };
         let offending = (kind == ViolationKind::SeidZero).then_some(57);
@@ -1857,7 +1788,7 @@ impl Node {
         from: SocketAddr,
         octets: &[u8],
         message: Message,
-        of_smf_set: bool,
+        stranger: bool,
     ) {
         let sequence = message.header.sequence;
         let message_type = message.body.message_type();
@@ -1969,7 +1900,7 @@ impl Node {
             },
             node_id: node_id_of(&message.body),
             effect,
-            of_smf_set,
+            stranger,
             id: self.next_inbound,
         };
         self.next_inbound += 1;
@@ -1991,14 +1922,14 @@ impl Node {
             }
             return;
         }
-        let stranger = self.stranger(from, message_type, message.header.seid);
+        let unassociated = self.unassociated(from, message_type, message.header.seid);
         if !self.answers.wait(
             (from, sequence),
             Digest::of(octets),
             inbound.id,
             now.saturating_add(self.config.keep),
             self.config.capacity,
-            stranger,
+            unassociated,
         ) {
             // Full of requests that wait for their answer: the peer sends it again.
             return;
@@ -2035,18 +1966,22 @@ impl Node {
         }
     }
 
-    #[allow(clippy::too_many_arguments)]
+    /// Send a request with the next sequence number, and keep it until its response.
     fn send(
         &mut self,
         now: Duration,
         to: SocketAddr,
         mut message: Message,
-        heartbeat: bool,
-        local_seid: Option<u64>,
-        mark: Option<u64>,
-        change: Change,
-        local_address: Option<IpAddr>,
+        pending: Pending,
     ) -> Result<RequestId, NodeError> {
+        let Pending {
+            heartbeat,
+            local_seid,
+            mark,
+            change,
+            local_address,
+            features,
+        } = pending;
         let sequence = self.next_free_sequence()?;
         message.header.sequence = sequence;
         let octets = message.encode()?;
@@ -2078,6 +2013,7 @@ impl Node {
                 mark,
                 change,
                 local_address,
+                features,
             },
         );
         self.queue(Transmit {
@@ -2174,23 +2110,20 @@ impl Node {
         }
         self.answers.prune(now);
         self.sessions.prune(now);
-        self.reage_flipped();
         for local_seid in self.sessions.ended(now) {
             self.events.push_back(Event::SessionEnded { local_seid });
         }
         self.prune_controls();
     }
 
-    /// Forget the load and overload of the addresses that no session or association has
-    /// any more, whose information goes with what set it.
+    /// Forget the overload of the addresses that no session or association has any more,
+    /// whose information goes with what set it.
     fn prune_controls(&mut self) {
         let mut orphans = core::mem::take(&mut self.orphans);
         orphans.append(&mut self.sessions.emptied());
         for peer in orphans {
             if !self.sessions.has(peer) && !self.by_peer.contains_key(&peer) {
-                let scope = Scope::Address(peer);
-                self.load.remove(&scope);
-                self.overload.remove(&scope);
+                self.overload.remove(&Scope::Address(peer));
             }
         }
     }
@@ -2229,11 +2162,13 @@ impl Node {
     /// first of them that names one, whatever the host, whose messages are then taken as
     /// they would be alone: a host of the session's F-SEID address, another SMF of the set.
     /// The peer of a session adopted without an association, whose features the holder of
-    /// its association knows, as the node announced it. `None` for a host of neither.
+    /// its association knows, as the node last announced BUNDL. `None` for a host of
+    /// neither.
     fn bundling_with(&self, from: SocketAddr, parts: &[&[u8]]) -> Option<bool> {
-        let own = self.config.bundling;
+        let agreed =
+            |association: &Association| association.own.bundl && association.set.features.bundl;
         if let Some(association) = self.association_of(from) {
-            return Some(own && association.set.bundl);
+            return Some(agreed(association));
         }
         let session = parts.iter().find_map(|part| {
             let (header, ..) = Header::decode(part)?;
@@ -2241,22 +2176,19 @@ impl Node {
             self.sessions.get(&local)
         })?;
         match self.associations.get(&session.node) {
-            Some(association) => Some(own && association.set.bundl),
-            None if session.adopted && self.same_peer(session.peer, from) => Some(own),
+            Some(association) => Some(agreed(association)),
+            None if session.adopted && self.same_peer(session.peer, from) => {
+                Some(self.features.bundl)
+            }
             None => None,
         }
-    }
-
-    /// Whether the node heartbeats `peer`: of an association, or of an adopted session.
-    fn beats(&self, peer: SocketAddr) -> bool {
-        self.association_of(peer).is_some() || self.sessions.adopts(peer)
     }
 
     /// Whether a request of `message_type` of `from` to the SEID `seid`, which
     /// [`screen`](Self::screen) lets through, waits in the room of
     /// [`NodeConfig::strangers`]: from a host without an association, and no session
     /// request of an adopted session from its peer, which does not wait.
-    fn stranger(&self, from: SocketAddr, message_type: u8, seid: Option<u64>) -> bool {
+    fn unassociated(&self, from: SocketAddr, message_type: u8, seid: Option<u64>) -> bool {
         let adopted = !is_node_related(message_type)
             && seid
                 .and_then(|seid| self.sessions.resolve(seid))
@@ -2276,7 +2208,7 @@ impl Node {
         SocketAddr::new(from.ip(), self.config.request_port.unwrap_or(from.port()))
     }
 
-    /// The SSET, MPAS and BUNDL that a peer says of itself: in its CP Function Features
+    /// The MPAS and BUNDL that a peer says of itself: in its CP Function Features
     /// (§8.2.58) to a UP function, and in its UP Function Features (§8.2.25) to a CP
     /// function. `None` when it says none.
     fn features_of(
@@ -2284,18 +2216,17 @@ impl Node {
         cp: Option<&crate::CpFunctionFeatures>,
         up: Option<&crate::UpFunctionFeatures>,
     ) -> Option<Features> {
-        match self.config.function {
-            Function::Up => cp.map(|features| Features {
-                sset: features.sset,
-                mpas: features.mpas,
-                bundl: features.bundl,
-            }),
-            Function::Cp => up.map(|features| Features {
-                sset: features.sset,
-                mpas: features.mpas,
-                bundl: features.bundl,
-            }),
-        }
+        features(self.config.function == Function::Up, cp, up)
+    }
+
+    /// The MPAS and BUNDL that the node says of itself, in the features of its own
+    /// function, which the caller writes. `None` when it says none.
+    fn own_features(
+        &self,
+        cp: Option<&crate::CpFunctionFeatures>,
+        up: Option<&crate::UpFunctionFeatures>,
+    ) -> Option<Features> {
+        features(self.config.function == Function::Cp, cp, up)
     }
 
     /// The SMF set that a peer says it is of in its Association Setup Request or Response.
@@ -2358,9 +2289,8 @@ impl Node {
         let Some(stamp) = stamp.map(|stamp| stamp.value) else {
             return;
         };
-        // The stamps of peers with neither an association nor an adopted session are
-        // bounded, the oldest first, which their index gives at once.
-        self.reage_flipped();
+        // The stamps of peers without an association are bounded, the oldest first, which
+        // their index gives at once.
         let key = self.peer_key(from);
         let turn = self.next_turn;
         self.next_turn += 1;
@@ -2377,7 +2307,7 @@ impl Node {
             }
             None => {}
         }
-        if !self.keeps_stamp(key) {
+        if !self.by_peer.contains_key(&key) {
             self.aging.insert(turn, key);
         }
         if let Some((known, _)) = known
@@ -2387,9 +2317,9 @@ impl Node {
             let node = self
                 .association_of(from)
                 .map(|association| Scope::Node(association.key.clone()));
-            let address = Scope::Address(key);
-            self.load
-                .retain(|scope, _| Some(scope) != node.as_ref() && *scope != address);
+            if let Some(node) = &node {
+                self.load.remove(node);
+            }
             let (peer, request_port) = (self.peer_key(from), self.config.request_port);
             self.overload.retain(|scope, overload| {
                 peer_key(request_port, overload.peer) != peer && Some(scope) != node.as_ref()
@@ -2402,35 +2332,20 @@ impl Node {
     }
 
     /// Index the stamp of `peer`, as the node tells peers apart, among those that go first
-    /// when the node is full, or not, as it has an association or an adopted session.
+    /// when the node is full, or not, as it has an association.
     fn reage(&mut self, peer: SocketAddr) {
         if let Some(&(_, turn)) = self.recovery.get(&peer) {
-            match self.keeps_stamp(peer) {
+            match self.by_peer.contains_key(&peer) {
                 true => self.aging.remove(&turn),
                 false => self.aging.insert(turn, peer),
             };
         }
     }
 
-    /// Whether the node keeps the stamp of `peer`, as it tells peers apart, through a
-    /// flood: of an association, or of an adopted session.
-    fn keeps_stamp(&self, peer: SocketAddr) -> bool {
-        self.by_peer.contains_key(&peer) || self.sessions.adopts(peer)
-    }
-
-    /// Index again the stamps of the peers whose first adopted session began, or whose last
-    /// ended, since the node last did.
-    fn reage_flipped(&mut self) {
-        for peer in self.sessions.flipped() {
-            self.reage(peer);
-        }
-    }
-
     /// The load and overload control information that a message of the session of
     /// `local_seid` carries (§6.2.3.3.3, §6.2.4.3.3), from a peer with an association:
     /// the load of its Node ID, and the overload of the address of the UP F-SEID of the
-    /// session, or of its Node ID (§6.2.4.3.1); and from the peer of an adopted session
-    /// without one, whose Node ID the node does not know, both of its address.
+    /// session, or of its Node ID (§6.2.4.3.1).
     fn note_controls(
         &mut self,
         now: Duration,
@@ -2470,25 +2385,14 @@ impl Node {
                     .association_of(from)
                     .is_some_and(|association| association.key == key)
         };
-        // The peer of an adopted session without an association, whose Node ID the node
-        // does not know, by its address.
-        let adopted = session
-            .filter(|session| {
-                session.adopted
-                    && self.same_peer(session.peer, from)
-                    && self.association_of(from).is_none()
-            })
-            .map(|session| Scope::Address(self.peer_key(session.peer)));
-        let node = adopted.or_else(|| {
-            match session.filter(|session| self.associations.contains_key(&session.node)) {
-                Some(session) => Some(session.node.clone())
-                    .filter(|key| of_peer(key))
-                    .map(Scope::Node),
-                None => self
-                    .association_of(from)
-                    .map(|association| Scope::Node(association.key.clone())),
-            }
-        });
+        let node = match session.filter(|session| self.associations.contains_key(&session.node)) {
+            Some(session) => Some(session.node.clone())
+                .filter(|key| of_peer(key))
+                .map(Scope::Node),
+            None => self
+                .association_of(from)
+                .map(|association| Scope::Node(association.key.clone())),
+        };
         let Some(node) = node else {
             return;
         };
@@ -2505,9 +2409,6 @@ impl Node {
                 (&load.load_control_sequence_number, &load.load_metric)
         {
             let scope = node.clone();
-            if let Scope::Address(peer) = scope {
-                self.orphans.insert(peer);
-            }
             let new = LoadControl {
                 sequence: sequence.value,
                 metric: metric.value.effective(),
@@ -2651,7 +2552,8 @@ impl Node {
                         response.up_function_features.as_ref(),
                         response.smf_set_id.as_ref(),
                     );
-                    self.associate(now, from, node_id.clone(), None, set);
+                    let own = request.features.unwrap_or_default();
+                    self.associate(now, from, node_id.clone(), None, set, own);
                 }
             }
             Body::AssociationReleaseResponse(_) if accepted => {
@@ -2673,7 +2575,7 @@ impl Node {
                     .association_of(from)
                     .map(|association| association.key.clone())
                 {
-                    self.update_set(&key, features, None);
+                    self.update_set(&key, features, None, request.features);
                 }
             }
             Body::SessionEstablishmentResponse(response) => {
@@ -2795,6 +2697,21 @@ impl Node {
         {
             self.sessions.set_local_address(local, address);
         }
+        // What the node says of its function to the peer (§8.2.25, §8.2.58).
+        let own = match &message.body {
+            Body::AssociationSetupResponse(response) => self.own_features(
+                response.cp_function_features.as_ref(),
+                response.up_function_features.as_ref(),
+            ),
+            Body::AssociationUpdateResponse(response) => self.own_features(
+                response.cp_function_features.as_ref(),
+                response.up_function_features.as_ref(),
+            ),
+            _ => None,
+        };
+        if let Some(own) = own {
+            self.features = own;
+        }
         match (&message.body, request.effect.clone()) {
             (Body::AssociationSetupResponse(_), Effect::Setup(retained, set)) => {
                 if let Some(node_id) = &request.node_id {
@@ -2802,13 +2719,19 @@ impl Node {
                     // The retention of the sessions is the UP function's (§6.2.6.2.2): a
                     // CP function stores the Node ID (§6.2.6.3.2).
                     let retained = (self.config.function == Function::Up).then_some(retained);
-                    self.associate(now, peer, node_id.clone(), retained, set);
+                    let own = own.unwrap_or_default();
+                    self.associate(now, peer, node_id.clone(), retained, set, own);
                 }
             }
-            // The peer's new set features and SMF Set ID (§5.22.3, bullet 1).
+            // The peer's new set features and SMF Set ID (§5.22.3, bullet 1), and the node's.
             (Body::AssociationUpdateResponse(_), Effect::Update(features, id)) => {
                 if let Some(node_id) = &request.node_id {
-                    self.update_set(&key_of(node_id), features, id);
+                    self.update_set(&key_of(node_id), features, id, own);
+                }
+            }
+            (Body::AssociationUpdateResponse(_), _) => {
+                if let Some(node_id) = &request.node_id {
+                    self.update_set(&key_of(node_id), None, None, own);
                 }
             }
             (Body::AssociationReleaseResponse(_), _) => {
@@ -2861,7 +2784,7 @@ impl Node {
                     self.sessions.set_peer(local, peer, Some(seid));
                 }
                 // The SMF of the set that modifies a session controls it (§5.22.3, bullet 3).
-                if request.of_smf_set
+                if request.stranger
                     && let (Some(local), Some(key)) = (
                         session,
                         self.association_of(request.from)
@@ -2890,20 +2813,27 @@ impl Node {
         }
     }
 
-    /// The set of the association of `key` that an update changes (§5.22.3, bullet 1): the
-    /// features of the peer's function, and the FQDN of its SMF Set ID, each taken if the
-    /// update carried it, and the rest kept.
-    fn update_set(&mut self, key: &[u8], features: Option<Features>, id: Option<Vec<u8>>) {
+    /// What an update changes of the association of `key` (§5.22.3, bullet 1): the
+    /// features of the peer's function, the FQDN of its SMF Set ID, and the features that
+    /// the node announces, each taken if the update carried it, and the rest kept.
+    fn update_set(
+        &mut self,
+        key: &[u8],
+        features: Option<Features>,
+        id: Option<Vec<u8>>,
+        own: Option<Features>,
+    ) {
         let Some(association) = self.associations.get_mut(key) else {
             return;
         };
         if let Some(features) = features {
-            association.set.sset = features.sset;
-            association.set.mpas = features.mpas;
-            association.set.bundl = features.bundl;
+            association.set.features = features;
         }
         if let Some(id) = id {
             association.set.id = Some(id);
+        }
+        if let Some(own) = own {
+            association.own = own;
         }
     }
 
@@ -2917,6 +2847,7 @@ impl Node {
         node_id: NodeId,
         retained: Option<Option<Vec<IpAddr>>>,
         set: SetOf,
+        own: Features,
     ) {
         let key = key_of(&node_id);
         // A peer, as the node tells peers apart, has one association: that of another
@@ -2936,6 +2867,7 @@ impl Node {
                 peer,
                 key: key.clone(),
                 set,
+                own,
             },
         );
         if let Some(old) = &replaced
@@ -2946,8 +2878,7 @@ impl Node {
         self.by_peer.insert(self.peer_key(peer), key.clone());
         let mut ended = Vec::new();
         if let Some(old) = &replaced {
-            // Nor of an adopted session (§6.2.2.2).
-            if old.peer != peer && !self.beats(old.peer) {
+            if old.peer != peer && self.association_of(old.peer).is_none() {
                 self.heartbeats.remove(&old.peer);
             }
             if let Some(retained) = retained {
@@ -3011,24 +2942,23 @@ impl Node {
             })
             .map(|(seid, _)| *seid)
             .collect();
-        // With MPAS, the set keeps the sessions while another of its associations remains
-        // (§6.2.8, §5.22.3 bullet 1): on a UP function one of the same SMF Set ID, which
-        // they go to; a CP function, which does not see the set's other associations,
-        // keeps them all, for its caller to end when none remains.
-        let mpas = self.config.smf_set.mpas;
+        // With MPAS, which both the node and the peer announced, the set keeps the sessions
+        // while another of its associations remains (§6.2.8, §5.22.3 bullet 1): on a UP
+        // function one of the same SMF Set ID, which they go to; a CP function, which does
+        // not see the set's other associations, keeps them all, for its caller to end when
+        // none remains.
+        let mpas = association.own.mpas && association.set.features.mpas;
         let heir = match self.config.function {
-            Function::Up if mpas && association.set.mpas && association.set.id.is_some() => self
+            Function::Up if mpas && association.set.id.is_some() => self
                 .associations
                 .values()
-                .find(|other| other.set.mpas && other.set.id == association.set.id)
+                .find(|other| {
+                    other.own.mpas && other.set.features.mpas && other.set.id == association.set.id
+                })
                 .map(|other| other.key.clone()),
             _ => None,
         };
-        // A CP function sees only its own association with the UPF, so it keeps the
-        // sessions when both it and the UPF use MPAS, for its caller to end when no other
-        // association of the set remains; a UPF that did not announce MPAS means no set.
-        let keeps = heir.is_some()
-            || (mpas && self.config.function == Function::Cp && association.set.mpas);
+        let keeps = heir.is_some() || (mpas && self.config.function == Function::Cp);
         let (kept, ended) = match keeps {
             true => (of_it, Vec::new()),
             false => (Vec::new(), of_it),
@@ -3041,7 +2971,7 @@ impl Node {
                 self.sessions.set_node(*seid, heir.clone());
             }
         }
-        if !self.beats(peer) {
+        if self.association_of(peer).is_none() {
             self.heartbeats.remove(&peer);
         }
         self.events.push_back(Event::Released {
@@ -3094,6 +3024,24 @@ fn control_scope(scope: &Scope) -> ControlScope {
             <NodeId as crate::ie::Codec>::decode(key)
                 .unwrap_or_else(|| NodeId::Fqdn(crate::octets::Octets::copied(key))),
         ),
+    }
+}
+
+/// The MPAS and BUNDL of the CP Function Features, or of the UP Function Features.
+fn features(
+    of_cp: bool,
+    cp: Option<&crate::CpFunctionFeatures>,
+    up: Option<&crate::UpFunctionFeatures>,
+) -> Option<Features> {
+    match of_cp {
+        true => cp.map(|features| Features {
+            mpas: features.mpas,
+            bundl: features.bundl,
+        }),
+        false => up.map(|features| Features {
+            mpas: features.mpas,
+            bundl: features.bundl,
+        }),
     }
 }
 

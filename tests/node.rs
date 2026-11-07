@@ -1674,17 +1674,10 @@ fn bundle(messages: &[Message]) -> Vec<u8> {
     octets
 }
 
-/// An SMF and a UPF associated, each of `NodeConfig::bundling`, which announce BUNDL in
-/// their CP and UP Function Features (§8.2.25, §8.2.58).
+/// An SMF and a UPF associated, which announce BUNDL in their CP and UP Function
+/// Features (§8.2.25, §8.2.58).
 fn bundling(now: Duration) -> (Node, Node) {
-    let bundling = |address, function| NodeConfig {
-        bundling: true,
-        ..config(address, function)
-    };
-    let (mut smf, mut upf) = (
-        Node::new(bundling(SMF, Function::Cp)),
-        Node::new(bundling(UPF, Function::Up)),
-    );
+    let (mut smf, mut upf) = (node(SMF, Function::Cp), node(UPF, Function::Up));
     let features = CpFunctionFeatures {
         bundl: true,
         ..Default::default()
@@ -1734,9 +1727,9 @@ fn bundled_datagram_each_message() {
 }
 
 /// §6.5: bundling "may be used if both the CP function and the UP function have
-/// indicated support of the corresponding feature": the node takes what a peer bundles
-/// when it announces BUNDL itself (`NodeConfig::bundling`) and the peer did in its
-/// Association Setup or Update, and discards it otherwise.
+/// indicated support of the corresponding feature ... during the PFCP Association Setup or
+/// Update procedure": the node takes what a peer bundles when both announced BUNDL in the
+/// features of their function, in their association messages, and discards it otherwise.
 #[test]
 fn bundling_needs_both_to_announce_it() {
     let modifications = |up_seid, first: u32| {
@@ -1747,37 +1740,49 @@ fn bundling_needs_both_to_announce_it() {
         bundle(&[modification(first), modification(first + 1)])
     };
     let refused = [ViolationKind::BundlingNotAgreed];
-    // Neither announced it
-    let (mut smf, mut upf) = associated(at(0));
-    let (_, up_seid) = established(&mut smf, &mut upf, at(0));
-    upf.handle_datagram(at(1), SMF, &modifications(up_seid, 20));
-    assert_eq!(violations(&mut upf), refused);
-    // The UPF did, the SMF did not
-    let (mut smf, upf) = associated(at(0));
-    let mut upf = Node::new(NodeConfig {
-        bundling: true,
-        ..upf.config().clone()
-    });
-    let setup = AssociationSetupRequest::new(node_id(SMF), RecoveryTimeStamp::new(1000));
-    let body = setup.into();
-    smf.request(
-        at(0),
-        UPF,
-        Message {
-            header: Header::node(0),
-            body,
-        },
-    )
-    .unwrap();
-    pass(&mut smf, &mut upf, UPF, at(0));
-    let (inbound, _) = request(&mut upf);
-    let response =
-        AssociationSetupResponse::new(node_id(UPF), accepted(), RecoveryTimeStamp::new(1000));
-    upf.respond(at(0), &inbound, response).unwrap();
-    pass(&mut upf, &mut smf, SMF, at(0));
-    let (_, up_seid) = established(&mut smf, &mut upf, at(0));
-    upf.handle_datagram(at(1), SMF, &modifications(up_seid, 20));
-    assert_eq!(violations(&mut upf), refused);
+    // Each of the four: neither, the SMF alone, the UPF alone, both
+    for (smf_bundles, upf_bundles) in [(false, false), (true, false), (false, true), (true, true)] {
+        let (mut smf, mut upf) = (node(SMF, Function::Cp), node(UPF, Function::Up));
+        let cp = CpFunctionFeatures {
+            bundl: smf_bundles,
+            ..Default::default()
+        };
+        let setup = AssociationSetupRequest::new(node_id(SMF), RecoveryTimeStamp::new(1000))
+            .with_cp_function_features(cp);
+        let body = setup.into();
+        let header = Header::node(0);
+        smf.request(at(0), UPF, Message { header, body }).unwrap();
+        pass(&mut smf, &mut upf, UPF, at(0));
+        let (inbound, _) = request(&mut upf);
+        let up = UpFunctionFeatures {
+            bundl: upf_bundles,
+            ..Default::default()
+        };
+        let response = setup_answer().with_up_function_features(up);
+        upf.respond(at(0), &inbound, response).unwrap();
+        pass(&mut upf, &mut smf, SMF, at(0));
+        let (cp_seid, up_seid) = established(&mut smf, &mut upf, at(0));
+        upf.handle_datagram(at(1), SMF, &modifications(up_seid, 20));
+        let report = |sequence| Message {
+            header: Header::session(cp_seid, sequence),
+            body: SessionReportRequest::new(ReportType {
+                upir: true,
+                ..Default::default()
+            })
+            .into(),
+        };
+        smf.handle_datagram(at(1), UPF, &bundle(&[report(30), report(31)]));
+        match smf_bundles && upf_bundles {
+            true => {
+                assert_eq!(sequences(&mut upf), [20, 21]);
+                assert_eq!(sequences(&mut smf), [30, 31]);
+            }
+            false => {
+                assert_eq!(violations(&mut upf), refused);
+                assert_eq!(violations(&mut smf), refused);
+            }
+        }
+    }
     // Both did, then the SMF's update takes BUNDL back
     let (mut smf, mut upf) = bundling(at(0));
     let (_, up_seid) = established(&mut smf, &mut upf, at(0));
@@ -1968,24 +1973,44 @@ fn a_bundle_of_an_f_seid_address_is_taken_as_its_messages_alone() {
         &bundle(&[modification(up_seids[0], 21), modification(up_seids[1], 22)]),
     );
     assert_eq!(sequences(&mut upf), [21, 22]);
+    // Another SMF of the set, without an association of its own: its requests, as alone,
+    // are a stranger's
+    upf.handle_datagram(
+        at(3),
+        OTHER,
+        &bundle(&[modification(up_seids[0], 40), modification(up_seids[1], 41)]),
+    );
+    let strangers: Vec<bool> = events(&mut upf)
+        .into_iter()
+        .filter_map(|event| match event {
+            Event::Request { request, .. } => Some(request.stranger),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(strangers, [true, true]);
 }
 
 /// §6.5 and §5.22: the peer of a session that the node adopted without an association, whose
-/// association another PFCP entity of the SMF holds, bundles its messages as an associated
-/// peer does: the node takes them when it announces BUNDL. A host of neither has not agreed
-/// on bundling.
+/// association another SMF of the set holds, bundles its messages as an associated peer
+/// does: the node takes them when it last announced BUNDL, in an association message of
+/// its own. A host of neither has not agreed on bundling.
 #[test]
 fn an_adopted_peer_bundles_as_an_associated_one() {
     let entity = |bundling| {
-        let mut entity = Node::new(NodeConfig {
-            smf_set: SmfSet {
-                mpas: true,
-                ..SmfSet::default()
-            },
-            other_entities: true,
-            bundling,
-            ..config(OTHER, Function::Cp)
-        });
+        let mut entity = node(OTHER, Function::Cp);
+        let features = CpFunctionFeatures {
+            bundl: bundling,
+            ..Default::default()
+        };
+        let setup = AssociationSetupRequest::new(node_id(OTHER), RecoveryTimeStamp::new(1000))
+            .with_cp_function_features(features);
+        let elsewhere = Ipv4Addr::new(10, 0, 0, 12).into_socket(8805);
+        let message = Message {
+            header: Header::node(0),
+            body: setup.into(),
+        };
+        entity.request(at(0), elsewhere, message).unwrap();
+        sent(&mut entity);
         entity.adopt_session(0x55, UPF, 0x66).unwrap();
         events(&mut entity);
         entity
@@ -2758,10 +2783,6 @@ fn a_new_host_costs_the_same_once_the_stamps_fill_the_node() {
     });
     let capacity = upf.config().capacity as u32;
     let address = |n: u32| SocketAddr::new(Ipv4Addr::from(0x0b00_0000 + n).into(), 8805);
-    for n in 0..1000 {
-        upf.adopt_session(u64::from(n) + 1, address(capacity * 2 + n), 0x66)
-            .unwrap();
-    }
     let beat = heartbeat().encode().unwrap();
     let mut hosts = 0..;
     let mut batch = |upf: &mut Node| {
@@ -2914,8 +2935,8 @@ fn a_replaced_association_heartbeats_its_new_address() {
 }
 
 /// §6.2.8: a release ends the association between its sender and the node, which it
-/// names: one that names the association of another is answered "No established PFCP
-/// Association".
+/// names: one that names the association of another is a stranger's, which the caller
+/// takes or rejects.
 #[test]
 fn a_release_ends_the_association_that_it_names() {
     let mut upf = node(UPF, Function::Up);
@@ -2939,7 +2960,16 @@ fn a_release_ends_the_association_that_it_names() {
         body: AssociationReleaseRequest::new(node_id(SMF)).into(),
     };
     upf.handle_datagram(at(1), OTHER, &release.encode().unwrap());
-    assert_eq!(violations(&mut upf), [ViolationKind::UnknownNode]);
+    let (inbound, _) = request(&mut upf);
+    assert!(inbound.stranger);
+    let rejection = Cause::new(CauseValue::RequestRejected);
+    upf.respond(
+        at(1),
+        &inbound,
+        AssociationReleaseResponse::new(node_id(UPF), rejection),
+    )
+    .unwrap();
+    assert!(upf.association(SMF).is_some());
     upf.handle_datagram(at(1), SMF, &release.encode().unwrap());
     let (inbound, _) = request(&mut upf);
     upf.respond(
@@ -3401,7 +3431,8 @@ fn a_request_that_waits_past_keep_is_forgotten() {
 }
 
 /// A request of a host is of an association that is the host's: a host that names the
-/// Node ID of another's is answered "No established PFCP Association".
+/// Node ID of another's in an establishment is answered "No established PFCP Association",
+/// and its release of another's association is a stranger's.
 #[test]
 fn a_request_of_another_peers_node_id() {
     let (_, mut upf) = associated(at(0));
@@ -3414,14 +3445,14 @@ fn a_request_of_another_peers_node_id() {
         header: Header::node(4),
         body: AssociationReleaseRequest::new(node_id(SMF)).into(),
     };
-    upf.handle_datagram(at(1), OTHER, &release.encode().unwrap());
-    assert_eq!(violations(&mut upf), [ViolationKind::UnknownNode]);
+    assert_eq!(taken(&mut upf, OTHER, release), Ok(true));
     assert!(upf.association(SMF).is_some());
 }
 
-/// A session request is of a session of the host's, which is established: one of a host
-/// without an association is answered "No established PFCP Association", and one of a
-/// session of another or of one not established yet "Session context not found".
+/// A session request is of a session of the host's, which is established: one of a
+/// session of another, of a host with an association or without, is a stranger's, which
+/// the caller takes or rejects, and one of a session not established yet is answered
+/// "Session context not found".
 #[test]
 fn a_session_request_of_a_session_of_the_host() {
     let (mut smf, mut upf) = associated(at(0));
@@ -3436,14 +3467,8 @@ fn a_session_request_of_a_session_of_the_host() {
     };
     let stranger: SocketAddr = "10.0.0.66:8805".parse().unwrap();
     upf.handle_datagram(at(1), stranger, &deletion(up_seid));
-    assert_eq!(
-        violations(&mut upf),
-        [ViolationKind::SessionWithoutAssociation]
-    );
-    assert_eq!(
-        decoded(&sent(&mut upf)[0]).body.cause(),
-        Some(CauseValue::NoEstablishedPfcpAssociation)
-    );
+    let (inbound, _) = request(&mut upf);
+    assert!(inbound.stranger);
     let allocated = upf.new_session();
     upf.handle_datagram(at(1), SMF, &deletion(allocated));
     assert_eq!(violations(&mut upf), [ViolationKind::UnknownSeid]);
@@ -3452,7 +3477,8 @@ fn a_session_request_of_a_session_of_the_host() {
     upf.respond(at(1), &inbound, setup_answer()).unwrap();
     sent(&mut upf);
     upf.handle_datagram(at(2), OTHER, &deletion(up_seid));
-    assert_eq!(violations(&mut upf), [ViolationKind::UnknownSeid]);
+    let (inbound, _) = request(&mut upf);
+    assert!(inbound.stranger);
     assert!(upf.session(up_seid).is_some());
 }
 
@@ -4165,16 +4191,14 @@ fn setup_of_set(node_id: NodeId, features: CpFunctionFeatures, set: Option<&str>
     .unwrap()
 }
 
-/// A UPF of `smf_set`, associated with an SMF of the set at each of `smfs`, which gives
-/// its Node ID, its features and its set; and a session of the first.
+/// A UPF associated with an SMF at each of `smfs`, which gives its Node ID, its features and
+/// its set, and which answers each with MPAS in its UP Function Features or not; and a
+/// session of the first.
 fn upf_of_set(
-    smf_set: SmfSet,
+    mpas: bool,
     smfs: &[(SocketAddr, NodeId, CpFunctionFeatures, Option<&str>)],
 ) -> (Node, u64) {
-    let mut upf = Node::new(NodeConfig {
-        smf_set,
-        ..config(UPF, Function::Up)
-    });
+    let mut upf = node(UPF, Function::Up);
     for (from, node_id, features, set) in smfs {
         upf.handle_datagram(
             at(0),
@@ -4182,7 +4206,11 @@ fn upf_of_set(
             &setup_of_set(node_id.clone(), features.clone(), *set),
         );
         let (inbound, _) = request(&mut upf);
-        upf.respond(at(0), &inbound, setup_answer()).unwrap();
+        let answer = setup_answer().with_up_function_features(UpFunctionFeatures {
+            mpas,
+            ..Default::default()
+        });
+        upf.respond(at(0), &inbound, answer).unwrap();
     }
     let (from, node_id, ..) = &smfs[0];
     let f_seid = FSeid {
@@ -4228,13 +4256,13 @@ fn node_id_of_upf() -> NodeId {
     node_id(UPF)
 }
 
-/// What the node gives of the datagram that `from` sends: whether a request, and of the
-/// set, or the violations.
+/// What the node gives of the datagram that `from` sends: whether a request, and a
+/// stranger's, or the violations.
 fn taken(upf: &mut Node, from: SocketAddr, message: Message) -> Result<bool, Vec<ViolationKind>> {
     upf.handle_datagram(at(1), from, &message.encode().unwrap());
     let got = events(upf);
     let request = got.iter().find_map(|event| match event {
-        Event::Request { request, .. } => Some(request.of_smf_set),
+        Event::Request { request, .. } => Some(request.stranger),
         _ => None,
     });
     match request {
@@ -4264,40 +4292,40 @@ fn sset_features() -> CpFunctionFeatures {
     }
 }
 
-/// §5.22.3 bullet 3: with MPAS, the UPF takes a modification or a deletion of a session
-/// from another association of the SMF set, of the same SMF Set ID, for its caller, and
-/// the session is then of that association. Without MPAS, or from an SMF of another set,
-/// it is answered "Session context not found".
+/// §5.22.3 bullet 3, §5.22.2 bullet 3: another SMF of a set modifies or deletes a session,
+/// and updates or releases the association, with an association of its own or none: the
+/// UPF gives its caller each request that names a session or an association that is not
+/// its sender's as a stranger's, for the caller to take or reject; accepted, a
+/// modification gives the session to the sender's association. What names none of the
+/// node's is answered as before.
 #[test]
-fn mpas_a_session_request_of_another_smf_of_the_set() {
+fn a_request_of_another_peers_session_is_a_strangers() {
     let smf_b = Ipv4Addr::new(10, 0, 0, 5).into_socket(8805);
-    let smf_c = Ipv4Addr::new(10, 0, 0, 6).into_socket(8805);
+    let smf_c: SocketAddr = Ipv4Addr::new(10, 0, 0, 7).into_socket(8805);
     let smfs = [
         (SMF, node_id(SMF), mpas(), Some("set")),
         (smf_b, node_id(smf_b), mpas(), Some("set")),
-        (smf_c, node_id(smf_c), mpas(), Some("other")),
     ];
-    let modification = |seid| Message {
-        header: Header::session(seid, 7),
+    let modification = |seid, sequence| Message {
+        header: Header::session(seid, sequence),
         body: SessionModificationRequest::default().into(),
     };
-    let (mut upf, up_seid) = upf_of_set(SmfSet::default(), &smfs);
-    assert_eq!(
-        taken(&mut upf, smf_b, modification(up_seid)),
-        Err(vec![ViolationKind::UnknownSeid])
-    );
-    let mpas = SmfSet {
-        mpas: true,
-        ..SmfSet::default()
+    let deletion = |seid| Message {
+        header: Header::session(seid, 5),
+        body: SessionDeletionRequest::default().into(),
     };
-    let (mut upf, up_seid) = upf_of_set(mpas, &smfs);
-    assert_eq!(
-        taken(&mut upf, smf_c, modification(up_seid)),
-        Err(vec![ViolationKind::UnknownSeid])
-    );
-    upf.handle_datagram(at(1), smf_b, &modification(up_seid).encode().unwrap());
+    let node_message = |sequence, body: Body| Message {
+        header: Header::node(sequence),
+        body,
+    };
+    let (mut upf, up_seid) = upf_of_set(false, &smfs);
+    // Of a session that is not theirs: B with an association, C without
+    assert_eq!(taken(&mut upf, smf_c, modification(up_seid, 6)), Ok(true));
+    assert_eq!(taken(&mut upf, smf_c, deletion(up_seid)), Ok(true));
+    assert_eq!(taken(&mut upf, SMF, modification(up_seid, 6)), Ok(false));
+    upf.handle_datagram(at(1), smf_b, &modification(up_seid, 7).encode().unwrap());
     let (inbound, _) = request(&mut upf);
-    assert!(inbound.of_smf_set);
+    assert!(inbound.stranger);
     upf.respond(
         at(1),
         &inbound,
@@ -4305,50 +4333,45 @@ fn mpas_a_session_request_of_another_smf_of_the_set() {
     )
     .unwrap();
     // The session is of B's association now
-    let again = Message {
-        header: Header::session(up_seid, 8),
-        body: SessionModificationRequest::default().into(),
-    };
-    assert_eq!(taken(&mut upf, smf_b, again), Ok(false));
-}
-
-/// §5.22.2 bullet 3: with SSET, any SMF of the set may modify or delete a session, or
-/// update or release the association, which is of the set: the UPF takes those of an SMF
-/// without an association of its own for its caller. Without SSET it answers "No
-/// established PFCP Association".
-#[test]
-fn sset_requests_of_an_smf_without_an_association() {
-    let set = fqdn("set.example");
-    let other: SocketAddr = Ipv4Addr::new(10, 0, 0, 7).into_socket(8805);
-    let smfs = [(SMF, set.clone(), sset_features(), None)];
-    let modification = |seid| Message {
-        header: Header::session(seid, 7),
-        body: SessionModificationRequest::default().into(),
-    };
-    let update = Message {
-        header: Header::node(8),
-        body: AssociationUpdateRequest::new(set.clone()).into(),
-    };
-    let (mut upf, up_seid) = upf_of_set(SmfSet::default(), &smfs);
+    assert_eq!(taken(&mut upf, smf_b, modification(up_seid, 8)), Ok(false));
+    // Of no session, as before
     assert_eq!(
-        taken(&mut upf, other, modification(up_seid)),
+        taken(&mut upf, smf_c, modification(0x999, 10)),
         Err(vec![ViolationKind::SessionWithoutAssociation])
     );
     assert_eq!(
-        taken(&mut upf, other, update.clone()),
+        taken(&mut upf, smf_b, modification(0x999, 11)),
+        Err(vec![ViolationKind::UnknownSeid])
+    );
+    // An update or a release of the association of another SMF, and of none
+    let update = |node_id| AssociationUpdateRequest::new(node_id).into();
+    let release = |node_id| AssociationReleaseRequest::new(node_id).into();
+    assert_eq!(
+        taken(&mut upf, smf_c, node_message(12, update(node_id(SMF)))),
+        Ok(true)
+    );
+    assert_eq!(
+        taken(&mut upf, smf_b, node_message(13, release(node_id(SMF)))),
+        Ok(true)
+    );
+    assert_eq!(
+        taken(&mut upf, SMF, node_message(14, update(node_id(SMF)))),
+        Ok(false)
+    );
+    assert_eq!(
+        taken(&mut upf, smf_c, node_message(15, update(node_id(smf_c)))),
         Err(vec![ViolationKind::UnknownNode])
     );
-    let sset = SmfSet {
-        sset: true,
-        ..SmfSet::default()
-    };
-    let (mut upf, up_seid) = upf_of_set(sset, &smfs);
-    assert_eq!(taken(&mut upf, other, modification(up_seid)), Ok(true));
-    assert_eq!(taken(&mut upf, other, update), Ok(true));
+    // An establishment needs an association (§6.2.6.2.1)
+    assert_eq!(
+        taken(&mut upf, smf_c, establishment(0x61)),
+        Err(vec![ViolationKind::SessionWithoutAssociation])
+    );
 }
 
-/// §6.2.8 with MPAS: the release of an association keeps its sessions while another of
-/// the SMF set remains, of which they are then; that of the last ends them.
+/// §6.2.8 with MPAS, which the SMFs and the UPF announced in their association messages:
+/// the release of an association keeps its sessions while another of the SMF set remains,
+/// of which they are then; that of the last ends them.
 #[test]
 fn mpas_a_release_keeps_the_sessions_of_the_set() {
     let smf_b = Ipv4Addr::new(10, 0, 0, 5).into_socket(8805);
@@ -4356,11 +4379,7 @@ fn mpas_a_release_keeps_the_sessions_of_the_set() {
         (SMF, node_id(SMF), mpas(), Some("set")),
         (smf_b, node_id(smf_b), mpas(), Some("set")),
     ];
-    let mpas = SmfSet {
-        mpas: true,
-        ..SmfSet::default()
-    };
-    let (mut upf, up_seid) = upf_of_set(mpas, &smfs);
+    let (mut upf, up_seid) = upf_of_set(true, &smfs);
     let release = |from: SocketAddr| Message {
         header: Header::node(9),
         body: AssociationReleaseRequest::new(node_id(from)).into(),
@@ -4389,68 +4408,58 @@ fn mpas_a_release_keeps_the_sessions_of_the_set() {
     }
 }
 
-/// §5.22.2 and §5.22.3 bullet 5: an SMF of a set takes the UPF's request of SEID 0 with
-/// the CP F-SEID of the previous SMF for its caller, which takes the session over; without
-/// the features of a set, it is a session that it does not have.
+/// §5.22.2 and §5.22.3, bullet 5: a UP function hands a session over to an SMF of the set
+/// with a request of SEID 0 and the CP F-SEID of the previous SMF, whether the SMF holds the
+/// association or another SMF of the set does: the SMF gives it its caller as a
+/// stranger's, which takes the session over by adopting it, and answers it to the UP
+/// function's SEID. The adopted session is then routed: its reports, its modifications. A
+/// report of SEID 0 without the previous CP F-SEID is of no session.
 #[test]
 fn a_session_handed_over_to_an_smf_of_the_set() {
-    let report = || {
-        let old = FSeid {
-            v4: true,
-            seid: Some(0x1234),
-            ipv4: Some(Ipv4Addr::new(10, 0, 0, 9)),
-            ..Default::default()
+    for associated_upf in [true, false] {
+        let mut smf = match associated_upf {
+            true => associated(at(0)).0,
+            false => node(SMF, Function::Cp),
         };
-        let report = SessionReportRequest::new(ReportType {
-            uisr: true,
-            ..Default::default()
-        })
-        .with_old_cp_f_seid(old);
-        Message {
-            header: Header::session(0, 9),
-            body: report.into(),
-        }
-    };
-    let (mut smf, _) = associated(at(0));
-    assert_eq!(
-        taken(&mut smf, UPF, report()),
-        Err(vec![ViolationKind::UnknownSeid])
-    );
-    let (mut smf, _) = associated_as(
-        NodeConfig {
-            smf_set: SmfSet {
-                mpas: true,
-                ..SmfSet::default()
-            },
-            ..config(SMF, Function::Cp)
-        },
-        at(0),
-    );
-    smf.handle_datagram(at(1), UPF, &report().encode().unwrap());
-    let (mut inbound, _) = request(&mut smf);
-    assert!(inbound.of_smf_set);
-    // The caller takes the session over, of the UPF's SEID that the set knows
-    let local = smf.new_session();
-    smf.end_session(local);
-    smf.adopt_session(local, UPF, 0x77).unwrap();
-    assert_eq!(
-        smf.adopt_session(local, UPF, 0x77),
-        Err(NodeError::SeidInUse)
-    );
-    inbound.seid = Some(local);
-    smf.respond(at(1), &inbound, SessionReportResponse::new(accepted()))
-        .unwrap();
-    assert_eq!(decoded(&sent(&mut smf)[0]).header.seid, Some(0x77));
-    // A report of the session that it took over is of its own
-    let report = Message {
-        header: Header::session(local, 10),
-        body: SessionReportRequest::new(ReportType {
-            upir: true,
-            ..Default::default()
-        })
-        .into(),
-    };
-    assert_eq!(taken(&mut smf, UPF, report), Ok(false));
+        smf.handle_datagram(at(1), UPF, &handover_report().encode().unwrap());
+        let (mut inbound, _) = request(&mut smf);
+        assert!(inbound.stranger);
+        // The caller takes the session over, of the UPF's SEID that the set knows
+        let local = smf.new_session();
+        smf.adopt_session(local, UPF, 0x77).unwrap();
+        assert_eq!(
+            smf.adopt_session(local, UPF, 0x77),
+            Err(NodeError::SeidInUse)
+        );
+        inbound.seid = Some(local);
+        smf.respond(at(1), &inbound, SessionReportResponse::new(accepted()))
+            .unwrap();
+        assert_eq!(decoded(&sent(&mut smf)[0]).header.seid, Some(0x77));
+        // A report of the session that it took over is of its own
+        let report = Message {
+            header: Header::session(local, 10),
+            body: SessionReportRequest::new(ReportType {
+                upir: true,
+                ..Default::default()
+            })
+            .into(),
+        };
+        assert_eq!(taken(&mut smf, UPF, report), Ok(false));
+        // Its modifications go to the UPF's SEID
+        smf.session_request(at(2), local, SessionModificationRequest::default())
+            .unwrap();
+        assert_eq!(decoded(&sent(&mut smf)[0]).header.seid, Some(0x77));
+        let mut lone = handover_report();
+        let Body::SessionReportRequest(report) = &mut lone.body else {
+            panic!()
+        };
+        report.old_cp_f_seid = None;
+        let refused = match associated_upf {
+            true => ViolationKind::UnknownSeid,
+            false => ViolationKind::SessionWithoutAssociation,
+        };
+        assert_eq!(taken(&mut smf, UPF, lone), Err(vec![refused]));
+    }
 }
 
 /// §5.22.2 bullet 4: a UP function sends a session's request to another SMF of the set,
@@ -4460,11 +4469,7 @@ fn a_session_handed_over_to_an_smf_of_the_set() {
 fn a_session_moved_to_another_smf_of_the_set() {
     let set = fqdn("set.example");
     let other: SocketAddr = Ipv4Addr::new(10, 0, 0, 7).into_socket(8805);
-    let sset = SmfSet {
-        sset: true,
-        ..SmfSet::default()
-    };
-    let (mut upf, up_seid) = upf_of_set(sset, &[(SMF, set, sset_features(), None)]);
+    let (mut upf, up_seid) = upf_of_set(false, &[(SMF, set, sset_features(), None)]);
     let old = FSeid {
         v4: true,
         seid: Some(0x51),
@@ -4501,53 +4506,6 @@ fn a_session_moved_to_another_smf_of_the_set() {
     upf.handle_datagram(at(1), other, &response.encode().unwrap());
     let session = upf.session(up_seid).unwrap();
     assert_eq!((session.peer, session.peer_seid), (other, Some(0x99)));
-}
-
-/// §5.22.2 bullets 3-5: with SSET the set has one association, held by one SMF. Another
-/// SMF of the set, with no association of its own, still takes the UPF's SEID-0 handover
-/// report (header SEID 0, Old CP F-SEID of the previous SMF) for its caller, adopts the
-/// session, and may modify it: any SMF of the set controls the session, with or without
-/// an association of its own.
-#[test]
-fn sset_an_smf_without_the_association_controls_a_session() {
-    let mut smf = Node::new(NodeConfig {
-        smf_set: SmfSet {
-            sset: true,
-            ..SmfSet::default()
-        },
-        ..config(SMF, Function::Cp)
-    });
-    let old = FSeid {
-        v4: true,
-        seid: Some(0x1234),
-        ipv4: Some(Ipv4Addr::new(10, 0, 0, 9)),
-        ..Default::default()
-    };
-    let report = Message {
-        header: Header::session(0, 9),
-        body: SessionReportRequest::new(ReportType {
-            uisr: true,
-            ..Default::default()
-        })
-        .with_old_cp_f_seid(old)
-        .into(),
-    };
-    smf.handle_datagram(at(1), UPF, &report.encode().unwrap());
-    let (mut inbound, _) = request(&mut smf);
-    assert!(inbound.of_smf_set);
-    // The caller takes the session over, of the UPF's SEID that the set knows, and
-    // answers the report.
-    let local = smf.new_session();
-    smf.end_session(local);
-    smf.adopt_session(local, UPF, 0x77).unwrap();
-    inbound.seid = Some(local);
-    smf.respond(at(1), &inbound, SessionReportResponse::new(accepted()))
-        .unwrap();
-    assert_eq!(decoded(&sent(&mut smf)[0]).header.seid, Some(0x77));
-    // Any SMF of the set may modify the session, with no association of its own.
-    smf.session_request(at(2), local, SessionModificationRequest::default())
-        .unwrap();
-    assert_eq!(decoded(&sent(&mut smf)[0]).header.seid, Some(0x77));
 }
 
 /// Table 7.5.4.1-1 NOTE 2, §6.3.3: the accepted response to a session's outstanding
@@ -4665,7 +4623,7 @@ fn a_probe_answer_of_another_type_changes_nothing() {
 
 /// Table 7.4.4.3-1, §5.22.3: an Association Update carries the supported features, which
 /// the node must take, not only a new SMF Set ID. An SMF that turns MPAS off in an update
-/// no longer shares its sessions with the set.
+/// no longer shares its sessions with the set: its release ends them.
 #[test]
 fn an_association_update_changes_the_set_features() {
     let smf_b = Ipv4Addr::new(10, 0, 0, 5).into_socket(8805);
@@ -4673,17 +4631,7 @@ fn an_association_update_changes_the_set_features() {
         (SMF, node_id(SMF), mpas(), Some("set")),
         (smf_b, node_id(smf_b), mpas(), Some("set")),
     ];
-    let mpas = SmfSet {
-        mpas: true,
-        ..SmfSet::default()
-    };
-    let (mut upf, up_seid) = upf_of_set(mpas, &smfs);
-    let modification = |seq| Message {
-        header: Header::session(up_seid, seq),
-        body: SessionModificationRequest::default().into(),
-    };
-    // Before: B may take A's session over by MPAS.
-    assert_eq!(taken(&mut upf, smf_b, modification(7)), Ok(true));
+    let (mut upf, up_seid) = upf_of_set(true, &smfs);
     // A turns MPAS off in an Association Update, with no new SMF Set ID.
     let update = Message {
         header: Header::node(8),
@@ -4699,11 +4647,12 @@ fn an_association_update_changes_the_set_features() {
         AssociationUpdateResponse::new(node_id(UPF), accepted()),
     )
     .unwrap();
-    // After: A no longer shares the session, so B's modification is not of the set.
-    assert_eq!(
-        taken(&mut upf, smf_b, modification(9)),
-        Err(vec![ViolationKind::UnknownSeid])
-    );
+    assert!(upf.end_association(SMF));
+    let released = events(&mut upf).into_iter().find_map(|event| match event {
+        Event::Released { sessions, kept, .. } => Some((sessions, kept)),
+        _ => None,
+    });
+    assert_eq!(released, Some((vec![up_seid], vec![])));
 }
 
 /// The same of a UPF's Association Update to an SMF: the SMF takes the MPAS of the UPF's
@@ -4715,26 +4664,25 @@ fn a_cp_takes_the_mpas_of_a_upf_update() {
 }
 
 /// §6.2.8.2: a CP function keeps the sessions of a released association only when the
-/// MPAS feature is used, which the UPF must support too. The CP reads the UPF's MPAS from
-/// the UP Function Features of the Association Setup Response; a UPF that did not announce
-/// it means the CP ends the sessions on release.
+/// MPAS feature is used, which both announce: the CP its own in the CP Function Features
+/// of its Association Setup Request, the UPF in the UP Function Features of its response.
+/// Without either, the CP ends the sessions on release.
 #[test]
 fn a_cp_keeps_released_sessions_only_with_an_mpas_upf() {
-    let outcome = |up_mpas: bool| {
-        let mut smf = Node::new(NodeConfig {
-            smf_set: SmfSet {
-                mpas: true,
-                ..SmfSet::default()
-            },
-            ..config(SMF, Function::Cp)
-        });
+    let outcome = |cp_mpas: bool, up_mpas: bool| {
+        let mut smf = node(SMF, Function::Cp);
         let mut upf = node(UPF, Function::Up);
+        let features = CpFunctionFeatures {
+            mpas: cp_mpas,
+            ..Default::default()
+        };
         smf.request(
             at(0),
             UPF,
             Message {
                 header: Header::node(0),
                 body: AssociationSetupRequest::new(node_id(SMF), RecoveryTimeStamp::new(1000))
+                    .with_cp_function_features(features)
                     .into(),
             },
         )
@@ -4763,33 +4711,34 @@ fn a_cp_keeps_released_sessions_only_with_an_mpas_upf() {
             .unwrap();
         (released, smf.session(cp_seid).is_some())
     };
-    // A UPF that did not announce MPAS: the CP ends the sessions.
-    let ((sessions, kept), still) = outcome(false);
-    assert!(!still);
-    assert_eq!(kept, Vec::<u64>::new());
-    assert!(!sessions.is_empty());
-    // A UPF that announced MPAS: the CP keeps them for its caller to decide.
-    let ((sessions, kept), still) = outcome(true);
+    // A UPF, or an SMF, that did not announce MPAS: the CP ends the sessions.
+    for (cp_mpas, up_mpas) in [(true, false), (false, true)] {
+        let ((sessions, kept), still) = outcome(cp_mpas, up_mpas);
+        assert!(!still);
+        assert_eq!(kept, Vec::<u64>::new());
+        assert!(!sessions.is_empty());
+    }
+    // Both announced MPAS: the CP keeps them for its caller to decide.
+    let ((sessions, kept), still) = outcome(true, true);
     assert!(still);
     assert_eq!(sessions, Vec::<u64>::new());
     assert!(!kept.is_empty());
 }
 
-/// §5.22.3 bullet 1, §6.2.6.3: a UPF may set the associations up itself; each SMF of the
-/// set then says its MPAS and its SMF Set ID in its Association Setup Response, which the
-/// UPF takes, so another SMF of the set may modify a session.
+/// §5.22.3 bullet 1, §6.2.6.3: a UPF may set the associations up itself, with MPAS in its
+/// requests; each SMF of the set then says its MPAS and its SMF Set ID in its Association
+/// Setup Response, which the UPF takes: a release leaves a session to another SMF of the
+/// set.
 #[test]
 fn mpas_of_associations_that_the_upf_sets_up() {
     let smf_b = Ipv4Addr::new(10, 0, 0, 5).into_socket(8805);
-    let mut upf = Node::new(NodeConfig {
-        smf_set: SmfSet {
-            mpas: true,
-            ..SmfSet::default()
-        },
-        ..config(UPF, Function::Up)
-    });
+    let mut upf = node(UPF, Function::Up);
     for smf in [SMF, smf_b] {
-        let setup = AssociationSetupRequest::new(node_id(UPF), RecoveryTimeStamp::new(1000));
+        let setup = AssociationSetupRequest::new(node_id(UPF), RecoveryTimeStamp::new(1000))
+            .with_up_function_features(UpFunctionFeatures {
+                mpas: true,
+                ..Default::default()
+            });
         upf.request(
             at(0),
             smf,
@@ -4830,23 +4779,19 @@ fn mpas_of_associations_that_the_upf_sets_up() {
     )
     .unwrap();
     sent(&mut upf);
-    let modification = Message {
-        header: Header::session(up_seid, 7),
-        body: SessionModificationRequest::default().into(),
-    };
-    assert_eq!(taken(&mut upf, smf_b, modification), Ok(true));
+    events(&mut upf);
+    assert!(upf.end_association(SMF));
+    let released = events(&mut upf).into_iter().find_map(|event| match event {
+        Event::Released { sessions, kept, .. } => Some((sessions, kept)),
+        _ => None,
+    });
+    assert_eq!(released, Some((vec![], vec![up_seid])));
 }
 
 /// A CP function of MPAS that a UPF sets an association up with, announcing MPAS, then
 /// updating its UP Function Features to `update`; whether a release then keeps a session.
 fn cp_keeps_with_a_upf_that_sets_up(update: Option<bool>) -> bool {
-    let mut smf = Node::new(NodeConfig {
-        smf_set: SmfSet {
-            mpas: true,
-            ..SmfSet::default()
-        },
-        ..config(SMF, Function::Cp)
-    });
+    let mut smf = node(SMF, Function::Cp);
     let mut upf = node(UPF, Function::Up);
     let up_mpas = |mpas| UpFunctionFeatures {
         mpas,
@@ -4923,11 +4868,7 @@ fn mpas_a_release_leaves_a_taken_over_session_with_its_smf() {
         (b, node_id(b), mpas(), Some("set")),
         (c, node_id(c), mpas(), Some("set")),
     ];
-    let mpas = SmfSet {
-        mpas: true,
-        ..SmfSet::default()
-    };
-    let (mut upf, up_seid) = upf_of_set(mpas, &smfs);
+    let (mut upf, up_seid) = upf_of_set(true, &smfs);
     // B takes the session over, with its Node ID and no new CP F-SEID.
     let takeover = Message {
         header: Header::session(up_seid, 7),
@@ -4937,7 +4878,7 @@ fn mpas_a_release_leaves_a_taken_over_session_with_its_smf() {
     };
     upf.handle_datagram(at(1), b, &takeover.encode().unwrap());
     let (inbound, _) = request(&mut upf);
-    assert!(inbound.of_smf_set);
+    assert!(inbound.stranger);
     upf.respond(
         at(1),
         &inbound,
@@ -4948,7 +4889,7 @@ fn mpas_a_release_leaves_a_taken_over_session_with_its_smf() {
         header: Header::session(up_seid, seq),
         body: SessionModificationRequest::default().into(),
     };
-    // The session is B's now: B's own modification is not of the set.
+    // The session is B's now: B's own modification is not a stranger's.
     assert_eq!(taken(&mut upf, b, bs(8)), Ok(false));
     // A releases its association.
     let release = Message {
@@ -4964,7 +4905,7 @@ fn mpas_a_release_leaves_a_taken_over_session_with_its_smf() {
     )
     .unwrap();
     events(&mut upf);
-    // The session stays B's: it is kept, and still not of the set for B.
+    // The session stays B's: it is kept, and still not a stranger's for B.
     assert!(upf.session(up_seid).is_some());
     assert_eq!(taken(&mut upf, b, bs(10)), Ok(false));
 }
@@ -5011,77 +4952,17 @@ fn an_answer_to_a_request_no_longer_waiting_says_so() {
 
 /// §7.2.2.4.2 bullet 3: the response to a request of header SEID 0 has SEID 0. A UPF
 /// without an association sends a Session Report Request of SEID 0 with the Old CP F-SEID
-/// of a previous SMF; the rejection must not carry that SMF-assigned SEID in its header.
+/// of a previous SMF, which the caller rejects: the rejection does not carry that
+/// SMF-assigned SEID in its header.
 #[test]
 fn a_seid_zero_report_is_rejected_with_seid_zero() {
     let mut smf = node(SMF, Function::Cp);
-    let old = FSeid {
-        v4: true,
-        seid: Some(0x1234),
-        ipv4: Some(Ipv4Addr::new(10, 0, 0, 9)),
-        ..Default::default()
-    };
-    let report = Message {
-        header: Header::session(0, 9),
-        body: SessionReportRequest::new(ReportType {
-            uisr: true,
-            ..Default::default()
-        })
-        .with_old_cp_f_seid(old)
-        .into(),
-    };
-    smf.handle_datagram(at(1), UPF, &report.encode().unwrap());
+    smf.handle_datagram(at(1), UPF, &handover_report().encode().unwrap());
+    let (inbound, _) = request(&mut smf);
+    let rejection = Cause::new(CauseValue::NoEstablishedPfcpAssociation);
+    smf.respond(at(1), &inbound, SessionReportResponse::new(rejection))
+        .unwrap();
     assert_eq!(decoded(&sent(&mut smf)[0]).header.seid, Some(0));
-}
-
-/// §5.22.2 bullet 3, §6.2.6.2.1: with SSET, an SMF without the set's association may
-/// modify or delete an established session of the set, and nothing more. An establishment
-/// needs an association, whatever its SEID, and so does a request of a session that is
-/// not established.
-#[test]
-fn sset_an_smf_without_the_association_establishes_nothing() {
-    let mut smf = Node::new(NodeConfig {
-        smf_set: SmfSet {
-            sset: true,
-            ..SmfSet::default()
-        },
-        ..config(SMF, Function::Cp)
-    });
-    // An establishment of a SEID of new_session, or of the caller's own: refused alike.
-    let seid = smf.new_session();
-    assert_eq!(
-        smf.request(at(0), UPF, establishment(seid)),
-        Err(NodeError::NoAssociation)
-    );
-    assert_eq!(
-        smf.request(at(0), UPF, establishment(0x99)),
-        Err(NodeError::NoAssociation)
-    );
-    assert!(sent(&mut smf).is_empty());
-    // An established session of the set, adopted, is modified and deleted.
-    smf.adopt_session(0x42, UPF, 0x77).unwrap();
-    smf.session_request(at(0), 0x42, SessionModificationRequest::default())
-        .unwrap();
-    smf.session_request(at(0), 0x42, SessionDeletionRequest::default())
-        .unwrap();
-    assert_eq!(sent(&mut smf).len(), 2);
-    // It moves to a new SEID, which is no established session while the move waits.
-    let moved = FSeid {
-        v4: true,
-        seid: Some(0x43),
-        ipv4: Some(Ipv4Addr::new(10, 0, 0, 1)),
-        ..Default::default()
-    };
-    smf.session_request(
-        at(0),
-        0x42,
-        SessionModificationRequest::default().with_cp_f_seid(moved),
-    )
-    .unwrap();
-    assert_eq!(
-        smf.session_request(at(0), 0x43, SessionDeletionRequest::default()),
-        Err(NodeError::NoAssociation)
-    );
 }
 
 /// The accepted responses of the node's requests in the order the peer took them
@@ -5412,94 +5293,19 @@ fn handover_report() -> Message {
     }
 }
 
-/// §5.22.3 bullet 6: with MPAS, a UPF hands a session over to an SMF of the set with which
-/// it has an association. An SMF of MPAS alone answers a report of SEID 0 of a UPF without
-/// one with "No established PFCP Association"; only SSET lets the taking SMF have none,
-/// and, with `other_entities`, another PFCP entity of the same SMF
-/// (`mpas_a_handover_report_to_another_entity_of_the_smf`).
-#[test]
-fn mpas_a_handover_report_needs_an_association() {
-    let report = handover_report;
-    let of = |mpas, sset| {
-        Node::new(NodeConfig {
-            smf_set: SmfSet { sset, mpas },
-            ..config(SMF, Function::Cp)
-        })
-    };
-    let mut smf = of(true, false);
-    assert_eq!(
-        taken(&mut smf, UPF, report()),
-        Err(vec![ViolationKind::SessionWithoutAssociation])
-    );
-    let rejection = decoded(&sent(&mut smf)[0]);
-    assert_eq!(
-        rejection.body.cause(),
-        Some(CauseValue::NoEstablishedPfcpAssociation)
-    );
-    assert_eq!(taken(&mut of(false, true), UPF, report()), Ok(true));
-    assert_eq!(taken(&mut of(true, true), UPF, report()), Ok(true));
-}
-
-/// §5.22.3 bullets 5 and 6: with MPAS, a UPF hands a session over to another PFCP entity of
-/// the same SMF too, a node of its own, which has not the association that another entity
-/// of the SMF holds. A node of `other_entities` gives its caller the report of a host
-/// without an association with it, as of the set, and answers nothing itself: its caller
-/// takes the session only from a UPF that has an association with an entity of its SMF,
-/// here by adopting it, and answers to the UPF's SEID. Without MPAS, a node of
-/// `other_entities` rejects it.
-#[test]
-fn mpas_a_handover_report_to_another_entity_of_the_smf() {
-    let entity = |mpas| {
-        Node::new(NodeConfig {
-            smf_set: SmfSet {
-                mpas,
-                ..SmfSet::default()
-            },
-            other_entities: true,
-            ..config(OTHER, Function::Cp)
-        })
-    };
-    let mut other = entity(true);
-    other.handle_datagram(at(1), UPF, &handover_report().encode().unwrap());
-    let (mut inbound, _) = request(&mut other);
-    assert!(inbound.of_smf_set);
-    assert!(sent(&mut other).is_empty());
-    // The caller takes the session over, with the UPF's SEID that the SMF knows.
-    other.adopt_session(0x55, UPF, 0x66).unwrap();
-    inbound.seid = Some(0x55);
-    let cp_f_seid = FSeid {
-        v4: true,
-        seid: Some(0x55),
-        ipv4: Some(Ipv4Addr::new(10, 0, 0, 3)),
-        ..Default::default()
-    };
-    let response = SessionReportResponse::new(accepted()).with_cp_f_seid(cp_f_seid);
-    other.respond(at(1), &inbound, response).unwrap();
-    assert_eq!(decoded(&sent(&mut other)[0]).header.seid, Some(0x66));
-    assert_eq!(
-        taken(&mut entity(false), UPF, handover_report()),
-        Err(vec![ViolationKind::SessionWithoutAssociation])
-    );
-}
-
 /// Table 7.4.4.4-1: the Association Update Response carries the responder's function
 /// features too. A CP function of MPAS sets an association up with a UPF of MPAS `before`,
 /// sends it an update, which the UPF answers with `cause` and its UP Function Features of
 /// MPAS `after`; whether a release then keeps a session.
 fn cp_keeps_after_an_update_answered_with(before: bool, after: bool, cause: CauseValue) -> bool {
-    let mut smf = Node::new(NodeConfig {
-        smf_set: SmfSet {
-            mpas: true,
-            ..SmfSet::default()
-        },
-        ..config(SMF, Function::Cp)
-    });
+    let mut smf = node(SMF, Function::Cp);
     let mut upf = node(UPF, Function::Up);
     let up_mpas = |mpas| UpFunctionFeatures {
         mpas,
         ..Default::default()
     };
-    let setup = AssociationSetupRequest::new(node_id(SMF), RecoveryTimeStamp::new(1000));
+    let setup = AssociationSetupRequest::new(node_id(SMF), RecoveryTimeStamp::new(1000))
+        .with_cp_function_features(mpas());
     smf.request(
         at(0),
         UPF,
@@ -5602,95 +5408,6 @@ fn a_refused_establishment_leaves_no_session() {
     assert!(upf.session(up_seid).is_none());
     pass(&mut upf, &mut smf, SMF, at(0));
     assert!(smf.session(cp_seid).is_none());
-}
-
-/// §5.22.2, Table 7.4.4.3-1: an Association Update that turns SSET off or on changes
-/// what an SMF of the set without an association may ask. Once the holder of the set's
-/// association withdraws SSET, another SMF's modification is answered "No established
-/// PFCP Association"; once it announces SSET, the modification goes to the caller.
-#[test]
-fn an_association_update_changes_the_sset_of_the_set() {
-    let set = fqdn("set.example");
-    let other: SocketAddr = Ipv4Addr::new(10, 0, 0, 7).into_socket(8805);
-    let sset = SmfSet {
-        sset: true,
-        ..SmfSet::default()
-    };
-    let modification = |seid, sequence| Message {
-        header: Header::session(seid, sequence),
-        body: SessionModificationRequest::default().into(),
-    };
-    let update = |sset| Message {
-        header: Header::node(8),
-        body: AssociationUpdateRequest::new(fqdn("set.example"))
-            .with_cp_function_features(CpFunctionFeatures {
-                sset,
-                ..Default::default()
-            })
-            .into(),
-    };
-    let updated = |upf: &mut Node, sset| {
-        upf.handle_datagram(at(2), SMF, &update(sset).encode().unwrap());
-        let (inbound, _) = request(upf);
-        upf.respond(
-            at(2),
-            &inbound,
-            AssociationUpdateResponse::new(node_id(UPF), accepted()),
-        )
-        .unwrap();
-    };
-    let smfs = [(SMF, set.clone(), sset_features(), None)];
-    let (mut upf, up_seid) = upf_of_set(sset, &smfs);
-    assert_eq!(taken(&mut upf, other, modification(up_seid, 7)), Ok(true));
-    updated(&mut upf, false);
-    assert_eq!(
-        taken(&mut upf, other, modification(up_seid, 9)),
-        Err(vec![ViolationKind::SessionWithoutAssociation])
-    );
-    let smfs = [(SMF, set, CpFunctionFeatures::default(), None)];
-    let (mut upf, up_seid) = upf_of_set(sset, &smfs);
-    assert_eq!(
-        taken(&mut upf, other, modification(up_seid, 7)),
-        Err(vec![ViolationKind::SessionWithoutAssociation])
-    );
-    updated(&mut upf, true);
-    assert_eq!(taken(&mut upf, other, modification(up_seid, 9)), Ok(true));
-}
-
-/// §5.22.2 bullet 3: an SMF without an association updates or releases the set's
-/// association only when that association is of SSET. A UPF of SSET with an association
-/// whose SMF did not announce SSET answers another host's update or release of it with
-/// "No established PFCP Association".
-#[test]
-fn sset_an_update_of_an_association_not_of_sset_is_refused() {
-    let set = fqdn("set.example");
-    let other: SocketAddr = Ipv4Addr::new(10, 0, 0, 7).into_socket(8805);
-    let sset = SmfSet {
-        sset: true,
-        ..SmfSet::default()
-    };
-    let update = Message {
-        header: Header::node(8),
-        body: AssociationUpdateRequest::new(set.clone()).into(),
-    };
-    let release = Message {
-        header: Header::node(9),
-        body: AssociationReleaseRequest::new(set.clone()).into(),
-    };
-    let smfs = [(SMF, set.clone(), CpFunctionFeatures::default(), None)];
-    let (mut upf, _) = upf_of_set(sset, &smfs);
-    assert_eq!(
-        taken(&mut upf, other, update.clone()),
-        Err(vec![ViolationKind::UnknownNode])
-    );
-    assert_eq!(
-        taken(&mut upf, other, release.clone()),
-        Err(vec![ViolationKind::UnknownNode])
-    );
-    let smfs = [(SMF, set, sset_features(), None)];
-    let (mut upf, _) = upf_of_set(sset, &smfs);
-    assert_eq!(taken(&mut upf, other, update), Ok(true));
-    assert_eq!(taken(&mut upf, other, release), Ok(true));
 }
 
 /// §6.4: a peer's retransmission of a request that the node holds is an event, which a
@@ -5870,11 +5587,6 @@ fn a_response_after_two_moves_acts_on_its_session() {
 #[test]
 fn mpas_an_entity_controls_the_session_that_it_takes_over() {
     let mut other = Node::new(NodeConfig {
-        smf_set: SmfSet {
-            mpas: true,
-            ..SmfSet::default()
-        },
-        other_entities: true,
         strangers: 2,
         heartbeat: Some(Duration::from_secs(60)),
         ..config(OTHER, Function::Cp)
@@ -5926,38 +5638,10 @@ fn mpas_an_entity_controls_the_session_that_it_takes_over() {
     }
     assert_eq!(requests_of(&events(&mut other)), 10);
     assert_eq!(other.counters().refused, 0);
-    // A heartbeat to the UPF, which tells its Recovery Time Stamp, and then its restart
-    let beat = |other: &mut Node, now: Duration, stamp: u32| {
-        assert!(other.poll_timeout().is_some_and(|due| due <= now));
-        other.handle_timeout(now);
-        let heartbeats: Vec<Message> = sent(other)
-            .iter()
-            .filter(|transmit| transmit.to == UPF)
-            .map(decoded)
-            .filter(|message| matches!(message.body, Body::HeartbeatRequest(_)))
-            .collect();
-        assert_eq!(heartbeats.len(), 1, "a heartbeat to the UPF at {now:?}");
-        let response = Message {
-            header: Header::node(heartbeats[0].header.sequence),
-            body: HeartbeatResponse::new(RecoveryTimeStamp::new(stamp)).into(),
-        };
-        other.handle_datagram(now, UPF, &response.encode().unwrap());
-        events(other)
-    };
-    assert!(
-        !beat(&mut other, at(3), 1000)
-            .iter()
-            .any(|event| matches!(event, Event::PeerRestarted { .. }))
-    );
-    let restarted = beat(&mut other, at(63), 2000);
-    assert!(restarted.iter().any(|event| matches!(
-        event,
-        Event::PeerRestarted {
-            peer: UPF,
-            recovery_time_stamp: 2000
-        }
-    )));
-    // Its deletion ends it, and the heartbeats with it
+    // No heartbeat to the UPF, whose association another entity holds
+    other.handle_timeout(at(63));
+    assert!(sent(&mut other).is_empty());
+    // Its deletion ends it
     other
         .session_request(at(64), 0x55, SessionDeletionRequest::default())
         .unwrap();
@@ -5968,60 +5652,7 @@ fn mpas_an_entity_controls_the_session_that_it_takes_over() {
     };
     other.handle_datagram(at(64), UPF, &response.encode().unwrap());
     assert!(other.session(0x55).is_none());
-    other.handle_timeout(at(123));
-    assert!(sent(&mut other).is_empty());
     assert_eq!(other.poll_timeout(), None);
-}
-
-/// §6.2.2.2: a node heartbeats the peer of a session adopted without an association for
-/// as long as such a session lasts, also through an association with the peer that ends
-/// and leaves the session to the set (§6.2.8, MPAS); without one, a released association
-/// has no more heartbeats.
-#[test]
-fn an_adopted_session_keeps_the_heartbeats_of_its_peer_through_a_release() {
-    let released = |adopt: bool| {
-        let mut smf = Node::new(NodeConfig {
-            smf_set: SmfSet {
-                mpas: true,
-                ..SmfSet::default()
-            },
-            heartbeat: Some(Duration::from_secs(60)),
-            ..config(SMF, Function::Cp)
-        });
-        if adopt {
-            smf.adopt_session(0x55, UPF, 0x66).unwrap();
-        }
-        let mut upf = node(UPF, Function::Up);
-        let setup = AssociationSetupRequest::new(node_id(SMF), RecoveryTimeStamp::new(1000));
-        smf.request(
-            at(0),
-            UPF,
-            Message {
-                header: Header::node(0),
-                body: setup.into(),
-            },
-        )
-        .unwrap();
-        pass(&mut smf, &mut upf, UPF, at(0));
-        let (inbound, _) = request(&mut upf);
-        let answer =
-            AssociationSetupResponse::new(node_id(UPF), accepted(), RecoveryTimeStamp::new(1000))
-                .with_up_function_features(UpFunctionFeatures {
-                    mpas: true,
-                    ..Default::default()
-                });
-        upf.respond(at(0), &inbound, answer).unwrap();
-        pass(&mut upf, &mut smf, SMF, at(0));
-        assert!(smf.end_association(UPF));
-        smf
-    };
-    let mut smf = released(true);
-    assert!(smf.session(0x55).is_some());
-    let due = smf.poll_timeout().expect("a heartbeat");
-    smf.handle_timeout(due);
-    assert!(sent(&mut smf).iter().any(|transmit| transmit.to == UPF
-        && matches!(decoded(transmit).body, Body::HeartbeatRequest(_))));
-    assert_eq!(released(false).poll_timeout(), None);
 }
 
 /// The requests of a host without an association, of the address of a session's F-SEID,
@@ -6053,82 +5684,12 @@ fn the_requests_of_the_host_of_an_f_seid_wait_as_a_strangers() {
     assert_eq!(smf.counters().refused, 1);
 }
 
-/// A node heartbeats the peer of its adopted sessions from the first adoption: those
-/// after change nothing, nor does an adoption from a peer of an association, which has
-/// the heartbeats of one, nor one on a node of no heartbeat.
+/// `NodeConfig::capacity`: the Recovery Time Stamps that a flood of hosts without an
+/// association pushes out are not those of the associated peers: the restart of one is
+/// told after a flood, while its association lasts, and that of an adopted session's peer,
+/// whose association another entity holds, is not kept through one.
 #[test]
-fn adoptions_start_the_heartbeats_of_their_peer_once() {
-    let (mut smf, _) = associated_as(
-        NodeConfig {
-            heartbeat: Some(Duration::from_secs(60)),
-            ..config(SMF, Function::Cp)
-        },
-        at(0),
-    );
-    assert_eq!(smf.poll_timeout(), Some(at(60)));
-    smf.adopt_session(0x55, UPF, 0x66).unwrap();
-    assert_eq!(smf.poll_timeout(), Some(at(60)));
-    let mut smf = Node::new(NodeConfig {
-        heartbeat: Some(Duration::from_secs(60)),
-        ..config(SMF, Function::Cp)
-    });
-    smf.adopt_session(0x55, UPF, 0x66).unwrap();
-    assert_eq!(smf.poll_timeout(), Some(at(0)));
-    smf.handle_timeout(at(0));
-    let request = decoded(&sent(&mut smf)[0]);
-    let response = Message {
-        header: Header::node(request.header.sequence),
-        body: HeartbeatResponse::new(RecoveryTimeStamp::new(1000)).into(),
-    };
-    smf.handle_datagram(at(0), UPF, &response.encode().unwrap());
-    smf.adopt_session(0x56, UPF, 0x67).unwrap();
-    assert_eq!(smf.poll_timeout(), Some(at(60)));
-    // A node of no heartbeat beats none
-    let mut smf = node(SMF, Function::Cp);
-    smf.adopt_session(0x55, UPF, 0x66).unwrap();
-    assert_eq!(smf.poll_timeout(), None);
-}
-
-/// A node keeps the Recovery Time Stamp of the peer of an adopted session through a flood
-/// of hosts without an association, as it keeps those of its associations: their
-/// heartbeats do not make it miss the peer's restart.
-#[test]
-fn an_adopted_peer_keeps_its_recovery_time_stamp() {
-    let mut smf = Node::new(NodeConfig {
-        capacity: 2,
-        heartbeat: Some(Duration::from_secs(60)),
-        ..config(SMF, Function::Cp)
-    });
-    smf.adopt_session(0x55, UPF, 0x66).unwrap();
-    let beat = |smf: &mut Node, now: Duration, stamp: u32| {
-        smf.handle_timeout(now);
-        let request = decoded(&sent(smf)[0]);
-        let response = Message {
-            header: Header::node(request.header.sequence),
-            body: HeartbeatResponse::new(RecoveryTimeStamp::new(stamp)).into(),
-        };
-        smf.handle_datagram(now, UPF, &response.encode().unwrap());
-        events(smf)
-    };
-    beat(&mut smf, at(0), 1000);
-    for host in 10..14 {
-        let stranger = Ipv4Addr::new(10, 0, 0, host).into_socket(8805);
-        smf.handle_datagram(at(1), stranger, &heartbeat().encode().unwrap());
-    }
-    sent(&mut smf);
-    assert!(
-        beat(&mut smf, at(60), 2000)
-            .iter()
-            .any(|event| matches!(event, Event::PeerRestarted { peer: UPF, .. }))
-    );
-}
-
-/// The Recovery Time Stamps that a flood of hosts without an association spares are
-/// those of the peers of an association or of an adopted session while they last: once
-/// the association is released, or the adopted session ends, the peer's stamp goes before
-/// the others, and a new one of it is no restart.
-#[test]
-fn the_stamps_that_a_flood_spares_follow_the_associations_and_adoptions() {
+fn the_stamps_that_a_flood_spares_follow_the_associations() {
     let (mut smf, _) = associated_as(
         NodeConfig {
             capacity: 2,
@@ -6157,12 +5718,10 @@ fn the_stamps_that_a_flood_spares_follow_the_associations_and_adoptions() {
     assert!(!beat(&mut smf, OTHER, 1000));
     flood(&mut smf);
     assert!(beat(&mut smf, UPF, 2000));
-    assert!(beat(&mut smf, OTHER, 2000));
+    assert!(!beat(&mut smf, OTHER, 2000));
     assert!(smf.end_association(UPF));
-    assert!(smf.end_session(0x55).is_some());
     flood(&mut smf);
     assert!(!beat(&mut smf, UPF, 3000));
-    assert!(!beat(&mut smf, OTHER, 3000));
 }
 
 /// §5.22.3 bullet 6, and 4119cdf: an adoption gives no more to a host that it does not
@@ -6172,11 +5731,6 @@ fn the_stamps_that_a_flood_spares_follow_the_associations_and_adoptions() {
 #[test]
 fn mpas_an_adopted_session_is_none_of_a_strangers() {
     let mut other = Node::new(NodeConfig {
-        smf_set: SmfSet {
-            mpas: true,
-            ..SmfSet::default()
-        },
-        other_entities: true,
         strangers: 1,
         ..config(OTHER, Function::Cp)
     });
@@ -6208,11 +5762,6 @@ fn mpas_an_adopted_session_is_none_of_a_strangers() {
 #[test]
 fn an_adopted_seid_spares_the_room_of_strangers_to_its_peer_alone() {
     let mut other = Node::new(NodeConfig {
-        smf_set: SmfSet {
-            mpas: true,
-            ..SmfSet::default()
-        },
-        other_entities: true,
         strangers: 1,
         ..config(OTHER, Function::Cp)
     });
@@ -6252,78 +5801,14 @@ fn an_adopted_seid_spares_the_room_of_strangers_to_its_peer_alone() {
     assert_eq!(requests_of(&events(&mut other)), 1);
 }
 
-/// §6.2.3.3.1, §6.2.4.3.1 and §6.2.4.4.1: the load and overload control information of
-/// the peer of an adopted session, without an association, applies to that peer, which
-/// the node knows by its address alone, with AOCI or not: kept, the overload throttles
-/// the session's requests, and a restart of the peer ends both.
-#[test]
-fn the_controls_of_an_adopted_peer_apply_to_it() {
-    for of_node in [false, true] {
-        let mut other = Node::new(NodeConfig {
-            smf_set: SmfSet {
-                mpas: true,
-                ..SmfSet::default()
-            },
-            other_entities: true,
-            ..config(OTHER, Function::Cp)
-        });
-        other.adopt_session(0x55, UPF, 0x66).unwrap();
-        let controls = with_overload(1, 100, 30, of_node);
-        let report = SessionReportRequest::new(ReportType {
-            upir: true,
-            ..Default::default()
-        })
-        .with_load_control_information(LoadControlInformation::new(
-            SequenceNumber::new(1),
-            Metric::new(Percent(50)),
-        ))
-        .with_overload_control_information(*controls.overload_control_information.unwrap());
-        let message = Message {
-            header: Header::session(0x55, 10),
-            body: report.into(),
-        };
-        other.handle_datagram(at(1), UPF, &message.encode().unwrap());
-        assert_eq!(requests_of(&events(&mut other)), 1);
-        assert_eq!(other.load_control(UPF).map(|load| load.metric), Some(50));
-        assert_eq!(
-            other.overload_control(UPF).map(|overload| overload.metric),
-            Some(100)
-        );
-        for second in 2..5 {
-            assert_eq!(
-                other.session_request(at(second), 0x55, SessionModificationRequest::default()),
-                Err(NodeError::Throttled)
-            );
-        }
-        // The UPF restarts
-        let restart = Message {
-            header: Header::node(11),
-            body: HeartbeatRequest::new(RecoveryTimeStamp::new(1000)).into(),
-        };
-        other.handle_datagram(at(5), UPF, &restart.encode().unwrap());
-        let restart = Message {
-            header: Header::node(12),
-            body: HeartbeatRequest::new(RecoveryTimeStamp::new(2000)).into(),
-        };
-        other.handle_datagram(at(5), UPF, &restart.encode().unwrap());
-        assert!(other.load_control(UPF).is_none() && other.overload_control(UPF).is_none());
-    }
-}
-
 /// §4.2.2: the node sends its requests to a peer of a session that it adopts at port
 /// 8805, whatever port the request that handed the session over came from, as it does to
 /// a peer of an association or of an established session; without `request_port`, to the
-/// port of the peer. Its modifications and its heartbeats go there.
+/// port of the peer. Its modifications go there.
 #[test]
 fn an_adopted_session_takes_the_port_of_the_requests() {
     for request_port in [Some(PORT), None] {
         let mut other = Node::new(NodeConfig {
-            smf_set: SmfSet {
-                mpas: true,
-                ..SmfSet::default()
-            },
-            other_entities: true,
-            heartbeat: Some(Duration::from_secs(60)),
             request_port,
             ..config(OTHER, Function::Cp)
         });
@@ -6345,62 +5830,11 @@ fn an_adopted_session_takes_the_port_of_the_requests() {
         other
             .session_request(at(2), 0x55, SessionModificationRequest::default())
             .unwrap();
-        other.handle_timeout(at(2));
         let requests: Vec<(SocketAddr, u8)> = sent(&mut other)
             .iter()
             .map(|transmit| (transmit.to, decoded(transmit).body.message_type()))
             .collect();
-        assert_eq!(requests, [(to, 52), (to, 1)]);
-    }
-}
-
-/// §6.2.2.2: an association of a Node ID that another address replaces leaves the
-/// heartbeats of the old address while the node has a session adopted from it, as a
-/// release does. A UPF of a session that the SMF adopted sets up an association, then
-/// sets it up again from another address: both addresses are heartbeated.
-#[test]
-fn a_replaced_association_keeps_the_heartbeats_of_an_adopted_peer() {
-    let mut smf = Node::new(NodeConfig {
-        heartbeat: Some(Duration::from_secs(60)),
-        ..config(SMF, Function::Cp)
-    });
-    smf.adopt_session(0x55, UPF, 0x66).unwrap();
-    let setup = |sequence: u32| {
-        let request =
-            AssociationSetupRequest::new(fqdn("upf.example"), RecoveryTimeStamp::new(1000));
-        Message {
-            header: Header::node(sequence),
-            body: request.into(),
-        }
-        .encode()
-        .unwrap()
-    };
-    let elsewhere = Ipv4Addr::new(10, 0, 0, 7).into_socket(8805);
-    for (now, from) in [(1, UPF), (2, elsewhere)] {
-        smf.handle_datagram(at(now), from, &setup(now as u32));
-        let (inbound, _) = request(&mut smf);
-        let answer =
-            AssociationSetupResponse::new(node_id(SMF), accepted(), RecoveryTimeStamp::new(1000));
-        smf.respond(at(now), &inbound, answer).unwrap();
-        sent(&mut smf);
-        events(&mut smf);
-    }
-    assert_eq!(smf.association(UPF), None);
-    for now in [62, 122] {
-        smf.handle_timeout(at(now));
-        let mut beaten: Vec<SocketAddr> = Vec::new();
-        for transmit in sent(&mut smf) {
-            let request = decoded(&transmit);
-            assert!(matches!(request.body, Body::HeartbeatRequest(_)));
-            let response = Message {
-                header: Header::node(request.header.sequence),
-                body: HeartbeatResponse::new(RecoveryTimeStamp::new(1000)).into(),
-            };
-            smf.handle_datagram(at(now), transmit.to, &response.encode().unwrap());
-            beaten.push(transmit.to);
-        }
-        beaten.sort();
-        assert_eq!(beaten, [UPF, elsewhere], "at {now} s");
+        assert_eq!(requests, [(to, 52)]);
     }
 }
 

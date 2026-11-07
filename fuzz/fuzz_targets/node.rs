@@ -15,14 +15,15 @@
    limitations under the License.
 */
 
-//! A UPF and an SMF, of the SMF set and the bundling that the first octet of the input
-//! picks, with a real session between them; two more SMFs of the set are associated with
-//! the UPF. Each
+//! A UPF and an SMF, which announce the features of an SMF set and the bundling that the
+//! first octet of the input picks, with a real session between them; two more SMFs of the
+//! set are associated with the UPF. Each
 //! piece of the rest of the input, split at 0xa5, is a datagram to one of the nodes from
 //! one of its peers or from a stranger, or, with the high bit of its first octet, an
 //! operation that its next octets pick: an SMF of the set sets up, establishes, modifies
 //! (taking a session over), deletes, updates or releases; the UPF hands a session over
-//! with a report of SEID 0, which the SMF may adopt; a session moves to a new SEID; a
+//! with a report of SEID 0, which the SMF may adopt, as a stranger's request may have its
+//! session adopted first; a session moves to a new SEID; a
 //! request is forgotten, cancelled, or answered late; a sequence number is reserved and
 //! given back. Answers accept or reject, through `respond` or as a probe's message of any
 //! type and delivery, and a deletion's may say that usage reports follow. What the nodes send each other is delivered. What a node sends
@@ -36,7 +37,7 @@ use std::time::Duration;
 
 use libfuzzer_sys::fuzz_target;
 use oxirush_pfcp::node::{
-    ControlScope, Delivery, Event, Function, Inbound, Node, NodeConfig, RequestId, SmfSet,
+    ControlScope, Delivery, Event, Function, Inbound, Node, NodeConfig, RequestId,
 };
 use oxirush_pfcp::*;
 
@@ -78,7 +79,7 @@ fn of_set(features: u8) -> (CpFunctionFeatures, SmfSetId) {
     let cp = CpFunctionFeatures {
         sset: features & 1 != 0,
         mpas: features & 2 != 0,
-        bundl: true,
+        bundl: features & 8 != 0,
         ..Default::default()
     };
     let id = SmfSetId {
@@ -176,8 +177,8 @@ fn deliver(
 
 /// Answer each request of a node, accepting or not as `how` says, with `respond` or, as a
 /// probe, a message of another type and each delivery. An establishment gets a UP F-SEID,
-/// a setup the UP Function Features of a set; a request of another SMF of the set may
-/// have its session adopted first.
+/// a setup the UP Function Features of a set; a stranger's request may have its session
+/// adopted first.
 fn answer(node: &mut Node, now: Duration, how: u8, kept: &mut Vec<Inbound>) {
     let cause = Cause::new(if how & 1 == 0 {
         CauseValue::RequestAccepted
@@ -193,7 +194,7 @@ fn answer(node: &mut Node, now: Duration, how: u8, kept: &mut Vec<Inbound>) {
         kept.push(request.clone());
         kept.truncate(16);
         let mut request = request;
-        if request.of_smf_set && how & 8 != 0 {
+        if request.stranger && how & 8 != 0 {
             let local = node.new_session();
             node.end_session(local);
             if node.adopt_session(local, request.from, 0x77).is_ok() {
@@ -296,17 +297,10 @@ fn settle(upf: &mut Node, smf: &mut Node, now: Duration, how: u8, kept: &mut Vec
 
 fuzz_target!(|octets: &[u8]| {
     let sets = octets.first().copied().unwrap_or(0);
-    let smf_set = SmfSet {
-        sset: sets & 1 != 0,
-        mpas: sets & 2 != 0,
-    };
     let config = |address, function| NodeConfig {
         capacity: 64,
         strangers: 4,
         keep: Duration::from_secs(5),
-        smf_set,
-        bundling: sets & 0x40 != 0,
-        other_entities: sets & 0x80 != 0,
         ..NodeConfig::new(node_id(address), function, 1)
     };
     let mut upf = Node::new(config(UPF, Function::Up));

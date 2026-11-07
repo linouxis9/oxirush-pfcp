@@ -391,11 +391,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
   release laid out otherwise is read as Release 19 lays it out.
 - No message of a commercial UPF or SMF is among the test fixtures.
 - A `Node` is one PFCP entity, with its own associations: an SMF of several
-  entities is as many nodes, which do not share them. With MPAS, a node of
-  `NodeConfig::other_entities` gives its caller a UPF's handover of a session
-  to it, without the association, for the caller to check against the other
-  entities of the SMF. A session that the caller then adopts is the node's to
-  modify and delete, and the node heartbeats the UPF while it has one.
+  entities is as many nodes, which do not share them. A request that names a
+  session or an association of the node that is not its sender's, as another
+  SMF of a set sends (§5.22), comes to the caller as `Inbound::stranger`, for
+  the caller to take or reject; a session that the caller adopts is routed, and
+  the holder of its association heartbeats its UPF.
 
 ## Performance
 

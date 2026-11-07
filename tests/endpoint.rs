@@ -684,25 +684,13 @@ async fn within<F: std::future::Future>(future: F) -> F::Output {
 }
 
 /// §5.22.3 bullets 5 and 6: an entity of an SMF of MPAS takes over a session that a UP
-/// function, which holds its association with another entity of the SMF, hands over to it.
-/// Its caller adopts the session through the handle, and answers the report to the UP
-/// function's SEID; the UP function's next report of the session comes in, and the
-/// entity's modification of it goes to the UP function.
+/// function, which holds its association with another entity of the SMF, hands over to it,
+/// a stranger's request. Its caller adopts the session through the handle, and answers the
+/// report to the UP function's SEID; the UP function's next report of the session comes
+/// in, and the entity's modification of it goes to the UP function.
 #[tokio::test]
 async fn an_entity_of_the_smf_takes_a_session_over() {
-    let mut smf = Endpoint::bind(
-        ANY,
-        NodeConfig {
-            smf_set: SmfSet {
-                mpas: true,
-                ..SmfSet::default()
-            },
-            other_entities: true,
-            ..config(Function::Cp)
-        },
-    )
-    .await
-    .unwrap();
+    let mut smf = Endpoint::bind(ANY, config(Function::Cp)).await.unwrap();
     let handle = smf.handle();
     let upf = tokio::net::UdpSocket::bind(ANY).await.unwrap();
     let upf_address = upf.local_addr().unwrap();
@@ -730,7 +718,7 @@ async fn an_entity_of_the_smf_takes_a_session_over() {
         .await
         .unwrap();
     let mut incoming = within(smf.incoming()).await.unwrap();
-    assert!(incoming.request.of_smf_set);
+    assert!(incoming.request.stranger);
     // The caller takes the session over, with the UP function's SEID that the SMF knows, at
     // a local SEID that no other call gave
     let local = handle.with(|node| node.new_session()).await.unwrap();

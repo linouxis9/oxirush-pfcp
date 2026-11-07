@@ -34,27 +34,26 @@ pub struct Association {
     /// `NodeConfig::request_port` has it (§4.2.2).
     pub peer: SocketAddr,
     pub(crate) key: Vec<u8>,
-    /// The SMF set that the peer says it is of, as its setup has it (§5.22).
+    /// What the peer says of itself, as its setup and updates have it.
     pub(crate) set: SetOf,
+    /// The features that the node announced to the peer, in its own setup or update
+    /// messages.
+    pub(crate) own: Features,
 }
 
-/// What the node keeps of the features of a peer's function (§8.2.25, §8.2.58): SSET and
-/// MPAS of the SMF sets (§5.22), and BUNDL (§6.5).
+/// The features of a function that the node keeps (§8.2.25, §8.2.58): MPAS of the SMF
+/// sets (§5.22.3), and BUNDL (§6.5).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub(crate) struct Features {
-    pub(crate) sset: bool,
     pub(crate) mpas: bool,
     pub(crate) bundl: bool,
 }
 
-/// What a peer says of itself in an Association Setup: of its SMF set (§5.22), the SSET
-/// and MPAS of the features of its function and its SMF Set ID, and whether it bundles
-/// (BUNDL, §6.5).
+/// What a peer says of itself in an Association Setup: the features of its function, and
+/// the FQDN of its SMF Set ID (§5.22.3).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct SetOf {
-    pub(crate) sset: bool,
-    pub(crate) mpas: bool,
-    pub(crate) bundl: bool,
+    pub(crate) features: Features,
     pub(crate) id: Option<Vec<u8>>,
 }
 
@@ -64,11 +63,8 @@ impl SetOf {
         features: Option<Features>,
         id: Option<&crate::values_hand::SmfSetId>,
     ) -> Self {
-        let Features { sset, mpas, bundl } = features.unwrap_or_default();
         Self {
-            sset,
-            mpas,
-            bundl,
+            features: features.unwrap_or_default(),
             id: id.map(|id| id.fqdn.0.to_vec()),
         }
     }
@@ -95,10 +91,9 @@ pub struct Session {
     /// a change of its peer. A request's outstanding carries the mark of its session, so
     /// its response acts on that session, not on another that reused its local SEID.
     pub(crate) mark: u64,
-    /// The caller adopted it from a peer without an association with the node (§5.22),
-    /// whose association another SMF of the set, or another PFCP entity of the SMF, holds:
-    /// the node takes the session's requests from its peer as those of an association,
-    /// sends the caller's, and heartbeats the peer while it has such a session.
+    /// The caller adopted it from a peer without an association with the node, whose
+    /// association another SMF of its set holds (§5.22): the node takes the session's
+    /// requests from its peer, and sends the caller's.
     pub(crate) adopted: bool,
     /// Its deletion waits for the UP function's last usage reports (§5.2.2.3.1): the node
     /// ends it then, without them.
@@ -116,15 +111,10 @@ pub(crate) struct Sessions {
     by_mark: BTreeMap<u64, u64>,
     /// The port of the node's requests, by which it tells its peers apart.
     request_port: Option<u16>,
-    /// How many adopted sessions each peer has, as the node tells peers apart.
-    adopted: BTreeMap<SocketAddr, usize>,
     /// How many sessions each peer has, as the node tells peers apart, and the peers whose
     /// last session ended since the node last took them.
     by_address: BTreeMap<SocketAddr, usize>,
     emptied: BTreeSet<SocketAddr>,
-    /// The peers whose first adopted session began, or whose last ended, since the node
-    /// last took them.
-    flipped: BTreeSet<SocketAddr>,
     /// A previous local SEID of a session, after a change of its CP F-SEID: the mark of
     /// the session, until when.
     aliases: BTreeMap<u64, (u64, Duration)>,
@@ -167,14 +157,6 @@ impl Sessions {
             .by_address
             .entry(super::peer_key(self.request_port, session.peer))
             .or_default() += 1;
-        if session.adopted {
-            let peer = super::peer_key(self.request_port, session.peer);
-            let count = self.adopted.entry(peer).or_default();
-            *count += 1;
-            if *count == 1 {
-                self.flipped.insert(peer);
-            }
-        }
         let until = session.until;
         self.moves.remove(&local);
         if let Some(old) = self.by_local.insert(local, session) {
@@ -189,7 +171,7 @@ impl Sessions {
             if let Some(until) = old.until {
                 self.ends.remove(&(until, local));
             }
-            self.unadopt(&old);
+            self.uncount(&old);
         }
         if let Some(until) = until {
             self.ends.insert((until, local));
@@ -197,24 +179,14 @@ impl Sessions {
         self.by_mark.insert(mark, local);
     }
 
-    /// Count a session that goes no more among the sessions of its peer, and its adopted
-    /// sessions.
-    fn unadopt(&mut self, session: &Session) {
+    /// Count a session that goes no more among the sessions of its peer.
+    fn uncount(&mut self, session: &Session) {
         let peer = super::peer_key(self.request_port, session.peer);
         if let Some(count) = self.by_address.get_mut(&peer) {
             *count -= 1;
             if *count == 0 {
                 self.by_address.remove(&peer);
                 self.emptied.insert(peer);
-            }
-        }
-        if session.adopted
-            && let Some(count) = self.adopted.get_mut(&peer)
-        {
-            *count -= 1;
-            if *count == 0 {
-                self.adopted.remove(&peer);
-                self.flipped.insert(peer);
             }
         }
     }
@@ -230,18 +202,6 @@ impl Sessions {
         core::mem::take(&mut self.emptied)
     }
 
-    /// Whether `peer` has an adopted session.
-    pub(crate) fn adopts(&self, peer: SocketAddr) -> bool {
-        self.adopted
-            .contains_key(&super::peer_key(self.request_port, peer))
-    }
-
-    /// The peers whose first adopted session began, or whose last ended, since the last
-    /// call, as the node tells peers apart.
-    pub(crate) fn flipped(&mut self) -> BTreeSet<SocketAddr> {
-        core::mem::take(&mut self.flipped)
-    }
-
     pub(crate) fn remove(&mut self, local: &u64) -> Option<Session> {
         let session = self.by_local.remove(local)?;
         self.moves.remove(local);
@@ -254,7 +214,7 @@ impl Sessions {
         if let Some(until) = session.until {
             self.ends.remove(&(until, *local));
         }
-        self.unadopt(&session);
+        self.uncount(&session);
         Some(session)
     }
 
@@ -410,15 +370,32 @@ pub(crate) enum Scope {
 }
 
 /// What the response to a request of the node changes, besides the association.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub(crate) enum Change {
     /// None.
+    #[default]
     Nothing,
     /// The session of the request ends: a deletion, or a report of a session that the UP
     /// function deleted (PSDBU, §5.18).
     Ends,
     /// The session goes to another local SEID: a modification of the CP F-SEID.
     Moves(u64),
+}
+
+/// What the node keeps of a request that it sends, besides its message.
+#[derive(Debug, Clone, Copy, Default)]
+pub(crate) struct Pending {
+    /// A heartbeat of the node's own, whose response goes to no event.
+    pub(crate) heartbeat: bool,
+    /// The local SEID of the session of a session request.
+    pub(crate) local_seid: Option<u64>,
+    /// The mark of the session when the request is sent.
+    pub(crate) mark: Option<u64>,
+    pub(crate) change: Change,
+    /// The address of the node's F-SEID that the request gives the peer.
+    pub(crate) local_address: Option<IpAddr>,
+    /// The features of the node's function that an association setup or update announces.
+    pub(crate) features: Option<Features>,
 }
 
 /// A request of the node, until its response or its last retransmission.
@@ -442,6 +419,8 @@ pub(crate) struct Outstanding {
     /// The address of the node's F-SEID that the request gives the peer: of the CP F-SEID
     /// of an establishment or a modification, of the family of the peer.
     pub(crate) local_address: Option<IpAddr>,
+    /// The features of the node's function that an association setup or update announces.
+    pub(crate) features: Option<Features>,
 }
 
 /// What the answer to a request of a peer changes, once accepted.
@@ -843,16 +822,13 @@ mod tests {
         }
     }
 
-    /// A session that another replaces at its local SEID takes its mark and its adoption
-    /// with it; one removed leaves the mark that another session took.
+    /// A session that another replaces at its local SEID takes its mark with it; one
+    /// removed leaves the mark that another session took.
     #[test]
     fn a_replaced_session_leaves_nothing_of_its_own() {
-        let peer = session(0, false).peer;
         let mut sessions = Sessions::default();
         sessions.insert(1, session(7, true));
-        assert!(sessions.adopts(peer));
         sessions.insert(1, session(8, false));
-        assert!(!sessions.adopts(peer));
         assert_eq!(sessions.of_mark(7), None);
         assert_eq!(sessions.of_mark(8), Some(1));
         // A mark that another session took stays with it.
@@ -864,30 +840,6 @@ mod tests {
         assert_eq!(sessions.of_mark(9), Some(2));
         sessions.insert(3, session(10, false));
         assert_eq!(sessions.of_mark(9), Some(2));
-    }
-
-    /// The peers whose first adopted session begins or whose last ends are told once, as
-    /// the node tells peers apart: of their addresses alone, with a port of the requests.
-    #[test]
-    fn the_peers_of_adopted_sessions_that_begin_or_end_are_told() {
-        let mut sessions = Sessions::new(Some(8805));
-        let key = SocketAddr::from(([10, 0, 0, 2], 0));
-        sessions.insert(1, session(7, true));
-        assert_eq!(sessions.flipped().into_iter().collect::<Vec<_>>(), [key]);
-        sessions.insert(
-            2,
-            Session {
-                peer: SocketAddr::from(([10, 0, 0, 2], 40000)),
-                ..session(8, true)
-            },
-        );
-        assert!(sessions.flipped().is_empty(), "the second is told nothing");
-        assert!(sessions.adopts(SocketAddr::from(([10, 0, 0, 2], 1))));
-        sessions.remove(&1);
-        assert!(sessions.flipped().is_empty());
-        sessions.remove(&2);
-        assert_eq!(sessions.flipped().into_iter().collect::<Vec<_>>(), [key]);
-        assert!(!sessions.adopts(key));
     }
 
     /// The peers whose last session ends are told once, whatever their sessions, and a peer
