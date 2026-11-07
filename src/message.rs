@@ -174,8 +174,10 @@ impl Message {
     ///
     /// # Errors
     ///
-    /// A value whose fields disagree with its flags, and an IE or a message longer than a
-    /// Length can say.
+    /// A field that disagrees with the flags of its IE ([`Error::Inconsistent`]), a field
+    /// or a field of the header too long for its bits or its length
+    /// ([`Error::FieldLength`], [`Error::HeaderField`]), and an IE or a message too long
+    /// for its Length ([`Error::TooLong`], [`Error::MessageTooLong`]).
     pub fn encode(&self) -> Result<Vec<u8>, Error> {
         // The IEs after room for the header, which their length then completes.
         let header = self.header.len();

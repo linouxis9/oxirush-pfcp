@@ -336,7 +336,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 - `check()` checks one message: the conditions that need the state of a node,
   or another scope, are not its own.
-- `encode()` writes any value that a type can hold, for a test tool.
+- `encode()` writes spare bits, reserved values, a false Length
+  (`RawIe::length`) and IEs that a table does not have, for a test tool. It
+  refuses a field that disagrees with the flags of its IE
+  (`Error::Inconsistent`), a field or a header field too long for its bits or
+  its length (`FieldLength`, `HeaderField`), and an IE or a message too long
+  for its Length (`TooLong`, `MessageTooLong`).
 - TS 29.244 V19.6.0: an IE of a later release stays octets.
 - A `Node` is one PFCP entity. A request that names another's session or
   association, as another SMF of a set sends (§5.22), comes to the caller as
