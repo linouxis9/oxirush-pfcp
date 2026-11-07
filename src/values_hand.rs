@@ -79,11 +79,11 @@ pfcp_layout! {
 
 pfcp_layout! {
     /// Downlink Data Service Information (§8.2.27): the Paging Policy Indication value and
-    /// the QFI each in its octet, with its two spare bits.
+    /// the QFI each in the six low bits of its octet, with its two spare bits.
     pub struct DownlinkDataServiceInformation "8.2.27" {
         flags(u8) { dlpsi "DLPSI": 3, qfii "QFII": 2, ppi "PPI": 1 }
-        paging_policy_indication "Paging Policy Indication value": u8 if ppi,
-        qfi "QFI": u8 if qfii,
+        paging_policy_indication "Paging Policy Indication value": SixBits if ppi,
+        qfi "QFI": SixBits if qfii,
         dl_data_packets_size "DL Data Packets Size": u16 if dlpsi,
     }
 }
@@ -351,10 +351,16 @@ pfcp_layout! {
 
 pfcp_layout! {
     /// DSCP to PPI Mapping Information (§8.2.214): the PPI value, then its DSCP values,
-    /// each in an octet with two spare bits.
+    /// each in the six low bits of an octet with two spare bits, at most 63 of them.
     pub struct DscpToPpiMappingInformation "8.2.214" {
         flags(u8) { ppi_value "PPI Value": 1 / 3 }
-        dscp_values "DSCP Value": Each<u8> if true,
+        dscp_values "DSCP Value": Each<SixBits> if true,
+    }
+    check(this, path, found) {
+        // "X shall not be larger than 63".
+        if this.dscp_values.as_ref().is_some_and(|values| values.0.len() > 63) {
+            found.push(Deviation::new(path, "8.2.214", crate::check::DeviationKind::Rule("more than 63 DSCP values")));
+        }
     }
 }
 
@@ -736,7 +742,7 @@ macro_rules! pfcp_secret {
             /// None: its tree is its octets.
             pub const MEMBERS: &'static [&'static str] = &[];
             /// Its layout.
-            pub const LAYOUT: Option<&'static Layout> = Some(&Layout { head: &[], bits: &[], fields: &[Member { name: $name, octets: None, condition: "true" }] });
+            pub const LAYOUT: Option<&'static Layout> = Some(&Layout { head: &[], bits: &[], fields: &[Member { name: $name, octets: None, cells: &[], condition: "true" }] });
         }
 
         impl Codec for $ty {

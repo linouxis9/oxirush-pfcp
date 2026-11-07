@@ -1215,8 +1215,10 @@ fn octets_of_label(label: &str) -> Option<usize> {
 /// The figures of clause 8.2, place by place: each field of bits of the crate has the
 /// octet, the lowest bit and the bits of its cell in the figure, or the octet and the bit
 /// of its line in a table of bits of its clause; each field of octets of a fixed number
-/// has as many as its row of the figure; and the fields of octets come in the order of
-/// the rows of the figure.
+/// has as many as its row of the figure; the cells of a field of octets narrower than an
+/// octet are those of the figure, of the same lowest bit and bits, and each cell of the
+/// figure narrower than an octet is a field of bits or such a cell; and the fields of
+/// octets come in the order of the rows of the figure.
 #[test]
 fn figure_places() {
     let errata = Errata::new();
@@ -1303,13 +1305,47 @@ fn figure_places() {
                 problems.push(format!("clause {} {}: {name:?} at (octet, bit, bits) {crate_places:?} in the crate, {document:?} in the document", info.clause, info.name));
             }
         }
-        // Each field of octets: its octets, and its order
+        // Each field of octets: its cells narrower than an octet, its octets, and its order
         let mut last = 0;
+        let mut covered: BTreeSet<(&str, &str)> = BTreeSet::new();
         for member in layout.head.iter().chain(layout.fields) {
             let wanted: Vec<&str> = mapped
                 .get(&(info.clause, member.name))
                 .cloned()
                 .unwrap_or_else(|| vec![member.name]);
+            // A cell of the field by its name, or the field itself in the low bits of its
+            // octet, which no field of bits is
+            let of_bits = |known: &str| layout.bits.iter().any(|bits| key(bits.name) == key(known));
+            let narrow: Vec<&(&str, &str, u8, u8)> = figure
+                .iter()
+                .filter(|(_, known, _, width)| {
+                    *width < 8
+                        && !of_bits(known)
+                        && wanted.iter().any(|name| key(known) == key(name))
+                })
+                .collect();
+            let same = |cell: &NarrowCell, (_, known, bit, width): &(&str, &str, u8, u8)| {
+                cell.name.is_none_or(|name| key(name) == key(known))
+                    && (cell.bit, cell.width) == (*bit, *width)
+            };
+            for place in &narrow {
+                checked += 1;
+                covered.insert((place.0, place.1));
+                if !member.cells.iter().any(|cell| same(cell, place)) {
+                    problems.push(format!(
+                        "clause {} {}: {:?} at octet {} of bit {} and {} bits is no cell of {:?}, whose cells are {:?}",
+                        info.clause, info.name, place.1, place.0, place.2, place.3, member.name, member.cells
+                    ));
+                }
+            }
+            for cell in member.cells {
+                if !narrow.iter().any(|place| same(cell, place)) {
+                    problems.push(format!(
+                        "clause {} {}: {:?} has the cell {cell:?}, which the figure does not",
+                        info.clause, info.name, member.name
+                    ));
+                }
+            }
             let Some(row) = figure.iter().position(|(_, known, _, width)| {
                 *width == 8 && wanted.iter().any(|name| key(known) == key(name))
             }) else {
@@ -1334,6 +1370,21 @@ fn figure_places() {
                 problems.push(format!(
                     "clause {} {}: {:?} has {octets} octets in the crate, and its row {label:?}",
                     info.clause, info.name, member.name
+                ));
+            }
+        }
+        // Each cell narrower than an octet: a field of bits, a spare one, or a cell of a
+        // field of octets
+        for (label, known, bit, width) in figure {
+            let of_bits = layout.bits.iter().any(|bits| key(bits.name) == key(known));
+            if *width < 8
+                && !of_bits
+                && !key(known).starts_with("spare")
+                && !covered.contains(&(*label, *known))
+            {
+                problems.push(format!(
+                    "clause {} {}: {known:?} at octet {label} of bit {bit} and {width} bits is no field of the crate",
+                    info.clause, info.name
                 ));
             }
         }

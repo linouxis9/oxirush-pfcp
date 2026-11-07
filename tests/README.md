@@ -83,7 +83,11 @@ test `codec` expects them (`other_vectors_round_trip`, with `--ignored` and
 - IE 198 is a TSN Bridge ID of a MAC address, six octets, where V19.6.0 has the 5GS User
   Plane Node ID of eight (`ie/tsn-bridge-id.go`).
 - Spare bits are set: Usage Report Trigger (octet 7, bits 8 and 7), QER Control
-  Indications (bits 2 and 3), Outer Header Removal (octet 6, bit 2).
+  Indications (bits 2 and 3), Outer Header Removal (octet 6, bit 2), and bits 8 and 7 of
+  the octets of the Paging Policy Indication value and of the QFI of Downlink Data
+  Service Information, which §8.2.27 has spare
+  (`NewDownlinkDataServiceInformation(true, true, 0xff, 0xff)` in
+  `message/session-report-request_test.go`).
 - Reporting Frequency has bit 3 set, SESRL of an earlier release, which §8.2.168
   reserves, "set to "0" by the sender" (`NewReportingFrequency(1, 1, 1)` in
   `message/session-establishment-request_test.go` and
