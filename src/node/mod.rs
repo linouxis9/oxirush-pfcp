@@ -1311,16 +1311,20 @@ impl Node {
         self.sessions.get(&local_seid)
     }
 
-    /// The latest load control information of a peer, by its Node ID (§6.2.3.3.1).
+    /// The latest load control information of a peer, by its Node ID (§6.2.3.3.1), or by
+    /// its address for the peer of an adopted session without an association, whose Node ID
+    /// the node does not know.
     pub fn load_control(&self, peer: SocketAddr) -> Option<LoadControl> {
-        let node = self
-            .association_of(peer)
-            .map(|association| Scope::Node(association.key.clone()));
-        node.and_then(|scope| self.load.get(&scope)).copied()
+        let scope = match self.association_of(peer) {
+            Some(association) => Scope::Node(association.key.clone()),
+            None => Scope::Address(self.peer_key(peer)),
+        };
+        self.load.get(&scope).copied()
     }
 
     /// The overload control information that still holds for the requests to `peer`: of
-    /// its address, as the UP F-SEID of a session has it, or of its Node ID (§6.2.4.3.1).
+    /// its address, as the UP F-SEID of a session has it, or of its Node ID (§6.2.4.3.1),
+    /// which the peer of an adopted session without an association has by its address.
     pub fn overload_control(&self, peer: SocketAddr) -> Option<OverloadControl> {
         let node = self
             .association_of(peer)
@@ -2228,7 +2232,9 @@ impl Node {
             let node = self
                 .association_of(from)
                 .map(|association| Scope::Node(association.key.clone()));
-            self.load.retain(|scope, _| Some(scope) != node.as_ref());
+            let address = Scope::Address(key);
+            self.load
+                .retain(|scope, _| Some(scope) != node.as_ref() && *scope != address);
             let (peer, request_port) = (self.peer_key(from), self.config.request_port);
             self.overload.retain(|scope, overload| {
                 peer_key(request_port, overload.peer) != peer && Some(scope) != node.as_ref()
@@ -2268,7 +2274,8 @@ impl Node {
     /// The load and overload control information that a message of the session of
     /// `local_seid` carries (§6.2.3.3.3, §6.2.4.3.3), from a peer with an association:
     /// the load of its Node ID, and the overload of the address of the UP F-SEID of the
-    /// session, or of its Node ID (§6.2.4.3.1).
+    /// session, or of its Node ID (§6.2.4.3.1); and from the peer of an adopted session
+    /// without one, whose Node ID the node does not know, both of its address.
     fn note_controls(
         &mut self,
         now: Duration,
@@ -2308,13 +2315,26 @@ impl Node {
                     .association_of(from)
                     .is_some_and(|association| association.key == key)
         };
-        let node = match session.filter(|session| self.associations.contains_key(&session.node)) {
-            Some(session) => Some(session.node.clone()).filter(|key| of_peer(key)),
-            None => self
-                .association_of(from)
-                .map(|association| association.key.clone()),
-        };
-        let Some(node) = node.map(Scope::Node) else {
+        // The peer of an adopted session without an association, whose Node ID the node
+        // does not know, by its address.
+        let adopted = session
+            .filter(|session| {
+                session.adopted
+                    && self.same_peer(session.peer, from)
+                    && self.association_of(from).is_none()
+            })
+            .map(|session| Scope::Address(self.peer_key(session.peer)));
+        let node = adopted.or_else(|| {
+            match session.filter(|session| self.associations.contains_key(&session.node)) {
+                Some(session) => Some(session.node.clone())
+                    .filter(|key| of_peer(key))
+                    .map(Scope::Node),
+                None => self
+                    .association_of(from)
+                    .map(|association| Scope::Node(association.key.clone())),
+            }
+        });
+        let Some(node) = node else {
             return;
         };
         let address = match body {

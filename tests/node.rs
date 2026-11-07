@@ -5752,6 +5752,64 @@ fn an_adopted_seid_spares_the_room_of_strangers_to_its_peer_alone() {
     assert_eq!(requests_of(&events(&mut other)), 1);
 }
 
+/// §6.2.3.3.1, §6.2.4.3.1 and §6.2.4.4.1: the load and overload control information of
+/// the peer of an adopted session, without an association, applies to that peer, which
+/// the node knows by its address alone, with AOCI or not: kept, the overload throttles
+/// the session's requests, and a restart of the peer ends both.
+#[test]
+fn the_controls_of_an_adopted_peer_apply_to_it() {
+    for of_node in [false, true] {
+        let mut other = Node::new(NodeConfig {
+            smf_set: SmfSet {
+                mpas: true,
+                ..SmfSet::default()
+            },
+            other_entities: true,
+            ..config(OTHER, Function::Cp)
+        });
+        other.adopt_session(0x55, UPF, 0x66).unwrap();
+        let controls = with_overload(1, 100, 30, of_node);
+        let report = SessionReportRequest::new(ReportType {
+            upir: true,
+            ..Default::default()
+        })
+        .with_load_control_information(LoadControlInformation::new(
+            SequenceNumber::new(1),
+            Metric::new(Percent(50)),
+        ))
+        .with_overload_control_information(*controls.overload_control_information.unwrap());
+        let message = Message {
+            header: Header::session(0x55, 10),
+            body: report.into(),
+        };
+        other.handle_datagram(at(1), UPF, &message.encode().unwrap());
+        assert_eq!(requests_of(&events(&mut other)), 1);
+        assert_eq!(other.load_control(UPF).map(|load| load.metric), Some(50));
+        assert_eq!(
+            other.overload_control(UPF).map(|overload| overload.metric),
+            Some(100)
+        );
+        for second in 2..5 {
+            assert_eq!(
+                other.session_request(at(second), 0x55, SessionModificationRequest::default()),
+                Err(NodeError::Throttled)
+            );
+        }
+        // The UPF restarts
+        let restart = Message {
+            header: Header::node(11),
+            body: HeartbeatRequest::new(RecoveryTimeStamp::new(1000)).into(),
+        };
+        other.handle_datagram(at(5), UPF, &restart.encode().unwrap());
+        let restart = Message {
+            header: Header::node(12),
+            body: HeartbeatRequest::new(RecoveryTimeStamp::new(2000)).into(),
+        };
+        other.handle_datagram(at(5), UPF, &restart.encode().unwrap());
+        assert!(other.load_control(UPF).is_none() && other.overload_control(UPF).is_none());
+    }
+}
+
 /// An establishment holds its session from when it is sent: another request of the
 /// session that ends without its response, cancelled here, leaves it, and the
 /// establishment's accepted response establishes it.
