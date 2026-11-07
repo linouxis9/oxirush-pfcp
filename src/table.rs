@@ -129,9 +129,9 @@ pub struct Row {
     pub mandatory: Interfaces,
     /// The rows that share the field, when several do.
     pub roles: &'static [Role],
-    /// Whether `check()` checks the condition of the row: a C row whose condition the
-    /// IEs of its scope show (§7.6.6), as each of two IEs of which a NOTE of the table
-    /// needs one.
+    /// Whether `check()` checks a condition of the row that the IEs of its scope show: of
+    /// its presence (§7.6.6), as each of two IEs of which a NOTE of the table needs one, or
+    /// of its absence.
     pub checked: bool,
 }
 

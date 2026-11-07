@@ -98,6 +98,13 @@ pub enum DeviationKind {
         /// Its IE type.
         ie_type: u16,
     },
+    /// An IE that is there where the condition that its table writes beside it, and that
+    /// the scope shows, has it absent: "shall not be present if", "shall be absent", "shall
+    /// not be present together". The receiver has no Cause for it (§7.6).
+    Excluded {
+        /// Its IE type.
+        ie_type: u16,
+    },
     /// An IE that its table has, but not on the interface (the Appl. columns).
     NotOnInterface {
         /// Its IE type.
@@ -245,6 +252,13 @@ impl fmt::Display for Deviation {
             }
             DeviationKind::NotOnInterface { ie_type } => {
                 write!(f, "{} is not on this interface", name(*ie_type))
+            }
+            DeviationKind::Excluded { ie_type } => {
+                write!(
+                    f,
+                    "{} is there where its condition has it absent",
+                    name(*ie_type)
+                )
             }
             DeviationKind::WithRejection { ie_type } => {
                 write!(f, "{} accompanies a rejection", name(*ie_type))
@@ -819,4 +833,31 @@ pub(crate) fn condition_missing<S: Scope>(
         deviation.cause = context.conditional_cause();
     }
     found.push(deviation);
+}
+
+/// A row that is there, on the interface, where the condition that its table writes beside
+/// it has it absent: an IE of a null length too.
+pub(crate) fn condition_absent<S: Scope>(
+    scope: &S,
+    at: usize,
+    path: &Path<'_>,
+    context: Context,
+    found: &mut Vec<Deviation>,
+) {
+    let table = S::table();
+    let row = &table.rows[at];
+    let there =
+        scope.count(row.ie_type) > 0 || scope.raw().iter().any(|ie| ie.ie_type == row.ie_type);
+    if !there || !on(row, context.interface).0 {
+        return;
+    }
+    let at = Path::Row {
+        parent: path,
+        row: row.name,
+        nth: None,
+    };
+    let kind = DeviationKind::Excluded {
+        ie_type: row.ie_type,
+    };
+    found.push(Deviation::new(at, table.id, kind));
 }

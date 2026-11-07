@@ -85,7 +85,11 @@ test `codec` expects them (`other_vectors_round_trip`, with `--ignored` and
   IE does not decode, in UE IP address Pool Information, Create PDR and UE IP Address
   Usage Information.
 - SMF Set ID has no spare octet before its FQDN, which §8.2.131 has
-  (`ie/smf-set-id.go`).
+  (`ie/smf-set-id.go`): the length of the first label is read as the spare octet, and
+  the rest is no labels of RFC 1035.
+- PDIs with a Traffic Endpoint ID and the Local F-TEID, Network Instance and UE IP
+  address that Table 7.5.2.2-2 then has absent, and an SDF Filter beside an Ethernet
+  Packet Filter, which its NOTE 3 has absent.
 - IE 198 is a TSN Bridge ID of a MAC address, six octets, where V19.6.0 has the 5GS User
   Plane Node ID of eight (`ie/tsn-bridge-id.go`).
 - Spare bits are set: Usage Report Trigger (octet 7, bits 8 and 7), QER Control

@@ -50,6 +50,18 @@ fn triggers(urr: &CreateUrr, has: impl Fn(&ReportingTriggers) -> bool) -> bool {
     urr.reporting_triggers.as_ref().is_some_and(has)
 }
 
+/// Whether a Steering Functionality is one of MPQUIC (Table 7.5.2.8-1, Transport Mode).
+fn mpquic(functionality: &Option<SteeringFunctionality>) -> bool {
+    functionality.as_ref().is_some_and(|functionality| {
+        matches!(
+            functionality.steering_functionality_value,
+            SteeringFunctionalityValue::MpquicUdp
+                | SteeringFunctionalityValue::MpquicIp
+                | SteeringFunctionalityValue::MpquicE
+        )
+    })
+}
+
 /// Whether an SMF says MPAS in its CP Function Features (§5.22.3), which then has the SMF
 /// Set ID follow.
 fn of_mpas(features: &Option<CpFunctionFeatures>) -> bool {
@@ -816,7 +828,9 @@ pfcp_table! {
         update_bar: "Update BAR" C UpdateBar [SXA N4],
         update_traffic_endpoint: "Update Traffic Endpoint" C* UpdateTrafficEndpoint [SXA SXB SXC N4 N4MB],
         pfcpsmreq_flags: "PFCPSMReq-Flags" C PFCPSMReqFlags [SXA SXB SXC N4 N4MB],
-        query_urr: "Query URR" C* QueryUrr [SXA SXB SXC N4 N4MB],
+        // NOTE 3: "The QAURR (Query All URRs) flag in the PFCPSMReq-Flags IE and the Query
+        // URR IE are exclusive from each other".
+        query_urr: "Query URR" C* QueryUrr [SXA SXB SXC N4 N4MB] absent(|s| s.pfcpsmreq_flags.as_ref().is_some_and(|flags| flags.qaurr)),
         fq_csid: "FQ-CSID" C*5 FqCsid [SXA SXB N4]
             roles ["PGW-C/SMF FQ-CSID" C [SXA SXB N4], "SGW-C FQ-CSID" C [SXA SXB], "MME FQ-CSID" C [SXA SXB], "ePDG FQ-CSID" C [SXB], "TWAN FQ-CSID" C [SXB]],
         user_plane_inactivity_timer: "User Plane Inactivity Timer" C UserPlaneInactivityTimer [SXB SXC N4 N4MB],
@@ -1202,15 +1216,21 @@ pfcp_table! {
     /// PDI IE within PFCP Session Establishment Request (Table 7.5.2.2-2).
     group Pdi = 2, "PDI", "7.5.2.2-2" {
         source_interface: "Source Interface" M SourceInterface [SXA SXB SXC N4 N4MB],
-        local_f_teid: "Local F-TEID" O FTeid [SXA SXB N4],
-        local_ingress_tunnel: "Local Ingress Tunnel" C LocalIngressTunnel [N4MB],
-        network_instance: "Network Instance" O NetworkInstance [SXA SXB SXC N4 N4MB],
+        // "This IE shall not be present if Traffic Endpoint ID is present", of each of
+        // the four; the Network Instance "shall be present if the CP function requests the
+        // UP function to allocate a UE IP address/prefix and the Traffic Endpoint ID is not
+        // present", which CHV4 or CHV6 of a UE IP address requests.
+        local_f_teid: "Local F-TEID" O FTeid [SXA SXB N4] absent(|s| !s.traffic_endpoint_id.is_empty()),
+        local_ingress_tunnel: "Local Ingress Tunnel" C LocalIngressTunnel [N4MB] absent(|s| !s.traffic_endpoint_id.is_empty()),
+        network_instance: "Network Instance" O NetworkInstance [SXA SXB SXC N4 N4MB] absent(|s| !s.traffic_endpoint_id.is_empty()) if |s| s.traffic_endpoint_id.is_empty() && s.ue_ip_address.iter().any(|ue| ue.chv4 || ue.chv6),
         redundant_transmission_detection_parameters: "Redundant Transmission Detection Parameters" O RedundantTransmissionParameters [N4],
-        ue_ip_address: "UE IP address" O* UeIpAddress [SXB SXC N4],
+        ue_ip_address: "UE IP address" O* UeIpAddress [SXB SXC N4] absent(|s| !s.traffic_endpoint_id.is_empty()),
         mapped_n6_ip_address: "Mapped N6 IP Address" O MappedN6IpAddress [N4],
         n6_routing_information: "N6 Routing Information" O N6RoutingInformation [N4],
         traffic_endpoint_id: "Traffic Endpoint ID" C* TrafficEndpointId [SXA SXB SXC N4 N4MB],
-        sdf_filter: "SDF Filter" O* SdfFilter [SXB SXC N4 N4MB],
+        // NOTE 3: "SDF Filter IE(s) shall not be present if Ethernet Packet Filter IE(s) is
+        // present".
+        sdf_filter: "SDF Filter" O* SdfFilter [SXB SXC N4 N4MB] absent(|s| !s.ethernet_packet_filter.is_empty()),
         application_id: "Application ID" O ApplicationId [SXB SXC N4 N4MB],
         ethernet_pdu_session_information: "Ethernet PDU Session Information" O EthernetPduSessionInformation [N4],
         ethernet_packet_filter: "Ethernet Packet Filter" O* EthernetPacketFilter [N4],
@@ -1317,7 +1337,9 @@ pfcp_table! {
         network_instance: "Network Instance" O NetworkInstance [SXA SXB SXC N4],
         redirect_information: "Redirect Information" C RedirectInformation [SXB SXC N4],
         outer_header_creation: "Outer Header Creation" C OuterHeaderCreation [SXA SXB N4],
-        transport_level_marking: "Transport Level Marking" C TransportLevelMarking [SXA SXB N4],
+        // "When this IE [Extended Transport Level Marking] is present, the Transport Level
+        // Marking IE shall not be present".
+        transport_level_marking: "Transport Level Marking" C TransportLevelMarking [SXA SXB N4] absent(|s| !s.extended_transport_level_marking.is_empty()),
         extended_transport_level_marking: "Extended Transport Level Marking" C* ExtendedTransportLevelMarking [N4],
         transport_level_marking_indications: "Transport Level Marking Indications" C TransportLevelMarkingIndications [N4],
         forwarding_policy: "Forwarding Policy" C ForwardingPolicy [SXB SXC N4] if |s| s.destination_interface.as_ref().is_some_and(|d| d.interface_value == DestinationInterfaceValue::SgiLanN6Lan),
@@ -1545,9 +1567,12 @@ pfcp_table! {
         steering_mode: "Steering Mode" M SteeringMode [N4],
         n3gpp_access_forwarding_action_information: "3GPP Access Forwarding Action Information" C ThreeGppAccessForwardingActionInformation [N4],
         non_3gpp_access_forwarding_action_information: "Non-3GPP Access Forwarding Action Information" C NonThreeGppAccessForwardingActionInformation [N4],
-        threshold_values: "Threshold Values" C Thresholds [N4],
-        steering_mode_indicator: "Steering Mode Indicator" C SteeringModeIndicator [N4],
-        transport_mode: "Transport Mode" C TransportMode [N4] if |s| s.steering_functionality.as_ref().is_some_and(|f| matches!(f.steering_functionality_value, SteeringFunctionalityValue::MpquicUdp | SteeringFunctionalityValue::MpquicIp | SteeringFunctionalityValue::MpquicE)),
+        // NOTE 2: "The Threshold Values IE and the Steering Mode Indicator IE shall not be
+        // present together".
+        threshold_values: "Threshold Values" C Thresholds [N4] absent(|s| s.steering_mode_indicator.is_some()),
+        steering_mode_indicator: "Steering Mode Indicator" C SteeringModeIndicator [N4] absent(|s| s.threshold_values.is_some()),
+        // Of the MPQUIC functionalities; "In all other cases, this IE shall be absent".
+        transport_mode: "Transport Mode" C TransportMode [N4] absent(|s| !mpquic(&s.steering_functionality)) if |s| mpquic(&s.steering_functionality),
     }
 }
 

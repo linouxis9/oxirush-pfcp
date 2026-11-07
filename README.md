@@ -234,7 +234,9 @@ a message may have the IEs of either and needs those that both need. It checks
 the mandatory IEs, the conditional IEs whose condition the IEs beside them show
 (the UP F-SEID of an accepted establishment, the Forwarding Parameters of a FAR
 that forwards, the reports that a Report Type names, two IEs of which a NOTE of
-their table needs one: `Row::checked` says which), the
+their table needs one), the IEs that the IEs beside them have absent (the Local
+F-TEID beside a Traffic Endpoint ID, a Transport Mode of no MPQUIC: `Row::checked`
+says which rows have either), the needed IEs of a null length, the
 IEs that do not decode, repeat, or are not of the table or the interface, spare
 bits and values, reserved values, the flags of each IE with the rules of
 clause 8.2 on which of them are set, together, with a value or the Cause of the
@@ -382,8 +384,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 - `check()` checks one message: the procedures, and the conditions of the C
   rows that need the state of a node, are not its own. Nor are the conditions
   on the IEs of another scope, as the Weight of an access of a MAR, of the
-  Steering Mode of the MAR (Table 7.5.2.8-2), or who sets a flag, as CH of an
-  F-TEID, which only the CP function sets.
+  Steering Mode of the MAR (Table 7.5.2.8-2), or the QFI of a PDI, absent when its
+  Traffic Endpoint has the QFIs, or who sets a flag, as CH of an F-TEID, which only
+  the CP function sets.
 - `encode()` writes any value that a type can hold, so a test tool can send
   an invalid message.
 - A tree is in the order of the tables, and the octets in the order of the

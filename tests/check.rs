@@ -1192,6 +1192,171 @@ fn missing_where_shown(value: &impl Check) -> Vec<String> {
         .collect()
 }
 
+/// The rows that a value has where the conditions of its table have them absent.
+fn excluded(value: &impl Check) -> Vec<String> {
+    let mut found = Vec::new();
+    Check::check(value, &Path::Root(""), &mut found);
+    found
+        .into_iter()
+        .filter(|deviation| matches!(deviation.kind, DeviationKind::Excluded { .. }))
+        .map(|deviation| deviation.path.trim_start_matches('/').to_string())
+        .collect()
+}
+
+/// The absence rules that the IEs beside a row show: "shall not be present if", "shall
+/// be absent", "shall not be present together", "exclusive from each other", each where
+/// it holds and where it does not, without a Cause (§7.6 has none for them).
+#[test]
+fn the_absence_rules_that_their_scope_shows() {
+    let pdi = || Pdi::new(SourceInterface::new(SourceInterfaceValue::Access));
+    let endpoint = TrafficEndpointId::new(1);
+    let ue = UeIpAddress {
+        v4: true,
+        ipv4: Some(SMF),
+        ..Default::default()
+    };
+    let chosen = UeIpAddress {
+        chv4: true,
+        ..Default::default()
+    };
+    let instance = NetworkInstance(b"internet".to_vec().into());
+    let filter = SdfFilter::default();
+    let ethernet = EthernetPacketFilter::default();
+    let forwarding =
+        || ForwardingParameters::new(DestinationInterface::new(DestinationInterfaceValue::Core));
+    let marking = || TransportLevelMarking::new(0x00fc);
+    let mar = |functionality| {
+        CreateMar::new(
+            MarId::new(1),
+            SteeringFunctionality::new(functionality),
+            SteeringMode::new(SteeringModeValue::ActiveStandby),
+        )
+    };
+    let mode = || TransportMode::new(TransportModeValue::DatagramMode1);
+    let cases: Vec<(Vec<String>, &[&str])> =
+        vec![
+            // Table 7.5.2.2-2: of a Traffic Endpoint ID, none of the four
+            (
+                excluded(&pdi().with_traffic_endpoint_id(endpoint.clone())),
+                &[],
+            ),
+            (
+                excluded(&pdi().with_local_f_teid(FTeid::choose_ipv4())),
+                &[],
+            ),
+            (
+                excluded(
+                    &pdi()
+                        .with_local_f_teid(FTeid::choose_ipv4())
+                        .with_local_ingress_tunnel(LocalIngressTunnel::default())
+                        .with_network_instance(instance.clone())
+                        .with_ue_ip_address(ue.clone())
+                        .with_traffic_endpoint_id(endpoint.clone()),
+                ),
+                &[
+                    "Local F-TEID",
+                    "Local Ingress Tunnel",
+                    "Network Instance",
+                    "UE IP address",
+                ],
+            ),
+            // NOTE 3: no SDF Filter beside an Ethernet Packet Filter
+            (excluded(&pdi().with_sdf_filter(filter.clone())), &[]),
+            (
+                excluded(
+                    &pdi()
+                        .with_sdf_filter(filter)
+                        .with_ethernet_packet_filter(ethernet),
+                ),
+                &["SDF Filter"],
+            ),
+            // Table 7.5.2.3-2: no Transport Level Marking beside an Extended one
+            (
+                excluded(&forwarding().with_transport_level_marking(marking())),
+                &[],
+            ),
+            (
+                excluded(
+                    &forwarding()
+                        .with_transport_level_marking(marking())
+                        .with_extended_transport_level_marking(
+                            ExtendedTransportLevelMarking::default(),
+                        ),
+                ),
+                &["Transport Level Marking"],
+            ),
+            // Table 7.5.2.8-1: a Transport Mode of MPQUIC alone, and NOTE 2
+            (
+                excluded(&mar(SteeringFunctionalityValue::MpquicUdp).with_transport_mode(mode())),
+                &[],
+            ),
+            (
+                excluded(&mar(SteeringFunctionalityValue::AtsssLl).with_transport_mode(mode())),
+                &["Transport Mode"],
+            ),
+            (
+                excluded(
+                    &mar(SteeringFunctionalityValue::AtsssLl)
+                        .with_threshold_values(Thresholds::default())
+                        .with_steering_mode_indicator(SteeringModeIndicator::default()),
+                ),
+                &["Threshold Values", "Steering Mode Indicator"],
+            ),
+        ];
+    for (found, expected) in cases {
+        assert_eq!(found, expected);
+    }
+    // The Network Instance of a UE IP address that the UP function allocates, without a
+    // Traffic Endpoint ID
+    assert_eq!(
+        missing_where_shown(&pdi().with_ue_ip_address(chosen.clone())),
+        ["Network Instance"]
+    );
+    for present in [
+        pdi()
+            .with_ue_ip_address(ue)
+            .with_ue_ip_address(chosen.clone())
+            .with_network_instance(instance),
+        pdi()
+            .with_ue_ip_address(chosen)
+            .with_traffic_endpoint_id(endpoint),
+    ] {
+        assert!(missing_where_shown(&present).is_empty(), "{present:?}");
+    }
+    // Table 7.5.4.1-1 NOTE 3: QAURR and the Query URR, exclusive, without a Cause
+    let modification = SessionModificationRequest::default()
+        .with_pfcpsmreq_flags(PFCPSMReqFlags {
+            qaurr: true,
+            ..Default::default()
+        })
+        .with_query_urr(QueryUrr::new(UrrId::new(1)));
+    let message = Message {
+        header: Header::session(1, 1),
+        body: modification.into(),
+    };
+    let found: Vec<_> = message
+        .check(Interfaces::N4)
+        .into_iter()
+        .map(|deviation| {
+            (
+                deviation.path,
+                deviation.clause,
+                deviation.kind,
+                deviation.cause,
+            )
+        })
+        .collect();
+    assert_eq!(
+        found,
+        [(
+            "/pfcp/Query URR".to_string(),
+            "7.5.4.1-1",
+            DeviationKind::Excluded { ie_type: 77 },
+            None
+        )]
+    );
+}
+
 /// §7.6.6: the conditions of the C rows that the IEs beside them show, each where it
 /// holds and where it does not; the NOTEs of Tables 7.4.4.1.3-1, 7.4.5.1.8-1 and 7.5.2.9-5,
 /// of one IE or another, as the condition of each on the other.

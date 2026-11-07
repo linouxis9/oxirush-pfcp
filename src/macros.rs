@@ -834,8 +834,9 @@ macro_rules! pfcp_messages {
 /// `*` for a list or `*N` for a list of at most N, and `TYPE` the type of its value, or
 /// `raw N` for an IE type that the crate keeps as octets. A field that several rows
 /// share, which the wire does not tell apart, lists them after `roles`, each with its
-/// presence and its interfaces. A C row whose condition the scope alone shows ends with
-/// `if |scope| condition`: `check()` reports it missing where the condition holds.
+/// presence and its interfaces. A row whose condition the scope alone shows ends with
+/// `absent(|scope| condition)`, where `check()` reports it there, and `if |scope|
+/// condition`, where it reports it missing.
 macro_rules! pfcp_table {
     // A table whose mandatory IEs differ between its interfaces has a constructor for each
     // interface that it lists, and no `new()`.
@@ -857,7 +858,7 @@ macro_rules! pfcp_table {
         $kind:ident $ty:ident = $code:literal, $name:literal, $id:literal {
             $( $field:ident : $row:literal $p:ident $(* $($max:literal)?)? $vty:ident $($raw:literal)?
                 [$($interface:ident)*] $(roles [$($role:literal $rp:ident [$($ri:ident)*]),*])?
-                $(if |$scope:ident| $condition:expr)? , )*
+                $(absent(|$ascope:ident| $absent:expr))? $(if |$scope:ident| $condition:expr)? , )*
         }
     ) => { pastey::paste! {
         $(#[$meta])*
@@ -904,7 +905,7 @@ macro_rules! pfcp_table {
                         presence: pfcp_table!(@presence $rp),
                         interfaces: crate::table::Interfaces(0 $(| crate::table::Interfaces::$ri.0)*),
                     }),*)?],
-                    checked: pfcp_table!(@checked $($scope)?),
+                    checked: pfcp_table!(@checked $($scope)? $($ascope)?),
                 },
             )*],
         };
@@ -1044,6 +1045,12 @@ macro_rules! pfcp_table {
                             crate::check::condition_missing(self, row, path, context, found);
                         }
                     })?
+                    $({
+                        let $ascope: &Self = self;
+                        if $absent {
+                            crate::check::condition_absent(self, row, path, context, found);
+                        }
+                    })?
                     row += 1;
                 )*
             }
@@ -1112,7 +1119,7 @@ macro_rules! pfcp_table {
         for $value in crate::table::FieldValues::<$t>::values(&$f) $body
     };
     (@checked) => { false };
-    (@checked $scope:ident) => { true };
+    (@checked $($scope:ident)+) => { true };
     (@list []) => { false };
     (@list [* $($max:literal)?]) => { true };
     (@place [] $p:ident ($t:ty) $f:expr, $body:expr) => {
