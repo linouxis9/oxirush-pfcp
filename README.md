@@ -386,7 +386,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
   entities is as many nodes, which do not share them. With MPAS, a node of
   `NodeConfig::other_entities` gives its caller a UPF's handover of a session
   to it, without the association, for the caller to check against the other
-  entities of the SMF.
+  entities of the SMF. A session that the caller then adopts is the node's to
+  modify and delete, and the node heartbeats the UPF while it has one.
 
 ## Performance
 

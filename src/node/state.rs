@@ -79,6 +79,11 @@ pub struct Session {
     /// a change of its peer. A request's outstanding carries the mark of its session, so
     /// its response acts on that session, not on another that reused its local SEID.
     pub(crate) mark: u64,
+    /// The caller adopted it from a peer without an association with the node (§5.22),
+    /// whose association another SMF of the set, or another PFCP entity of the SMF, holds:
+    /// the node takes the session's requests from its peer as those of an association,
+    /// sends the caller's, and heartbeats the peer while it has such a session.
+    pub(crate) adopted: bool,
 }
 
 /// The sessions of the node by their local SEIDs, with the peer's SEID and the mark of
@@ -90,6 +95,8 @@ pub(crate) struct Sessions {
     by_peer: BTreeSet<(u64, u64)>,
     /// The local SEID of each session by its mark, wherever it moved.
     by_mark: BTreeMap<u64, u64>,
+    /// How many adopted sessions each peer has.
+    adopted: BTreeMap<SocketAddr, usize>,
     /// A previous local SEID of a session, after a change of its CP F-SEID: the mark of
     /// the session, until when.
     aliases: BTreeMap<u64, (u64, Duration)>,
@@ -114,17 +121,43 @@ impl Sessions {
             self.by_peer.insert((seid, local));
         }
         let mark = session.mark;
+        if session.adopted {
+            *self.adopted.entry(session.peer).or_default() += 1;
+        }
         if let Some(old) = self.by_local.insert(local, session) {
             if let Some(seid) = old.peer_seid
                 && self.by_local[&local].peer_seid != Some(seid)
             {
                 self.by_peer.remove(&(seid, local));
             }
-            if old.mark != mark && self.by_mark.get(&old.mark) == Some(&local) {
+            if self.by_mark.get(&old.mark) == Some(&local) {
                 self.by_mark.remove(&old.mark);
             }
+            self.unadopt(&old);
         }
         self.by_mark.insert(mark, local);
+    }
+
+    /// Count a session that goes no more among the adopted sessions of its peer.
+    fn unadopt(&mut self, session: &Session) {
+        if session.adopted
+            && let Some(count) = self.adopted.get_mut(&session.peer)
+        {
+            *count -= 1;
+            if *count == 0 {
+                self.adopted.remove(&session.peer);
+            }
+        }
+    }
+
+    /// Whether `peer` has an adopted session.
+    pub(crate) fn adopts(&self, peer: SocketAddr) -> bool {
+        self.adopted.contains_key(&peer)
+    }
+
+    /// The peers of the adopted sessions.
+    pub(crate) fn adopted_peers(&self) -> impl Iterator<Item = SocketAddr> + '_ {
+        self.adopted.keys().copied()
     }
 
     pub(crate) fn remove(&mut self, local: &u64) -> Option<Session> {
@@ -135,6 +168,7 @@ impl Sessions {
         if self.by_mark.get(&session.mark) == Some(local) {
             self.by_mark.remove(&session.mark);
         }
+        self.unadopt(&session);
         Some(session)
     }
 
@@ -650,5 +684,44 @@ impl Overloads {
             .take_while(|(until, _)| *until <= now)
             .map(|(_, scope)| scope.clone())
             .collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn session(mark: u64, adopted: bool) -> Session {
+        Session {
+            peer: SocketAddr::from(([10, 0, 0, 2], 8805)),
+            peer_seid: Some(0x66),
+            node: Vec::new(),
+            reserved: false,
+            mark,
+            adopted,
+        }
+    }
+
+    /// A session that another replaces at its local SEID takes its mark and its adoption
+    /// with it; one removed leaves the mark that another session took.
+    #[test]
+    fn a_replaced_session_leaves_nothing_of_its_own() {
+        let peer = session(0, false).peer;
+        let mut sessions = Sessions::default();
+        sessions.insert(1, session(7, true));
+        assert!(sessions.adopts(peer));
+        sessions.insert(1, session(8, false));
+        assert!(!sessions.adopts(peer));
+        assert_eq!(sessions.of_mark(7), None);
+        assert_eq!(sessions.of_mark(8), Some(1));
+        // A mark that another session took stays with it.
+        sessions.insert(2, session(8, false));
+        sessions.remove(&1);
+        assert_eq!(sessions.of_mark(8), Some(2));
+        sessions.insert(3, session(9, false));
+        sessions.insert(2, session(9, false));
+        assert_eq!(sessions.of_mark(9), Some(2));
+        sessions.insert(3, session(10, false));
+        assert_eq!(sessions.of_mark(9), Some(2));
     }
 }
