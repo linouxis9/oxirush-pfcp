@@ -671,6 +671,11 @@ impl From<&str> for TextLv8 {
 macro_rules! identity_lv8 {
     ($($ty:ident $as_text:ident $from_text:expr),*) => {$(
         impl Field for $ty {
+            #[cfg(feature = "tree")]
+            const BELOW: &'static crate::tree::Below = &crate::tree::Below::Either(
+                None,
+                &[("octets", &crate::tree::Below::Scalar)],
+            );
             fn read(octets: &mut &[u8]) -> Option<Self> {
                 Lv8::read(octets).map(|value| Self(value.0))
             }

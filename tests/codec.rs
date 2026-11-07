@@ -597,6 +597,163 @@ fn a_flag_that_disagrees_is_refused_where_it_is_written() {
     );
 }
 
+/// A field whose tree is a scalar or an object, as its value is, has one rule for each
+/// form and for its absence: a value without or with spare bits, an IPv4 or IPv6 address
+/// or another, an identity of digits or text or of other octets. The member that the
+/// scalar is selects it, as the object's; another member of the object selects nothing at
+/// the scalar and where the field is absent; another name is no member, whatever the form.
+#[test]
+fn a_field_of_either_form_has_one_rule() {
+    let found = |tree: &tree::Value, path: &str| {
+        select(tree, path)
+            .map(|values| values.into_iter().cloned().collect::<Vec<_>>())
+            .map_err(|error| error.kind())
+    };
+    let none = Ok(Vec::<tree::Value>::new());
+    let misspelt = Err(tree::ErrorKind::NoSuchMember);
+    let request = |change: &dyn Fn(&mut SessionEstablishmentRequest)| {
+        let Body::SessionEstablishmentRequest(mut request) = establishment().body else {
+            panic!()
+        };
+        change(&mut request);
+        Message {
+            header: Header::session(0, 1),
+            body: Body::SessionEstablishmentRequest(request),
+        }
+        .to_tree()
+    };
+    // Spare bits: a Time Unit without them, with them, and none
+    let rate = |downlink: Option<Narrow<TimeUnit>>| PacketRate {
+        ulpr: true,
+        dlpr: downlink.is_some(),
+        uplink_time_unit: Some(Narrow::new(TimeUnit::Minute)),
+        maximum_uplink_packet_rate: Some(10),
+        downlink_time_unit: downlink,
+        maximum_downlink_packet_rate: downlink.map(|_| 10),
+        ..Default::default()
+    };
+    let spared = Narrow {
+        value: TimeUnit::Minute,
+        spare: 0x40,
+    };
+    let tree = request(&|request| {
+        let qer = CreateQer::new(QerId::new(1), GateStatus::default());
+        request
+            .create_qer
+            .push(qer.with_packet_rate(rate(Some(spared))));
+        let qer = CreateQer::new(QerId::new(2), GateStatus::default());
+        request.create_qer.push(qer.with_packet_rate(rate(None)));
+    });
+    let minute = tree!("minute");
+    for (unit, value, spare) in [
+        (
+            "0/Packet Rate/Uplink Time Unit",
+            Ok(vec![minute.clone()]),
+            none.clone(),
+        ),
+        (
+            "0/Packet Rate/Downlink Time Unit",
+            Ok(vec![minute.clone()]),
+            Ok(vec![tree!(64)]),
+        ),
+        (
+            "1/Packet Rate/Downlink Time Unit",
+            none.clone(),
+            none.clone(),
+        ),
+    ] {
+        let unit = format!("/pfcp/Create QER/{unit}");
+        assert_eq!(found(&tree, &format!("{unit}/value")), value, "{unit}");
+        assert_eq!(found(&tree, &format!("{unit}/Spare")), spare, "{unit}");
+        assert_eq!(found(&tree, &format!("{unit}/Bogus")), misspelt, "{unit}");
+        let below = found(&tree, &format!("{unit}/value/Bogus"));
+        assert_eq!(below, Err(tree::ErrorKind::Scalar), "{unit}");
+    }
+    // An address of IPv4, of another type, and none
+    let ssm = SsmAddress {
+        distribution: TypedAddress::from(core::net::IpAddr::V4(Ipv4Addr::new(232, 0, 0, 1))),
+        source: TypedAddress {
+            address_type: 2,
+            address: vec![1, 2],
+        },
+    };
+    let mbs = |ssm: Option<SsmAddress>| {
+        MbsSessionN4ControlInformation::new(MbsSessionIdentifier {
+            tmgi: true,
+            tmgi_field: Some([1, 2, 3, 4, 5, 6]),
+            ssmi: ssm.is_some(),
+            source_specific_ip_multicast_address: ssm,
+            ..Default::default()
+        })
+    };
+    let tree = request(&|request| {
+        *request = request
+            .clone()
+            .with_mbs_session_n4_control_information(mbs(Some(ssm.clone())))
+    });
+    let without = request(&|request| {
+        *request = request
+            .clone()
+            .with_mbs_session_n4_control_information(mbs(None))
+    });
+    let ssm = "/pfcp/MBS Session N4 Control Information/0/MBS Session Identifier/Source Specific IP Multicast Address";
+    for (tree, address, value, kind) in [
+        (
+            &tree,
+            "IP Multicast Distribution Address",
+            Ok(vec![tree!("232.0.0.1")]),
+            none.clone(),
+        ),
+        (
+            &tree,
+            "IP Source Address",
+            Ok(vec![tree!({"octets": "0102"})["octets"].clone()]),
+            Ok(vec![tree!(2)]),
+        ),
+        (&without, "IP Source Address", none.clone(), none.clone()),
+    ] {
+        let address = format!("{ssm}/{address}");
+        assert_eq!(
+            found(tree, &format!("{address}/Address")),
+            value,
+            "{address}"
+        );
+        assert_eq!(
+            found(tree, &format!("{address}/Address Type")),
+            kind,
+            "{address}"
+        );
+        assert_eq!(
+            found(tree, &format!("{address}/Bogus")),
+            misspelt,
+            "{address}"
+        );
+    }
+    // An identity of digits, of text, of other octets, and none
+    let user = |imsi: Option<DigitsLv8>| UserId {
+        imsif: imsi.is_some(),
+        imsi,
+        naif: true,
+        nai: Some(TextLv8::from("user@example")),
+        ..Default::default()
+    };
+    for (imsi, octets) in [
+        (Some(DigitsLv8::new("20893").unwrap()), none.clone()),
+        (
+            Some(DigitsLv8(vec![0x02, 0xf8, 0x39])),
+            Ok(vec![tree!({"octets": "02f839"})["octets"].clone()]),
+        ),
+        (None, none.clone()),
+    ] {
+        let tree = request(&|request| request.user_id = Some(user(imsi.clone())));
+        let imsi = "/pfcp/User ID/IMSI";
+        assert_eq!(found(&tree, &format!("{imsi}/octets")), octets, "{imsi:?}");
+        assert_eq!(found(&tree, &format!("{imsi}/Bogus")), misspelt, "{imsi:?}");
+        assert_eq!(found(&tree, "/pfcp/User ID/NAI/octets"), none);
+        assert_eq!(found(&tree, "/pfcp/User ID/NAI/Bogus"), misspelt);
+    }
+}
+
 /// What the paths know of a place prints the names of the message, of the tables and of
 /// the IE types, not their rows.
 #[test]

@@ -354,7 +354,9 @@ value lacks of those that its tree may have (`IeTypeInfo::members`: its flags,
 its fields, `Spare`, `length`, `unknown octets`), selects nothing; a name that
 is none of them is an error, also below what a message lacks: a row, a flag or
 a field, of what the tree of the field may hold (`tree::Below`), and an entry
-past the end of a list.
+past the end of a list. A field that its tree writes as a scalar or as an
+object, as a value with spare bits or not, takes the same names in either
+form: the member that the scalar is selects it.
 
 ```rust
 use oxirush_pfcp::*;
