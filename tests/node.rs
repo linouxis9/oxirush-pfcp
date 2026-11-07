@@ -1876,6 +1876,100 @@ fn bundled_messages_of_one_peer() {
     assert_eq!(kinds_of(&events), [ViolationKind::BundledPeers]);
 }
 
+/// §6.5: "the procedures ... shall apply for each PFCP message that is bundled ... as if
+/// the PFCP message was sent in its own individual UDP/IP packet": a bundle of a peer that
+/// sends from the address of an F-SEID of its sessions, not that of its association, is
+/// taken as its messages alone are, by the agreement of the association of the sessions:
+/// the UPF's reports from its UP F-SEID address, the SMF's modifications from its CP
+/// F-SEID address; and an SMF of an SSET set without an association of its own bundles
+/// what it sends alone, by the agreement of the set's association.
+#[test]
+fn a_bundle_of_an_f_seid_address_is_taken_as_its_messages_alone() {
+    let (mut smf, mut upf) = bundling(at(0));
+    let up_address = Ipv4Addr::new(10, 0, 0, 22);
+    let (cp_first, up_first) = established_on(&mut smf, &mut upf, at(0), up_address);
+    let (cp_second, up_second) = established_on(&mut smf, &mut upf, at(0), up_address);
+    let report = |seid, sequence| Message {
+        header: Header::session(seid, sequence),
+        body: SessionReportRequest::new(ReportType {
+            upir: true,
+            ..Default::default()
+        })
+        .into(),
+    };
+    let from = up_address.into_socket(8805);
+    smf.handle_datagram(at(1), from, &report(cp_first, 99).encode().unwrap());
+    assert_eq!(sequences(&mut smf), [99]);
+    smf.handle_datagram(
+        at(1),
+        from,
+        &bundle(&[report(cp_first, 100), report(cp_second, 101)]),
+    );
+    assert_eq!(sequences(&mut smf), [100, 101]);
+    let _ = (up_first, up_second);
+    // The SMF from the address of its CP F-SEIDs, 10.0.0.11, not its association's
+    let cp_address = Ipv4Addr::new(10, 0, 0, 11);
+    let up_seids: Vec<u64> = (0..2)
+        .map(|_| {
+            let f_seid = FSeid {
+                v4: true,
+                seid: Some(smf.new_session()),
+                ipv4: Some(cp_address),
+                ..Default::default()
+            };
+            let pdr = CreatePdr::new_n4(
+                PdrId::new(1),
+                Precedence::new(1),
+                Pdi::new(SourceInterface::new(SourceInterfaceValue::Access)),
+            );
+            let far = CreateFar::new(
+                FarId::new(1),
+                ApplyAction {
+                    forw: true,
+                    ..Default::default()
+                },
+            );
+            let establishment = SessionEstablishmentRequest::new_n4(node_id(SMF), f_seid, pdr, far);
+            let message = Message {
+                header: Header::session(0, 0),
+                body: establishment.into(),
+            };
+            smf.request(at(1), UPF, message).unwrap();
+            pass(&mut smf, &mut upf, UPF, at(1));
+            let (inbound, _) = request(&mut upf);
+            let up_seid = upf.new_session();
+            let up_f_seid = FSeid {
+                v4: true,
+                seid: Some(up_seid),
+                ipv4: Some(Ipv4Addr::new(10, 0, 0, 2)),
+                ..Default::default()
+            };
+            let response = SessionEstablishmentResponse::new(node_id(UPF), accepted())
+                .with_up_f_seid(up_f_seid);
+            upf.respond(at(1), &inbound, response).unwrap();
+            up_seid
+        })
+        .collect();
+    events(&mut upf);
+    let modification = |seid, sequence| Message {
+        header: Header::session(seid, sequence),
+        body: SessionModificationRequest::default().into(),
+    };
+    let from = cp_address.into_socket(8805);
+    upf.handle_datagram(
+        at(2),
+        from,
+        &modification(up_seids[0], 20).encode().unwrap(),
+    );
+    assert_eq!(sequences(&mut upf), [20]);
+    upf.handle_datagram(
+        at(2),
+        from,
+        &bundle(&[modification(up_seids[0], 21), modification(up_seids[1], 22)]),
+    );
+    assert_eq!(sequences(&mut upf), [21, 22]);
+}
+
 /// §6.5 and §5.22: the peer of a session that the node adopted without an association, whose
 /// association another PFCP entity of the SMF holds, bundles its messages as an associated
 /// peer does: the node takes them when it announces BUNDL. A host of neither has not agreed

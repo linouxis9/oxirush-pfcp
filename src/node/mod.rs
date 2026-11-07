@@ -397,8 +397,9 @@ pub enum ViolationKind {
     /// another address, which are of different PFCP entities as the sender sees them
     /// (§6.5): discarded, as the first of its address is taken.
     BundledPeers,
-    /// Messages bundled by a host with neither an association nor a session that the node
-    /// adopted, which could not have agreed on bundling (§6.5): discarded.
+    /// Messages bundled by a host without an association, none of which names a session of
+    /// an association or one that the node adopted from the host: no agreement on bundling
+    /// is of them (§6.5), and they are discarded.
     BundledWithoutAssociation,
     /// Messages bundled by a peer when it or the node did not announce BUNDL
     /// ([`NodeConfig::bundling`], §6.5): discarded.
@@ -1455,7 +1456,7 @@ impl Node {
         let parts = datagram_parts(octets);
         let bundled = parts.len() > 1;
         if bundled {
-            let refused = match self.bundling_with(from) {
+            let refused = match self.bundling_with(from, &parts) {
                 Some(true) => None,
                 Some(false) => Some(ViolationKind::BundlingNotAgreed),
                 None => Some(ViolationKind::BundledWithoutAssociation),
@@ -2223,15 +2224,25 @@ impl Node {
         self.peer_key(one) == self.peer_key(other)
     }
 
-    /// Whether `from` may bundle its messages (§6.5): a peer of an association, when both it
-    /// and the node announced BUNDL; the peer of a session adopted without one, whose
-    /// features the holder of its association knows, when the node did. `None` for a host
-    /// of neither.
-    fn bundling_with(&self, from: SocketAddr) -> Option<bool> {
+    /// Whether `from` may bundle the messages `parts` (§6.5): as the association of the
+    /// host has it, when both it and the node announced BUNDL, or that of the session of the
+    /// first of them that names one, whatever the host, whose messages are then taken as
+    /// they would be alone: a host of the session's F-SEID address, another SMF of the set.
+    /// The peer of a session adopted without an association, whose features the holder of
+    /// its association knows, as the node announced it. `None` for a host of neither.
+    fn bundling_with(&self, from: SocketAddr, parts: &[&[u8]]) -> Option<bool> {
         let own = self.config.bundling;
-        match self.association_of(from) {
+        if let Some(association) = self.association_of(from) {
+            return Some(own && association.set.bundl);
+        }
+        let session = parts.iter().find_map(|part| {
+            let (header, ..) = Header::decode(part)?;
+            let local = self.sessions.resolve(header.seid?)?;
+            self.sessions.get(&local)
+        })?;
+        match self.associations.get(&session.node) {
             Some(association) => Some(own && association.set.bundl),
-            None if self.sessions.adopts(from) => Some(own),
+            None if session.adopted && self.same_peer(session.peer, from) => Some(own),
             None => None,
         }
     }
