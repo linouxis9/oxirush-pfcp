@@ -112,6 +112,9 @@ pub(crate) struct Sessions {
     /// The sessions whose deletion waits for their last usage reports, by when the node
     /// ends them.
     ends: BTreeSet<(Duration, u64)>,
+    /// The new local SEID of each outstanding move, which the UP function may send to
+    /// before the response: the mark of the session that moves.
+    moves: BTreeMap<u64, u64>,
 }
 
 impl Sessions {
@@ -149,6 +152,7 @@ impl Sessions {
             }
         }
         let until = session.until;
+        self.moves.remove(&local);
         if let Some(old) = self.by_local.insert(local, session) {
             if let Some(seid) = old.peer_seid
                 && self.by_local[&local].peer_seid != Some(seid)
@@ -197,6 +201,7 @@ impl Sessions {
 
     pub(crate) fn remove(&mut self, local: &u64) -> Option<Session> {
         let session = self.by_local.remove(local)?;
+        self.moves.remove(local);
         if let Some(seid) = session.peer_seid {
             self.by_peer.remove(&(seid, *local));
         }
@@ -265,6 +270,14 @@ impl Sessions {
         }
     }
 
+    /// Take `new`, which an outstanding move of the session of `mark` holds, for that
+    /// session, until the move ends and the session or nothing is there.
+    pub(crate) fn hold_for(&mut self, new: u64, mark: u64) {
+        if self.by_local.contains_key(&new) {
+            self.moves.insert(new, mark);
+        }
+    }
+
     /// The local SEIDs of the sessions whose peer's SEID is `peer_seid`.
     pub(crate) fn of_peer_seid(&self, peer_seid: u64) -> impl Iterator<Item = u64> + '_ {
         self.by_peer
@@ -284,9 +297,13 @@ impl Sessions {
         self.aliases.contains_key(&seid)
     }
 
-    /// The local SEID of the session of a SEID that a header has: its own, or the one it
-    /// moved to since, through any number of moves.
+    /// The local SEID of the session of a SEID that a header has: its own, the one it
+    /// moved to since, through any number of moves, or the one it moves from, of the new
+    /// SEID of an outstanding move.
     pub(crate) fn resolve(&self, seid: u64) -> Option<u64> {
+        if let Some(mark) = self.moves.get(&seid) {
+            return self.of_mark(*mark);
+        }
         match self.by_local.contains_key(&seid) {
             true => Some(seid),
             false => self

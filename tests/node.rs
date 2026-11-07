@@ -5786,6 +5786,75 @@ fn a_request_that_ends_leaves_an_establishment_its_session() {
     );
 }
 
+/// Table 7.5.4.1-1, CP F-SEID: "The UP function shall use the new CP F-SEID for subsequent
+/// PFCP Session related messages", from when it accepts the change, and §7.2.2.4.2: the
+/// new SEID is the SMF's while its move is outstanding. A report of the UPF to it that
+/// comes before the move's response, lost or overtaken, is of the session: it reaches the
+/// SMF's caller, of the session's SEID then, and its answer goes to the UPF's SEID. The
+/// session then moves with the response, or stays where it was with a rejection, which a
+/// request to the new SEID before it does not change.
+#[test]
+fn a_request_to_the_new_seid_of_a_move_before_its_response() {
+    for accept in [true, false] {
+        let (mut smf, mut upf) = associated(at(0));
+        let (cp_seid, up_seid) = established(&mut smf, &mut upf, at(0));
+        let new = smf.new_session();
+        let moved = FSeid {
+            v4: true,
+            seid: Some(new),
+            ipv4: Some(Ipv4Addr::new(10, 0, 0, 1)),
+            ..Default::default()
+        };
+        smf.session_request(
+            at(1),
+            cp_seid,
+            SessionModificationRequest::default().with_cp_f_seid(moved),
+        )
+        .unwrap();
+        pass(&mut smf, &mut upf, UPF, at(1));
+        let (inbound, _) = request(&mut upf);
+        let cause = match accept {
+            true => accepted(),
+            false => Cause::new(CauseValue::RequestRejected),
+        };
+        upf.respond(at(1), &inbound, SessionModificationResponse::new(cause))
+            .unwrap();
+        let response = sent(&mut upf);
+        let report = SessionReportRequest::new(ReportType {
+            dldr: true,
+            ..Default::default()
+        });
+        // To the new SEID, which the UPF takes with its acceptance
+        let peer_seid = upf.session(up_seid).and_then(|session| session.peer_seid);
+        assert_eq!(peer_seid == Some(new), accept);
+        let header = Header::session(new, 0);
+        upf.request(
+            at(1),
+            SMF,
+            Message {
+                header,
+                body: report.into(),
+            },
+        )
+        .unwrap();
+        pass(&mut upf, &mut smf, SMF, at(1));
+        let (inbound, _) = request(&mut smf);
+        assert_eq!(inbound.seid, Some(cp_seid));
+        smf.respond(at(1), &inbound, SessionReportResponse::new(accepted()))
+            .unwrap();
+        let answer = decoded(&sent(&mut smf)[0]);
+        assert_eq!(answer.header.seid, Some(up_seid));
+        assert_eq!(answer.body.cause(), Some(CauseValue::RequestAccepted));
+        for transmit in response {
+            smf.handle_datagram(at(1), UPF, &transmit.octets);
+        }
+        assert!(violations(&mut smf).is_empty());
+        let at_new = smf.session(new).and_then(|session| session.peer_seid);
+        let at_old = smf.session(cp_seid).and_then(|session| session.peer_seid);
+        assert_eq!((at_new.is_some(), at_old.is_some()), (accept, !accept));
+    }
+}
+
 // ── §5.2.2.3.1: the usage reports that follow a deletion ────────────────────
 
 /// A UPF's report of the usage of a session that the SMF deletes: the last with PSDBU.
