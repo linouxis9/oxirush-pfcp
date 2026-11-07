@@ -415,7 +415,10 @@ fn in_table_order(table: &Table, raws: &[RawIe], count: impl Fn(u16) -> usize) -
     let kept = |ie_type: u16| raws.iter().filter(|ie| ie.ie_type == ie_type).count();
     let mut order = Vec::new();
     for row in table.rows {
-        order.extend(core::iter::repeat_n(Placed::Field(row.ie_type), count(row.ie_type)));
+        order.extend(core::iter::repeat_n(
+            Placed::Field(row.ie_type),
+            count(row.ie_type),
+        ));
         order.extend(core::iter::repeat_n(Placed::Raw, kept(row.ie_type)));
     }
     let of_no_row = raws.iter().filter(|ie| table.row_of(ie.ie_type).is_none());

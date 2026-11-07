@@ -374,7 +374,10 @@ async fn the_events_of_a_request_sent_with_the_node() {
     tokio::time::sleep(Duration::from_millis(20)).await;
     let now = smf.handle().with(|_, now| now).await.unwrap();
     assert!(now >= Duration::from_millis(20), "{now:?}");
-    for (to, answered) in [(upf.local_addr(), true), (silent.local_addr().unwrap(), false)] {
+    for (to, answered) in [
+        (upf.local_addr(), true),
+        (silent.local_addr().unwrap(), false),
+    ] {
         let heartbeat = Message {
             header: Header::node(0),
             body: HeartbeatRequest::new(RecoveryTimeStamp::new(7)).into(),
@@ -746,7 +749,10 @@ async fn an_entity_of_the_smf_takes_a_session_over() {
     // The caller takes the session over, with the UP function's SEID that the SMF knows, at
     // a local SEID that no other call gave
     let local = handle.with(|node, _| node.new_session()).await.unwrap();
-    assert_ne!(handle.with(|node, _| node.new_session()).await.unwrap(), local);
+    assert_ne!(
+        handle.with(|node, _| node.new_session()).await.unwrap(),
+        local
+    );
     let adopt = move |node: &mut Node, _| node.adopt_session(local, upf_address, 0x66);
     handle.with(adopt).await.unwrap().unwrap();
     assert_eq!(handle.with(adopt).await.unwrap(), Err(NodeError::SeidInUse));

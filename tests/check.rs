@@ -1455,13 +1455,7 @@ fn the_conditions_that_their_scope_shows() {
         }),
         ..Default::default()
     };
-    shown(
-        &path,
-        &[
-            "Remote GTP-U Peer",
-            "Measurement Period",
-        ],
-    );
+    shown(&path, &["Remote GTP-U Peer", "Measurement Period"]);
     path.gtp_u_path_interface_type = Some(GtpUPathInterfaceType {
         n3: true,
         ..Default::default()

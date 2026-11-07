@@ -3604,7 +3604,9 @@ fn a_request_is_judged_by_the_first_ie_of_each_type() {
     let release = |second: [u8; 4]| {
         let mut release = AssociationReleaseRequest::default();
         release.raw.push(RawIe::new(60, Vec::new()));
-        release.raw.push(RawIe::new(60, [&[0], &second[..]].concat()));
+        release
+            .raw
+            .push(RawIe::new(60, [&[0], &second[..]].concat()));
         Message {
             header: Header::node(5),
             body: release.into(),
@@ -3626,7 +3628,8 @@ fn a_request_is_judged_by_the_first_ie_of_each_type() {
     };
     body.cp_f_seid = None;
     body.raw.push(RawIe::new(57, Vec::new()));
-    body.raw.push(RawIe::new(57, [2, 0, 0, 0, 0, 0, 0, 0, 0, 10, 0, 0, 1]));
+    body.raw
+        .push(RawIe::new(57, [2, 0, 0, 0, 0, 0, 0, 0, 0, 10, 0, 0, 1]));
     let null_first = Message {
         header: Header::session(0, 6),
         body: Body::SessionEstablishmentRequest(body),
