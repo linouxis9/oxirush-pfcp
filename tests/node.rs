@@ -5861,11 +5861,12 @@ fn mpas_an_entity_controls_the_session_that_it_takes_over() {
     assert_eq!(other.poll_timeout(), None);
 }
 
-/// The requests of a host without an association, of the address of a session's F-SEID,
-/// wait in the room of hosts without an association, as `NodeConfig::strangers` says: only
-/// a session that the caller adopted makes its peer's requests those of an association.
+/// A UPF sends the requests of a session from the address of its UP F-SEID, which may
+/// differ from its own (§7.2.2.4.1 NOTE): they are of the session's peer, and take no
+/// place of the room of `NodeConfig::strangers`, which the hosts without an association
+/// share.
 #[test]
-fn the_requests_of_the_host_of_an_f_seid_wait_as_a_strangers() {
+fn the_requests_of_the_host_of_an_f_seid_are_no_strangers() {
     let (mut smf, mut upf) = associated_as(
         NodeConfig {
             strangers: 1,
@@ -5875,7 +5876,7 @@ fn the_requests_of_the_host_of_an_f_seid_wait_as_a_strangers() {
     );
     let (cp_seid, _) = established_on(&mut smf, &mut upf, at(0), Ipv4Addr::new(10, 0, 0, 12));
     let host = Ipv4Addr::new(10, 0, 0, 12).into_socket(8805);
-    for sequence in [10, 11] {
+    for sequence in [10, 11, 12] {
         let report = Message {
             header: Header::session(cp_seid, sequence),
             body: SessionReportRequest::new(ReportType {
@@ -5885,6 +5886,12 @@ fn the_requests_of_the_host_of_an_f_seid_wait_as_a_strangers() {
             .into(),
         };
         smf.handle_datagram(at(1), host, &report.encode().unwrap());
+    }
+    assert_eq!(requests_of(&events(&mut smf)), 3);
+    assert_eq!(smf.counters().refused, 0);
+    // A host without an association still waits for the one place
+    for from in [OTHER, Ipv4Addr::new(10, 0, 0, 4).into_socket(8805)] {
+        smf.handle_datagram(at(1), from, &setup_of(from, 1, 1000));
     }
     assert_eq!(requests_of(&events(&mut smf)), 1);
     assert_eq!(smf.counters().refused, 1);

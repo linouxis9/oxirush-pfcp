@@ -109,7 +109,9 @@ pub struct NodeConfig {
     /// its address and port.
     pub request_port: Option<u16>,
     /// How many requests of hosts without an association wait for their answer at once:
-    /// beyond, one is dropped unread ([`Counters::refused`]).
+    /// beyond, one is dropped unread ([`Counters::refused`]). A session request from the
+    /// address of its session's F-SEID, or from the peer of an adopted session, is not
+    /// one of them.
     pub strangers: usize,
 }
 

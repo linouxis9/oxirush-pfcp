@@ -89,20 +89,21 @@ impl Node {
 
     /// Whether a request of `message_type` of `from` to the SEID `seid`, which
     /// [`screen`](Self::screen) lets through, waits in the room of
-    /// [`NodeConfig::strangers`]: from a host without an association, and no session
-    /// request of an adopted session from its peer, which does not wait.
+    /// [`NodeConfig::strangers`]: from a host without an association, but for a session
+    /// request of a session whose peer the host is, as the address of its F-SEID
+    /// (§7.2.2.4.1 NOTE) or of a session adopted from it, which does not wait.
     pub(super) fn unassociated(
         &self,
         from: SocketAddr,
         message_type: u8,
         seid: Option<u64>,
     ) -> bool {
-        let adopted = !is_node_related(message_type)
+        let of_its_session = !is_node_related(message_type)
             && seid
                 .and_then(|seid| self.sessions.resolve(seid))
                 .and_then(|seid| self.sessions.get(&seid))
-                .is_some_and(|session| session.adopted && self.same_peer(session.peer, from));
-        self.association_of(from).is_none() && !adopted
+                .is_some_and(|session| self.same_peer(session.peer, from));
+        self.association_of(from).is_none() && !of_its_session
     }
 
     /// Whether `from` may bundle the messages `parts` (§6.5): as the association of the
