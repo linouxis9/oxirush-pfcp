@@ -2970,6 +2970,11 @@ fn debug_prints_no_key() {
     assert!(!printed(&format!("{upf:?}")));
     let got = format!("{:?}", events(&mut upf));
     assert!(!printed(&got), "{got}");
+    // The requests that it keeps are there, by their lengths: the rejection of the
+    // modification, and the establishment that waits
+    let kept = format!("{upf:?}");
+    assert!(kept.contains("rejection: true"), "{kept}");
+    assert!(kept.contains("response: None"), "{kept}");
 }
 
 // ── §4.2.2: the port of the requests ───────────────────────────────────────
@@ -4939,9 +4944,9 @@ fn mpas_a_handover_report_to_another_entity_of_the_smf() {
 
 /// Table 7.4.4.4-1: the Association Update Response carries the responder's function
 /// features too. A CP function of MPAS sets an association up with a UPF of MPAS `before`,
-/// sends it an update, which the UPF answers with its UP Function Features of MPAS
-/// `after`; whether a release then keeps a session.
-fn cp_keeps_after_an_update_answered_with(before: bool, after: bool) -> bool {
+/// sends it an update, which the UPF answers with `cause` and its UP Function Features of
+/// MPAS `after`; whether a release then keeps a session.
+fn cp_keeps_after_an_update_answered_with(before: bool, after: bool, cause: CauseValue) -> bool {
     let mut smf = Node::new(NodeConfig {
         smf_set: SmfSet {
             mpas: true,
@@ -4987,7 +4992,7 @@ fn cp_keeps_after_an_update_answered_with(before: bool, after: bool) -> bool {
     upf.respond(
         at(1),
         &inbound,
-        AssociationUpdateResponse::new(node_id(UPF), accepted())
+        AssociationUpdateResponse::new(node_id(UPF), Cause::new(cause))
             .with_up_function_features(up_mpas(after)),
     )
     .unwrap();
@@ -5002,12 +5007,24 @@ fn cp_keeps_after_an_update_answered_with(before: bool, after: bool) -> bool {
 /// §6.2.8.2, Table 7.4.4.4-1: the node takes the set features of the peer's function from
 /// an Association Update Response as from a request: a UPF that withdraws MPAS in its
 /// answer leaves the CP nothing to keep on a release, and one that announces it there,
-/// its sessions.
+/// its sessions. An answer that rejects the update changes nothing.
 #[test]
 fn an_association_update_response_changes_the_set_features() {
-    assert!(cp_keeps_after_an_update_answered_with(true, true));
-    assert!(!cp_keeps_after_an_update_answered_with(true, false));
-    assert!(cp_keeps_after_an_update_answered_with(false, true));
+    let accepted = CauseValue::RequestAccepted;
+    assert!(cp_keeps_after_an_update_answered_with(true, true, accepted));
+    assert!(!cp_keeps_after_an_update_answered_with(
+        true, false, accepted
+    ));
+    assert!(cp_keeps_after_an_update_answered_with(
+        false, true, accepted
+    ));
+    let rejected = CauseValue::RequestRejected;
+    assert!(cp_keeps_after_an_update_answered_with(
+        true, false, rejected
+    ));
+    assert!(!cp_keeps_after_an_update_answered_with(
+        false, true, rejected
+    ));
 }
 
 /// An establishment that does not go, or that its peer rejects, takes its local SEID
