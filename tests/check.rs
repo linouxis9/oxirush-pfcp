@@ -752,6 +752,38 @@ fn a_reserved_value_follows_the_presence_of_its_own_row() {
     );
 }
 
+/// §8.2.43: "Other values of Node-Address Type are reserved", which §7.6.8 makes an
+/// incorrect value: a conditional FQ-CSID of one, which only a built value has, is
+/// answered "Mandatory IE incorrect".
+#[test]
+fn a_reserved_node_id_type_of_an_fq_csid_is_incorrect() {
+    let mut message = establishment();
+    request_with(&mut message, |request| {
+        request.fq_csid.push(FqCsid {
+            node_id_type: 3,
+            node_address: vec![10, 0, 0, 1],
+            csids: vec![1],
+            node_type: None,
+            extra: Octets::new(),
+        })
+    });
+    let found = message.check(Interfaces::N4);
+    assert_eq!(found.len(), 1, "{found:?}");
+    assert_eq!(
+        (
+            found[0].kind.clone(),
+            found[0].cause(),
+            found[0].offending_ie()
+        ),
+        (
+            DeviationKind::ReservedValue { value: 3 },
+            Some(CauseValue::MandatoryIeIncorrect),
+            Some(65)
+        ),
+        "{found:?}"
+    );
+}
+
 /// §8.1.2: an IE of a null length is no error, and a mandatory one is there.
 #[test]
 fn a_mandatory_ie_of_a_null_length_is_there() {
