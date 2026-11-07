@@ -1953,7 +1953,13 @@ fn a_lone_message_with_the_fo_flag_is_one_message() {
     assert!(events(&mut upf).is_empty());
     let answers: Vec<Message> = sent(&mut upf).iter().map(decoded).collect();
     assert!(
-        matches!(&answers[..], [Message { body: Body::HeartbeatResponse(_), .. }]),
+        matches!(
+            &answers[..],
+            [Message {
+                body: Body::HeartbeatResponse(_),
+                ..
+            }]
+        ),
         "{answers:?}"
     );
 }

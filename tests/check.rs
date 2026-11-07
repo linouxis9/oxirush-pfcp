@@ -920,17 +920,83 @@ fn a_conditional_ie_that_does_not_decode_is_incorrect() {
     );
 }
 
-/// §8.1.2: an IE of a null length is no error, and a mandatory one is there.
+/// §8.1.2, §5.6.3: a null length removes an IE that an update provisioned, and its
+/// receiver does not treat it as an error. A mandatory IE of a null length, or a
+/// conditional one where its condition holds, lacks its value: the sender's deviation,
+/// without a Cause. One after a value is a repetition.
 #[test]
-fn a_mandatory_ie_of_a_null_length_is_there() {
-    assert_eq!(found(&node_message(5, &[ie(60, &[]), ie(96, &RTS)])), []);
-    // After a value, it is a repetition, ignored
+fn a_needed_ie_of_a_null_length_is_the_senders_deviation() {
+    let null = |ie_type| (DeviationKind::NullLength { ie_type }, None, None);
+    assert_eq!(
+        found(&node_message(5, &[ie(60, &[]), ie(96, &RTS)])),
+        [null(60)]
+    );
+    assert_eq!(found(&node_message(1, &[ie(96, &[])])), [null(96)]);
     assert_eq!(
         found(&node_message(
             5,
             &[ie(60, &[0, 10, 0, 0, 1]), ie(96, &RTS), ie(60, &[])]
         )),
         [(DeviationKind::Repeated { ie_type: 60 }, None, None)]
+    );
+    let node = ie(60, &[0, 10, 0, 0, 1]);
+    let f_seid = ie(57, &[2, 0, 0, 0, 0, 0, 0, 0x10, 0x01, 10, 0, 0, 1]);
+    let [pdr, far] = rules();
+    assert_eq!(
+        found(&session_message(
+            50,
+            0,
+            &[ie(60, &[]), f_seid.clone(), pdr.clone(), far.clone()]
+        )),
+        [null(60)]
+    );
+    assert_eq!(
+        found(&session_message(
+            50,
+            0,
+            &[node.clone(), ie(57, &[]), pdr, far.clone()]
+        )),
+        [null(57)]
+    );
+    let pdr = ie(
+        1,
+        &[
+            ie(56, &[]),
+            ie(29, &[0, 0, 0, 255]),
+            ie(2, &ie(20, &[0])),
+            ie(108, &[0, 0, 0, 1]),
+        ]
+        .concat(),
+    );
+    let deviations = Message::decode(&session_message(50, 0, &[node.clone(), f_seid, pdr, far]))
+        .unwrap()
+        .check(Interfaces::N4);
+    let at: Vec<_> = deviations
+        .iter()
+        .map(|deviation| {
+            (
+                deviation.path.as_str(),
+                deviation.kind.clone(),
+                deviation.cause,
+            )
+        })
+        .collect();
+    assert_eq!(
+        at,
+        [(
+            "/pfcp/Create PDR/0/PDR ID",
+            DeviationKind::NullLength { ie_type: 56 },
+            None
+        )]
+    );
+    // A response: its Cause, and the UP F-SEID of an acceptance
+    assert_eq!(
+        found(&session_message(51, 1, &[node.clone(), ie(19, &[])])),
+        [null(19)]
+    );
+    assert_eq!(
+        found(&session_message(51, 1, &[node, ie(19, &[1]), ie(57, &[])])),
+        [null(57)]
     );
 }
 

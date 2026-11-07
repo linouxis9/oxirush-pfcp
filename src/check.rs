@@ -65,6 +65,14 @@ pub enum DeviationKind {
         /// Its IE type.
         ie_type: u16,
     },
+    /// A mandatory IE, or a conditional one where the scope shows that its condition
+    /// holds, of a null length: the sender's deviation, which its receiver does not treat
+    /// as an error (§8.1.2), as a null length removes an IE of a rule that an update
+    /// changes (§5.6.3).
+    NullLength {
+        /// Its IE type.
+        ie_type: u16,
+    },
     /// A conditional IE that is there, and whose value does not decode as its type: a
     /// verifiable conditional IE of a semantically invalid value (§7.6.8), which the
     /// receiver of a request answers with "Mandatory IE incorrect".
@@ -214,6 +222,13 @@ impl fmt::Display for Deviation {
             }
             DeviationKind::ConditionalIncorrect { ie_type } => {
                 write!(f, "the conditional {} does not decode", name(*ie_type))
+            }
+            DeviationKind::NullLength { ie_type } => {
+                write!(
+                    f,
+                    "{} has a null length where it needs its value",
+                    name(*ie_type)
+                )
             }
             DeviationKind::Incorrect { ie_type } => write!(
                 f,
@@ -620,9 +635,9 @@ pub(crate) fn check_scope<S: Scope + Checked>(
     scope.check_values(path, context, found);
 }
 
-/// A mandatory row that has fewer values than it needs: missing, or there and incorrect.
-/// An IE of a null length is there (§8.1.2). Of a row there once, the first IE is the one
-/// handled (§7.6.10).
+/// A mandatory row that has fewer values than it needs: missing, there and incorrect, or
+/// there with a null length, which its receiver takes (§8.1.2). Of a row there once, the
+/// first IE is the one handled (§7.6.10).
 #[cold]
 #[inline(never)]
 fn mandatory_missing<S: Scope>(
@@ -648,6 +663,15 @@ fn mandatory_missing<S: Scope>(
         }),
     };
     if scope.count(row.ie_type) + nulls >= needed {
+        let kind = DeviationKind::NullLength {
+            ie_type: row.ie_type,
+        };
+        let at = Path::Row {
+            parent: path,
+            row: row.name,
+            nth: None,
+        };
+        found.push(Deviation::new(at, S::table().id, kind));
         return;
     }
     let (kind, missing) = match incorrect {
@@ -756,8 +780,8 @@ fn raw_deviations<S: Scope>(
 }
 
 /// A C row that is not there where the condition that its table writes beside it holds
-/// (§7.6.6): on the interface, and without an IE of the row that the scope keeps as
-/// octets, of a null length or incorrect.
+/// (§7.6.6), on the interface: missing, or of a null length (§8.1.2). One that is there
+/// and incorrect is answered as such.
 pub(crate) fn condition_missing<S: Scope>(
     scope: &S,
     at: usize,
@@ -767,14 +791,20 @@ pub(crate) fn condition_missing<S: Scope>(
 ) {
     let table = S::table();
     let row = &table.rows[at];
-    if scope.count(row.ie_type) > 0
-        || !on(row, context.interface).0
-        || scope.raw().iter().any(|ie| ie.ie_type == row.ie_type)
-    {
-        return;
-    }
-    let kind = DeviationKind::ConditionalMissing {
-        ie_type: row.ie_type,
+    let mut kept = scope.raw().iter().filter(|ie| ie.ie_type == row.ie_type);
+    let null = match kept.next() {
+        _ if scope.count(row.ie_type) > 0 || !on(row, context.interface).0 => return,
+        Some(ie) if ie.octets.is_empty() => true,
+        Some(_) => return,
+        None => false,
+    };
+    let kind = match null {
+        true => DeviationKind::NullLength {
+            ie_type: row.ie_type,
+        },
+        false => DeviationKind::ConditionalMissing {
+            ie_type: row.ie_type,
+        },
     };
     let mut deviation = Deviation::new(
         Path::Row {
@@ -785,6 +815,8 @@ pub(crate) fn condition_missing<S: Scope>(
         table.id,
         kind,
     );
-    deviation.cause = context.conditional_cause();
+    if !null {
+        deviation.cause = context.conditional_cause();
+    }
     found.push(deviation);
 }
