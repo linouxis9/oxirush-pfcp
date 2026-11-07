@@ -2764,7 +2764,8 @@ impl Node {
         self.by_peer.insert(self.peer_key(peer), key.clone());
         let mut ended = Vec::new();
         if let Some(old) = &replaced {
-            if old.peer != peer && !self.by_peer.contains_key(&self.peer_key(old.peer)) {
+            // Nor of an adopted session (§6.2.2.2).
+            if old.peer != peer && !self.beats(old.peer) {
                 self.heartbeats.remove(&old.peer);
             }
             if let Some(retained) = retained {
