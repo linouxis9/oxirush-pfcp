@@ -1,15 +1,16 @@
 name: Mutants
 
-# cargo-mutants changes the code of the crate at one place at a time, a mutant, and
-# runs the tests on each: a mutant that every test passes is code that no test checks.
-# .cargo/mutants.toml says what it leaves alone, and why. Every mutant runs each Saturday
-# evening, and when the run is started by hand with `full`; on the other nights after a
-# day with a commit, and when it is started by hand without `full`, the mutants of the
-# code that the commits of the last day changed. Each job keeps its mutants.out, and a
-# missed mutant fails it. The crates of the family start at times of their own, the
-# longest first, and few jobs of each run at once, to leave runners to the other CI;
-# started by hand, `parallel` says how many. A shard takes every n-th mutant, so that
-# the shards of a job last alike, and they are as many as keep each to 2 hours or less.
+# cargo-mutants changes the code of the crate at one place at a time, a mutant, and runs
+# the tests on each: a mutant that every test passes is code that no test checks.
+# .cargo/mutants.toml says what it leaves alone, and why. Every mutant runs each
+# Saturday evening, and when the run is started by hand with `full`; on the other
+# nights, and when it is started by hand without `full`, the mutants of the code that
+# the commits since the last run changed, and none without such a commit. Each job keeps
+# its mutants.out, and a missed mutant fails it. The crates of the family start at times
+# of their own, the longest first, and few jobs of each run at once, to leave runners to
+# the other CI; started by hand, `parallel` says how many. A shard takes every n-th
+# mutant, so that the shards of a job last alike, and they are as many as keep each to 2
+# hours or less.
 on:
   schedule:
     - cron: "43 23 * * 6"
@@ -17,7 +18,7 @@ on:
   workflow_dispatch:
     inputs:
       full:
-        description: Every mutant, rather than those of the last day's changes
+        description: Every mutant, rather than those of the changes since the last run
         type: boolean
         default: false
       parallel:
@@ -41,8 +42,8 @@ env:
   CARGO_PROFILE_DEV_DEBUG: 0
 
 jobs:
-  # What the run mutates: every mutant, the mutants of what the commits of the last day
-  # changed since the last commit before them, or nothing after a day without a commit.
+  # What the run mutates: every mutant, the mutants of what the commits since the last run
+  # changed, or nothing without such a commit.
   plan:
     name: What to mutate
     runs-on: ubuntu-latest
@@ -65,8 +66,7 @@ jobs:
           # late a run starts and however old the date of a commit is. A run whose plan
           # succeeded and whose shards then failed, for a missed mutant as for a lost runner
           # or a shard that ended early, is such a base too, and no later run mutates its
-          # commits again: it stays red until someone reads it, and is run again itself. A
-          # run of `recheck`, which mutates named mutants alone, is none.
+          # commits again: it stays red until someone reads it, and is run again itself.
           runs=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow mutants.yml \
             --branch "$GITHUB_REF_NAME" --status completed --limit 100 \
             --json databaseId,conclusion \
@@ -74,9 +74,7 @@ jobs:
           base=
           for run in $runs; do
             base=$(gh run view "$run" --repo "$GITHUB_REPOSITORY" --json headSha,jobs --jq '
-              select(any(.jobs[]; .name == "What to mutate" and .conclusion == "success")
-                and all(.jobs[]; (.name | startswith("Mutants named by the file") | not)
-                  or .conclusion == "skipped"))
+              select(any(.jobs[]; .name == "What to mutate" and .conclusion == "success"))
               | .headSha')
             if [ -n "$base" ]; then break; fi
           done
@@ -153,9 +151,9 @@ jobs:
           name: mutants.out-${{ matrix.shard }}
           path: mutants.out
 
-  # The mutants of the lines that the commits of the last day changed.
+  # The mutants of the lines that the commits since the last run changed.
   changes:
-    name: Mutants of the last day's changes
+    name: Mutants of the changes since the last run
     needs: plan
     if: needs.plan.outputs.mode == 'diff'
     runs-on: ubuntu-latest

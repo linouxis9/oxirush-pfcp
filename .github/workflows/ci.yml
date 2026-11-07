@@ -147,7 +147,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@nightly
-      - run: cargo install cargo-fuzz --locked
+      - run: cargo install cargo-fuzz@0.13.2 --locked
       # From the seeds of fuzz/seeds: the captured messages, and for the node each of
       # them delivered to the SMF and the UPF.
       - run: |
