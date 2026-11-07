@@ -1211,6 +1211,23 @@ fn the_values_read_by_hand_have_the_places_of_their_figures() {
     assert_eq!(again(&removed), octets[..13]);
 }
 
+/// §8.2.38: a Node ID of an FQDN from its text, as RFC 1035 writes its labels, which
+/// gives the text back; not from a text of an empty label or one of more than 63 octets.
+#[test]
+fn an_fqdn_node_id_from_its_text() {
+    let node_id = NodeId::from_fqdn("upf.example").unwrap();
+    assert_eq!(node_id, NodeId::Fqdn(b"\x03upf\x07example".to_vec().into()));
+    assert_eq!(node_id.fqdn().as_deref(), Some("upf.example"));
+    let longest = "a".repeat(63);
+    assert_eq!(
+        NodeId::from_fqdn(&longest).and_then(|node_id| node_id.fqdn()),
+        Some(longest.clone())
+    );
+    for name in ["", "upf..example", "upf.", ".upf", &format!("{longest}a")] {
+        assert_eq!(NodeId::from_fqdn(name), None, "{name:?}");
+    }
+}
+
 /// §8.2.38: a Node ID as its receiver takes it, the spare bits of its type and the octets
 /// after its value ignored (§8.1.2); and its tree, which reads back to its octets in each
 /// form (the FQDN forms found by a fuzz target that compares octets).

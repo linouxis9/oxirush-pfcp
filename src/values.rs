@@ -1400,6 +1400,21 @@ impl NodeId {
         }
     }
 
+    /// A Node ID of an FQDN from its text, `upf.example`: its labels as RFC 1035 writes
+    /// them, each after its length (§8.2.38). `None` for a text with an empty label or a
+    /// label of more than 63 octets.
+    pub fn from_fqdn(name: &str) -> Option<Self> {
+        let mut labels = Vec::with_capacity(name.len() + 1);
+        for label in name.split('.') {
+            let length = u8::try_from(label.len())
+                .ok()
+                .filter(|length| (1..=63).contains(length))?;
+            labels.push(length);
+            labels.extend_from_slice(label.as_bytes());
+        }
+        Some(Self::Fqdn(labels.into()))
+    }
+
     /// The FQDN as text, its labels with dots: `None` for labels that are not each of 1
     /// to 63 octets of UTF-8 without a dot, which the text could not give back.
     pub fn fqdn(&self) -> Option<String> {
@@ -1462,21 +1477,12 @@ impl oxirush_utils::tree::Tree for NodeId {
         match which {
             0 => reading.within("FQDN", content, |content, reading| {
                 let name = reading.text(content)?;
-                let mut labels = Vec::new();
-                for label in name.split('.') {
-                    let length = u8::try_from(label.len())
-                        .ok()
-                        .filter(|length| (1..=63).contains(length));
-                    let Some(length) = length else {
-                        return Err(reading.mismatch(
-                            "a name of labels of 1 to 63 octets, with dots between them",
-                            content,
-                        ));
-                    };
-                    labels.push(length);
-                    labels.extend_from_slice(label.as_bytes());
-                }
-                Ok(Self::Fqdn(labels.into()))
+                Self::from_fqdn(name).ok_or_else(|| {
+                    reading.mismatch(
+                        "a name of labels of 1 to 63 octets, with dots between them",
+                        content,
+                    )
+                })
             }),
             // The octets of a Node ID that the text does not give: read as they decode.
             _ => reading.within("Node ID value", content, |content, reading| {
