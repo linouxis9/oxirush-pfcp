@@ -350,9 +350,9 @@ pub(crate) fn decode_scope_sized<S: Scope>(
         scope.presize(octets);
     }
     // No order is kept while the IEs come in the order of the table, which encoding the
-    // fields in that order gives back.
+    // scope without one gives back.
     let mut order: Option<Vec<Placed>> = None;
-    let mut last = 0;
+    let mut last = (0, false);
     // The rows there once whose first IE the scope keeps as octets, of a null length or
     // not decoding: §7.6.10 handles that first one, and ignores the others.
     let mut kept_first: Vec<u16> = Vec::new();
@@ -383,23 +383,19 @@ pub(crate) fn decode_scope_sized<S: Scope>(
             order.push(placed);
             continue;
         }
-        let at = match placed {
-            Placed::Field(ie_type) => S::position(ie_type).unwrap_or(usize::MAX),
-            Placed::Raw => usize::MAX,
-        };
-        if placed != Placed::Raw && at >= last {
+        let at = rank::<S>(ie_type, placed == Placed::Raw);
+        if at >= last {
             last = at;
             continue;
         }
         // The first IE out of the order of the table: those before it were in that order.
-        let mut kept = Vec::new();
-        for row in S::table().rows {
-            let mut values = scope.count(row.ie_type);
-            if placed == Placed::Field(row.ie_type) {
-                values -= 1;
-            }
-            kept.extend(core::iter::repeat_n(Placed::Field(row.ie_type), values));
-        }
+        let raws = scope.raw();
+        let before = match placed {
+            Placed::Raw => &raws[..raws.len() - 1],
+            Placed::Field(_) => raws,
+        };
+        let count = |ie_type| scope.count(ie_type) - usize::from(placed == Placed::Field(ie_type));
+        let mut kept = in_table_order(S::table(), before, count);
         kept.push(placed);
         order = Some(kept);
     }
@@ -407,21 +403,32 @@ pub(crate) fn decode_scope_sized<S: Scope>(
     Ok(())
 }
 
-/// Keep `order` in `scope`, unless the fields in the order of the table give the same
-/// octets: then nothing is kept, and a scope that is changed stays in that order.
+/// Where an IE goes in the order of a table: at the position of its row, an IE that the
+/// scope keeps as octets after the values of its row, and one of no row after every row.
+fn rank<S: Scope>(ie_type: u16, kept: bool) -> (usize, bool) {
+    (S::position(ie_type).unwrap_or(usize::MAX), kept)
+}
+
+/// The order of a scope that has `count` values of each row and keeps `raws`, in the order
+/// of its table: each row, its values then its kept IEs, and the kept IEs of no row last.
+fn in_table_order(table: &Table, raws: &[RawIe], count: impl Fn(u16) -> usize) -> Vec<Placed> {
+    let kept = |ie_type: u16| raws.iter().filter(|ie| ie.ie_type == ie_type).count();
+    let mut order = Vec::new();
+    for row in table.rows {
+        order.extend(core::iter::repeat_n(Placed::Field(row.ie_type), count(row.ie_type)));
+        order.extend(core::iter::repeat_n(Placed::Raw, kept(row.ie_type)));
+    }
+    let of_no_row = raws.iter().filter(|ie| table.row_of(ie.ie_type).is_none());
+    order.extend(core::iter::repeat_n(Placed::Raw, of_no_row.count()));
+    order
+}
+
+/// Keep `order` in `scope`, unless it is the order of the table, which the scope without
+/// one is encoded in: then nothing is kept, and a scope that is changed stays in that order.
 #[cfg(feature = "tree")]
 pub(crate) fn keep_order<S: Scope>(scope: &mut S, order: Vec<Placed>) {
-    let mut last = 0;
-    let in_table_order = order.iter().all(|placed| match placed {
-        Placed::Raw => false,
-        Placed::Field(ie_type) => {
-            let at = S::position(*ie_type).unwrap_or(usize::MAX);
-            let ordered = at >= last;
-            last = at;
-            ordered
-        }
-    });
-    *scope.order_mut() = if in_table_order { Vec::new() } else { order };
+    let ordered = in_table_order(S::table(), scope.raw(), |ie_type| scope.count(ie_type));
+    *scope.order_mut() = if order == ordered { Vec::new() } else { order };
 }
 
 /// More than the rows of a table, which the table macro asserts: the counts of each row
@@ -429,17 +436,33 @@ pub(crate) fn keep_order<S: Scope>(scope: &mut S, order: Vec<Placed>) {
 pub(crate) const MAX_ROWS: usize = 64;
 
 /// Write `scope`: in the order that it keeps, with the values that were added since in
-/// the places of their rows, or in the order of its table.
+/// the places of their rows, or in the order of its table, where an IE that it keeps as
+/// octets follows the values of its row, and one of no row comes last.
 pub(crate) fn encode_scope<S: Scope>(scope: &S, out: &mut Vec<u8>) -> Result<(), Error> {
     let order = scope.order();
+    let table = S::table();
     if order.is_empty() {
-        scope.encode_fields(out)?;
-        for ie in scope.raw() {
+        let raws = scope.raw();
+        let of_row = |ie: &&RawIe| table.row_of(ie.ie_type).is_some();
+        match raws.iter().any(|ie| of_row(&ie)) {
+            false => scope.encode_fields(out)?,
+            true => {
+                for row in table.rows {
+                    let mut nth = 0;
+                    while scope.emit(row.ie_type, nth, out)? {
+                        nth += 1;
+                    }
+                    for ie in raws.iter().filter(|ie| ie.ie_type == row.ie_type) {
+                        ie.encode(out)?;
+                    }
+                }
+            }
+        }
+        for ie in raws.iter().filter(|ie| !of_row(ie)) {
             ie.encode(out)?;
         }
         return Ok(());
     }
-    let table = S::table();
     // How many values of each row the order has: those after are added.
     let mut ordered = [0usize; MAX_ROWS];
     for placed in order {

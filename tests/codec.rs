@@ -92,6 +92,31 @@ fn a_built_message_is_in_the_order_of_its_table_and_decodes_back() {
     assert!(pdi.local_f_teid.as_ref().unwrap().ch);
 }
 
+/// A built message is in the order of its table, an IE that it keeps as octets with the
+/// values of its row, and an IE of no row last: as its tree is, which reads back to the
+/// same message and the same octets; decoded, it keeps no other order.
+#[test]
+fn a_kept_ie_of_a_row_is_with_its_row() {
+    let mut response = AssociationReleaseResponse::new(
+        NodeId::Ipv4(Ipv4Addr::new(10, 0, 0, 1)),
+        Cause::new(CauseValue::RequestAccepted),
+    );
+    response.raw.push(RawIe::new(60, vec![0, 10, 0, 0, 2]));
+    response.raw.push(RawIe::new(96, vec![0, 0, 0, 7]));
+    let message = Message {
+        header: Header::node(2),
+        body: response.into(),
+    };
+    let octets = message.encode().unwrap();
+    let ies = "003c0005000a000001003c0005000a00000200130001010060000400000007";
+    assert_eq!(hex::encode(&octets), format!("200a002300000200{ies}"));
+    let back = Message::from_tree(&message.to_tree()).unwrap();
+    assert_eq!(back, message);
+    assert_eq!(back.encode().unwrap(), octets);
+    let decoded = Message::decode(&octets).unwrap();
+    assert_eq!(decoded, message);
+}
+
 #[test]
 fn the_tree_reads_back_and_a_path_edits_it() {
     let message = establishment();

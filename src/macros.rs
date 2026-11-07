@@ -874,7 +874,8 @@ macro_rules! pfcp_table {
             )*
             /// The IEs that the scope keeps as octets, in the order of the wire.
             pub raw: alloc::vec::Vec<crate::ie::RawIe>,
-            /// The order of the wire, when it is not that of the table.
+            /// The order of the wire, when it is not that of the table: each row, its values
+            /// then the IEs of its type in `raw`, and the IEs of no row last.
             pub order: alloc::vec::Vec<crate::ie::Placed>,
         }
 
