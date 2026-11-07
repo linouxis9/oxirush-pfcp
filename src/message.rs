@@ -569,8 +569,21 @@ pub(crate) mod forms {
 
         fn from_tree(value: &Value, reading: &mut Reading) -> Result<Self, Refused> {
             let read = reading.members(value, NAMES)?;
+            // A message of Table 7.3-1 by its name, and one of no table by its number.
             let kind = reading.member(&read, 0, |value, reading| match value.is_number() {
-                true => Ok(Err(reading.unsigned(value, 0, 255)? as u8)),
+                true => {
+                    let code = reading.unsigned(value, 0, 255)? as u8;
+                    match super::message_type_info(code) {
+                        Some(info) => Err(reading.refuse(
+                            tree::ErrorKind::Value,
+                            alloc::format!(
+                                "message type {code} is the {}, which goes by its name",
+                                info.name()
+                            ),
+                        )),
+                        None => Ok(Err(code)),
+                    }
+                }
                 false => Ok(Ok(reading.named(value, &Body::names())?)),
             })?;
             let small = |reading: &mut Reading, at: usize, most: u64| {

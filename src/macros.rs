@@ -818,7 +818,7 @@ macro_rules! pfcp_messages {
                     Err(code) => code,
                 };
                 Ok(match code {
-                    $( $code if kind.is_ok() => Self::$ty(alloc::boxed::Box::new(crate::tree::scope_from_tree(value, reading)?)), )*
+                    $( $code => Self::$ty(alloc::boxed::Box::new(crate::tree::scope_from_tree(value, reading)?)), )*
                     other => {
                         let (_, octets) = reading.alternative(value, &["octets"])?;
                         let octets = reading.within("octets", octets, |value, reading| reading.octets(value))?;

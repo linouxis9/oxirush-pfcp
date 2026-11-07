@@ -2153,6 +2153,20 @@ fn a_row_goes_by_its_name() {
     assert!(error.contains("are both the row Node ID"), "{error}");
 }
 
+/// A message goes by its name: a message type of Table 7.3-1 written by its number is
+/// refused with the name to write, and the number is for a message type of no table, whose
+/// IEs are octets.
+#[test]
+fn a_message_goes_by_its_name() {
+    let heartbeat = tree!({"message": 1, "Sequence Number": 9, "ies": {"octets": "006000040000000a"}});
+    let error = Message::from_tree(&heartbeat).unwrap_err().to_string();
+    assert!(error.contains("PFCP Heartbeat Request"), "{error}");
+    let other = tree!({"message": 99, "Sequence Number": 9, "ies": {"octets": "006000040000000a"}});
+    let other = Message::from_tree(&other).unwrap();
+    assert!(matches!(other.body, Body::Other { message_type: 99, .. }));
+    assert_eq!(Message::decode(&other.encode().unwrap()).unwrap(), other);
+}
+
 /// §8.2.137: the (end) addresses of an IP Multicast Address are there with R alone, a range;
 /// a single address is its (start) address.
 #[test]
