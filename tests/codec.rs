@@ -427,6 +427,39 @@ fn set_takes_the_paths_that_select_takes() {
     }
 }
 
+/// `set` adds an entry to a list at the position of its length, of a list that is there
+/// and of one that is not, at any depth, and what it writes reads back; past the end, a
+/// path selects nothing, which `set` refuses, and the tree is left as it was.
+#[test]
+fn set_adds_an_entry_at_the_end_of_a_list() {
+    let mut tree = establishment().to_tree();
+    for (path, value) in [
+        ("/pfcp/Create PDR/2/PDR ID", tree!(3)),
+        ("/pfcp/Create PDR/2/Precedence", tree!(9)),
+        ("/pfcp/Create PDR/2/PDI/Source Interface", tree!("Core")),
+        ("/pfcp/Create PDR/2/PDI/SDF Filter/0/Spare octet", tree!(0)),
+        ("/pfcp/Create PDR/3", tree!({"PDR ID": 4, "Precedence": 1, "PDI": {"Source Interface": "Access"}})),
+        ("/pfcp/Create URR/0/URR ID", tree!(1)),
+        ("/pfcp/Create URR/0/Measurement Method", tree!({"VOLUM": true})),
+        ("/pfcp/Create URR/0/Reporting Triggers", tree!({"PERIO": true})),
+    ] {
+        set(&mut tree, path, value).unwrap_or_else(|error| panic!("{path}: {error}"));
+    }
+    let Body::SessionEstablishmentRequest(request) = Message::from_tree(&tree).unwrap().body else {
+        panic!()
+    };
+    let ids: Vec<u16> = request.create_pdr.iter().map(|pdr| pdr.pdr_id.as_ref().unwrap().value).collect();
+    assert_eq!(ids, [1, 2, 3, 4]);
+    let pdi = request.create_pdr[2].pdi.as_ref().unwrap();
+    assert_eq!(pdi.sdf_filter.len(), 1);
+    assert_eq!(request.create_urr.len(), 1);
+    let before = tree.clone();
+    for path in ["/pfcp/Create PDR/9/PDR ID", "/pfcp/Create URR/3", "/pfcp/Create PDR/4/Bogus"] {
+        assert!(set(&mut tree, path, 1).is_err(), "{path}");
+        assert_eq!(tree, before, "{path}");
+    }
+}
+
 /// oxirush-utils' `select_in`: "a misspelt name is not a member that is absent", also
 /// below what a message lacks. Below a row that it lacks, a name is judged as where the row
 /// is there: a member that it could have selects nothing, and another is `NoSuchMember`;

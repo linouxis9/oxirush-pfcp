@@ -311,7 +311,8 @@ A tree is in the order of the tables, the octets in that of the wire.
 `tree::select` and `tree::set` take the same paths on the tree of a message:
 `/pfcp` stands for its IEs, a list has the positions of its entries, `*` stands
 for each, and names go in any case. What a message lacks selects nothing, and
-`set` adds it; a misspelt name is an error.
+`set` adds it, as an entry at the position of a list's length; a misspelt name
+is an error.
 
 ```rust
 use oxirush_pfcp::*;

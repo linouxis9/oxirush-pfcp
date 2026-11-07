@@ -528,6 +528,12 @@ impl tree::Family for Paths {
     ) -> Result<Step<Shape>, tree::Error> {
         let shape = place.shape();
         let list = matches!(shape.0, Of::List(_) | Of::Below(Below::List(_)));
+        if next.edit() == Some(Edit::Open)
+            && let Some(opened) = room(place.value(), shape.0, list, segment, next.is_last())
+        {
+            next.open(place, opened);
+            return Ok(Step::Taken);
+        }
         // What is null is not there.
         match (place.value().filter(|value| !value.is_null()), shape.0) {
             (_, Of::Nothing) => Ok(Step::Plain),
@@ -636,6 +642,36 @@ impl tree::Family for Paths {
     }
 }
 
+/// What an edit opens at a place so that `segment` goes into it: a list with one more
+/// entry, `null`, for the position of its length, and an object of IEs with the list or the
+/// grouped IE of the row that it lacks, empty, for a path that goes on into it. `None` where
+/// the place has what the segment names, or is not there to open, as its holder is opened
+/// first.
+fn room(value: Option<&Value>, of: Of, list: bool, segment: &str, last: bool) -> Option<Value> {
+    match (value?, of) {
+        (Value::Array(entries), _) if list && tree::position(segment) == Some(entries.len()) => {
+            let mut grown = entries.clone();
+            grown.push(Value::Null);
+            Some(Value::Array(grown))
+        }
+        (Value::Null | Value::Object(_), Of::Ies(tables)) if !last => {
+            let row = row_named(tables, segment)?;
+            let empty = match (row.repeat, ie_type_info(row.ie_type)?.form) {
+                (Repeat::Once, Form::Grouped) => Value::Object(Map::new()),
+                (Repeat::Once, _) => return None,
+                _ => Value::Array(Vec::new()),
+            };
+            let mut members = value?.as_object().cloned().unwrap_or_default();
+            if tree::member(&members, segment).is_some() {
+                return None;
+            }
+            members.insert(row.name.into(), empty);
+            Some(Value::Object(members))
+        }
+        _ => None,
+    }
+}
+
 /// The values at `path` in the tree of a message. A row of a table that a message or a
 /// grouped IE lacks, and a member that a value or the header lacks of those that its tree
 /// may have, select nothing; a name that is none of them is an error, also below what is
@@ -652,9 +688,10 @@ pub fn select<'v>(tree: &'v Value, path: &str) -> Result<Vec<&'v Value>, tree::E
 }
 
 /// Give the place at `path` the value `value`: a path that [`select`] takes, with what it
-/// lacks added. A member of the object of a value or a field that the tree writes as a
-/// scalar writes the object, with the scalar as its member if it is one: `{"value":
-/// "minute", "Spare": 8}` from `"minute"`. The tree is left as it was when the edit fails.
+/// lacks added, an entry of a list at the position of its length too. A member of the
+/// object of a value or a field that the tree writes as a scalar writes the object, with
+/// the scalar as its member if it is one: `{"value": "minute", "Spare": 8}` from
+/// `"minute"`. The tree is left as it was when the edit fails.
 ///
 /// # Errors
 ///
