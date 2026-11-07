@@ -74,7 +74,7 @@ session-establishment-request_test.go	Single IE	a ToS/Traffic Class mask other t
 session-establishment-request_test.go	Single IE	a ToS/Traffic Class mask other than 0xFC (TS 29.244 8.2.12), at /pfcp/Create FAR/0/Forwarding Parameters/Transport Level Marking: the answer is "Mandatory IE incorrect"
 session-establishment-response_test.go	Single IE	Provide ATSSS Control Information is no IE of this table (TS 29.244 7.6.9), at /pfcp/Provide ATSSS Control Information
 session-establishment-response_test.go	Single IE	NW-TT Port Number is no IE of this table (TS 29.244 7.6.9), at /pfcp/Created Bridge/Router Info/NW-TT Port Number
-session-establishment-response_test.go	Single IE	5GS User Plane Node ID does not decode, and is taken as absent (TS 29.244 7.6.8), at /pfcp/Created Bridge/Router Info/5GS User Plane Node ID
+session-establishment-response_test.go	Single IE	the conditional 5GS User Plane Node ID does not decode (TS 29.244 7.6.8), at /pfcp/Created Bridge/Router Info/5GS User Plane Node ID
 session-establishment-response_test.go	Multiple IEs	Provide ATSSS Control Information is no IE of this table (TS 29.244 7.6.9), at /pfcp/Provide ATSSS Control Information
 session-establishment-response_test.go	Multiple IEs	NW-TT Port Number is no IE of this table (TS 29.244 7.6.9), at /pfcp/Created Bridge/Router Info/NW-TT Port Number
 session-modification-request_test.go	Single IE	UE IP address Pool Identity does not decode, and is taken as absent (TS 29.244 7.6.8), at /pfcp/Create PDR/0/UE IP address Pool Identity
