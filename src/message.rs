@@ -459,177 +459,41 @@ impl Body {
     /// Each rule that the message creates, updates or removes more than once (§5.2.1,
     /// §6.3.3.2), by the name of its type and its ID.
     fn rules_changed_twice(&self) -> Vec<(&'static str, u32)> {
-        fn ids<'b, T: 'b>(
-            rules: impl IntoIterator<Item = &'b T>,
-            id: impl Fn(&T) -> Option<u32>,
-            out: &mut Ids,
-        ) {
-            for id in rules.into_iter().filter_map(id) {
-                out.push(id);
-            }
-        }
         let mut twice = Vec::new();
-        let mut each = |rule: &'static str, mut ids: Ids| {
-            for id in ids.repeated() {
-                twice.push((rule, id));
-            }
-            ids.clear();
-        };
+        let mut ids = Ids::default();
+        // The IDs of the rules of a type, of each of the lists of the message that change
+        // them, and those that are there twice.
+        macro_rules! rules {
+            ($body:ident: $($rule:literal [$($list:ident),+] $id:ident),+ $(,)?) => {{$(
+                $(
+                    for rule in $body.$list.iter() {
+                        if let Some(id) = rule.$id.as_ref() {
+                            ids.push(id.value.into());
+                        }
+                    }
+                )+
+                twice.extend(ids.repeated().into_iter().map(|id| ($rule, id)));
+                ids.clear();
+            )+}};
+        }
         match self {
-            Self::SessionEstablishmentRequest(body) => {
-                let mut rules = Ids::default();
-                ids(
-                    &body.create_pdr,
-                    |rule| rule.pdr_id.as_ref().map(|id| id.value.into()),
-                    &mut rules,
-                );
-                each("PDR", core::mem::take(&mut rules));
-                ids(
-                    &body.create_far,
-                    |rule| rule.far_id.as_ref().map(|id| id.value),
-                    &mut rules,
-                );
-                each("FAR", core::mem::take(&mut rules));
-                ids(
-                    &body.create_urr,
-                    |rule| rule.urr_id.as_ref().map(|id| id.value),
-                    &mut rules,
-                );
-                each("URR", core::mem::take(&mut rules));
-                ids(
-                    &body.create_qer,
-                    |rule| rule.qer_id.as_ref().map(|id| id.value),
-                    &mut rules,
-                );
-                each("QER", core::mem::take(&mut rules));
-                ids(
-                    &body.create_mar,
-                    |rule| rule.mar_id.as_ref().map(|id| id.value.into()),
-                    &mut rules,
-                );
-                each("MAR", core::mem::take(&mut rules));
-                ids(
-                    &body.create_srr,
-                    |rule| rule.srr_id.as_ref().map(|id| id.value.into()),
-                    &mut rules,
-                );
-                each("SRR", rules);
-            }
-            Self::SessionModificationRequest(body) => {
-                let mut rules = Ids::default();
-                ids(
-                    &body.create_pdr,
-                    |rule| rule.pdr_id.as_ref().map(|id| id.value.into()),
-                    &mut rules,
-                );
-                ids(
-                    &body.update_pdr,
-                    |rule| rule.pdr_id.as_ref().map(|id| id.value.into()),
-                    &mut rules,
-                );
-                ids(
-                    &body.remove_pdr,
-                    |rule| rule.pdr_id.as_ref().map(|id| id.value.into()),
-                    &mut rules,
-                );
-                each("PDR", core::mem::take(&mut rules));
-                ids(
-                    &body.create_far,
-                    |rule| rule.far_id.as_ref().map(|id| id.value),
-                    &mut rules,
-                );
-                ids(
-                    &body.update_far,
-                    |rule| rule.far_id.as_ref().map(|id| id.value),
-                    &mut rules,
-                );
-                ids(
-                    &body.remove_far,
-                    |rule| rule.far_id.as_ref().map(|id| id.value),
-                    &mut rules,
-                );
-                each("FAR", core::mem::take(&mut rules));
-                ids(
-                    &body.create_urr,
-                    |rule| rule.urr_id.as_ref().map(|id| id.value),
-                    &mut rules,
-                );
-                ids(
-                    &body.update_urr,
-                    |rule| rule.urr_id.as_ref().map(|id| id.value),
-                    &mut rules,
-                );
-                ids(
-                    &body.remove_urr,
-                    |rule| rule.urr_id.as_ref().map(|id| id.value),
-                    &mut rules,
-                );
-                each("URR", core::mem::take(&mut rules));
-                ids(
-                    &body.create_qer,
-                    |rule| rule.qer_id.as_ref().map(|id| id.value),
-                    &mut rules,
-                );
-                ids(
-                    &body.update_qer,
-                    |rule| rule.qer_id.as_ref().map(|id| id.value),
-                    &mut rules,
-                );
-                ids(
-                    &body.remove_qer,
-                    |rule| rule.qer_id.as_ref().map(|id| id.value),
-                    &mut rules,
-                );
-                each("QER", core::mem::take(&mut rules));
-                ids(
-                    body.create_bar.iter().map(|rule| &**rule),
-                    |rule| rule.bar_id.as_ref().map(|id| id.value.into()),
-                    &mut rules,
-                );
-                ids(
-                    body.update_bar.iter().map(|rule| &**rule),
-                    |rule| rule.bar_id.as_ref().map(|id| id.value.into()),
-                    &mut rules,
-                );
-                ids(
-                    body.remove_bar.iter().map(|rule| &**rule),
-                    |rule| rule.bar_id.as_ref().map(|id| id.value.into()),
-                    &mut rules,
-                );
-                each("BAR", core::mem::take(&mut rules));
-                ids(
-                    &body.create_mar,
-                    |rule| rule.mar_id.as_ref().map(|id| id.value.into()),
-                    &mut rules,
-                );
-                ids(
-                    &body.update_mar,
-                    |rule| rule.mar_id.as_ref().map(|id| id.value.into()),
-                    &mut rules,
-                );
-                ids(
-                    &body.remove_mar,
-                    |rule| rule.mar_id.as_ref().map(|id| id.value.into()),
-                    &mut rules,
-                );
-                each("MAR", core::mem::take(&mut rules));
-                ids(
-                    &body.create_srr,
-                    |rule| rule.srr_id.as_ref().map(|id| id.value.into()),
-                    &mut rules,
-                );
-                ids(
-                    &body.update_srr,
-                    |rule| rule.srr_id.as_ref().map(|id| id.value.into()),
-                    &mut rules,
-                );
-                ids(
-                    &body.remove_srr,
-                    |rule| rule.srr_id.as_ref().map(|id| id.value.into()),
-                    &mut rules,
-                );
-                each("SRR", rules);
-            }
+            Self::SessionEstablishmentRequest(body) => rules!(body:
+                "PDR" [create_pdr] pdr_id,
+                "FAR" [create_far] far_id,
+                "URR" [create_urr] urr_id,
+                "QER" [create_qer] qer_id,
+                "MAR" [create_mar] mar_id,
+                "SRR" [create_srr] srr_id,
+            ),
+            Self::SessionModificationRequest(body) => rules!(body:
+                "PDR" [create_pdr, update_pdr, remove_pdr] pdr_id,
+                "FAR" [create_far, update_far, remove_far] far_id,
+                "URR" [create_urr, update_urr, remove_urr] urr_id,
+                "QER" [create_qer, update_qer, remove_qer] qer_id,
+                "BAR" [create_bar, update_bar, remove_bar] bar_id,
+                "MAR" [create_mar, update_mar, remove_mar] mar_id,
+                "SRR" [create_srr, update_srr, remove_srr] srr_id,
+            ),
             _ => {}
         }
         twice
