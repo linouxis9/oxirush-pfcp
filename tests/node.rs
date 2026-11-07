@@ -6231,6 +6231,117 @@ fn a_replaced_association_keeps_the_heartbeats_of_an_adopted_peer() {
     }
 }
 
+/// §6.2.6.2.2: an association that a setup from another address replaces leaves the old
+/// address, which has nothing else of the node, without heartbeats: the next is due to
+/// the new address.
+#[test]
+fn a_replaced_association_stops_the_heartbeats_of_its_old_address() {
+    let mut smf = Node::new(NodeConfig {
+        heartbeat: Some(Duration::from_secs(60)),
+        ..config(SMF, Function::Cp)
+    });
+    let setup = |sequence: u32| {
+        let request =
+            AssociationSetupRequest::new(fqdn("upf.example"), RecoveryTimeStamp::new(1000));
+        Message {
+            header: Header::node(sequence),
+            body: request.into(),
+        }
+        .encode()
+        .unwrap()
+    };
+    let elsewhere = Ipv4Addr::new(10, 0, 0, 7).into_socket(8805);
+    for (now, from) in [(0, UPF), (10, elsewhere)] {
+        smf.handle_datagram(at(now), from, &setup(now as u32 + 1));
+        let (inbound, _) = request(&mut smf);
+        let answer =
+            AssociationSetupResponse::new(node_id(SMF), accepted(), RecoveryTimeStamp::new(1000));
+        smf.respond(at(now), &inbound, answer).unwrap();
+        sent(&mut smf);
+        events(&mut smf);
+    }
+    assert_eq!(smf.poll_timeout(), Some(at(70)));
+}
+
+/// The Recovery Time Stamps of hosts without an association go, the oldest first, only
+/// once the node holds `capacity` of them: before, the restart of each is told.
+#[test]
+fn the_stamps_of_hosts_go_only_once_the_node_is_full() {
+    let mut upf = Node::new(NodeConfig {
+        capacity: 3,
+        ..config(UPF, Function::Up)
+    });
+    let heartbeat = |stamp| {
+        Message {
+            header: Header::node(1),
+            body: HeartbeatRequest::new(RecoveryTimeStamp::new(stamp)).into(),
+        }
+        .encode()
+        .unwrap()
+    };
+    let hosts = [3, 4, 5, 6].map(|last| Ipv4Addr::new(10, 0, 0, last).into_socket(8805));
+    let restarted = |upf: &mut Node, host| {
+        events(upf).contains(&Event::PeerRestarted {
+            peer: host,
+            recovery_time_stamp: 2000,
+        })
+    };
+    for host in &hosts[..3] {
+        upf.handle_datagram(at(0), *host, &heartbeat(1000));
+    }
+    events(&mut upf);
+    upf.handle_datagram(at(1), hosts[0], &heartbeat(2000));
+    assert!(restarted(&mut upf, hosts[0]), "the first, of three stamps");
+    // A fourth host takes the place of the oldest, now the second
+    upf.handle_datagram(at(2), hosts[3], &heartbeat(1000));
+    upf.handle_datagram(at(3), hosts[1], &heartbeat(2000));
+    assert!(!restarted(&mut upf, hosts[1]), "the second, forgotten");
+    upf.handle_datagram(at(4), hosts[3], &heartbeat(2000));
+    assert!(restarted(&mut upf, hosts[3]), "the fourth, kept");
+}
+
+/// §6.2.3.3.1, §6.2.4.3.1: the load and overload of a session of an association, which
+/// the UP function sends from the address of its UP F-SEID, are of the Node ID of the
+/// association, not of that address: the peer of an adopted session alone has them by
+/// its address.
+#[test]
+fn the_controls_of_a_session_from_its_f_seid_address_are_of_its_association() {
+    let (mut smf, mut upf) = associated(at(0));
+    let f_seid_address = Ipv4Addr::new(10, 0, 0, 22);
+    let (_, up_seid) = established_on(&mut smf, &mut upf, at(0), f_seid_address);
+    let timer = Timer::new(TimerUnit::OneMinute, 30);
+    let overload =
+        OverloadControlInformation::new(SequenceNumber::new(1), Metric::new(Percent(50)), timer)
+            .with_overload_control_information_flags(OciFlags {
+                aoci: true,
+                ..Default::default()
+            });
+    let report = SessionReportRequest::new(ReportType {
+        upir: true,
+        ..Default::default()
+    })
+    .with_load_control_information(LoadControlInformation::new(
+        SequenceNumber::new(1),
+        Metric::new(Percent(40)),
+    ))
+    .with_overload_control_information(overload);
+    upf.session_request(at(1), up_seid, report).unwrap();
+    let from = f_seid_address.into_socket(8805);
+    for transmit in sent(&mut upf) {
+        smf.handle_datagram(at(1), from, &transmit.octets);
+    }
+    let (inbound, _) = request(&mut smf);
+    smf.respond(at(1), &inbound, SessionReportResponse::new(accepted()))
+        .unwrap();
+    assert_eq!(smf.load_control(UPF).map(|load| load.metric), Some(40));
+    assert_eq!(
+        smf.overload_control(UPF).map(|overload| overload.metric),
+        Some(50)
+    );
+    let scopes: Vec<ControlScope> = smf.loads().map(|(scope, _)| scope).collect();
+    assert_eq!(scopes, [ControlScope::Node(node_id(UPF))]);
+}
+
 /// An establishment holds its session from when it is sent: another request of the
 /// session that ends without its response, cancelled here, leaves it, and the
 /// establishment's accepted response establishes it.

@@ -84,18 +84,19 @@ async fn an_smf_and_a_upf_set_up_an_association_and_a_session() {
         upf
     });
 
+    // Each step within its bound: a node that does not associate, or does not answer, fails
+    // the test, and does not hang it.
     let setup =
         AssociationSetupRequest::new(NodeId::Ipv4(Ipv4Addr::LOCALHOST), RecoveryTimeStamp::new(7));
-    let response = smf
-        .request(
-            upf_address,
-            Message {
-                header: Header::node(0),
-                body: setup.into(),
-            },
-        )
-        .await
-        .unwrap();
+    let response = within(smf.request(
+        upf_address,
+        Message {
+            header: Header::node(0),
+            body: setup.into(),
+        },
+    ))
+    .await
+    .unwrap();
     assert_eq!(response.body.cause(), Some(CauseValue::RequestAccepted));
 
     let seid = smf.new_session().await.unwrap();
@@ -119,18 +120,17 @@ async fn an_smf_and_a_upf_set_up_an_association_and_a_session() {
     );
     let request =
         SessionEstablishmentRequest::new_n4(NodeId::Ipv4(Ipv4Addr::LOCALHOST), f_seid, pdr, far);
-    let response = smf
-        .request(
-            upf_address,
-            Message {
-                header: Header::session(0, 0),
-                body: request.into(),
-            },
-        )
-        .await
-        .unwrap();
+    let response = within(smf.request(
+        upf_address,
+        Message {
+            header: Header::session(0, 0),
+            body: request.into(),
+        },
+    ))
+    .await
+    .unwrap();
     assert_eq!(response.header.seid, Some(seid), "to the SMF's SEID");
-    let upf = answering.await.unwrap();
+    let upf = within(answering).await.unwrap();
     assert_eq!(
         upf.statistics()
             .incoming_dropped
@@ -331,7 +331,8 @@ async fn a_request_without_an_answer_times_out_after_n1() {
         header: Header::node(0),
         body: HeartbeatRequest::new(RecoveryTimeStamp::new(7)).into(),
     };
-    let result = smf.request(silent.local_addr().unwrap(), heartbeat).await;
+    // Within its bound: a node whose timer does not run fails the test, and does not hang it.
+    let result = within(smf.request(silent.local_addr().unwrap(), heartbeat)).await;
     assert_eq!(result, Err(EndpointError::Timeout));
     // The first and the N1 = 2 retransmissions, the same octets
     let mut buffer = [0; 64];
