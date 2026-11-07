@@ -50,19 +50,15 @@ use std::io;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::{Duration, Instant};
+use std::time::Instant;
 use std::vec;
-use std::vec::Vec;
 
 use tokio::net::UdpSocket;
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
 
 use crate::message::{Body, Message};
-use crate::node::{
-    Association, Counters, Delivery, Event, Failure, Inbound, LoadControl, Node, NodeConfig,
-    NodeError, OverloadControl, RequestId, Session,
-};
+use crate::node::{Delivery, Event, Failure, Inbound, Node, NodeConfig, NodeError, RequestId};
 
 /// The largest datagram that the endpoint takes.
 const DATAGRAM: usize = 65_535;
@@ -228,7 +224,7 @@ impl Incoming {
 type Reply = oneshot::Sender<Result<Message, EndpointError>>;
 
 /// What the node does for a [`Handle`], on its state.
-type OnNode = Box<dyn FnOnce(&mut Node, Duration) + Send>;
+type OnNode = Box<dyn FnOnce(&mut Node) + Send>;
 
 enum Command {
     Request {
@@ -486,167 +482,35 @@ impl Handle {
         response?
     }
 
-    /// What the node does with its state, as the caller asks.
-    async fn on<T: Send + 'static>(
+    /// Do `with` on the node, in the task of the endpoint, and give what it returns: its
+    /// state ([`Node::sessions`], [`Node::association`], [`Node::counters`]), a new local
+    /// SEID ([`Node::new_session`]), an adopted session, the end of one, a probe's
+    /// sequence number or octets. The response of a request that `with` sends comes as an
+    /// [`Event::Response`]: [`request`](Self::request) waits for its own.
+    ///
+    /// ```no_run
+    /// # async fn run(handle: oxirush_pfcp::endpoint::Handle) -> Result<(), oxirush_pfcp::endpoint::EndpointError> {
+    /// let seid = handle.with(|node| node.new_session()).await?;
+    /// let sessions = handle.with(|node| node.sessions().count()).await?;
+    /// # Ok(()) }
+    /// ```
+    ///
+    /// # Errors
+    ///
+    /// The endpoint has ended.
+    pub async fn with<T: Send + 'static>(
         &self,
-        on: impl FnOnce(&mut Node, Duration) -> T + Send + 'static,
+        with: impl FnOnce(&mut Node) -> T + Send + 'static,
     ) -> Result<T, EndpointError> {
         let (reply, answer) = oneshot::channel();
-        let command = Command::On(Box::new(move |node, now| {
-            let _ = reply.send(on(node, now));
+        let command = Command::On(Box::new(move |node| {
+            let _ = reply.send(with(node));
         }));
         self.commands
             .send(command)
             .await
             .map_err(|_| EndpointError::Closed)?;
         answer.await.map_err(|_| EndpointError::Closed)
-    }
-
-    /// A new local SEID for a session ([`Node::new_session`]).
-    ///
-    /// # Errors
-    ///
-    /// The endpoint has ended.
-    pub async fn new_session(&self) -> Result<u64, EndpointError> {
-        self.on(move |node, _| node.new_session()).await
-    }
-
-    /// Take over a session that the node did not establish, with the UP function at `peer`,
-    /// on the port of the node's requests, and its SEID ([`Node::adopt_session`]): as an
-    /// SMF of a set, the session of a UP function's report of SEID 0, which comes with
-    /// [`Inbound::of_smf_set`]. The caller then sets the report's [`Inbound::seid`], in its
-    /// [`Incoming`], to `local_seid` before it answers.
-    ///
-    /// # Errors
-    ///
-    /// A local or peer's SEID of 0, a local SEID that another session has, and an endpoint
-    /// that has ended.
-    pub async fn adopt_session(
-        &self,
-        local_seid: u64,
-        peer: SocketAddr,
-        peer_seid: u64,
-    ) -> Result<(), EndpointError> {
-        self.on(move |node, _| node.adopt_session(local_seid, peer, peer_seid))
-            .await?
-            .map_err(EndpointError::Node)
-    }
-
-    /// Send octets as they are, for a probe ([`Node::send_raw`]).
-    ///
-    /// # Errors
-    ///
-    /// The endpoint has ended.
-    pub async fn send_raw(&self, to: SocketAddr, octets: Vec<u8>) -> Result<(), EndpointError> {
-        self.on(move |node, _| node.send_raw(to, 0, octets)).await
-    }
-
-    /// A sequence number that the node will not give, for a probe that sends its own
-    /// ([`Node::reserve_sequence`]).
-    ///
-    /// # Errors
-    ///
-    /// Every sequence number is taken, and the endpoint has ended.
-    pub async fn reserve_sequence(&self) -> Result<u32, EndpointError> {
-        self.on(|node, _| node.reserve_sequence())
-            .await?
-            .map_err(EndpointError::Node)
-    }
-
-    /// Give back a sequence number of [`reserve_sequence`](Self::reserve_sequence)
-    /// ([`Node::release_sequence`]): `false` for one that is not reserved.
-    ///
-    /// # Errors
-    ///
-    /// The endpoint has ended.
-    pub async fn release_sequence(&self, sequence: u32) -> Result<bool, EndpointError> {
-        self.on(move |node, _| node.release_sequence(sequence))
-            .await
-    }
-
-    /// The association with a peer ([`Node::association`]).
-    ///
-    /// # Errors
-    ///
-    /// The endpoint has ended.
-    pub async fn association(
-        &self,
-        peer: SocketAddr,
-    ) -> Result<Option<Association>, EndpointError> {
-        self.on(move |node, _| node.association(peer).cloned())
-            .await
-    }
-
-    /// The session of a local SEID ([`Node::session`]).
-    ///
-    /// # Errors
-    ///
-    /// The endpoint has ended.
-    pub async fn session(&self, local_seid: u64) -> Result<Option<Session>, EndpointError> {
-        self.on(move |node, _| node.session(local_seid).cloned())
-            .await
-    }
-
-    /// End a session without a procedure ([`Node::end_session`]).
-    ///
-    /// # Errors
-    ///
-    /// The endpoint has ended.
-    pub async fn end_session(&self, local_seid: u64) -> Result<Option<Session>, EndpointError> {
-        self.on(move |node, _| node.end_session(local_seid)).await
-    }
-
-    /// End every session with `peer`, as after its restart ([`Node::end_sessions_of`]).
-    ///
-    /// # Errors
-    ///
-    /// The endpoint has ended.
-    pub async fn end_sessions_of(&self, peer: SocketAddr) -> Result<Vec<u64>, EndpointError> {
-        self.on(move |node, _| node.end_sessions_of(peer)).await
-    }
-
-    /// End the association with `peer` without a procedure, as after a peer that is down
-    /// ([`Node::end_association`]).
-    ///
-    /// # Errors
-    ///
-    /// The endpoint has ended.
-    pub async fn end_association(&self, peer: SocketAddr) -> Result<bool, EndpointError> {
-        self.on(move |node, _| node.end_association(peer)).await
-    }
-
-    /// The latest load control information of a peer ([`Node::load_control`]).
-    ///
-    /// # Errors
-    ///
-    /// The endpoint has ended.
-    pub async fn load_control(
-        &self,
-        peer: SocketAddr,
-    ) -> Result<Option<LoadControl>, EndpointError> {
-        self.on(move |node, _| node.load_control(peer)).await
-    }
-
-    /// The overload control information that holds for a peer
-    /// ([`Node::overload_control`]).
-    ///
-    /// # Errors
-    ///
-    /// The endpoint has ended.
-    pub async fn overload_control(
-        &self,
-        peer: SocketAddr,
-    ) -> Result<Option<OverloadControl>, EndpointError> {
-        self.on(move |node, _| node.overload_control(peer)).await
-    }
-
-    /// What the node dropped to bound what it keeps ([`Node::counters`]).
-    ///
-    /// # Errors
-    ///
-    /// The endpoint has ended.
-    pub async fn counters(&self) -> Result<Counters, EndpointError> {
-        self.on(|node, _| node.counters()).await
     }
 }
 
@@ -760,7 +624,7 @@ impl Task {
             } => {
                 let _ = reply.send(self.node.respond_message(now, &request, message, delivery));
             }
-            Command::On(on) => on(&mut self.node, now),
+            Command::On(on) => on(&mut self.node),
         }
     }
 
