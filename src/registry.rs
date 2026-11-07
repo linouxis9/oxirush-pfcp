@@ -111,17 +111,17 @@ pub struct IeTypeInfo {
     pub fixed: Option<u16>,
     /// The clause of its layout, or the table of its content.
     pub clause: &'static str,
-    /// The names of the flags and fields of its figure that the crate lays out, as the
-    /// figure has them, which the test `spec` compares with it: none for a grouped IE. A
-    /// tree may name them otherwise: [`members`](Self::members) are its names.
+    /// The names of the flags and fields of its figure that the crate lays out, which the
+    /// test `spec` compares with it.
+    #[doc(hidden)]
     pub fields: &'static [&'static str],
     /// The members that the tree of a value may have, as an object: its flags and fields,
     /// and, as the value may have them, `Spare`, `length` and `unknown octets`. A tree has
     /// those of them that the value has, and a path that names another of them selects
     /// nothing. None for a grouped IE, and for a value whose tree is its octets.
     pub members: &'static [&'static str],
-    /// How the crate lays it out: `None` for a grouped IE, an IE that the crate keeps as
-    /// octets, and a value that the crate reads by hand.
+    /// How the crate lays it out, which the test `spec` compares with its figure.
+    #[doc(hidden)]
     pub layout: Option<&'static crate::values::Layout>,
     /// The tables of its content, for a grouped IE: one, or one per place for an IE that
     /// has different content in different places.

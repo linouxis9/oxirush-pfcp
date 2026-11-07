@@ -319,6 +319,7 @@ pub trait Check {
 /// Where a check is: the interface, and how the receiver takes the mandatory IEs of the
 /// scope (§7.2.3.2: those of a conditional grouped IE as conditional, those of an
 /// optional one as optional).
+#[doc(hidden)]
 #[derive(Debug, Clone, Copy)]
 pub struct Context {
     pub(crate) interface: Interfaces,

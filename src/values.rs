@@ -73,6 +73,7 @@ pub(crate) trait Field: Sized {
 
 /// How a value is laid out, as the crate reads it: what the test `spec` compares with the
 /// figure of its clause.
+#[doc(hidden)]
 #[derive(Debug)]
 pub struct Layout {
     /// The fields before its flags, in order.
@@ -84,6 +85,7 @@ pub struct Layout {
 }
 
 /// A field of bits: where it is.
+#[doc(hidden)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Bits {
     /// Its name in the figure.
@@ -100,6 +102,7 @@ pub struct Bits {
 
 /// A field of octets: its octets when they are fixed, its cells narrower than an octet,
 /// and when it is there.
+#[doc(hidden)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Member {
     /// Its name in the figure.
@@ -114,6 +117,7 @@ pub struct Member {
 
 /// A cell of a figure narrower than an octet that a field lays out: a value of the low
 /// bits of its octet, whose others are spare, or a part of a field of its own layout.
+#[doc(hidden)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct NarrowCell {
     /// Its name in the figure: `None` for the field itself.
@@ -1043,6 +1047,7 @@ macro_rules! pfcp_number {
 
         impl $ty {
             /// The name of its field.
+            #[doc(hidden)]
             pub const FIELDS: &'static [&'static str] = &[$field];
             /// The members that its tree may have: its field and its unknown octets. Without
             /// them, its tree is the number alone.
@@ -1051,6 +1056,7 @@ macro_rules! pfcp_number {
             #[cfg(feature = "tree")]
             pub(crate) const MEMBERS_BELOW: &'static [(&'static str, &'static crate::tree::Below)] = &[];
             /// Its layout.
+            #[doc(hidden)]
             pub const LAYOUT: Option<&'static Layout> = Some(&Layout {
                 head: &[],
                 bits: &[],
@@ -1475,6 +1481,7 @@ impl Field for Fqdn {
 
 impl NodeId {
     /// The names of its fields.
+    #[doc(hidden)]
     pub const FIELDS: &'static [&'static str] = &["Node ID Type", "Node ID value"];
     /// The members that its tree may have: the FQDN, or the octets of a Node ID that is no
     /// text. The tree of an address is the address alone.
@@ -1483,6 +1490,7 @@ impl NodeId {
     #[cfg(feature = "tree")]
     pub(crate) const MEMBERS_BELOW: &'static [(&'static str, &'static crate::tree::Below)] = &[];
     /// Read by hand: its layout depends on its type.
+    #[doc(hidden)]
     pub const LAYOUT: Option<&'static Layout> = None;
 
     /// The Node ID Type (Table 8.2.38-2).
@@ -1630,6 +1638,7 @@ pub struct NetworkInstance(pub Octets);
 
 impl NetworkInstance {
     /// The name of its field.
+    #[doc(hidden)]
     pub const FIELDS: &'static [&'static str] = &["Network Instance"];
     /// None: its tree is its octets.
     pub const MEMBERS: &'static [&'static str] = &[];
@@ -1637,6 +1646,7 @@ impl NetworkInstance {
     #[cfg(feature = "tree")]
     pub(crate) const MEMBERS_BELOW: &'static [(&'static str, &'static crate::tree::Below)] = &[];
     /// Its layout.
+    #[doc(hidden)]
     pub const LAYOUT: Option<&'static Layout> = Some(&Layout {
         head: &[],
         bits: &[],
@@ -1697,6 +1707,7 @@ macro_rules! pfcp_fields {
 
         impl $ty {
             /// The names of its fields.
+            #[doc(hidden)]
             pub const FIELDS: &'static [&'static str] = &[$($name),*];
             /// The members that its tree may have: its fields and its unknown octets.
             pub const MEMBERS: &'static [&'static str] = &[$($name,)* crate::ie::UNKNOWN_OCTETS];
@@ -1704,6 +1715,7 @@ macro_rules! pfcp_fields {
             #[cfg(feature = "tree")]
             pub(crate) const MEMBERS_BELOW: &'static [(&'static str, &'static crate::tree::Below)] = &[$(($name, <$kind as Field>::BELOW)),*];
             /// Its layout.
+            #[doc(hidden)]
             pub const LAYOUT: Option<&'static Layout> = Some(&Layout {
                 head: &[],
                 bits: &[],
@@ -2001,6 +2013,7 @@ macro_rules! pfcp_octets {
 
         impl $ty {
             /// The name of its field.
+            #[doc(hidden)]
             pub const FIELDS: &'static [&'static str] = &[$name];
             /// None: its tree is its octets.
             pub const MEMBERS: &'static [&'static str] = &[];
@@ -2008,6 +2021,7 @@ macro_rules! pfcp_octets {
             #[cfg(feature = "tree")]
             pub(crate) const MEMBERS_BELOW: &'static [(&'static str, &'static crate::tree::Below)] = &[];
             /// Its layout.
+            #[doc(hidden)]
             pub const LAYOUT: Option<&'static Layout> = Some(&Layout { head: &[], bits: &[], fields: &[Member { name: $name, octets: None, cells: &[], condition: "true" }] });
         }
 

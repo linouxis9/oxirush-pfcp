@@ -290,11 +290,6 @@ impl Table {
         let rows: &'static [Row] = self.rows;
         rows.iter().find(|row| row.ie_type == ie_type)
     }
-
-    /// The position in the table of the row of `ie_type`.
-    pub fn position_of(&self, ie_type: u16) -> Option<usize> {
-        self.rows.iter().position(|row| row.ie_type == ie_type)
-    }
 }
 
 /// What the table macro writes for a message or a grouped IE, which the code of every

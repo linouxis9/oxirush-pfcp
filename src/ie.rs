@@ -64,6 +64,7 @@ pub trait Codec: Sized {
 
 /// How a row of a type is held: a list is a vector, and a row that is there once an
 /// `Option` of a value, or of a box for a grouped IE, which is large.
+#[doc(hidden)]
 pub trait Listed: Codec {
     /// Decode at the end of the field of a row that is a list.
     fn decode_push(list: &mut Vec<Self>, octets: &[u8]) -> bool;
@@ -184,6 +185,7 @@ impl RawIe {
 
 /// Where an IE of a decoded scope went: what the order of a scope keeps, from the first
 /// IE that is not where the table has it.
+#[doc(hidden)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Placed {
     /// The next value of the field of this IE type.
