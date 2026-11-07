@@ -15,8 +15,9 @@
    limitations under the License.
 */
 
-//! A UPF and an SMF, of the SMF set that the first octet of the input picks, with a real
-//! session between them; two more SMFs of the set are associated with the UPF. Each
+//! A UPF and an SMF, of the SMF set and the bundling that the first octet of the input
+//! picks, with a real session between them; two more SMFs of the set are associated with
+//! the UPF. Each
 //! piece of the rest of the input, split at 0xa5, is a datagram to one of the nodes from
 //! one of its peers or from a stranger, or, with the high bit of its first octet, an
 //! operation that its next octets pick: an SMF of the set sets up, establishes, modifies
@@ -74,6 +75,7 @@ fn of_set(features: u8) -> (CpFunctionFeatures, SmfSetId) {
     let cp = CpFunctionFeatures {
         sset: features & 1 != 0,
         mpas: features & 2 != 0,
+        bundl: true,
         ..Default::default()
     };
     let id = SmfSetId {
@@ -180,6 +182,7 @@ fn answer(node: &mut Node, now: Duration, how: u8, kept: &mut Vec<Inbound>) {
                     .with_up_function_features(UpFunctionFeatures {
                         sset: how & 2 != 0,
                         mpas: how & 4 != 0,
+                        bundl: true,
                         ..Default::default()
                     })
                     .into()
@@ -278,6 +281,7 @@ fuzz_target!(|octets: &[u8]| {
         strangers: 4,
         keep: Duration::from_secs(5),
         smf_set,
+        bundling: sets & 0x40 != 0,
         other_entities: sets & 0x80 != 0,
         ..NodeConfig::new(node_id(address), function, 1)
     };

@@ -209,7 +209,7 @@
 6.4	10	A duplicated response is discarded.	test duplicate_response_discarded
 6.4	11	A response to no outstanding request is discarded.	test unknown_response_discarded
 6.4	12	The application learns of a request that got no response.	test timeout_after_n1
-6.5	1	The rules of bundling apply when messages are bundled.	test bundled_datagram_each_message
-6.5	2	Session messages of different peers are not bundled together.	test bundled_messages_of_one_peer
+6.5	1	Bundling is used when both functions announced it, and its rules apply then.	test bundling_needs_both_to_announce_it
+6.5	2	Session messages of sessions of different F-SEID addresses of the receiver are not bundled together.	test bundled_messages_of_one_peer
 6.5	3	Node related messages are not bundled.	test bundled_node_message_reported
 6.5	4	Each bundled message follows the procedures as if it were alone.	test bundled_datagram_each_message

@@ -45,6 +45,10 @@
 //!   algorithm, sparing the priority ones.
 //! - **Message priority (§6.2.4.5).** A response has the priority of its request, a
 //!   request without one the default priority, and the highest priorities are sent first.
+//! - **Bundling (§6.5).** It takes each message of a datagram that a peer bundles on its
+//!   own, when both announced BUNDL ([`NodeConfig::bundling`]), and discards a node related
+//!   one, and one of a session whose F-SEID of the node has another address than the
+//!   bundle's.
 //! - **What a peer does wrong** is an [`Event::Violation`]: the node does what the clause
 //!   says (discards a duplicate response, answers an unknown session), and reports it.
 //!
@@ -74,7 +78,8 @@ use crate::values::*;
 use crate::values_gen::*;
 
 use state::{
-    Answers, Change, Digest, Effect, Heartbeats, Outstanding, Overloads, Scope, Sessions, SetOf,
+    Answers, Change, Digest, Effect, Features, Heartbeats, Outstanding, Overloads, Scope, Sessions,
+    SetOf,
 };
 pub use state::{Association, LoadControl, OverloadControl, Session};
 
@@ -148,6 +153,12 @@ pub struct NodeConfig {
     /// messages too: without either, the node takes the requests of a set as those of
     /// any peer.
     pub smf_set: SmfSet,
+    /// BUNDL, which the caller writes in its CP or UP Function Features too (§8.2.25,
+    /// §8.2.58): the node takes the messages that a peer bundles in one datagram (§6.5)
+    /// when the peer announced BUNDL in its Association Setup or Update as well, or is the
+    /// peer of a session adopted without an association ([`Node::adopt_session`]), whose
+    /// features the holder of its association knows. Without, it discards them.
+    pub bundling: bool,
     /// A CP function of several PFCP entities, each a node with associations of its own,
     /// of which this is one. With MPAS, a UP function hands a session over to another
     /// entity of the same SMF too (§5.22.3 bullets 5 and 6), which has not the
@@ -186,7 +197,7 @@ impl NodeConfig {
     /// A node of `node_id`: T1 of 3 s, N1 of 3, a heartbeat every 60 s, answers kept for
     /// 24 s, default priority 8, throttling on, no priority spared, room for 65,536
     /// requests of the peers and 16 of hosts without an association, requests to port
-    /// 8805, no SMF set, and no other PFCP entity.
+    /// 8805, no SMF set, no bundling, and no other PFCP entity.
     pub fn new(node_id: NodeId, function: Function, recovery_time_stamp: u32) -> Self {
         Self {
             node_id,
@@ -203,6 +214,7 @@ impl NodeConfig {
             request_port: Some(PORT),
             strangers: 16,
             smf_set: SmfSet::default(),
+            bundling: false,
             other_entities: false,
         }
     }
@@ -381,11 +393,16 @@ pub enum ViolationKind {
     OverloadControlSequence,
     /// A node related message bundled with others (§6.5): discarded.
     BundledNodeMessage,
-    /// Session messages of different peers bundled together (§6.5): discarded.
+    /// A session message bundled with those of sessions whose F-SEIDs of the node have
+    /// another address, which are of different PFCP entities as the sender sees them
+    /// (§6.5): discarded, as the first of its address is taken.
     BundledPeers,
-    /// Messages bundled by a peer without an association, which could not have agreed on
-    /// bundling (§6.5): discarded.
+    /// Messages bundled by a host with neither an association nor a session that the node
+    /// adopted, which could not have agreed on bundling (§6.5): discarded.
     BundledWithoutAssociation,
+    /// Messages bundled by a peer when it or the node did not announce BUNDL
+    /// ([`NodeConfig::bundling`], §6.5): discarded.
+    BundlingNotAgreed,
     /// A peer's SEID of 0, which says that it is not known (§7.2.2.4.2): an
     /// establishment's response that gives it establishes no session, an establishment
     /// that gives it is answered "Mandatory IE incorrect", and a modification or a
@@ -605,11 +622,17 @@ fn sends(function: Function, message_type: u8) -> bool {
 /// The peer of `from` whose F-SEID has `fseid`: its address of the family of `from`, on
 /// the port of `from` (§5.6.2).
 fn fseid_peer(from: SocketAddr, fseid: &FSeid) -> SocketAddr {
-    let address = match from.ip() {
+    let address = fseid_address(from, fseid);
+    SocketAddr::new(address.unwrap_or(from.ip()), from.port())
+}
+
+/// The address of `fseid` of the family of `peer`: where `peer` sends the messages of its
+/// session.
+fn fseid_address(peer: SocketAddr, fseid: &FSeid) -> Option<IpAddr> {
+    match peer.ip() {
         IpAddr::V4(_) => fseid.ipv4.map(IpAddr::V4),
         IpAddr::V6(_) => fseid.ipv6.map(IpAddr::V6),
-    };
-    SocketAddr::new(address.unwrap_or(from.ip()), from.port())
+    }
 }
 
 /// A PFCP entity on one local endpoint.
@@ -783,7 +806,7 @@ impl Node {
                     header: Header::node(0),
                     body: request.into(),
                 };
-                let _ = self.send(now, peer, message, true, None, None, Change::Nothing);
+                let _ = self.send(now, peer, message, true, None, None, Change::Nothing, None);
             }
         }
         for scope in self.overload.ended(now) {
@@ -923,7 +946,24 @@ impl Node {
             Some(session) => Some(session.mark),
             None => made.filter(|_| establishment).map(|(_, mark)| mark),
         };
-        let id = self.send(now, to, message, false, local_seid, mark, change)?;
+        // Where the peer sends the messages of the session: the CP F-SEID that the request
+        // gives it (§6.5).
+        let local_address = match &message.body {
+            Body::SessionEstablishmentRequest(request) => request.cp_f_seid.as_ref(),
+            Body::SessionModificationRequest(request) => request.cp_f_seid.as_ref(),
+            _ => None,
+        }
+        .and_then(|f_seid| fseid_address(to, f_seid));
+        let id = self.send(
+            now,
+            to,
+            message,
+            false,
+            local_seid,
+            mark,
+            change,
+            local_address,
+        )?;
         self.put_off(now, local_seid);
         if let Some((seid, mark)) = made {
             let node = self
@@ -933,6 +973,7 @@ impl Node {
             let session = Session {
                 peer: to,
                 peer_seid: None,
+                local_address,
                 node,
                 reserved: false,
                 mark,
@@ -1090,6 +1131,7 @@ impl Node {
         let session = Session {
             peer,
             peer_seid: Some(peer_seid),
+            local_address: None,
             node: node.unwrap_or_default(),
             reserved: false,
             mark: self.mark(),
@@ -1360,11 +1402,20 @@ impl Node {
         }
         let parts = datagram_parts(octets);
         let bundled = parts.len() > 1;
-        if bundled && self.association_of(from).is_none() {
-            self.violation(from, ViolationKind::BundledWithoutAssociation, octets);
-            return;
+        if bundled {
+            let refused = match self.bundling_with(from) {
+                Some(true) => None,
+                Some(false) => Some(ViolationKind::BundlingNotAgreed),
+                None => Some(ViolationKind::BundledWithoutAssociation),
+            };
+            if let Some(kind) = refused {
+                self.violation(from, kind, octets);
+                return;
+            }
         }
-        let mut peers = BTreeSet::new();
+        // The address of the node's F-SEIDs of the sessions of the bundle, of the first
+        // whose session it knows (§6.5).
+        let mut local = None;
         for this in parts {
             let Some((header, message_type, _)) = Header::decode(this) else {
                 let error = crate::Error::TooShort { octets: this.len() };
@@ -1381,16 +1432,15 @@ impl Node {
                 continue;
             }
             if bundled
-                && let Some(session) = header
+                && let Some(address) = header
                     .seid
                     .and_then(|seid| self.sessions.resolve(seid))
                     .and_then(|seid| self.sessions.get(&seid))
+                    .and_then(|session| session.local_address)
+                && *local.get_or_insert(address) != address
             {
-                peers.insert(self.peer_key(session.peer));
-                if peers.len() > 1 {
-                    self.violation(from, ViolationKind::BundledPeers, this);
-                    continue;
-                }
+                self.violation(from, ViolationKind::BundledPeers, this);
+                continue;
             }
             let Some(of_smf_set) = self.screen(now, from, this, header, message_type) else {
                 continue;
@@ -1941,6 +1991,7 @@ impl Node {
         local_seid: Option<u64>,
         mark: Option<u64>,
         change: Change,
+        local_address: Option<IpAddr>,
     ) -> Result<RequestId, NodeError> {
         let sequence = self.next_free_sequence()?;
         message.header.sequence = sequence;
@@ -1972,6 +2023,7 @@ impl Node {
                 local_seid,
                 mark,
                 change,
+                local_address,
             },
         );
         self.queue(Transmit {
@@ -2103,6 +2155,19 @@ impl Node {
         self.peer_key(one) == self.peer_key(other)
     }
 
+    /// Whether `from` may bundle its messages (§6.5): a peer of an association, when both it
+    /// and the node announced BUNDL; the peer of a session adopted without one, whose
+    /// features the holder of its association knows, when the node did. `None` for a host
+    /// of neither.
+    fn bundling_with(&self, from: SocketAddr) -> Option<bool> {
+        let own = self.config.bundling;
+        match self.association_of(from) {
+            Some(association) => Some(own && association.set.bundl),
+            None if self.sessions.adopts(from) => Some(own),
+            None => None,
+        }
+    }
+
     /// Whether the node heartbeats `peer`: of an association, or of an adopted session.
     fn beats(&self, peer: SocketAddr) -> bool {
         self.association_of(peer).is_some() || self.sessions.adopts(peer)
@@ -2132,17 +2197,25 @@ impl Node {
         SocketAddr::new(from.ip(), self.config.request_port.unwrap_or(from.port()))
     }
 
-    /// The SSET and MPAS that a peer says of itself: in its CP Function Features
+    /// The SSET, MPAS and BUNDL that a peer says of itself: in its CP Function Features
     /// (§8.2.58) to a UP function, and in its UP Function Features (§8.2.25) to a CP
     /// function. `None` when it says none.
     fn features_of(
         &self,
         cp: Option<&crate::CpFunctionFeatures>,
         up: Option<&crate::UpFunctionFeatures>,
-    ) -> Option<(bool, bool)> {
+    ) -> Option<Features> {
         match self.config.function {
-            Function::Up => cp.map(|features| (features.sset, features.mpas)),
-            Function::Cp => up.map(|features| (features.sset, features.mpas)),
+            Function::Up => cp.map(|features| Features {
+                sset: features.sset,
+                mpas: features.mpas,
+                bundl: features.bundl,
+            }),
+            Function::Cp => up.map(|features| Features {
+                sset: features.sset,
+                mpas: features.mpas,
+                bundl: features.bundl,
+            }),
         }
     }
 
@@ -2536,6 +2609,7 @@ impl Node {
                                 Session {
                                     peer: fseid_peer(from, f_seid),
                                     peer_seid: f_seid.seid,
+                                    local_address: request.local_address,
                                     node,
                                     reserved: false,
                                     mark,
@@ -2564,6 +2638,12 @@ impl Node {
                 }
             }
             Body::SessionModificationResponse(_) if accepted => {
+                // The new CP F-SEID, of the same SEID or not, is where the peer sends.
+                if let (Some(address), Some(local)) =
+                    (request.local_address, self.session_of(request))
+                {
+                    self.sessions.set_local_address(local, address);
+                }
                 let Change::Moves(new) = request.change else {
                     return;
                 };
@@ -2619,6 +2699,17 @@ impl Node {
         if !accepted {
             return;
         }
+        // The CP F-SEID of the SMF that takes a session over (§5.22), where the UP function
+        // sends its messages from then on.
+        if let Body::SessionReportResponse(response) = &message.body
+            && let Some(address) = response
+                .cp_f_seid
+                .as_ref()
+                .and_then(|f_seid| fseid_address(request.from, f_seid))
+            && let Some(local) = self.answered_session(request)
+        {
+            self.sessions.set_local_address(local, address);
+        }
         match (&message.body, request.effect.clone()) {
             (Body::AssociationSetupResponse(_), Effect::Setup(retained, set)) => {
                 if let Some(node_id) = &request.node_id {
@@ -2659,11 +2750,16 @@ impl Node {
                     };
                     let peer = self.request_address(peer);
                     let mark = self.mark();
+                    let local_address = response
+                        .up_f_seid
+                        .as_ref()
+                        .and_then(|f_seid| fseid_address(request.from, f_seid));
                     self.sessions.insert(
                         local,
                         Session {
                             peer,
                             peer_seid: request.peer_seid,
+                            local_address,
                             node,
                             reserved: false,
                             mark,
@@ -2710,15 +2806,16 @@ impl Node {
     }
 
     /// The set of the association of `key` that an update changes (§5.22.3, bullet 1): the
-    /// set features of the peer's function, and the FQDN of its SMF Set ID, each taken if
-    /// the update carried it, and the rest kept.
-    fn update_set(&mut self, key: &[u8], features: Option<(bool, bool)>, id: Option<Vec<u8>>) {
+    /// features of the peer's function, and the FQDN of its SMF Set ID, each taken if the
+    /// update carried it, and the rest kept.
+    fn update_set(&mut self, key: &[u8], features: Option<Features>, id: Option<Vec<u8>>) {
         let Some(association) = self.associations.get_mut(key) else {
             return;
         };
-        if let Some((sset, mpas)) = features {
-            association.set.sset = sset;
-            association.set.mpas = mpas;
+        if let Some(features) = features {
+            association.set.sset = features.sset;
+            association.set.mpas = features.mpas;
+            association.set.bundl = features.bundl;
         }
         if let Some(id) = id {
             association.set.id = Some(id);
