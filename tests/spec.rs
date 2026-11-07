@@ -1260,8 +1260,19 @@ fn figure_places() {
     }
     let mut problems = Vec::new();
     let mut checked = 0;
+    let mut by_hand = Vec::new();
     for info in IE_TYPES {
-        let Some(layout) = info.layout else { continue };
+        // A layout is the reader that the macro of a value writes. A value that the crate
+        // reads by hand, as its figure follows a type or a number, has none, which would
+        // describe its reader without being it: the test codec compares its octets with
+        // its figure (`the_values_read_by_hand_have_the_places_of_their_figures`). A grouped
+        // IE and an IE kept as octets have no fields.
+        let Some(layout) = info.layout else {
+            if info.form != Form::Grouped && !info.fields.is_empty() {
+                by_hand.push(info.clause);
+            }
+            continue;
+        };
         let figure = places
             .get(info.clause)
             .map(Vec::as_slice)
@@ -1394,6 +1405,7 @@ fn figure_places() {
     problems.extend(errata.unused(&["figure-octets"]));
     report(problems);
     assert!(checked > 800, "{checked} places checked");
+    assert_eq!(by_hand, ["8.2.38", "8.2.43", "8.2.103", "8.2.104"]);
 }
 
 /// The conditions of the fields of clause 8.2: each sentence that makes a field there, or

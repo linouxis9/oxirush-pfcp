@@ -4,14 +4,14 @@
 
 | Test | What it checks |
 |---|---|
-| `spec` | The crate against TS 29.244 V19.6.0: every message type and IE type; every row of a table, with its presence, interfaces, IE type and repetition, and its bound; every flag and field of a figure, with its octet, bits, order and width, and the conditions that the sentences of its clause give; the sentences of clause 8.2 on which flags are set, together, with the value of another field or always, each with the rule that checks it (`spec/flag-rules.tsv`); every table of values, and the values that a receiver reads as another; the constructors by interface; and the requirements of clause 6 (`spec/`) |
+| `spec` | The crate against TS 29.244 V19.6.0: every message type and IE type; every row of a table, with its presence, interfaces, IE type and repetition, and its bound; every flag and field of a figure, with its octet, bits, order and width, and the conditions that the sentences of its clause give, but for the four values read by hand, which `codec` compares; the sentences of clause 8.2 on which flags are set, together, with the value of another field or always, each with the rule that checks it (`spec/flag-rules.tsv`); every table of values, and the values that a receiver reads as another; the constructors by interface; and the requirements of clause 6 (`spec/`) |
 | `captures` | The 213 messages of the lab runs (`captures/`): each decodes, encodes back byte for byte, has a tree that reads back, and is checked on its interface |
 | `check` | What `check()` finds on each interface, with the clause and the Cause of each |
 | `node` | The procedures of clause 6 on a `Node`: one test for each requirement of `spec/requirements.tsv` that names it |
 | `endpoint` | Two endpoints on the loopback: a setup and a session, both ways at once through a `Handle`, a probe that answers twice, a request that times out, a full queue and a full node, an `Incoming` dropped or answered in vain, an answer that does not encode, a heartbeat of never, a request dropped before and after the task takes it, `close()` |
 | `src/endpoint.rs` | Through `Handle::request`, that a request dropped once queued closes its reply before its cancel goes, as the waker of the cancels sees it |
 | `allocation` | What the node allocates and keeps of what it rejects unread: the datagrams of hosts without an association, and their rejections |
-| `codec` | The codec, the trees and paths, the IEs that a scope keeps as octets, and the vectors of `PFCP_VECTORS` |
+| `codec` | The codec, the trees and paths, the IEs that a scope keeps as octets, the octets of the four values read by hand against their figures (Node ID, FQ-CSID, MAC Addresses Detected and Removed), and the vectors of `PFCP_VECTORS` |
 | `serde` | A message and an IE as JSON through serde |
 | `readme` | Each Rust block of the README prints what the README shows |
 

@@ -1125,6 +1125,92 @@ fn kept_ies_in_every_row_read_back() {
     assert!(checked > 3600, "{checked}");
 }
 
+/// The four values that the crate reads by hand, whose figures the test `spec` does not
+/// compare (`figure_places`), have the places of their figures, octet by octet: Node ID
+/// (§8.2.38), FQ-CSID (§8.2.43), and MAC Addresses Detected and Removed (§8.2.103,
+/// §8.2.104). Each decodes from octets written from its figure, and encodes back to them.
+#[test]
+fn the_values_read_by_hand_have_the_places_of_their_figures() {
+    fn again<T: Codec>(value: &T) -> Vec<u8> {
+        let mut octets = Vec::new();
+        value.encode(&mut octets).unwrap();
+        octets
+    }
+    // Node ID: the Node ID Type in bits 1 to 4 of octet 5, the others spare; the value from
+    // octet 6, of the length that the type says
+    let ipv4 = [0x00, 10, 0, 0, 1];
+    assert_eq!(
+        NodeId::decode(&ipv4),
+        Some(NodeId::Ipv4(Ipv4Addr::new(10, 0, 0, 1)))
+    );
+    assert_eq!(again(&NodeId::decode(&ipv4).unwrap()), ipv4);
+    let ipv6 = [&[0x01][..], &[0x20, 0x01], &[0; 13], &[0x01]].concat();
+    assert!(
+        matches!(NodeId::decode(&ipv6), Some(NodeId::Ipv6(address)) if address.segments()[0] == 0x2001)
+    );
+    let fqdn = [0x02, 3, b'u', b'p', b'f'];
+    assert_eq!(
+        NodeId::decode(&fqdn)
+            .and_then(|node_id| node_id.fqdn())
+            .as_deref(),
+        Some("upf")
+    );
+    assert_eq!(again(&NodeId::decode(&fqdn).unwrap()), fqdn);
+    let spare = NodeId::decode(&[0xf0, 10, 0, 0, 1]).unwrap();
+    assert_eq!(
+        spare.effective(),
+        Some(NodeId::Ipv4(Ipv4Addr::new(10, 0, 0, 1)))
+    );
+    // FQ-CSID: the Node-ID Type in bits 5 to 8 of octet 5, the Number of CSIDs in bits 1
+    // to 4; the Node-Address from octet 6, of 4 octets for types 0 and 2 and 16 for type
+    // 1; the CSIDs of two octets each; the Node Type in bits 1 to 4 of the octet after
+    let octets = [0x22, 0x0c, 0x80, 0x10, 0x01, 0x00, 0x07, 0x00, 0x09, 0x02];
+    let fq_csid = FqCsid::decode(&octets).unwrap();
+    assert_eq!(fq_csid.node_id_type, 2);
+    assert_eq!(fq_csid.node_address, [0x0c, 0x80, 0x10, 0x01]);
+    assert_eq!(fq_csid.csids, [7, 9]);
+    assert_eq!(
+        fq_csid.node_type.map(|node_type| node_type.value),
+        Some(NodeType::PgwCSmf)
+    );
+    assert_eq!(again(&fq_csid), octets);
+    let ipv6 = FqCsid {
+        node_id_type: 1,
+        node_address: vec![0; 16],
+        csids: vec![1],
+        ..Default::default()
+    };
+    assert_eq!(again(&ipv6), [&[0x11][..], &[0; 16], &[0, 1]].concat());
+    // MAC Addresses Detected and Removed: the number of MAC addresses in octet 5, each
+    // address of 6 octets, then the C-TAG and the S-TAG, each after its length
+    let octets = [
+        &[2][..],
+        &[0x02, 0, 0, 0, 0, 1],
+        &[0x02, 0, 0, 0, 0, 2],
+        &[3, 0x07, 0x00, 0x64],
+        &[3, 0x07, 0x00, 0xc8],
+    ]
+    .concat();
+    let detected = MacAddressesDetected::decode(&octets).unwrap();
+    assert_eq!(
+        detected.mac_addresses,
+        [[0x02, 0, 0, 0, 0, 1], [0x02, 0, 0, 0, 0, 2]]
+    );
+    assert_eq!(
+        detected.c_tag.as_ref().map(|tag| tag.0.clone()),
+        Some(vec![0x07, 0x00, 0x64])
+    );
+    assert_eq!(
+        detected.s_tag.as_ref().map(|tag| tag.0.clone()),
+        Some(vec![0x07, 0x00, 0xc8])
+    );
+    assert_eq!(again(&detected), octets);
+    let removed = MacAddressesRemoved::decode(&octets[..13]).unwrap();
+    assert_eq!(removed.mac_addresses.len(), 2);
+    assert!(removed.c_tag.is_none() && removed.s_tag.is_none());
+    assert_eq!(again(&removed), octets[..13]);
+}
+
 /// §8.2.38: a Node ID as its receiver takes it, the spare bits of its type and the octets
 /// after its value ignored (§8.1.2); and its tree, which reads back to its octets in each
 /// form (the FQDN forms found by a fuzz target that compares octets).
