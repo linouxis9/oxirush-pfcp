@@ -650,3 +650,121 @@ async fn close_frees_the_socket() {
     );
     assert_eq!(held.respond(response).await, Err(EndpointError::Closed));
 }
+
+/// What `future` gives within 5 seconds: a test whose message does not come fails, and
+/// does not wait for ever.
+async fn within<F: std::future::Future>(future: F) -> F::Output {
+    tokio::time::timeout(Duration::from_secs(5), future)
+        .await
+        .expect("within 5 seconds")
+}
+
+/// §5.22.3 bullets 5 and 6: an entity of an SMF of MPAS takes over a session that a UP
+/// function, which holds its association with another entity of the SMF, hands over to it.
+/// Its caller adopts the session through the handle, and answers the report to the UP
+/// function's SEID; the UP function's next report of the session comes in, and the
+/// entity's modification of it goes to the UP function.
+#[tokio::test]
+async fn an_entity_of_the_smf_takes_a_session_over() {
+    let mut smf = Endpoint::bind(
+        ANY,
+        NodeConfig {
+            smf_set: SmfSet {
+                mpas: true,
+                ..SmfSet::default()
+            },
+            other_entities: true,
+            ..config(Function::Cp)
+        },
+    )
+    .await
+    .unwrap();
+    let handle = smf.handle();
+    let upf = tokio::net::UdpSocket::bind(ANY).await.unwrap();
+    let upf_address = upf.local_addr().unwrap();
+    let report = |seid, sequence, report_type, old: Option<FSeid>| {
+        let mut report = SessionReportRequest::new(report_type);
+        report.old_cp_f_seid = old;
+        Message {
+            header: Header::session(seid, sequence),
+            body: report.into(),
+        }
+        .encode()
+        .unwrap()
+    };
+    let old = FSeid {
+        v4: true,
+        seid: Some(0x1234),
+        ipv4: Some(Ipv4Addr::new(10, 0, 0, 9)),
+        ..Default::default()
+    };
+    let handover = ReportType {
+        uisr: true,
+        ..Default::default()
+    };
+    upf.send_to(&report(0, 9, handover, Some(old)), smf.local_addr())
+        .await
+        .unwrap();
+    let mut incoming = within(smf.incoming()).await.unwrap();
+    assert!(incoming.request.of_smf_set);
+    // The caller takes the session over, with the UP function's SEID that the SMF knows, at
+    // a local SEID that no other call gave
+    let local = handle.new_session().await.unwrap();
+    assert_ne!(handle.new_session().await.unwrap(), local);
+    handle
+        .adopt_session(local, upf_address, 0x66)
+        .await
+        .unwrap();
+    assert_eq!(
+        handle.adopt_session(local, upf_address, 0x66).await,
+        Err(EndpointError::Node(NodeError::SeidInUse))
+    );
+    incoming.request.seid = Some(local);
+    let cp_f_seid = FSeid {
+        v4: true,
+        seid: Some(local),
+        ipv4: Some(Ipv4Addr::LOCALHOST),
+        ..Default::default()
+    };
+    incoming
+        .respond(SessionReportResponse::new(accepted()).with_cp_f_seid(cp_f_seid))
+        .await
+        .unwrap();
+    let mut buffer = vec![0; 65_535];
+    let (length, _) = within(upf.recv_from(&mut buffer)).await.unwrap();
+    let answer = Message::decode(&buffer[..length]).unwrap();
+    assert_eq!(answer.header.seid, Some(0x66));
+    // The UP function's next report, to the session's SEID
+    let downlink = ReportType {
+        dldr: true,
+        ..Default::default()
+    };
+    upf.send_to(&report(local, 10, downlink, None), smf.local_addr())
+        .await
+        .unwrap();
+    let incoming = within(smf.incoming()).await.unwrap();
+    assert_eq!(incoming.request.seid, Some(local));
+    // The entity's modification goes to the UP function
+    let modification = tokio::spawn({
+        let handle = handle.clone();
+        async move {
+            handle
+                .session_request(local, SessionModificationRequest::default())
+                .await
+        }
+    });
+    let (length, _) = within(upf.recv_from(&mut buffer)).await.unwrap();
+    let request = Message::decode(&buffer[..length]).unwrap();
+    assert!(matches!(request.body, Body::SessionModificationRequest(_)));
+    assert_eq!(request.header.seid, Some(0x66));
+    let response = Message {
+        header: Header::session(local, request.header.sequence),
+        body: SessionModificationResponse::new(accepted()).into(),
+    };
+    upf.send_to(&response.encode().unwrap(), smf.local_addr())
+        .await
+        .unwrap();
+    let response = within(modification).await.unwrap().unwrap();
+    assert_eq!(response.body.cause(), Some(CauseValue::RequestAccepted));
+    drop(incoming);
+}
