@@ -5701,6 +5701,57 @@ fn mpas_an_adopted_session_is_none_of_a_strangers() {
     assert_eq!(other.counters().refused, 1);
 }
 
+/// `NodeConfig::strangers`: an adopted session spares the room of hosts without an
+/// association to the session requests of its peer alone. Hosts without an association
+/// that send Association Setup Requests with the S flag and the session's SEID wait in it
+/// as any, and so does the peer's own, which is no session request.
+#[test]
+fn an_adopted_seid_spares_the_room_of_strangers_to_its_peer_alone() {
+    let mut other = Node::new(NodeConfig {
+        smf_set: SmfSet {
+            mpas: true,
+            ..SmfSet::default()
+        },
+        other_entities: true,
+        strangers: 1,
+        ..config(OTHER, Function::Cp)
+    });
+    other.adopt_session(1, UPF, 0x66).unwrap();
+    let setup = |from: SocketAddr, sequence: u32| {
+        let header = Header {
+            seid: Some(1),
+            ..Header::node(sequence)
+        };
+        let body = AssociationSetupRequest::new(node_id(from), RecoveryTimeStamp::new(1000));
+        Message {
+            header,
+            body: body.into(),
+        }
+        .encode()
+        .unwrap()
+    };
+    for host in 10..20 {
+        let from = Ipv4Addr::new(10, 0, 1, host).into_socket(8805);
+        other.handle_datagram(at(1), from, &setup(from, host.into()));
+    }
+    assert_eq!(requests_of(&events(&mut other)), 1);
+    assert_eq!(other.counters().refused, 9);
+    other.handle_datagram(at(1), UPF, &setup(UPF, 30));
+    assert_eq!(requests_of(&events(&mut other)), 0);
+    assert_eq!(other.counters().refused, 10);
+    // The session's report, from its peer, does not wait
+    let report = Message {
+        header: Header::session(1, 31),
+        body: SessionReportRequest::new(ReportType {
+            dldr: true,
+            ..Default::default()
+        })
+        .into(),
+    };
+    other.handle_datagram(at(1), UPF, &report.encode().unwrap());
+    assert_eq!(requests_of(&events(&mut other)), 1);
+}
+
 /// An establishment holds its session from when it is sent: another request of the
 /// session that ends without its response, cancelled here, leaves it, and the
 /// establishment's accepted response establishes it.
