@@ -1212,7 +1212,9 @@ fn the_values_read_by_hand_have_the_places_of_their_figures() {
 }
 
 /// §8.2.38: a Node ID of an FQDN from its text, as RFC 1035 writes its labels, which
-/// gives the text back; not from a text of an empty label or one of more than 63 octets.
+/// gives the text back; not from a text of an empty label, one of more than 63 octets, or
+/// of more than 255 octets with the trailing zero byte that the IE leaves out (RFC 1035
+/// §2.3.4).
 #[test]
 fn an_fqdn_node_id_from_its_text() {
     let node_id = NodeId::from_fqdn("upf.example").unwrap();
@@ -1223,7 +1225,22 @@ fn an_fqdn_node_id_from_its_text() {
         NodeId::from_fqdn(&longest).and_then(|node_id| node_id.fqdn()),
         Some(longest.clone())
     );
-    for name in ["", "upf..example", "upf.", ".upf", &format!("{longest}a")] {
+    // Labels of 254 octets, 255 with the trailing zero byte: 253 characters of text.
+    let name = [&longest[..], &longest, &longest, &longest[..61]].join(".");
+    assert_eq!(name.len(), 253);
+    assert_eq!(
+        NodeId::from_fqdn(&name).and_then(|node_id| node_id.fqdn()),
+        Some(name.clone())
+    );
+    let over = format!("{name}a");
+    for name in [
+        "",
+        "upf..example",
+        "upf.",
+        ".upf",
+        &format!("{longest}a"),
+        &over,
+    ] {
         assert_eq!(NodeId::from_fqdn(name), None, "{name:?}");
     }
 }
@@ -1260,6 +1277,16 @@ fn node_id_forms() {
     }
     let long = [&[64][..], &[b'a'; 64]].concat();
     assert_eq!(fqdn(&long).fqdn(), None);
+    // Labels of 255 octets, 256 with the trailing zero byte (RFC 1035 §2.3.4).
+    let label = [&[63][..], &[b'a'; 63]].concat();
+    let too_long = [&label[..], &label, &label, &[62], &[b'a'; 62]].concat();
+    assert_eq!(too_long.len(), 255);
+    assert_eq!(fqdn(&too_long).fqdn(), None);
+    assert!(
+        fqdn(&[&too_long[..192], &[61], &[b'a'; 61]].concat())
+            .fqdn()
+            .is_some()
+    );
     for content in [
         &[0x10, 10, 0, 0, 1][..],
         &[0, 10, 0, 0, 1, 0xff],
@@ -1270,6 +1297,7 @@ fn node_id_forms() {
         &[2, 2, 0xc3, 0x28],
         &[0x12, 1, b'a'],
         &[[2].as_slice(), &long].concat(),
+        &[[2].as_slice(), &too_long].concat(),
     ] {
         let node_id = read(content);
         let tree = tree::Tree::to_tree(&node_id);
@@ -1279,7 +1307,14 @@ fn node_id_forms() {
         Codec::encode(&back, &mut octets).unwrap();
         assert_eq!(octets, content, "{tree}");
     }
-    for name in ["a..b", "", ".a", "a.", &"a".repeat(64)] {
+    let over = [
+        &"a".repeat(63)[..],
+        &"a".repeat(63),
+        &"a".repeat(63),
+        &"a".repeat(62),
+    ]
+    .join(".");
+    for name in ["a..b", "", ".a", "a.", &"a".repeat(64), &over] {
         let written = tree!({"FQDN": name});
         assert!(tree::from_value::<NodeId>(&written).is_err(), "{name}");
     }

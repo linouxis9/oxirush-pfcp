@@ -1324,7 +1324,7 @@ impl Check for NodeId {
             (0 | 1, _) => None,
             (2, 0) => Some("an FQDN without a label"),
             (2, _) if !fqdn_valid(value) => Some(
-                "labels that are no FQDN of RFC 1035: each of 1 to 63 octets, after its length",
+                "labels that are no FQDN of RFC 1035: each of 1 to 63 octets, after its length, and 255 octets at most with the trailing zero byte",
             ),
             (2, _) => None,
             _ => {
@@ -1338,8 +1338,11 @@ impl Check for NodeId {
 }
 
 /// Whether octets are labels of an FQDN as RFC 1035 writes them, without the last zero
-/// octet: each of 1 to 63 octets, after its length.
+/// octet: each of 1 to 63 octets, after its length, and [`FQDN_OCTETS`] at most.
 fn fqdn_valid(mut octets: &[u8]) -> bool {
+    if octets.len() > FQDN_OCTETS {
+        return false;
+    }
     while let [length @ 1..=63, rest @ ..] = octets {
         let Some(tail) = rest.get(usize::from(*length)..) else {
             return false;
@@ -1349,9 +1352,17 @@ fn fqdn_valid(mut octets: &[u8]) -> bool {
     octets.is_empty()
 }
 
+/// The most octets of the labels of an FQDN, without the trailing zero byte: 255 with it
+/// (RFC 1035 §2.3.4).
+const FQDN_OCTETS: usize = 254;
+
 /// The labels of an FQDN as RFC 1035 writes them, without the last zero octet: `None`
-/// for octets that are not labels of 1 to 63 octets, each after its length.
+/// for octets that are not labels of 1 to 63 octets, each after its length, or that are
+/// more than [`FQDN_OCTETS`].
 fn fqdn_labels(mut octets: &[u8]) -> Option<Vec<&[u8]>> {
+    if octets.len() > FQDN_OCTETS {
+        return None;
+    }
     let mut labels = Vec::new();
     while let [length @ 1..=63, rest @ ..] = octets {
         let (label, tail) = rest.split_at_checked(usize::from(*length))?;
@@ -1401,9 +1412,13 @@ impl NodeId {
     }
 
     /// A Node ID of an FQDN from its text, `upf.example`: its labels as RFC 1035 writes
-    /// them, each after its length (§8.2.38). `None` for a text with an empty label or a
-    /// label of more than 63 octets.
+    /// them, each after its length (§8.2.38). `None` for a text with an empty label, a
+    /// label of more than 63 octets, or labels of more than 255 octets with the trailing
+    /// zero byte that the IE leaves out (RFC 1035 §2.3.4): a text of more than 253.
     pub fn from_fqdn(name: &str) -> Option<Self> {
+        if name.len() + 1 > FQDN_OCTETS {
+            return None;
+        }
         let mut labels = Vec::with_capacity(name.len() + 1);
         for label in name.split('.') {
             let length = u8::try_from(label.len())
@@ -1416,7 +1431,8 @@ impl NodeId {
     }
 
     /// The FQDN as text, its labels with dots: `None` for labels that are not each of 1
-    /// to 63 octets of UTF-8 without a dot, which the text could not give back.
+    /// to 63 octets of UTF-8 without a dot, or of more than 255 octets with the trailing
+    /// zero byte (RFC 1035 §2.3.4), which the text could not give back.
     pub fn fqdn(&self) -> Option<String> {
         let Self::Fqdn(octets) = self else {
             return None;
@@ -1479,7 +1495,7 @@ impl oxirush_utils::tree::Tree for NodeId {
                 let name = reading.text(content)?;
                 Self::from_fqdn(name).ok_or_else(|| {
                     reading.mismatch(
-                        "a name of labels of 1 to 63 octets, with dots between them",
+                        "a name of 253 octets at most, of labels of 1 to 63 octets with dots between them",
                         content,
                     )
                 })
