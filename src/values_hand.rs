@@ -293,6 +293,11 @@ pub struct SsmAddress {
 }
 
 impl Field for SsmAddress {
+    #[cfg(feature = "tree")]
+    const BELOW: &'static crate::tree::Below = &crate::tree::Below::Object(&[
+        ("IP Multicast Distribution Address", TypedAddress::BELOW),
+        ("IP Source Address", TypedAddress::BELOW),
+    ]);
     fn read(octets: &mut &[u8]) -> Option<Self> {
         Some(Self {
             distribution: TypedAddress::read(octets)?,
@@ -741,6 +746,9 @@ macro_rules! pfcp_secret {
             pub const FIELDS: &'static [&'static str] = &[$name];
             /// None: its tree is its octets.
             pub const MEMBERS: &'static [&'static str] = &[];
+            /// What the tree of each field may hold below it: nothing, of scalars alone.
+            #[cfg(feature = "tree")]
+            pub(crate) const MEMBERS_BELOW: &'static [(&'static str, &'static crate::tree::Below)] = &[];
             /// Its layout.
             pub const LAYOUT: Option<&'static Layout> = Some(&Layout { head: &[], bits: &[], fields: &[Member { name: $name, octets: None, cells: &[], condition: "true" }] });
         }
@@ -884,6 +892,15 @@ impl FqCsid {
         "PDN Connection Set Identifiers",
         "Node Type",
         crate::ie::UNKNOWN_OCTETS,
+    ];
+    /// What the tree of each field may hold below it.
+    #[cfg(feature = "tree")]
+    pub(crate) const MEMBERS_BELOW: &'static [(&'static str, &'static crate::tree::Below)] = &[
+        (
+            "PDN Connection Set Identifiers",
+            &crate::tree::Below::List(&crate::tree::Below::Scalar),
+        ),
+        ("Node Type", <Narrow<NodeType> as Field>::BELOW),
     ];
     /// Read by hand: its layout depends on its type.
     pub const LAYOUT: Option<&'static Layout> = None;
@@ -1092,6 +1109,9 @@ macro_rules! mac_addresses {
             pub const FIELDS: &'static [&'static str] = &["MAC address values", "C-TAG", "S-TAG"];
             /// The members that its tree may have: its fields and its unknown octets.
             pub const MEMBERS: &'static [&'static str] = &["MAC address values", "C-TAG", "S-TAG", crate::ie::UNKNOWN_OCTETS];
+            /// What the tree of each field may hold below it.
+            #[cfg(feature = "tree")]
+            pub(crate) const MEMBERS_BELOW: &'static [(&'static str, &'static crate::tree::Below)] = &[("MAC address values", &crate::tree::Below::List(&crate::tree::Below::Scalar))];
             /// Read by hand: a list after its number, then fields after their lengths.
             pub const LAYOUT: Option<&'static Layout> = None;
         }
