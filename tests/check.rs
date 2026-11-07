@@ -616,11 +616,11 @@ fn the_first_of_a_repeated_ie_is_the_one_handled() {
             Some(57)
         )
     );
-    // An optional IE: the first, which does not decode, is taken as absent
+    // An optional IE: the first is the one handled, and each of the others a repetition
     let octets = node_message(1, &[ie(96, &RTS), ie(96, &RTS[..2]), ie(96, &RTS)]);
     assert_eq!(
         found(&octets),
-        [(DeviationKind::Repeated { ie_type: 96 }, None, None); 1]
+        vec![(DeviationKind::Repeated { ie_type: 96 }, None, None); 2]
     );
     let octets = node_message(
         5,
@@ -909,7 +909,7 @@ fn a_conditional_ie_that_does_not_decode_is_incorrect() {
             Some(57)
         )]
     );
-    // A second Create PDR, whose IEs do not frame
+    // A second Create PDR, whose IEs do not frame, at its position in the list
     let mut message = establishment();
     request_with(&mut message, |request| {
         request.raw.push(cut(1, &[0, 56, 0, 9]));
@@ -917,7 +917,7 @@ fn a_conditional_ie_that_does_not_decode_is_incorrect() {
     assert_eq!(
         checked(&message),
         [(
-            "/pfcp/Create PDR".to_string(),
+            "/pfcp/Create PDR/1".to_string(),
             DeviationKind::MandatoryIncorrect { ie_type: 1 },
             Some(CauseValue::MandatoryIeIncorrect),
             Some(1)
@@ -978,7 +978,7 @@ fn a_conditional_ie_that_does_not_decode_is_incorrect() {
     assert_eq!(
         checked(&response),
         [(
-            "/pfcp/Created PDR/0/F-TEID".to_string(),
+            "/pfcp/Created PDR/0/F-TEID/0".to_string(),
             DeviationKind::ConditionalIncorrect { ie_type: 21 },
             None,
             None

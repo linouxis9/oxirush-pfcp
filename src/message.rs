@@ -284,33 +284,41 @@ impl Message {
             Body::SessionReportRequest(request) => Some(request.old_cp_f_seid.is_some()),
             _ => None,
         };
-        let overflow = header.overflow().map(|(field, _)| match field {
-            "Version" => "a version of more than 3 bits",
-            "Spare" => "spare bits of octet 1 of more than 2 bits",
-            "Sequence Number" => "a sequence number of more than 24 bits",
-            "Message Priority" => "a message priority of more than 4 bits",
-            _ => "spare bits of the last octet of more than its bits",
+        // A field of more than its bits, at its member of the tree of the message.
+        let wide = header.overflow().map(|(field, _)| match field {
+            "Version" => ("/Version", "a version of more than 3 bits"),
+            "Spare" => ("/Spare", "spare bits of octet 1 of more than 2 bits"),
+            "Sequence Number" => ("/Sequence Number", "a sequence number of more than 24 bits"),
+            "Message Priority" => (
+                "/Message Priority",
+                "a message priority of more than 4 bits",
+            ),
+            _ => (
+                "/Spare octet",
+                "spare bits of the last octet of more than its bits",
+            ),
         });
+        let (wide_field, too_wide) = wide.unwrap_or_default();
         let establishment = message_type == 50 && !interface.has(Interfaces::N4MB);
-        let spare = header.spare != 0 || header.spare_last != 0;
-        // Whether each rule is broken, where, its clause and what it is. An establishment
-        // has SEID 0, the peer's SEID being not known yet, but on N4mb. The last octet is
-        // spare, or its bits after the priority are (§7.2.2.3).
+        // Whether each rule is broken, at which field of the header or IE, its clause and
+        // what it is. An establishment has SEID 0, the peer's SEID being not known yet, but
+        // on N4mb. The last octet is spare, or its bits after the priority are (§7.2.2.3).
         #[rustfmt::skip]
         let rules = [
-            (header.version != 1, "/header", "7.2.2.4.1", Rule("the version is not 1")),
-            (overflow.is_some(), "/header", "7.2.2.1", Rule(overflow.unwrap_or_default())),
-            (spare, "/header", "7.2.2.1", DeviationKind::SpareBits),
-            (node && seid.is_some(), "/header", "7.2.2.2", Rule("a node related message has the S flag")),
-            (session && seid.is_none(), "/header", "7.2.2.4.1", Rule("a session related message has no SEID")),
-            (node && header.priority.is_some(), "/header", "7.2.2.2", Rule("a node related message has the MP flag")),
-            (node && header.follow_on, "/header", "6.5", Rule("a node related message is bundled")),
-            (establishment && seid.is_some_and(|seid| seid != 0), "/header", "7.2.2.4.2",
+            (header.version != 1, "/Version", "7.2.2.4.1", Rule("the version is not 1")),
+            (wide.is_some(), wide_field, "7.2.2.1", Rule(too_wide)),
+            (header.spare != 0, "/Spare", "7.2.2.1", DeviationKind::SpareBits),
+            (header.spare_last != 0, "/Spare octet", "7.2.2.1", DeviationKind::SpareBits),
+            (node && seid.is_some(), "/SEID", "7.2.2.2", Rule("a node related message has the S flag")),
+            (session && seid.is_none(), "/SEID", "7.2.2.4.1", Rule("a session related message has no SEID")),
+            (node && header.priority.is_some(), "/Message Priority", "7.2.2.2", Rule("a node related message has the MP flag")),
+            (node && header.follow_on, "/FO", "6.5", Rule("a node related message is bundled")),
+            (establishment && seid.is_some_and(|seid| seid != 0), "/SEID", "7.2.2.4.2",
                 Rule("a Session Establishment Request of a SEID other than 0")),
-            (seid_zero_known, "/header", "7.2.2.4.2", Rule("SEID 0 where the peer's SEID is known")),
-            (seid == Some(0) && old == Some(false), "/header", "7.2.2.4.2",
+            (seid_zero_known, "/SEID", "7.2.2.4.2", Rule("SEID 0 where the peer's SEID is known")),
+            (seid == Some(0) && old == Some(false), "/pfcp/Old CP F-SEID", "7.2.2.4.2",
                 Rule("a Session Report Request of SEID 0 without the Old CP F-SEID")),
-            (seid.is_some_and(|seid| seid != 0) && old == Some(true), "/header", "7.2.2.4.2",
+            (seid.is_some_and(|seid| seid != 0) && old == Some(true), "/pfcp/Old CP F-SEID", "7.2.2.4.2",
                 Rule("a Session Report Request of a SEID other than 0 with the Old CP F-SEID")),
         ];
         let broken = rules.into_iter().filter(|(broken, ..)| *broken);

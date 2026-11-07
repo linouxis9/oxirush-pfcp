@@ -1038,11 +1038,10 @@ macro_rules! pfcp_table {
         #[allow(unused_variables, unused_mut, unused_assignments)]
         impl crate::check::Checked for $ty {
             fn check_values(&self, path: &crate::check::Path, context: crate::check::Context, found: &mut alloc::vec::Vec<crate::check::Deviation>) {
-                let table = <Self as crate::table::Scope>::table();
                 let mut row = 0;
                 $(
-                    crate::check::check_field_values::<pfcp_table!(@type $vty $($raw)?), _>(
-                        table, row, &self.$field, pfcp_table!(@list [$(* $($max)?)?]), path, context, found,
+                    crate::check::check_field_values::<pfcp_table!(@type $vty $($raw)?), _, _>(
+                        self, row, &self.$field, path, context, found,
                     );
                     $({
                         let $scope: &Self = self;
@@ -1125,8 +1124,6 @@ macro_rules! pfcp_table {
     };
     (@checked) => { false };
     (@checked $($scope:ident)+) => { true };
-    (@list []) => { false };
-    (@list [* $($max:literal)?]) => { true };
     (@place [] $p:ident ($t:ty) $f:expr, $body:expr) => {
         pfcp_table!(@place_once $p ($t) $f, $body)
     };

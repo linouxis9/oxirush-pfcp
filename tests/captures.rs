@@ -95,7 +95,7 @@ const EXPECTED: &[Found] = &[
     (
         "open5gs-5gs-upf-restart",
         "43",
-        "/header",
+        "/SEID",
         "7.2.2.4.2",
         DeviationKind::Rule("a Session Establishment Request of a SEID other than 0"),
         None,

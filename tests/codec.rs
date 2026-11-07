@@ -701,6 +701,102 @@ fn what_the_table_does_not_have_is_kept_in_its_place() {
     assert!(clauses.contains(&"8.1.2"), "IE type 32767 is in no release");
 }
 
+/// The path of a deviation is one of the tree of its message, which selects what it names:
+/// a field of the header, an IE of no row by its name in the tree, and an entry of a list
+/// or of a row there more than once by its position, among the IEs that the scope keeps
+/// as octets too.
+#[test]
+fn the_path_of_a_deviation_is_one_of_the_tree() {
+    let paths = |message: &Message| -> Vec<(String, Vec<tree::Value>)> {
+        let tree = message.to_tree();
+        let deviations = message.check(Interfaces::N4).into_iter();
+        let selected = deviations.map(|deviation| {
+            let values = select(&tree, &deviation.path)
+                .unwrap_or_else(|error| panic!("{deviation}: {error}"));
+            (deviation.path, values.into_iter().cloned().collect())
+        });
+        selected.collect()
+    };
+    let header = Header {
+        spare: 1,
+        spare_last: 2,
+        priority: Some(3),
+        ..Header::node(1)
+    };
+    let heartbeat = Message {
+        header,
+        body: HeartbeatRequest::new(RecoveryTimeStamp::new(1)).into(),
+    };
+    assert_eq!(
+        paths(&heartbeat),
+        [
+            ("/Spare".into(), vec![tree!(1)]),
+            ("/Spare octet".into(), vec![tree!(2)]),
+            ("/Message Priority".into(), vec![tree!(3)]),
+        ]
+    );
+    // Packet Rate Status Report, type 252, in a Session Modification Response, whose row of
+    // that name is of type 264: the tree has it by its number
+    let mut response = SessionModificationResponse::new(Cause::new(CauseValue::RequestAccepted));
+    response.raw.push(RawIe::new(252, vec![1]));
+    let mut message = Message {
+        header: Header::session(1, 1),
+        body: response.into(),
+    };
+    assert_eq!(
+        paths(&message),
+        [("/pfcp/252".into(), vec![tree!({"octets": "01"})])]
+    );
+    let Body::SessionModificationResponse(response) = &mut message.body else {
+        panic!()
+    };
+    response.raw.push(RawIe::new(252, vec![2]));
+    assert_eq!(
+        paths(&message),
+        [
+            ("/pfcp/252/0".into(), vec![tree!({"octets": "01"})]),
+            ("/pfcp/252/1".into(), vec![tree!({"octets": "02"})]),
+        ]
+    );
+    // A Create PDR that does not decode between two, the second without its Precedence, and
+    // a second Cause
+    let pdr = |id| tree!({"PDR ID": id, "Precedence": 1, "PDI": {"Source Interface": "Access"}, "FAR ID": 1});
+    let mut second = pdr(2);
+    tree::remove(&mut second, "/Precedence").unwrap();
+    let request = tree!({
+        "message": "PFCP Session Establishment Request",
+        "SEID": 0,
+        "Sequence Number": 1,
+        "ies": {
+            "Node ID": "10.0.0.1",
+            "CP F-SEID": {"V4": true, "SEID": 1, "IPv4 address": "10.0.0.1"},
+            "Create PDR": [pdr(1), {"octets": "ff"}, second],
+            "Create FAR": [{"FAR ID": 1, "Apply Action": {"DROP": true}}],
+        }
+    });
+    let request = Message::from_tree(&request).unwrap();
+    assert_eq!(
+        paths(&request),
+        [
+            ("/pfcp/Create PDR/1".into(), vec![tree!({"octets": "ff"})]),
+            ("/pfcp/Create PDR/2/Precedence".into(), vec![]),
+        ]
+    );
+    let mut response = AssociationReleaseResponse::new(
+        NodeId::Ipv4(Ipv4Addr::new(10, 0, 0, 1)),
+        Cause::new(CauseValue::RequestAccepted),
+    );
+    response.raw.push(RawIe::new(19, vec![2]));
+    let response = Message {
+        header: Header::node(2),
+        body: response.into(),
+    };
+    assert_eq!(
+        paths(&response),
+        [("/pfcp/Cause/1".into(), vec![tree!({"octets": "02"})])]
+    );
+}
+
 #[test]
 fn check_names_the_clause() {
     let mut message = establishment();

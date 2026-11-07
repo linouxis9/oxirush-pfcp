@@ -434,6 +434,55 @@ pub(crate) fn keep_order<S: Scope>(scope: &mut S, order: Vec<Placed>) {
     *scope.order_mut() = if order == ordered { Vec::new() } else { order };
 }
 
+/// An entry of a row in the tree of its scope: a value of its field, or an IE that the
+/// scope keeps as octets, by its position among them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Entry {
+    Value(usize),
+    Kept(usize),
+}
+
+/// The entries of the row of `ie_type`, as the tree of the scope lists them: in the order
+/// of the wire as far as the scope keeps one, then the values, then the kept IEs.
+pub(crate) fn each_entry<S: Scope>(scope: &S, ie_type: u16, mut each: impl FnMut(Entry)) {
+    let (raws, count) = (scope.raw(), scope.count(ie_type));
+    let (mut values, mut kept) = (0, 0);
+    for placed in scope.order() {
+        match *placed {
+            Placed::Field(of) if of == ie_type && values < count => {
+                each(Entry::Value(values));
+                values += 1;
+            }
+            Placed::Raw => {
+                if raws.get(kept).is_some_and(|ie| ie.ie_type == ie_type) {
+                    each(Entry::Kept(kept));
+                }
+                kept += 1;
+            }
+            Placed::Field(_) => {}
+        }
+    }
+    (values..count).for_each(|nth| each(Entry::Value(nth)));
+    for (at, ie) in raws.iter().enumerate().skip(kept) {
+        if ie.ie_type == ie_type {
+            each(Entry::Kept(at));
+        }
+    }
+}
+
+/// The position of an entry of `row` in the tree of the scope, in the list of the row:
+/// `None` for the one entry of a row there once, which the tree has alone.
+pub(crate) fn position<S: Scope>(scope: &S, row: &Row, entry: Entry) -> Option<usize> {
+    let (mut at, mut entries) = (None, 0);
+    each_entry(scope, row.ie_type, |each| {
+        if each == entry {
+            at = Some(entries);
+        }
+        entries += 1;
+    });
+    at.filter(|_| row.repeat != Repeat::Once || entries > 1)
+}
+
 /// More than the rows of a table, which the table macro asserts: the counts of each row
 /// that the encoder keeps on the stack.
 pub(crate) const MAX_ROWS: usize = 64;

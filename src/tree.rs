@@ -42,7 +42,7 @@ pub use oxirush_utils::tree::Value;
 use crate::ie::{Placed, RawIe};
 use crate::message::{MESSAGE_TYPES, MessageTypeInfo};
 use crate::registry::{Form, IE_TYPES, IeTypeInfo, ie_type_info, members_below};
-use crate::table::{FieldValues, Repeat, Row, Scope, Table, keep_order};
+use crate::table::{Entry, FieldValues, Repeat, Row, Scope, Table, each_entry, keep_order};
 
 /// The tree hook of a scope, which the table macro writes.
 pub(crate) trait TreeScope {
@@ -113,58 +113,18 @@ fn raw_tree(ie: &RawIe) -> Value {
 pub(crate) fn scope_to_tree<S: Scope + TreeScope>(scope: &S) -> Value {
     let table = S::table();
     let raws = scope.raw();
-    let order = scope.order();
-    // The kept IEs that the order places; those after them were added since.
-    let ordered = order
-        .iter()
-        .filter(|placed| matches!(placed, Placed::Raw))
-        .count()
-        .min(raws.len());
     let mut members = Map::new();
     for row in table.rows {
-        let kept = raws.iter().any(|ie| ie.ie_type == row.ie_type);
-        if !kept && scope.count(row.ie_type) == 0 {
-            continue;
-        }
         let list = row.repeat != Repeat::Once;
-        let mut nth = 0;
-        let field = |members: &mut Map, nth: &mut usize| match scope.field_tree(row.ie_type, *nth) {
-            Some(value) => {
-                *nth += 1;
-                put(members, row.name.into(), list, value);
-                true
+        each_entry(scope, row.ie_type, |entry| {
+            let value = match entry {
+                Entry::Value(nth) => scope.field_tree(row.ie_type, nth),
+                Entry::Kept(at) => Some(raw_tree(&raws[at])),
+            };
+            if let Some(value) = value {
+                put(&mut members, row.name.into(), list, value);
             }
-            None => false,
-        };
-        let kept_from = match (kept, order.is_empty()) {
-            // The values and the kept IEs of the row, in the order of the wire.
-            (true, false) => {
-                let mut at = 0;
-                for placed in order {
-                    match placed {
-                        Placed::Field(ie_type) if *ie_type == row.ie_type => {
-                            field(&mut members, &mut nth);
-                        }
-                        Placed::Raw => {
-                            if let Some(ie) = raws.get(at).filter(|ie| ie.ie_type == row.ie_type) {
-                                put(&mut members, row.name.into(), list, raw_tree(ie));
-                            }
-                            at += 1;
-                        }
-                        Placed::Field(_) => {}
-                    }
-                }
-                ordered
-            }
-            _ => 0,
-        };
-        while field(&mut members, &mut nth) {}
-        for ie in raws[kept_from..]
-            .iter()
-            .filter(|ie| ie.ie_type == row.ie_type)
-        {
-            put(&mut members, row.name.into(), list, raw_tree(ie));
-        }
+        });
     }
     for ie in raws.iter().filter(|ie| table.row_of(ie.ie_type).is_none()) {
         put(

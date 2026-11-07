@@ -27,12 +27,16 @@ use core::fmt;
 use crate::enums::CauseValue;
 use crate::ie::VENDOR;
 use crate::registry::type_name;
-use crate::table::{Interfaces, Presence, Repeat, Row, Scope, Table};
+use crate::table::{Entry, Interfaces, Presence, Repeat, Row, Scope};
 
 /// One deviation: where, which clause, what, and the Cause of the answer.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Deviation {
-    /// The path of the IE in the tree of the message: `/pfcp/Create PDR/0/PDI`.
+    /// Where the deviation is, as a path of the tree of the message: the IE, at its
+    /// position in the list of its row (`/pfcp/Create PDR/0/PDI`); the row, for what the
+    /// row has as a whole (a mandatory IE missing, more IEs than it allows, an interface
+    /// without it); a field of the header (`/SEID`); `/message` for the message type; and
+    /// `/pfcp` for the IEs together.
     pub path: String,
     /// The clause or the table that the message breaks.
     pub clause: &'static str,
@@ -475,16 +479,17 @@ fn value_deviations(
     }
 }
 
-/// Check the values of a row: the row, then each value.
+/// Check the values of the row at `at` of a scope: the row, then each value, at its
+/// position in the tree, which the IEs of the row that the scope keeps as octets share.
 #[inline(always)]
 pub(crate) fn check_field_values<
     T: Check + crate::ie::Codec + crate::ie::IeType,
     F: crate::table::FieldValues<T>,
+    S: Scope,
 >(
-    table: &'static Table,
+    scope: &S,
     at: usize,
     field: &F,
-    list: bool,
     path: &Path<'_>,
     context: Context,
     found: &mut Vec<Deviation>,
@@ -493,13 +498,19 @@ pub(crate) fn check_field_values<
     if values.is_empty() {
         return;
     }
+    let table = S::table();
     let row = &table.rows[at];
     check_row(table.id, row, values.len(), path, context, found);
+    let kept = scope.raw().iter().any(|ie| ie.ie_type == row.ie_type);
     for (nth, value) in values.iter().enumerate() {
+        let nth = match kept {
+            false => (row.repeat != Repeat::Once).then_some(nth),
+            true => crate::table::position(scope, row, Entry::Value(nth)),
+        };
         let here = Path::Row {
             parent: path,
             row: row.name,
-            nth: list.then_some(nth),
+            nth,
         };
         check_field(
             value,
@@ -723,10 +734,17 @@ fn raw_deviations<S: Scope>(
     found: &mut Vec<Deviation>,
 ) {
     let table = S::table();
+    let raws = scope.raw();
     let mut handled: Vec<u16> = Vec::new();
-    for ie in scope.raw() {
+    for (at, ie) in raws.iter().enumerate() {
         let Some(row) = table.row_of(ie.ie_type) else {
-            let name = crate::tree_name(ie.ie_type, None);
+            // By its name in the tree, and its position among those of its type there.
+            let name = crate::tree_name(ie.ie_type, Some(table));
+            let same = |other: &&crate::ie::RawIe| other.ie_type == ie.ie_type;
+            let here = match raws.iter().filter(same).count() {
+                1 => format!("{path}/{name}"),
+                _ => format!("{path}/{name}/{}", raws[..at].iter().filter(same).count()),
+            };
             let (clause, kind) = match ie.ie_type {
                 VENDOR.. if ie.enterprise_id.is_none_or(|id| id == 10415) => {
                     ("8.1.1", DeviationKind::VendorId)
@@ -737,7 +755,7 @@ fn raw_deviations<S: Scope>(
                 }
                 unknown => ("8.1.2", DeviationKind::UnknownType { ie_type: unknown }),
             };
-            found.push(Deviation::new(format!("{path}/{name}"), clause, kind));
+            found.push(Deviation::new(here, clause, kind));
             continue;
         };
         let first = match row.repeat {
@@ -750,7 +768,7 @@ fn raw_deviations<S: Scope>(
         let here = || Path::Row {
             parent: path,
             row: row.name,
-            nth: None,
+            nth: crate::table::position(scope, row, Entry::Kept(at)),
         };
         let deviation = match (first, ie.octets.is_empty()) {
             // A null length says what its row allows it to (§5.6.3).
@@ -782,9 +800,7 @@ fn raw_deviations<S: Scope>(
                 },
             ),
         };
-        if !found.contains(&deviation) {
-            found.push(deviation);
-        }
+        found.push(deviation);
     }
 }
 
