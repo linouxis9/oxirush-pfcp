@@ -977,9 +977,14 @@ fn flag_rules() {
         };
         let values = breaks.split(' ').map(|octets| (octets, true));
         for (octets, broken) in values.chain(keeps.split(' ').map(|octets| (octets, false))) {
+            // A sentence of the Cause of the message is checked on a message.
+            let checked = match phrase {
+                "with the Cause" => message_checked,
+                _ => flag_checked,
+            };
             let Some(found) = hex::decode(octets)
                 .ok()
-                .and_then(|octets| flag_checked(info.ie_type, &octets))
+                .and_then(|octets| checked(info.ie_type, &octets))
             else {
                 problems.push(format!(
                     "{clause}/{n}: {octets} is no value of IE type {}",
@@ -1014,6 +1019,22 @@ fn flag_rules() {
         problems.push("flag-rules.tsv: the rows are not in the order of the sentences".into());
     }
     report(problems);
+}
+
+/// The clauses and the kinds of what check() finds in a message of `octets`, on N4, which
+/// encodes back to them: `None` for octets that do not.
+fn message_checked(_: u16, octets: &[u8]) -> Option<Vec<(&'static str, DeviationKind)>> {
+    let message = Message::decode(octets).ok()?;
+    if message.encode().ok()? != octets {
+        return None;
+    }
+    Some(
+        message
+            .check(Interfaces::N4)
+            .into_iter()
+            .map(|deviation| (deviation.clause, deviation.kind))
+            .collect(),
+    )
 }
 
 /// The clauses and the kinds of what check() finds in a value of `ie_type` of `octets`,
@@ -1605,7 +1626,7 @@ fn the_readme_counts() {
         (
             &readme,
             format!(
-                "has the {} sentences of clause 8.2 that say which flags of an IE are set, together, with the value of another field, or always: {} with the rule of `check()` that checks it, and {unchecked} that a value does not show alone",
+                "has the {} sentences of clause 8.2 that say which flags of an IE are set, together, with the value of another field or the Cause of the message, or always: {} with the rule of `check()` that checks it, and {unchecked} that a value does not show alone",
                 flags.len(),
                 flags.len() - unchecked
             ),

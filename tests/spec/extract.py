@@ -24,9 +24,11 @@ script:
                         together: "at least one", "one and only one", "only one of", "may
                         only be set", "shall be set to "1" if the ... flag is set", "shall
                         not be set", "either ... shall be set" or "exclusive", with a value
-                        ("if ... is 1, then the ... flags shall be set"), or always ("this
-                        bit shall be set to "1"."), by their clause and their number in it,
-                        which flag-rules.tsv lists with the rule that checks each
+                        ("if ... is 1, then the ... flags shall be set"), with the Cause of
+                        the message ("shall be set to "1" ... if ... the Cause IE is set
+                        to"), or always ("this bit shall be set to "1"."), by their clause
+                        and their number in it, which flag-rules.tsv lists with the rule
+                        that checks each
     value-tables.tsv    the tables of clause 8.2 that name values, or bits as octet/bit; a
                         value that a table reserves is named <reserved>
     read-as.tsv         the values of those tables that a receiver reads as another: the
@@ -326,6 +328,9 @@ FLAG_PHRASES = [
     ('flags of a value', re.compile(r'(?i)\bif [A-Za-z /-]+ is \d+, then the [A-Za-z0-9, -]+ flags? shall be set\b')),
     # Of a flag that is always set: "This bit shall be set to "1"." alone, not "to "1" if".
     ('always set', re.compile(r'(?i)\bthis (?:bit|flag) shall be set to ["“]1["”]\s*\.')),
+    # Of a flag that the Cause of the message has set: "This flag shall be set to "1" by
+    # the UP function, if ... the Cause IE is set to a rejection cause value".
+    ('with the Cause', re.compile(r'(?i)\bshall be set to ["“]1["”][^.]*\bif\b[^.]*\bthe Cause IE is set to\b')),
 ]
 
 

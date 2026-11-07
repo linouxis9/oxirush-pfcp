@@ -237,8 +237,8 @@ that forwards, the reports that a Report Type names, two IEs of which a NOTE of
 their table needs one: `Row::checked` says which), the
 IEs that do not decode, repeat, or are not of the table or the interface, spare
 bits and values, reserved values, the flags of each IE with the rules of
-clause 8.2 on which of them are set, together, with a value or always, and the
-rules of the header. Each deviation has its path, its clause, and the Cause with which a
+clause 8.2 on which of them are set, together, with a value or the Cause of the
+message, or always, and the rules of the header. Each deviation has its path, its clause, and the Cause with which a
 receiver answers a request for it.
 
 A table whose mandatory IEs differ between interfaces has a constructor for
@@ -452,10 +452,10 @@ in turn. `tests/spec/errata.tsv` names the 43 errata of the document that the
 crate meets, and the 3 readings of the crate where the document names no
 value, and `tests/spec/requirements.tsv` the 172 requirements of the
 procedures: 107 with the test that checks it, and 65 that are the
-application's, above the crate. `tests/spec/flag-rules.tsv` has the 57
+application's, above the crate. `tests/spec/flag-rules.tsv` has the 58
 sentences of clause 8.2 that say which flags of an IE are set, together, with
-the value of another field, or always: 56 with the rule of `check()` that
-checks it, and 1 that a value does not show alone. The test `spec` checks
+the value of another field or the Cause of the message, or always: 57 with the
+rule of `check()` that checks it, and 1 that a value does not show alone. The test `spec` checks
 these numbers.
 `tests/captures` has 213 messages that Open5GS and free5GC sent in lab runs:
 each decodes, encodes back to its octets, reads back from its tree, and is

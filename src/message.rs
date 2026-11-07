@@ -303,6 +303,26 @@ impl Message {
                 ));
             }
         }
+        // "This flag shall be set to "1" by the UP function, if the "Overload Control
+        // Information" is included in the PFCP Session Establishment Response and the Cause
+        // IE is set to a rejection cause value" (§8.2.76): AOCI, which the value of the IE
+        // does not show alone.
+        if let Body::SessionEstablishmentResponse(response) = &self.body
+            && rejection
+            && let Some(overload) = &response.overload_control_information
+            && !overload
+                .overload_control_information_flags
+                .as_ref()
+                .is_some_and(|flags| flags.aoci)
+        {
+            found.push(Deviation::new(
+                "/pfcp/Overload Control Information/Overload Control Information Flags",
+                "8.2.76",
+                DeviationKind::Rule(
+                    "an Overload Control Information of a rejected establishment without AOCI",
+                ),
+            ));
+        }
         match message_type_info(message_type) {
             Some(info) if !info.interfaces.has(interface) => {
                 found.push(Deviation::new(

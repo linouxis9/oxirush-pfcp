@@ -2072,3 +2072,70 @@ fn the_tags_of_mac_addresses() {
         )]
     );
 }
+
+/// §8.2.76: AOCI "shall be set to "1" by the UP function, if the "Overload Control
+/// Information" is included in the PFCP Session Establishment Response and the Cause IE is
+/// set to a rejection cause value": not of an accepted establishment, nor of another
+/// response.
+#[test]
+fn the_aoci_of_a_rejected_establishment() {
+    let oci = |flags: Option<OciFlags>| OverloadControlInformation {
+        overload_control_sequence_number: Some(SequenceNumber::new(1)),
+        overload_reduction_metric: Some(Metric::new(Percent(50))),
+        period_of_validity: Some(Timer {
+            timer_value: 1,
+            ..Default::default()
+        }),
+        overload_control_information_flags: flags,
+        ..Default::default()
+    };
+    let aoci = |aoci| {
+        Some(OciFlags {
+            aoci,
+            ..Default::default()
+        })
+    };
+    let establishment = |cause, flags| {
+        let response = SessionEstablishmentResponse::new(NodeId::Ipv4(SMF), Cause::new(cause))
+            .with_overload_control_information(oci(flags));
+        let response = match cause {
+            CauseValue::RequestAccepted => response.with_up_f_seid(FSeid {
+                v4: true,
+                seid: Some(0x2001),
+                ipv4: Some(SMF),
+                ..Default::default()
+            }),
+            _ => response,
+        };
+        Message {
+            header: Header::session(0x1001, 7),
+            body: response.into(),
+        }
+    };
+    let found = |message: Message| {
+        message
+            .check(Interfaces::N4)
+            .into_iter()
+            .map(|found| (found.path, found.clause, found.kind))
+            .collect::<Vec<_>>()
+    };
+    let broken = vec![(
+        "/pfcp/Overload Control Information/Overload Control Information Flags".to_string(),
+        "8.2.76",
+        DeviationKind::Rule(
+            "an Overload Control Information of a rejected establishment without AOCI",
+        ),
+    )];
+    let rejected = CauseValue::NoResourcesAvailable;
+    assert_eq!(found(establishment(rejected, None)), broken);
+    assert_eq!(found(establishment(rejected, aoci(false))), broken);
+    assert_eq!(found(establishment(rejected, aoci(true))), []);
+    assert_eq!(found(establishment(CauseValue::RequestAccepted, None)), []);
+    let modification = Message {
+        header: Header::session(0x1001, 7),
+        body: SessionModificationResponse::new(Cause::new(rejected))
+            .with_overload_control_information(oci(None))
+            .into(),
+    };
+    assert_eq!(found(modification), []);
+}
