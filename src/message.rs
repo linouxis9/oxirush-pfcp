@@ -55,8 +55,16 @@ pfcp_messages! {
     57 SessionReportResponse [SXA SXB SXC N4 N4MB],
 }
 
-/// The name of the message, its SEID and its sequence number: `PFCP Session
-/// Establishment Request (SEID 0, sequence 7)`.
+/// The name of the message, its SEID and its sequence number:
+///
+/// ```
+/// # use oxirush_pfcp::*;
+/// let deletion = Message {
+///     header: Header::session(0x1001, 7),
+///     body: SessionDeletionRequest::default().into(),
+/// };
+/// assert_eq!(deletion.to_string(), "PFCP Session Deletion Request (SEID 0x1001, sequence 7)");
+/// ```
 impl core::fmt::Display for Message {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         match self.body.name() {
