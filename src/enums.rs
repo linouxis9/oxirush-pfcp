@@ -356,3 +356,12 @@ pfcp_enum! {
         1 SendTheCollectedDataToTheConsumer "Send the collected data to the consumer",
     }
 }
+
+impl CauseValue {
+    /// Whether the Cause accepts the request, as its receiver reads it: 1 to 63, of which
+    /// Table 8.2.1-1 has 4 to 63 read as "Request accepted (success)" (NOTE 1). The node
+    /// and check() read an acceptance so.
+    pub(crate) const fn accepts(self) -> bool {
+        matches!(self.effective().value(), 1..=63)
+    }
+}

@@ -425,8 +425,7 @@ impl Node {
 /// Whether a response accepts its request: a Cause of acceptance, as read (Table
 /// 8.2.1-1), and not the reserved 0, an invalid IE.
 pub(super) fn accepts(body: &Body) -> bool {
-    body.cause()
-        .is_some_and(|cause| (1..64).contains(&cause.effective().value()))
+    body.cause().is_some_and(CauseValue::accepts)
 }
 
 /// Whether the response to a deletion says that the UP function's usage reports of the

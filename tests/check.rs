@@ -2395,6 +2395,39 @@ fn the_tags_of_mac_addresses() {
     );
 }
 
+/// Table 8.2.1-1 NOTE 1: a Cause of 4 to 63 is read as "Request accepted (success)", so an
+/// establishment accepted with one needs the UP F-SEID, as the node reads it; NOTE 2: one
+/// of 93 to 255 is a rejection, which carries no Created PDR (§7.2.3.2).
+#[test]
+fn a_spare_cause_is_read_as_its_receiver_reads_it() {
+    let establishment = |cause: u8, pdr: bool| {
+        let mut response =
+            SessionEstablishmentResponse::new(NodeId::Ipv4(SMF), Cause::new(cause.into()));
+        if pdr {
+            response = response.with_created_pdr(CreatedPdr::new(PdrId::new(1)));
+        }
+        Message {
+            header: Header::session(0x1001, 7),
+            body: response.into(),
+        }
+    };
+    let up_f_seid = DeviationKind::ConditionalMissing { ie_type: 57 };
+    let read_as = |value| DeviationKind::ReadAs { value, read: 1 };
+    assert_eq!(
+        kinds(&establishment(1, false), Interfaces::N4),
+        [up_f_seid.clone()]
+    );
+    for cause in [5, 63] {
+        let found = kinds(&establishment(cause, false), Interfaces::N4);
+        assert_eq!(found, [read_as(cause.into()), up_f_seid.clone()]);
+    }
+    let found = kinds(&establishment(95, true), Interfaces::N4);
+    assert!(
+        found.contains(&DeviationKind::WithRejection { ie_type: 8 }),
+        "{found:?}"
+    );
+}
+
 /// §8.2.76: AOCI "shall be set to "1" by the UP function, if the "Overload Control
 /// Information" is included in the PFCP Session Establishment Response and the Cause IE is
 /// set to a rejection cause value": not of an accepted establishment, nor of another

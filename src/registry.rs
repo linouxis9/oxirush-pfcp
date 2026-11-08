@@ -799,7 +799,7 @@ pfcp_table! {
         node_id: "Node ID" M NodeId [SXA SXB SXC N4 N4MB],
         cause: "Cause" M Cause [SXA SXB SXC N4 N4MB],
         offending_ie: "Offending IE" C OffendingIe [SXA SXB SXC N4 N4MB] if |s| cause_is(&s.cause, &OF_AN_IE),
-        up_f_seid: "UP F-SEID" C FSeid [SXA SXB SXC N4 N4MB] if |s| cause_is(&s.cause, &[CauseValue::RequestAccepted]),
+        up_f_seid: "UP F-SEID" C FSeid [SXA SXB SXC N4 N4MB] if |s| s.cause.as_ref().is_some_and(|cause| cause.value.accepts()),
         created_pdr: "Created PDR" C* CreatedPdr [SXA SXB N4 N4MB],
         load_control_information: "Load Control Information" Ob LoadControlInformation [SXA SXB SXC N4 N4MB],
         overload_control_information: "Overload Control Information" Ob OverloadControlInformation [SXA SXB SXC N4 N4MB],
