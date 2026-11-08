@@ -34,6 +34,8 @@ def fresh_copy():
 
 
 def main():
+    # A copy of an earlier run may have files that the crate no longer has.
+    shutil.rmtree(COPY, ignore_errors=True)
     survivors = []
     lines = [line.rstrip('\n').split('\t') for line in open(os.path.join(ROOT, 'tests', 'spec', 'mutations.tsv'), encoding='utf-8')
              if line.strip() and not line.startswith('#')]
