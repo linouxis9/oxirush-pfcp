@@ -10,15 +10,11 @@ fn network_instance() -> NetworkInstance {
     NetworkInstance(b"\x08internet".to_vec().into())
 }
 
-fn network_instance_fp() -> NetworkInstance {
-    NetworkInstance(b"\x08internet".to_vec().into())
-}
-
 fn far(id: u32, core: bool) -> CreateFar {
     // FAR ID, Apply Action (FORW), Forwarding Parameters: Destination Interface, Network
     // Instance and, toward the access, Outer Header Creation (GTP-U/UDP/IPv4)
     let mut forwarding = ForwardingParameters::new(DestinationInterface::new(DestinationInterfaceValue::from_value(u8::from(core))))
-        .with_network_instance(network_instance_fp());
+        .with_network_instance(network_instance());
     if !core {
         let creation = OuterHeaderCreation { gtpu_udp_ipv4: true, teid: Some(1), ipv4: Some(Ipv4Addr::new(10, 0, 0, 2)), ..Default::default() };
         forwarding = forwarding.with_outer_header_creation(creation);
