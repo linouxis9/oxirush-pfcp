@@ -257,14 +257,15 @@ fn on_a_set_of_interfaces_a_conditional_ie_that_one_lacks_is_not_missing() {
     assert_eq!(on(Interfaces::SXA_SXB), None);
 }
 
-/// §7.6.9: an IE of a row that is not on the interface is discarded, and the message
-/// processed: what its value breaks, and a value that does not decode, have no Cause. A
-/// Precedence of three octets on Sxa, which has no Precedence in Create PDR, and on the
-/// combined Sxa/Sxb, which does not need it; on Sxc, a Transport Level Marking of a mask
-/// other than 0xFC and an Outer Header Creation of no description, which Forwarding
-/// Parameters has on Sxa, Sxb and N4 (Table 7.5.2.3-2).
+/// §7.6.9: an IE of a row that is not on the interface is discarded whole, and the
+/// message processed: it is told once, without a Cause, and not for what its value breaks
+/// or for a value that does not decode. A Precedence of three octets on Sxa, which has no
+/// Precedence in Create PDR, and on the combined Sxa/Sxb, which does not need it, where it
+/// is incorrect; on Sxc, a Transport Level Marking of a mask other than 0xFC and an Outer
+/// Header Creation of no description, which Forwarding Parameters has on Sxa, Sxb and N4
+/// (Table 7.5.2.3-2).
 #[test]
-fn an_ie_of_a_row_not_on_the_interface_has_no_cause() {
+fn an_ie_of_a_row_not_on_the_interface_is_told_once() {
     let checked = |forwarding: &[Vec<u8>], precedence: &[u8], interface: Interfaces| {
         let pdr = ie(
             1,
@@ -297,10 +298,7 @@ fn an_ie_of_a_row_not_on_the_interface_has_no_cause() {
     let short = [0, 0, 1];
     assert_eq!(
         checked(&[], &short, Interfaces::SXA),
-        [
-            (DeviationKind::NotOnInterface { ie_type: 29 }, None),
-            (DeviationKind::Incorrect { ie_type: 29 }, None),
-        ]
+        [(DeviationKind::NotOnInterface { ie_type: 29 }, None)]
     );
     assert_eq!(
         checked(&[], &short, Interfaces::SXA_SXB),
@@ -310,21 +308,27 @@ fn an_ie_of_a_row_not_on_the_interface_has_no_cause() {
     let marking = ie(30, &[0x11, 0x11]);
     assert_eq!(
         checked(std::slice::from_ref(&marking), &precedence, Interfaces::SXC),
-        [
-            (DeviationKind::NotOnInterface { ie_type: 30 }, None),
-            (
-                DeviationKind::Rule("a ToS/Traffic Class mask other than 0xFC"),
-                None
-            ),
-        ]
+        [(DeviationKind::NotOnInterface { ie_type: 30 }, None)]
     );
     let found = checked(&[marking], &precedence, Interfaces::N4);
     assert_eq!(found.len(), 1, "{found:?}");
     assert_eq!(found[0].1, Some(CauseValue::MandatoryIeIncorrect));
     let creation = ie(84, &[0, 0]);
-    let found = checked(&[creation], &precedence, Interfaces::SXC);
-    assert_eq!(found.len(), 2, "{found:?}");
-    assert!(found.iter().all(|(_, cause)| cause.is_none()), "{found:?}");
+    let found = checked(std::slice::from_ref(&creation), &precedence, Interfaces::SXC);
+    assert_eq!(
+        found,
+        [(DeviationKind::NotOnInterface { ie_type: 84 }, None)]
+    );
+    // On Sxa, which has the Outer Header Creation and no Precedence
+    let found = checked(&[creation], &precedence, Interfaces::SXA);
+    let rule = DeviationKind::Rule("no bit of the description is set");
+    assert_eq!(
+        found,
+        [
+            (DeviationKind::NotOnInterface { ie_type: 29 }, None),
+            (rule, Some(CauseValue::MandatoryIeIncorrect))
+        ]
+    );
 }
 
 /// §7.6.8: a mandatory IE that does not decode is of the clause of an incorrect IE,
@@ -593,7 +597,10 @@ fn seid_0_only_where_the_peer_seid_is_not_known() {
     );
     let deletion = SessionDeletionResponse::new(Cause::new(CauseValue::from_value(0)));
     let reserved = DeviationKind::ReservedValue { value: 0 };
-    assert_eq!(kinds(&Message::session(0, 8, deletion), Interfaces::N4), [reserved]);
+    assert_eq!(
+        kinds(&Message::session(0, 8, deletion), Interfaces::N4),
+        [reserved]
+    );
 }
 
 /// §7.2.2.4.2 bullet 4, §5.22.2 bullet 4, Table 7.5.8.1-1: a Session Report Request of

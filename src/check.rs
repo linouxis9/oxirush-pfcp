@@ -110,7 +110,8 @@ pub enum DeviationKind {
         /// Its IE type.
         ie_type: u16,
     },
-    /// An IE that its table has, but not on the interface (the Appl. columns).
+    /// An IE that its table has, but not on the interface (the Appl. columns): its
+    /// receiver discards it whole (§7.6.9), and nothing that it holds is told.
     NotOnInterface {
         /// Its IE type.
         ie_type: u16,
@@ -529,7 +530,10 @@ pub(crate) fn check_field_values<
     }
     let table = S::table();
     let row = &table.rows[at];
-    check_row(table.id, row, values.len(), path, context, found);
+    if !check_row(table.id, row, values.len(), path, context, found) {
+        // The receiver discards each IE of the row, whatever it holds (§7.6.9).
+        return;
+    }
     // Of the values alone, their positions; with kept IEs of the row, theirs in the tree.
     let kept = scope.raw().iter().any(|ie| ie.ie_type == row.ie_type);
     let positions = match kept {
@@ -595,7 +599,7 @@ fn mandatory(row: &Row, context: Context) -> usize {
 
 /// Check a row that has `count` values, or IEs kept as octets alone when 0: whether the
 /// interface has it, whether a rejection may carry it, and whether the table allows that
-/// many.
+/// many. Whether the interface has it.
 #[inline]
 pub(crate) fn check_row(
     table: &'static str,
@@ -604,7 +608,7 @@ pub(crate) fn check_row(
     path: &Path<'_>,
     context: Context,
     found: &mut Vec<Deviation>,
-) {
+) -> bool {
     let rejected = context
         .rejected
         .is_some_and(|cause| count.max(1) > with_rejection(table, row, cause));
@@ -615,6 +619,7 @@ pub(crate) fn check_row(
     if rejected || off || over {
         row_deviations(table, row, [rejected, off, over], path, found);
     }
+    !off
 }
 
 #[cold]
@@ -793,6 +798,11 @@ fn raw_deviations<S: Scope>(
         let alone = handled.insert(row.ie_type) && scope.count(row.ie_type) == 0;
         if alone {
             check_row(table.id, row, 0, path, context, found);
+        }
+        // The receiver discards each IE of a row that is not on the interface, which its
+        // row tells (§7.6.9).
+        if row.on(context.interface).is_none() {
+            continue;
         }
         let first = match row.repeat {
             Repeat::Once => alone,

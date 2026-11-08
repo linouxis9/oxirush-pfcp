@@ -101,7 +101,7 @@ const EXPECTED: &[Found] = &[
         None,
     ),
     // Open5GS 157f611a: the SMF as PGW-C sends Create BAR on Sxb, which Table 7.5.2.1-1
-    // has on Sxa and N4 only (src/smf/n4-build.c).
+    // has on Sxa and N4 only (src/smf/n4-build.c): its receiver discards it whole.
     (
         "open5gs-eps-handover",
         "17",
@@ -111,27 +111,11 @@ const EXPECTED: &[Found] = &[
         None,
     ),
     (
-        "open5gs-eps-handover",
-        "17",
-        "/pfcp/Create BAR/BAR ID",
-        "7.5.2.6-1",
-        DeviationKind::NotOnInterface { ie_type: 88 },
-        None,
-    ),
-    (
         "open5gs-eps-lifecycle",
         "17",
         "/pfcp/Create BAR",
         "7.5.2.1-1",
         DeviationKind::NotOnInterface { ie_type: 85 },
-        None,
-    ),
-    (
-        "open5gs-eps-lifecycle",
-        "17",
-        "/pfcp/Create BAR/BAR ID",
-        "7.5.2.6-1",
-        DeviationKind::NotOnInterface { ie_type: 88 },
         None,
     ),
 ];
@@ -241,7 +225,7 @@ fn each_deviation_is_at_a_path_that_select_takes() {
             }
         }
     }
-    assert!(paths > 1000, "{paths}");
+    assert!(paths > 900, "{paths}");
     let escaped = |message: &Message| {
         let found = message.check(Interfaces::N4).into_iter();
         found
