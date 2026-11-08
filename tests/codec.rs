@@ -1062,6 +1062,18 @@ fn a_field_of_either_form_has_one_rule() {
         assert_eq!(&Message::from_tree(written).unwrap().to_tree(), written);
     }
     let ssm = "/pfcp/MBS Session N4 Control Information/0/MBS Session Identifier/Source Specific IP Multicast Address";
+    // An address of 63 octets at most, as its six bits of length say (§8.2.207)
+    for (octets, read) in [(63, true), (64, false)] {
+        let mut long = tree.clone();
+        let address = tree!("ab".repeat(octets));
+        set(
+            &mut long,
+            &format!("{ssm}/IP Source Address/Address"),
+            address,
+        )
+        .unwrap();
+        assert_eq!(Message::from_tree(&long).is_ok(), read, "{octets} octets");
+    }
     for (tree, address, value, kind) in [
         (
             &tree,
