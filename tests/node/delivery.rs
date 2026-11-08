@@ -1415,6 +1415,82 @@ fn a_probe_answer_of_another_sequence_number_changes_nothing() {
     assert!(upf.association(SMF).is_none());
 }
 
+/// §7.6.1-§7.6.3: the peer reads an answer from its octets, and ends its request on one
+/// that it cannot read, of another version, of a false Message Length, or of an IE whose
+/// length runs past the message: such an answer changes neither the peer nor the node,
+/// nor does a later one, which the peer, its request ended, discards. One of a type of no
+/// table the peer discards, and the request waits for the next.
+#[test]
+fn a_probe_answer_that_the_peer_cannot_read_changes_nothing() {
+    let answer = |sequence: u32| {
+        let answer =
+            AssociationSetupResponse::new(node_id(UPF), accepted(), RecoveryTimeStamp::new(2000));
+        Message::node(sequence, answer)
+    };
+    let false_ie = RawIe {
+        ie_type: 3000,
+        enterprise_id: None,
+        length: Some(200),
+        octets: vec![1, 2].into(),
+    };
+    let unread: [&dyn Fn(&mut Message); 3] = [
+        &|message| message.header.version = 2,
+        &|message| message.header.length = Some(3),
+        &|message| {
+            let Body::AssociationSetupResponse(response) = &mut message.body else {
+                panic!()
+            };
+            response.raw.push(false_ie.clone());
+        },
+    ];
+    for (at_case, change) in unread.into_iter().enumerate() {
+        let mut smf = node(SMF, Function::Cp);
+        let mut upf = node(UPF, Function::Up);
+        let setup = AssociationSetupRequest::new(node_id(SMF), RecoveryTimeStamp::new(1000));
+        smf.request(at(0), UPF, Message::node(0, setup)).unwrap();
+        pass(&mut smf, &mut upf, UPF, at(0));
+        let (received, _) = request(&mut upf);
+        let mut first = answer(received.sequence);
+        change(&mut first);
+        upf.respond_message(at(0), &received, first, Delivery::Send)
+            .unwrap();
+        assert!(upf.association(SMF).is_none(), "{at_case}");
+        pass(&mut upf, &mut smf, SMF, at(0));
+        let failed = events(&mut smf)
+            .into_iter()
+            .any(|event| matches!(event, Event::Failed { .. }));
+        assert!(failed && smf.association(UPF).is_none(), "{at_case}");
+        upf.respond_message(at(0), &received, answer(received.sequence), Delivery::Send)
+            .unwrap();
+        assert!(upf.association(SMF).is_none(), "{at_case}");
+        pass(&mut upf, &mut smf, SMF, at(0));
+        assert!(smf.association(UPF).is_none(), "{at_case}");
+    }
+    // A message type of no table is discarded, and the answer after it taken
+    let mut smf = node(SMF, Function::Cp);
+    let mut upf = node(UPF, Function::Up);
+    let setup = AssociationSetupRequest::new(node_id(SMF), RecoveryTimeStamp::new(1000));
+    smf.request(at(0), UPF, Message::node(0, setup)).unwrap();
+    pass(&mut smf, &mut upf, UPF, at(0));
+    let (received, _) = request(&mut upf);
+    let other = Message::node(
+        received.sequence,
+        Body::Other {
+            message_type: 99,
+            octets: vec![].into(),
+        },
+    );
+    upf.respond_message(at(0), &received, other, Delivery::Send)
+        .unwrap();
+    assert!(upf.association(SMF).is_none());
+    pass(&mut upf, &mut smf, SMF, at(0));
+    assert_eq!(violations(&mut smf), [ViolationKind::UnknownMessage]);
+    upf.respond_message(at(0), &received, answer(received.sequence), Delivery::Send)
+        .unwrap();
+    pass(&mut upf, &mut smf, SMF, at(0));
+    assert!(upf.association(SMF).is_some() && smf.association(UPF).is_some());
+}
+
 /// §6.4: a peer's retransmission of a request that the node holds is an event, which a
 /// probe of the peer's retransmissions sees without forgetting the request: one that waits
 /// for the caller's answer, unanswered, and one answered from the cache, the caller's

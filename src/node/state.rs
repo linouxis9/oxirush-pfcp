@@ -517,17 +517,17 @@ impl Answers {
         true
     }
 
-    /// Keep an answer of the request `id` until `expires`, `effective` for one of the type
-    /// of its response: whether it is the first such, which changes the node. A later
-    /// answer replaces the one kept, and one of a request that the node no longer keeps
-    /// is not kept.
+    /// Keep an answer of the request `id` until `expires`, `ends` for one that ends the
+    /// peer's request, read or not: whether it is the first such, which alone may change
+    /// the node. A later answer replaces the one kept, and one of a request that the node
+    /// no longer keeps is not kept.
     pub(crate) fn answer(
         &mut self,
         key: (SocketAddr, u32),
         id: u64,
         response: Vec<u8>,
         expires: Duration,
-        effective: bool,
+        ends: bool,
     ) -> bool {
         if !self.entries.get(&key).is_some_and(|entry| entry.id == id) {
             return false;
@@ -535,8 +535,8 @@ impl Answers {
         let Some(mut entry) = self.remove(&key) else {
             return false;
         };
-        let first = effective && !entry.settled;
-        entry.settled |= effective;
+        let first = ends && !entry.settled;
+        entry.settled |= ends;
         entry.response = Some(response);
         entry.expires = expires;
         self.insert(key, entry);
