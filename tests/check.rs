@@ -765,7 +765,7 @@ fn a_reserved_node_id_type_of_an_fq_csid_is_incorrect() {
     request_with(&mut message, |request| {
         request.fq_csid.push(FqCsid {
             node_id_type: 3,
-            node_address: vec![10, 0, 0, 1],
+            node_address: [10, 0, 0, 1].into(),
             csids: vec![1],
             node_type: None,
             extra: Octets::new(),
@@ -1840,7 +1840,7 @@ fn messages_of_each_interface() {
     let node = NodeId::Ipv4(SMF);
     let fq_csid = |node_id_type_address: [u8; 4], csid: u16| FqCsid {
         node_id_type: 0,
-        node_address: node_id_type_address.to_vec(),
+        node_address: node_id_type_address.into(),
         csids: vec![csid],
         node_type: None,
         extra: Octets::new(),
@@ -1865,7 +1865,7 @@ fn messages_of_each_interface() {
     let pfd = PfdContents {
         fd: true,
         spare_octet: Some(Spare(0)),
-        flow_description: Some(Lv16(b"permit out ip from any to any".to_vec())),
+        flow_description: Some(Lv16(b"permit out ip from any to any".into())),
         ..Default::default()
     };
     let cases: Vec<(Message, Interfaces, Option<Interfaces>)> = vec![

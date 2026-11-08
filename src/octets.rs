@@ -126,3 +126,10 @@ impl<const N: usize> From<[u8; N]> for Octets {
         Self::copied(&octets)
     }
 }
+
+/// Of a byte string: `b"internet".into()`.
+impl<const N: usize> From<&[u8; N]> for Octets {
+    fn from(octets: &[u8; N]) -> Self {
+        Self::copied(octets)
+    }
+}

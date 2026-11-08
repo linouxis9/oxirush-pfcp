@@ -1031,7 +1031,7 @@ fn a_field_of_either_form_has_one_rule() {
     for (imsi, octets) in [
         (Some(DigitsLv8::new("20893").unwrap()), none.clone()),
         (
-            Some(DigitsLv8(vec![0x02, 0xf8, 0x39])),
+            Some(DigitsLv8([0x02, 0xf8, 0x39].into())),
             Ok(vec![tree!({"octets": "02f839"})["octets"].clone()]),
         ),
         (None, none.clone()),
@@ -1576,7 +1576,7 @@ fn the_values_read_by_hand_have_the_places_of_their_figures() {
     let octets = [0x22, 0x0c, 0x80, 0x10, 0x01, 0x00, 0x07, 0x00, 0x09, 0x02];
     let fq_csid = FqCsid::decode(&octets).unwrap();
     assert_eq!(fq_csid.node_id_type, 2);
-    assert_eq!(fq_csid.node_address, [0x0c, 0x80, 0x10, 0x01]);
+    assert_eq!(*fq_csid.node_address, [0x0c, 0x80, 0x10, 0x01]);
     assert_eq!(fq_csid.csids, [7, 9]);
     assert_eq!(
         fq_csid.node_type.map(|node_type| node_type.value),
@@ -1585,7 +1585,7 @@ fn the_values_read_by_hand_have_the_places_of_their_figures() {
     assert_eq!(again(&fq_csid), octets);
     let ipv6 = FqCsid {
         node_id_type: 1,
-        node_address: vec![0; 16],
+        node_address: [0; 16].into(),
         csids: vec![1],
         ..Default::default()
     };
@@ -1595,7 +1595,7 @@ fn the_values_read_by_hand_have_the_places_of_their_figures() {
     let mut out = Vec::new();
     let reserved = FqCsid {
         node_id_type: 3,
-        node_address: vec![10, 0, 0, 1, 2],
+        node_address: [10, 0, 0, 1, 2].into(),
         csids: vec![1],
         ..Default::default()
     };
@@ -1618,7 +1618,7 @@ fn the_values_read_by_hand_have_the_places_of_their_figures() {
     // Fifteen CSIDs at most, which four bits count, and the Node-Address of a known type
     let csids = |count: u16, address: Vec<u8>| FqCsid {
         node_id_type: 0,
-        node_address: address,
+        node_address: address.into(),
         csids: (0..count).collect(),
         ..Default::default()
     };
@@ -1645,11 +1645,11 @@ fn the_values_read_by_hand_have_the_places_of_their_figures() {
         [[0x02, 0, 0, 0, 0, 1], [0x02, 0, 0, 0, 0, 2]]
     );
     assert_eq!(
-        detected.c_tag.as_ref().map(|tag| tag.0.clone()),
+        detected.c_tag.as_ref().map(|tag| tag.0.to_vec()),
         Some(vec![0x07, 0x00, 0x64])
     );
     assert_eq!(
-        detected.s_tag.as_ref().map(|tag| tag.0.clone()),
+        detected.s_tag.as_ref().map(|tag| tag.0.to_vec()),
         Some(vec![0x07, 0x00, 0xc8])
     );
     assert_eq!(again(&detected), octets);
@@ -1959,7 +1959,7 @@ fn a_message_read_back_equals_the_one_decoded() {
     address[2] = 15;
     let fq_csid = FqCsid {
         node_id_type: 1,
-        node_address: address.to_vec(),
+        node_address: address.into(),
         csids: vec![1],
         ..Default::default()
     };
@@ -2049,17 +2049,14 @@ fn keys_are_not_printed() {
         pan: true,
         par: true,
         proxy_authen_type_value: 3,
-        proxy_authen_name_value: Some(Lv8(b"alice".to_vec())),
-        proxy_authen_response_value: Some(SecretLv8(b"secret".to_vec())),
+        proxy_authen_name_value: Some(Lv8(b"alice".into())),
+        proxy_authen_response_value: Some(SecretLv8(b"secret".into())),
         ..Default::default()
     };
     let printed = format!("{authentication:?}");
+    assert!(printed.contains("616c696365"), "{printed}");
     assert!(
-        printed.contains("alice") || printed.contains("97, 108"),
-        "{printed}"
-    );
-    assert!(
-        !printed.contains("115, 101, 99") && !printed.contains("secret"),
+        !printed.contains("736563726574") && !printed.contains("secret"),
         "{printed}"
     );
     let printed = format!("{:?}", RawIe::new(278, b"secret".to_vec()));
@@ -2219,7 +2216,7 @@ fn values_as_their_clauses_have_them() {
     // A length-prefixed field longer than its length can say
     let user = UserId {
         naif: true,
-        nai: Some(TextLv8(vec![b'a'; 300])),
+        nai: Some(TextLv8(vec![b'a'; 300].into())),
         ..Default::default()
     };
     assert!(matches!(

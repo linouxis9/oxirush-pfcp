@@ -456,11 +456,11 @@ pub type Mac = [u8; 6];
 
 /// Octets after a length of one octet.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct Lv8(pub Vec<u8>);
+pub struct Lv8(pub Octets);
 
 /// Octets after a length of two octets.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct Lv16(pub Vec<u8>);
+pub struct Lv16(pub Octets);
 
 macro_rules! length_value {
     ($($ty:ident $length:ty),*) => {$(
@@ -469,7 +469,7 @@ macro_rules! length_value {
                 let length = usize::from(<$length as Field>::read(octets)?);
                 let (value, rest) = octets.split_at_checked(length)?;
                 *octets = rest;
-                Some(Self(value.to_vec()))
+                Some(Self(Octets::copied(value)))
             }
             fn write(&self, out: &mut Vec<u8>) {
                 // encode() refuses a value longer than its length can say.
@@ -501,7 +501,7 @@ macro_rules! length_value {
                 if octets.len() > usize::from(<$length>::MAX) {
                     return Err(reading.mismatch("octets that their length can say", value));
                 }
-                Ok(Self(octets))
+                Ok(Self(octets.into()))
             }
         }
     )*};
@@ -511,12 +511,12 @@ length_value!(Lv8 u8, Lv16 u16);
 /// The octets up to the end of the IE: the last field of a layout whose length its clause
 /// does not give.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct Rest(pub Vec<u8>);
+pub struct Rest(pub Octets);
 
 impl Field for Rest {
     fn read(octets: &mut &[u8]) -> Option<Self> {
         let all = core::mem::take(octets);
-        Some(Self(all.to_vec()))
+        Some(Self(Octets::copied(all)))
     }
     fn write(&self, out: &mut Vec<u8>) {
         out.extend_from_slice(&self.0);
@@ -533,7 +533,7 @@ impl Field for Rest {
         value: &oxirush_utils::tree::Value,
         reading: &mut oxirush_utils::tree::Reading,
     ) -> Result<Self, oxirush_utils::tree::Refused> {
-        reading.octets(value).map(Self)
+        reading.octets(value).map(|octets| Self(octets.into()))
     }
 }
 

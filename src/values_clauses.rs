@@ -576,7 +576,7 @@ pfcp_bits! {
 
 /// Octets of a key or a password, which `Debug` does not print: their length alone.
 #[derive(Clone, Default, PartialEq, Eq)]
-pub struct SecretLv8(pub Vec<u8>);
+pub struct SecretLv8(pub Octets);
 
 impl fmt::Debug for SecretLv8 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -625,13 +625,13 @@ impl Field for SecretLv8 {
 /// 29.274 §8.3, §8.10 and §8.11 write them. Its tree is the digits, or `{"octets": ...}`
 /// for octets that are no TBCD string.
 #[derive(Clone, Default, PartialEq, Eq)]
-pub struct DigitsLv8(pub Vec<u8>);
+pub struct DigitsLv8(pub Octets);
 
 impl DigitsLv8 {
     /// The digits, as `tbcd::encode` gives back their octets.
     pub fn digits(&self) -> Option<alloc::string::String> {
         let text = oxirush_utils::identity::tbcd::decode(&self.0).ok()?;
-        (oxirush_utils::identity::tbcd::encode(&text).ok()? == self.0).then_some(text)
+        (oxirush_utils::identity::tbcd::encode(&text).ok()? == *self.0).then_some(text)
     }
 
     /// The octets of `digits`.
@@ -640,7 +640,7 @@ impl DigitsLv8 {
     ///
     /// A character that TBCD does not have.
     pub fn new(digits: &str) -> Result<Self, oxirush_utils::identity::Error> {
-        oxirush_utils::identity::tbcd::encode(digits).map(Self)
+        oxirush_utils::identity::tbcd::encode(digits).map(|octets| Self(octets.into()))
     }
 }
 
@@ -656,7 +656,7 @@ impl fmt::Debug for DigitsLv8 {
 /// Text after a length of one octet: a NAI, a SUPI, a GPSI or a PEI. Its tree is the
 /// text, or `{"octets": ...}` for octets that are no UTF-8.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct TextLv8(pub Vec<u8>);
+pub struct TextLv8(pub Octets);
 
 impl TextLv8 {
     /// The text.
@@ -667,7 +667,7 @@ impl TextLv8 {
 
 impl From<&str> for TextLv8 {
     fn from(text: &str) -> Self {
-        Self(text.as_bytes().to_vec())
+        Self(Octets::copied(text.as_bytes()))
     }
 }
 
@@ -722,7 +722,7 @@ macro_rules! identity_lv8 {
                 if octets.len() > usize::from(u8::MAX) {
                     return Err(reading.mismatch("at most 255 octets", value));
                 }
-                Ok(Self(octets))
+                Ok(Self(octets.into()))
             }
         }
     )*};
@@ -885,7 +885,7 @@ pub struct FqCsid {
     /// The Node-ID Type, bits 8 to 5 of octet 5.
     pub node_id_type: u8,
     /// The Node-Address: four octets, or sixteen for an IPv6 address.
-    pub node_address: Vec<u8>,
+    pub node_address: Octets,
     /// The PDN Connection Set Identifiers, at most fifteen.
     pub csids: Vec<u16>,
     /// The octet of the Node Type, bits 4 to 1, and four spare bits: absent from a sender
@@ -948,7 +948,7 @@ impl Codec for FqCsid {
         let node_type = Narrow::read(&mut rest);
         Some(Self {
             node_id_type,
-            node_address: address.to_vec(),
+            node_address: Octets::copied(address),
             csids,
             node_type,
             extra: Octets::copied(rest),
@@ -1097,7 +1097,7 @@ impl oxirush_utils::tree::Tree for FqCsid {
         let extra = reading.optional(&read, 4, |value, reading| reading.octets(value))?;
         let fq_csid = Self {
             node_id_type,
-            node_address,
+            node_address: node_address.into(),
             csids,
             node_type,
             extra: extra.map(Octets::from).unwrap_or_default(),
