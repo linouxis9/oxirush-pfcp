@@ -448,8 +448,10 @@ impl Node {
     }
 
     /// Answer a request that does not decode, when its header says that it is one:
-    /// "Invalid length" (§7.6.3, §7.6.7), with the IE when the node knows it. A header
-    /// of the node's own, which copies none of the faults of the request's.
+    /// "Invalid length" (§7.6.3, §7.6.7), with the IE when the node knows it, but a
+    /// Heartbeat Request, which has no Cause. A header of the node's own, which copies none
+    /// of the faults of the request's. One that the peer does not send was discarded first
+    /// (§7.6.5).
     pub(super) fn reject_malformed(
         &mut self,
         from: SocketAddr,
@@ -457,10 +459,6 @@ impl Node {
         message_type: u8,
         offending: Option<u16>,
     ) {
-        // Nor one that the peer does not send, which is discarded (§7.6.5).
-        if !is_request(message_type) || message_type == 1 || !self.peer_sends(message_type) {
-            return;
-        }
         let Some(body) = rejection_body(
             message_type,
             CauseValue::InvalidLength,
@@ -472,7 +470,7 @@ impl Node {
         let header = match is_node_related(message_type) {
             true => Header::node(header.sequence),
             false => Header {
-                priority: header.priority.map(|priority| priority & 0x0f),
+                priority: header.priority,
                 ..Header::session(0, header.sequence)
             },
         };

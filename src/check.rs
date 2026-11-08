@@ -677,7 +677,7 @@ pub(crate) fn check_scope<S: Scope + Checked>(
     let table = S::table();
     for row in table.rows {
         let needed = mandatory(row, context);
-        if needed > 0 && scope.count(row.ie_type) < needed {
+        if scope.count(row.ie_type) < needed {
             mandatory_missing(scope, row, needed, path, context, found);
         }
     }
