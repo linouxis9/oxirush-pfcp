@@ -309,7 +309,11 @@ fn an_ie_of_a_row_not_on_the_interface_is_told_once() {
     assert_eq!(found.len(), 1, "{found:?}");
     assert_eq!(found[0].1, Some(CauseValue::MandatoryIeIncorrect));
     let creation = ie(84, &[0, 0]);
-    let found = checked(std::slice::from_ref(&creation), &precedence, Interfaces::SXC);
+    let found = checked(
+        std::slice::from_ref(&creation),
+        &precedence,
+        Interfaces::SXC,
+    );
     assert_eq!(
         found,
         [(DeviationKind::NotOnInterface { ie_type: 84 }, None)]

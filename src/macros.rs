@@ -882,7 +882,7 @@ macro_rules! pfcp_table {
         @table [$($by:ident)*]
         $(#[$meta:meta])*
         $kind:ident $ty:ident = $code:literal, $name:literal, $id:literal {
-            $( $field:ident : $row:literal $p:ident $(* $($max:literal)?)? $vty:ident $($raw:literal)?
+            $( $field:ident : $row:literal $p:ident $(* $($max:literal)?)? $vty:ident
                 [$($interface:ident)*] $(roles [$($role:literal $rp:ident $(* $($rmax:literal)?)? [$($ri:ident)*]),*])?
                 $(absent(|$ascope:ident| $absent:expr))? $(if |$scope:ident| $condition:expr)? , )*
         }
@@ -892,7 +892,7 @@ macro_rules! pfcp_table {
         pub struct $ty {
             $(
                 #[doc = concat!("The ", $row, " IE.")]
-                pub $field: pfcp_table!(@field [$(* $($max)?)?] $p (pfcp_table!(@type $vty $($raw)?))),
+                pub $field: pfcp_table!(@field [$(* $($max)?)?] $p ($vty)),
             )*
             /// The IEs that the scope keeps as octets, in the order of the wire.
             pub raw: alloc::vec::Vec<crate::ie::RawIe>,
@@ -914,7 +914,7 @@ macro_rules! pfcp_table {
             rows: &[$(
                 crate::table::Row {
                     name: $row,
-                    ie_type: <pfcp_table!(@type $vty $($raw)?) as crate::ie::IeType>::IE_TYPE,
+                    ie_type: <$vty as crate::ie::IeType>::IE_TYPE,
                     presence: pfcp_table!(@presence $p),
                     repeat: pfcp_table!(@repeat $(* $($max)?)?),
                     interfaces: crate::table::Interfaces(0 $(| crate::table::Interfaces::$interface.0)*),
@@ -937,14 +937,14 @@ macro_rules! pfcp_table {
 
             $(
                 #[doc = concat!("Builder: add the ", $row, " IE.")]
-                pub fn [<with_ $field>](mut self, value: pfcp_table!(@type $vty $($raw)?)) -> Self {
-                    crate::table::FieldValues::<pfcp_table!(@type $vty $($raw)?)>::add(&mut self.$field, value);
+                pub fn [<with_ $field>](mut self, value: $vty) -> Self {
+                    crate::table::FieldValues::<$vty>::add(&mut self.$field, value);
                     self
                 }
             )*
         }
 
-        pfcp_table!(@ctors [$($by)*] $ty { $( $field : $row $p $(* $($max)?)? $vty $($raw)? [$($interface)*] , )* });
+        pfcp_table!(@ctors [$($by)*] $ty { $( $field : $row $p $(* $($max)?)? $vty [$($interface)*] , )* });
 
         // A table without rows leaves its arguments unused.
         #[allow(unused_variables, unused_mut, unused_assignments)]
@@ -957,7 +957,7 @@ macro_rules! pfcp_table {
             fn position(ie_type: u16) -> Option<usize> {
                 let mut at = 0;
                 $(
-                    if ie_type == <pfcp_table!(@type $vty $($raw)?) as crate::ie::IeType>::IE_TYPE {
+                    if ie_type == <$vty as crate::ie::IeType>::IE_TYPE {
                         return Some(at);
                     }
                     at += 1;
@@ -965,7 +965,7 @@ macro_rules! pfcp_table {
                 None
             }
 
-            const PRESIZE: bool = false $( || pfcp_table!(@large [$(* $($max)?)?] (pfcp_table!(@type $vty $($raw)?))) )*;
+            const PRESIZE: bool = false $( || pfcp_table!(@large [$(* $($max)?)?] ($vty)) )*;
 
             // Only the IEs that can be values are counted: not one of a null length, nor
             // one whose IEs run past it, which the scope keeps as octets.
@@ -974,8 +974,8 @@ macro_rules! pfcp_table {
                 $( let mut [<count_ $field>] = 0usize; )*
                 for ie in crate::framing::ies(octets).flatten() {
                     $(
-                        if pfcp_table!(@large [$(* $($max)?)?] (pfcp_table!(@type $vty $($raw)?)))
-                            && ie.ie_type == <pfcp_table!(@type $vty $($raw)?) as crate::ie::IeType>::IE_TYPE
+                        if pfcp_table!(@large [$(* $($max)?)?] ($vty))
+                            && ie.ie_type == <$vty as crate::ie::IeType>::IE_TYPE
                         {
                             let content = ie.content();
                             if !content.is_empty() && crate::framing::ies(content).all(|inner| inner.is_ok()) {
@@ -990,8 +990,8 @@ macro_rules! pfcp_table {
 
             fn place(&mut self, ie_type: u16, body: &[u8]) -> crate::ie::Placing {
                 $(
-                    if ie_type == <pfcp_table!(@type $vty $($raw)?) as crate::ie::IeType>::IE_TYPE {
-                        return pfcp_table!(@place [$(* $($max)?)?] $p (pfcp_table!(@type $vty $($raw)?)) self.$field, body);
+                    if ie_type == <$vty as crate::ie::IeType>::IE_TYPE {
+                        return pfcp_table!(@place [$(* $($max)?)?] $p ($vty) self.$field, body);
                     }
                 )*
                 crate::ie::Placing::Unexpected
@@ -999,8 +999,8 @@ macro_rules! pfcp_table {
 
             fn emit(&self, ie_type: u16, nth: usize, out: &mut alloc::vec::Vec<u8>) -> Result<bool, crate::Error> {
                 $(
-                    if ie_type == <pfcp_table!(@type $vty $($raw)?) as crate::ie::IeType>::IE_TYPE {
-                        return crate::table::emit_field::<pfcp_table!(@type $vty $($raw)?), _>(&self.$field, nth, out);
+                    if ie_type == <$vty as crate::ie::IeType>::IE_TYPE {
+                        return crate::table::emit_field::<$vty, _>(&self.$field, nth, out);
                     }
                 )*
                 Ok(false)
@@ -1008,7 +1008,7 @@ macro_rules! pfcp_table {
 
             fn encoded_len(&self) -> usize {
                 let mut length = 0;
-                $( pfcp_table!(@each [$(* $($max)?)?] (pfcp_table!(@type $vty $($raw)?)) self.$field, |value| {
+                $( pfcp_table!(@each [$(* $($max)?)?] ($vty) self.$field, |value| {
                     length += 4 + crate::ie::Codec::encoded_len(value);
                 }); )*
                 for ie in &self.raw {
@@ -1018,7 +1018,7 @@ macro_rules! pfcp_table {
             }
 
             fn encode_fields(&self, out: &mut alloc::vec::Vec<u8>) -> Result<(), crate::Error> {
-                $( pfcp_table!(@each [$(* $($max)?)?] (pfcp_table!(@type $vty $($raw)?)) self.$field, |value| {
+                $( pfcp_table!(@each [$(* $($max)?)?] ($vty) self.$field, |value| {
                     crate::ie::encode_value(value, out)?;
                 }); )*
                 Ok(())
@@ -1028,14 +1028,14 @@ macro_rules! pfcp_table {
             fn held(&self) -> usize {
                 let mut held = self.raw.capacity() * core::mem::size_of::<crate::ie::RawIe>()
                     + self.order.capacity() * core::mem::size_of::<crate::ie::Placed>();
-                $( held += pfcp_table!(@held [$(* $($max)?)?] $p (pfcp_table!(@type $vty $($raw)?)) self.$field); )*
+                $( held += pfcp_table!(@held [$(* $($max)?)?] $p ($vty) self.$field); )*
                 held
             }
 
             fn count(&self, ie_type: u16) -> usize {
                 $(
-                    if ie_type == <pfcp_table!(@type $vty $($raw)?) as crate::ie::IeType>::IE_TYPE {
-                        return crate::table::FieldValues::<pfcp_table!(@type $vty $($raw)?)>::values(&self.$field).len();
+                    if ie_type == <$vty as crate::ie::IeType>::IE_TYPE {
+                        return crate::table::FieldValues::<$vty>::values(&self.$field).len();
                     }
                 )*
                 0
@@ -1043,8 +1043,8 @@ macro_rules! pfcp_table {
 
             fn decodes(&self, ie_type: u16, octets: &[u8]) -> bool {
                 $(
-                    if ie_type == <pfcp_table!(@type $vty $($raw)?) as crate::ie::IeType>::IE_TYPE {
-                        return <pfcp_table!(@type $vty $($raw)?) as crate::ie::Codec>::decode(octets).is_some();
+                    if ie_type == <$vty as crate::ie::IeType>::IE_TYPE {
+                        return <$vty as crate::ie::Codec>::decode(octets).is_some();
                     }
                 )*
                 false
@@ -1062,7 +1062,7 @@ macro_rules! pfcp_table {
             fn check_values(&self, path: &crate::check::Path, context: crate::check::Context, found: &mut alloc::vec::Vec<crate::check::Deviation>) {
                 let mut row = 0;
                 $(
-                    crate::check::check_field_values::<pfcp_table!(@type $vty $($raw)?), _, _>(
+                    crate::check::check_field_values::<$vty, _, _>(
                         self, row, &self.$field, path, context, found,
                     );
                     $({
@@ -1090,8 +1090,8 @@ macro_rules! pfcp_table {
         impl crate::paths::TreeScope for $ty {
             fn field_tree(&self, ie_type: u16, nth: usize) -> Option<oxirush_utils::tree::Value> {
                 $(
-                    if ie_type == <pfcp_table!(@type $vty $($raw)?) as crate::ie::IeType>::IE_TYPE {
-                        return crate::paths::field_tree::<pfcp_table!(@type $vty $($raw)?), _>(&self.$field, nth);
+                    if ie_type == <$vty as crate::ie::IeType>::IE_TYPE {
+                        return crate::paths::field_tree::<$vty, _>(&self.$field, nth);
                     }
                 )*
                 None
@@ -1104,8 +1104,8 @@ macro_rules! pfcp_table {
                 reading: &mut oxirush_utils::tree::Reading,
             ) -> Result<(), oxirush_utils::tree::Refused> {
                 $(
-                    if ie_type == <pfcp_table!(@type $vty $($raw)?) as crate::ie::IeType>::IE_TYPE {
-                        return crate::paths::read_field::<pfcp_table!(@type $vty $($raw)?), _>(&mut self.$field, value, reading);
+                    if ie_type == <$vty as crate::ie::IeType>::IE_TYPE {
+                        return crate::paths::read_field::<$vty, _>(&mut self.$field, value, reading);
                     }
                 )*
                 Ok(())
@@ -1115,8 +1115,6 @@ macro_rules! pfcp_table {
 
     // ── The parts of a row ──────────────────────────────────────────────────
 
-    (@type raw $raw:literal) => { crate::values::Raw<$raw> };
-    (@type $vty:ident) => { $vty };
     // A row that is there once is a field of its value, in place, but a grouped IE of `Cb`
     // or `Ob`, large and rare, which is boxed.
     (@field [] Cb ($t:ty)) => { Option<alloc::boxed::Box<$t>> };
@@ -1298,10 +1296,10 @@ macro_rules! pfcp_table {
             }
         }
     };
-    (@new $name:ident $on:tt $ty:ident $doc:literal [$($arg:tt)*] [$($set:tt)*] $field:ident : $row:literal M $(* $($max:literal)?)? $vty:ident $($raw:literal)? [$($i:ident)*] , $($rest:tt)*) => {
-        pfcp_table!(@in $on [$($i)*] $name $ty $doc [$($arg)*] [$($set)*] ($field [$(* $($max)?)?] (pfcp_table!(@type $vty $($raw)?))) $($rest)*);
+    (@new $name:ident $on:tt $ty:ident $doc:literal [$($arg:tt)*] [$($set:tt)*] $field:ident : $row:literal M $(* $($max:literal)?)? $vty:ident [$($i:ident)*] , $($rest:tt)*) => {
+        pfcp_table!(@in $on [$($i)*] $name $ty $doc [$($arg)*] [$($set)*] ($field [$(* $($max)?)?] ($vty)) $($rest)*);
     };
-    (@new $name:ident $on:tt $ty:ident $doc:literal [$($arg:tt)*] [$($set:tt)*] $field:ident : $row:literal $p:ident $(* $($max:literal)?)? $vty:ident $($raw:literal)? [$($i:ident)*] , $($rest:tt)*) => {
+    (@new $name:ident $on:tt $ty:ident $doc:literal [$($arg:tt)*] [$($set:tt)*] $field:ident : $row:literal $p:ident $(* $($max:literal)?)? $vty:ident [$($i:ident)*] , $($rest:tt)*) => {
         pfcp_table!(@new $name $on $ty $doc [$($arg)*] [$($set)*] $($rest)*);
     };
     // A mandatory row is an argument where its interfaces have `$on`.

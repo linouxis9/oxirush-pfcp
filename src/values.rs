@@ -25,7 +25,7 @@ use core::net::{Ipv4Addr, Ipv6Addr};
 use crate::Error;
 use crate::check::{Deviation, DeviationKind, Rules};
 use crate::enums::*;
-use crate::ie::{Codec, IeType, listed_value};
+use crate::ie::{Codec, listed_value};
 use crate::macros::{pfcp_bits, pfcp_layout};
 use crate::octets::Octets;
 
@@ -1018,44 +1018,6 @@ macro_rules! address_field {
 }
 address_field!(Ipv4Addr, 4; Ipv6Addr, 16);
 
-/// The octets of an IE type that the crate does not read yet, of the IE type `N`.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct Raw<const N: u16>(pub Octets);
-
-impl<const N: u16> IeType for Raw<N> {
-    const IE_TYPE: u16 = N;
-    const TYPE_NAME: &'static str = "IE";
-}
-
-impl<const N: u16> Codec for Raw<N> {
-    fn decode(octets: &[u8]) -> Option<Self> {
-        Some(Self(Octets::copied(octets)))
-    }
-    fn encode(&self, out: &mut Vec<u8>) -> Result<(), Error> {
-        out.extend_from_slice(&self.0);
-        Ok(())
-    }
-    fn encoded_len(&self) -> usize {
-        self.0.len()
-    }
-}
-
-impl<const N: u16> Rules for Raw<N> {}
-
-#[cfg(feature = "tree")]
-impl<const N: u16> oxirush_utils::tree::Tree for Raw<N> {
-    const NAME: &'static str = "IE";
-    fn to_tree(&self) -> oxirush_utils::tree::Value {
-        oxirush_utils::tree::octets(&self.0)
-    }
-    fn from_tree(
-        value: &oxirush_utils::tree::Value,
-        reading: &mut oxirush_utils::tree::Reading,
-    ) -> Result<Self, oxirush_utils::tree::Refused> {
-        reading.octets(value).map(|octets| Self(octets.into()))
-    }
-}
-
 /// A value that is one number, then the octets that a later release adds, and the rules
 /// of its clause that follow it.
 macro_rules! pfcp_number {
@@ -1943,14 +1905,6 @@ listed_value!(
     PagingPolicyIndicator,
     InterfaceType3gpp,
 );
-
-impl<const N: u16> crate::ie::Listed for Raw<N> {
-    #[inline]
-    fn decode_push(list: &mut Vec<Self>, octets: &[u8]) -> bool {
-        list.push(Self(Octets::copied(octets)));
-        true
-    }
-}
 
 /// A value that is octets that its clause does not split, of the lengths that it gives, if
 /// it gives some.
