@@ -137,6 +137,7 @@ jobs:
           - { target: node, seeds: fuzz/seeds/node }
           - { target: paths }
           - { target: edit }
+          - { target: differential, seeds: fuzz/seeds/messages, features: differential }
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@nightly
@@ -164,9 +165,10 @@ jobs:
         env:
           TARGET: ${{ matrix.target }}
           FUZZ_SECONDS: ${{ needs.plan.outputs.seconds }}
+          FEATURES: ${{ matrix.features }}
         run: |
           mkdir -p "fuzz/corpus/$TARGET"
-          cargo fuzz run "$TARGET" "fuzz/corpus/$TARGET" -- \
+          cargo fuzz run ${FEATURES:+--features "$FEATURES"} "$TARGET" "fuzz/corpus/$TARGET" -- \
             -max_total_time="$FUZZ_SECONDS" -timeout=30 2>&1 |
             tee "$RUNNER_TEMP/fuzz.log"
       # On Sunday: the inputs that reach nothing that the others do not are
@@ -175,9 +177,10 @@ jobs:
         if: needs.plan.outputs.weekly == 'true'
         env:
           TARGET: ${{ matrix.target }}
+          FEATURES: ${{ matrix.features }}
         run: |
           before=$(find "fuzz/corpus/$TARGET" -type f | wc -l)
-          cargo fuzz cmin "$TARGET" "fuzz/corpus/$TARGET"
+          cargo fuzz cmin ${FEATURES:+--features "$FEATURES"} "$TARGET" "fuzz/corpus/$TARGET"
           after=$(find "fuzz/corpus/$TARGET" -type f | wc -l)
           echo "The corpus of $TARGET: $before inputs, $after once minimized." >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/cache/save@v4
@@ -192,8 +195,9 @@ jobs:
         if: needs.plan.outputs.weekly == 'true'
         env:
           TARGET: ${{ matrix.target }}
+          FEATURES: ${{ matrix.features }}
         run: |
-          cargo fuzz coverage "$TARGET" "fuzz/corpus/$TARGET" --target-dir fuzz/target-coverage
+          cargo fuzz coverage ${FEATURES:+--features "$FEATURES"} "$TARGET" "fuzz/corpus/$TARGET" --target-dir fuzz/target-coverage
           llvm_cov=$(find "$(rustc --print sysroot)" -name llvm-cov -type f | head -n 1)
           binary="fuzz/target-coverage/x86_64-unknown-linux-gnu/release/$TARGET"
           profile="fuzz/coverage/$TARGET/coverage.profdata"

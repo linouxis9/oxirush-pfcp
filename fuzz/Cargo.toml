@@ -18,6 +18,15 @@ path = ".."
 features = ["tree", "node"]
 
 # Not part of any parent workspace.
+# A codec of PFCP written apart from this crate (Apache-2.0), which only the differential
+# target builds: `cargo fuzz run differential --features differential`.
+[dependencies.rs-pfcp]
+version = "=0.5.0"
+optional = true
+
+[features]
+differential = ["dep:rs-pfcp"]
+
 [workspace]
 members = ["."]
 
@@ -52,6 +61,14 @@ bench = false
 [[bin]]
 name = "edit"
 path = "fuzz_targets/edit.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "differential"
+path = "fuzz_targets/differential.rs"
+required-features = ["differential"]
 test = false
 doc = false
 bench = false
