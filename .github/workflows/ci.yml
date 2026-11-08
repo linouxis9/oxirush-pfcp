@@ -168,3 +168,22 @@ jobs:
         with:
           name: fuzz-artifacts
           path: fuzz/artifacts
+
+  # The targets beside those of the codec and the node, in a job of their own: the paths
+  # of a message and the edits of its tree, a minute each.
+  fuzz-more:
+    name: Fuzz the trees (2 minutes)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+      - run: cargo install cargo-fuzz@0.13.2 --locked
+      - run: |
+          for target in paths edit; do
+            cargo fuzz run "$target" -- -max_total_time=60
+          done
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: fuzz-more-artifacts
+          path: fuzz/artifacts

@@ -128,12 +128,15 @@ jobs:
       fail-fast: false
       max-parallel: 3
       # The targets that read octets start from the captured messages, the node from
-      # each of them delivered to the SMF and the UPF.
+      # each of them delivered to the SMF and the UPF; those that build their input with
+      # `arbitrary` from the messages of tests/captures themselves.
       matrix:
         include:
           - { target: decode, seeds: fuzz/seeds/messages }
           - { target: tree, seeds: fuzz/seeds/messages }
           - { target: node, seeds: fuzz/seeds/node }
+          - { target: paths }
+          - { target: edit }
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@nightly

@@ -10,7 +10,8 @@ edition = "2024"
 cargo-fuzz = true
 
 [dependencies]
-libfuzzer-sys = "0.4"
+libfuzzer-sys = { version = "0.4", features = ["arbitrary-derive"] }
+serde_json = "1"
 
 [dependencies.oxirush-pfcp]
 path = ".."
@@ -37,6 +38,20 @@ bench = false
 [[bin]]
 name = "node"
 path = "fuzz_targets/node.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "paths"
+path = "fuzz_targets/paths.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "edit"
+path = "fuzz_targets/edit.rs"
 test = false
 doc = false
 bench = false
