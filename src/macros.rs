@@ -850,7 +850,8 @@ macro_rules! pfcp_messages {
 ///
 /// A row is `field: "Name" P TYPE [INTERFACES]`, where `P` is `M`, `C` or `O`, followed by
 /// `*` for a list or `*N` for a list of at most N, and `TYPE` the type of its value, or
-/// `raw N` for an IE type that the crate keeps as octets. A field that several rows
+/// `raw N` for an IE type that the crate keeps as octets. `Cb` and `Ob` are `C` and `O` of
+/// a grouped IE that the field boxes, as it is large and most scopes lack it. A field that several rows
 /// share, which the wire does not tell apart, lists them after `roles`, each with its
 /// presence and its interfaces. A row whose condition the scope alone shows ends with
 /// `absent(|scope| condition)`, where `check()` reports it there, and `if |scope|
@@ -1024,6 +1025,7 @@ macro_rules! pfcp_table {
                 Ok(())
             }
 
+            #[cfg(feature = "endpoint")]
             fn held(&self) -> usize {
                 let mut held = self.raw.capacity() * core::mem::size_of::<crate::ie::RawIe>()
                     + self.order.capacity() * core::mem::size_of::<crate::ie::Placed>();
@@ -1120,19 +1122,17 @@ macro_rules! pfcp_table {
     (@type_static $vty:ident) => { $vty };
     (@type_any raw $raw:literal) => { crate::values::Raw<$raw> };
     (@type_any $vty:ident) => { $vty };
-    // A row that is there once is a field of its value, mandatory ones in place, and the
-    // others as the slot of their type: a grouped IE, large and rare, is boxed.
-    (@field [] M ($t:ty)) => { Option<$t> };
-    (@field [] Ci ($t:ty)) => { Option<$t> };
-    (@field [] Oi ($t:ty)) => { Option<$t> };
-    (@field [] $p:ident ($t:ty)) => { <$t as crate::ie::Listed>::Slot };
+    // A row that is there once is a field of its value, in place, but a grouped IE of `Cb`
+    // or `Ob`, large and rare, which is boxed.
+    (@field [] Cb ($t:ty)) => { Option<alloc::boxed::Box<$t>> };
+    (@field [] Ob ($t:ty)) => { Option<alloc::boxed::Box<$t>> };
+    (@field [] $p:ident ($t:ty)) => { Option<$t> };
     (@field [* $($max:literal)?] $p:ident ($t:ty)) => { alloc::vec::Vec<$t> };
     (@presence M) => { crate::table::Presence::Mandatory };
     (@presence C) => { crate::table::Presence::Conditional };
     (@presence O) => { crate::table::Presence::Optional };
-    // A conditional or optional grouped IE that most messages have stays in place.
-    (@presence Ci) => { crate::table::Presence::Conditional };
-    (@presence Oi) => { crate::table::Presence::Optional };
+    (@presence Cb) => { crate::table::Presence::Conditional };
+    (@presence Ob) => { crate::table::Presence::Optional };
     (@repeat) => { crate::table::Repeat::Once };
     (@repeat *) => { crate::table::Repeat::Any };
     (@repeat * $max:literal) => { crate::table::Repeat::AtMost($max) };
@@ -1148,19 +1148,21 @@ macro_rules! pfcp_table {
     (@place [] $p:ident ($t:ty) $f:expr, $body:expr) => {
         pfcp_table!(@place_once $p ($t) $f, $body)
     };
-    (@place_once Ci ($t:ty) $f:expr, $body:expr) => { pfcp_table!(@place_once M ($t) $f, $body) };
-    (@place_once Oi ($t:ty) $f:expr, $body:expr) => { pfcp_table!(@place_once M ($t) $f, $body) };
-    (@place_once M ($t:ty) $f:expr, $body:expr) => {
-        match $f.is_some() {
-            true => crate::ie::Placing::Repeated,
-            false if crate::ie::Codec::decode_into(&mut $f, $body) => crate::ie::Placing::Placed,
-            false => crate::ie::Placing::Malformed,
-        }
+    (@place_once Cb ($t:ty) $f:expr, $body:expr) => {
+        pfcp_table!(@placing $f, crate::table::decode_boxed(&mut $f, $body))
+    };
+    (@place_once Ob ($t:ty) $f:expr, $body:expr) => {
+        pfcp_table!(@placing $f, crate::table::decode_boxed(&mut $f, $body))
     };
     (@place_once $p:ident ($t:ty) $f:expr, $body:expr) => {
+        pfcp_table!(@placing $f, crate::ie::Codec::decode_into(&mut $f, $body))
+    };
+    // A row there once that has its value repeats it; one that has none takes it when it
+    // decodes.
+    (@placing $f:expr, $decoded:expr) => {
         match $f.is_some() {
             true => crate::ie::Placing::Repeated,
-            false if <$t as crate::ie::Listed>::decode_slot(&mut $f, $body) => crate::ie::Placing::Placed,
+            false if $decoded => crate::ie::Placing::Placed,
             false => crate::ie::Placing::Malformed,
         }
     };
@@ -1182,10 +1184,12 @@ macro_rules! pfcp_table {
     (@held [* $($max:literal)?] $p:ident ($t:ty) $f:expr) => {
         $f.capacity() * core::mem::size_of::<$t>() + $f.iter().map(crate::ie::Listed::held).sum::<usize>()
     };
-    (@held [] M ($t:ty) $f:expr) => { $f.as_ref().map_or(0, crate::ie::Listed::held) };
-    (@held [] Ci ($t:ty) $f:expr) => { $f.as_ref().map_or(0, crate::ie::Listed::held) };
-    (@held [] Oi ($t:ty) $f:expr) => { $f.as_ref().map_or(0, crate::ie::Listed::held) };
-    (@held [] $p:ident ($t:ty) $f:expr) => { <$t as crate::ie::Listed>::slot_held(&$f) };
+    (@held [] Cb ($t:ty) $f:expr) => { pfcp_table!(@held_box ($t) $f) };
+    (@held [] Ob ($t:ty) $f:expr) => { pfcp_table!(@held_box ($t) $f) };
+    (@held [] $p:ident ($t:ty) $f:expr) => { $f.as_ref().map_or(0, crate::ie::Listed::held) };
+    (@held_box ($t:ty) $f:expr) => {
+        $f.as_ref().map_or(0, |value| core::mem::size_of::<$t>() + crate::table::Scope::held(&**value))
+    };
     (@full [] $f:expr) => { false };
     (@full [$max:literal] $f:expr) => { $f.len() >= $max };
 
@@ -1217,17 +1221,6 @@ macro_rules! pfcp_table {
         }
 
         impl crate::ie::Listed for $ty {
-            type Slot = Option<alloc::boxed::Box<Self>>;
-
-            fn decode_slot(slot: &mut Self::Slot, octets: &[u8]) -> bool {
-                let scope = slot.insert(alloc::boxed::Box::default());
-                if crate::table::decode_scope_into(&mut **scope, octets).is_err() {
-                    *slot = None;
-                    return false;
-                }
-                true
-            }
-
             fn decode_push(list: &mut alloc::vec::Vec<Self>, octets: &[u8]) -> bool {
                 list.push(Self::default());
                 let last = list.len() - 1;
@@ -1238,12 +1231,13 @@ macro_rules! pfcp_table {
                 true
             }
 
+            #[cfg(feature = "endpoint")]
             fn held(&self) -> usize {
                 crate::table::Scope::held(self)
             }
 
-            fn slot_held(slot: &Self::Slot) -> usize {
-                slot.as_ref().map_or(0, |value| core::mem::size_of::<Self>() + value.held())
+            fn check_in(&self, path: &crate::check::Path, context: crate::check::Context, found: &mut alloc::vec::Vec<crate::check::Deviation>) {
+                crate::check::check_scope(self, path, context, found);
             }
         }
 
@@ -1253,10 +1247,6 @@ macro_rules! pfcp_table {
             fn check(&self, path: &crate::check::Path, found: &mut alloc::vec::Vec<crate::check::Deviation>) {
                 let interfaces = <Self as crate::table::Scope>::table().interfaces();
                 crate::check::check_scope(self, path, crate::check::Context::on(interfaces), found);
-            }
-
-            fn check_in(&self, path: &crate::check::Path, context: crate::check::Context, found: &mut alloc::vec::Vec<crate::check::Deviation>) {
-                crate::check::check_scope(self, path, context, found);
             }
         }
 

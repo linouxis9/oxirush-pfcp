@@ -64,11 +64,10 @@ mod values_figures;
 use alloc::string::{String, ToString};
 use core::fmt;
 
-pub use check::Context;
 pub use check::{Check, Deviation, DeviationKind, Path};
 pub use enums::*;
 pub use header::Header;
-pub use ie::{Codec, IeFault, IeType, Listed, Placed, RawIe, VENDOR};
+pub use ie::{Codec, IeFault, IeType, Placed, RawIe, VENDOR};
 pub use message::{
     Body, MESSAGE_TYPES, Message, MessageTypeInfo, is_node_related, is_request, message_type_info,
 };

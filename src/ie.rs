@@ -62,31 +62,30 @@ pub trait Codec: Sized {
     fn encoded_len(&self) -> usize;
 }
 
-/// How a row of a type is held: a list is a vector, and a row that is there once an
-/// `Option` of a value, or of a box for a grouped IE, which is large.
-#[doc(hidden)]
-pub trait Listed: Codec {
+/// The value of a row of a table, as the scope holds and checks it: what a grouped IE
+/// does as such, and a value that is not one by default.
+pub(crate) trait Listed: Codec + crate::check::Check {
     /// Decode at the end of the field of a row that is a list.
     fn decode_push(list: &mut Vec<Self>, octets: &[u8]) -> bool;
-
-    /// The field of a row that is conditional or optional and there once: an `Option` of
-    /// a value, or of a box for a grouped IE.
-    type Slot: Default + Clone + PartialEq + core::fmt::Debug;
-
-    /// Decode into a slot that is empty.
-    fn decode_slot(slot: &mut Self::Slot, octets: &[u8]) -> bool;
 
     /// The octets that a value takes beyond its own size: those of the boxes, the lists
     /// and the kept IEs of a grouped IE, which a few octets of the wire make, and not the
     /// octets of its values, which are those of the wire.
+    #[cfg(feature = "endpoint")]
     fn held(&self) -> usize {
         0
     }
 
-    /// The same of a slot, with its box.
-    fn slot_held(slot: &Self::Slot) -> usize {
-        let _ = slot;
-        0
+    /// The check of a value in its scope, of the context of its row: a grouped IE checks
+    /// its table there.
+    fn check_in(
+        &self,
+        path: &crate::check::Path<'_>,
+        context: crate::check::Context,
+        found: &mut Vec<crate::check::Deviation>,
+    ) {
+        let _ = context;
+        self.check(path, found);
     }
 }
 
@@ -94,11 +93,6 @@ pub trait Listed: Codec {
 macro_rules! listed_value {
     ($($ty:ident),* $(,)?) => {$(
         impl crate::ie::Listed for $ty {
-            type Slot = Option<Self>;
-            #[inline]
-            fn decode_slot(slot: &mut Self::Slot, octets: &[u8]) -> bool {
-                <Self as crate::ie::Codec>::decode_into(slot, octets)
-            }
             #[inline]
             fn decode_push(list: &mut alloc::vec::Vec<Self>, octets: &[u8]) -> bool {
                 match <Self as crate::ie::Codec>::decode(octets) {
@@ -196,9 +190,12 @@ impl RawIe {
     }
 }
 
-/// Where an IE of a decoded scope went: what the order of a scope keeps, from the first
-/// IE that is not where the table has it.
-#[doc(hidden)]
+/// An entry of the `order` of a scope, the order of the wire, which a decoded message keeps
+/// when its IEs are not in the order of their tables, so that it encodes back byte for
+/// byte: the next value of a field, or the next IE of the scope's `raw`. A scope without
+/// an order is encoded in the order of its table, each IE of its `raw` after the values of
+/// its row and those of no row last; a value added to a scope of an order goes in the
+/// place of its row.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Placed {
     /// The next value of the field of this IE type.

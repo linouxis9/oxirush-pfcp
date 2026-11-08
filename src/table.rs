@@ -314,6 +314,7 @@ pub(crate) trait Scope: Default {
     fn encode_fields(&self, out: &mut Vec<u8>) -> Result<(), Error>;
     /// The octets that the scope takes beyond its own size: its lists and boxes, and the
     /// IEs that it keeps as octets ([`Listed::held`](crate::ie::Listed::held)).
+    #[cfg(feature = "endpoint")]
     fn held(&self) -> usize;
     /// How many values the field of `ie_type` has.
     fn count(&self, ie_type: u16) -> usize;
@@ -327,6 +328,20 @@ pub(crate) trait Scope: Default {
     fn order(&self) -> &[Placed];
     /// The same, to change.
     fn order_mut(&mut self) -> &mut Vec<Placed>;
+}
+
+/// Decode a grouped IE in a box that `slot`, which is empty, takes: `false`, and the slot
+/// left empty, for octets that are not one.
+pub(crate) fn decode_boxed<S: Scope>(
+    slot: &mut Option<alloc::boxed::Box<S>>,
+    octets: &[u8],
+) -> bool {
+    let scope = slot.insert(alloc::boxed::Box::default());
+    if decode_scope_into(&mut **scope, octets).is_err() {
+        *slot = None;
+        return false;
+    }
+    true
 }
 
 /// The scope of `octets`.

@@ -311,21 +311,13 @@ pub trait Check {
     fn check(&self, path: &Path<'_>, found: &mut Vec<Deviation>) {
         let _ = (path, found);
     }
-
-    /// The check of a value in its scope: a grouped IE checks its table there.
-    #[doc(hidden)]
-    fn check_in(&self, path: &Path<'_>, context: Context, found: &mut Vec<Deviation>) {
-        let _ = context;
-        self.check(path, found);
-    }
 }
 
 /// Where a check is: the interface, and how the receiver takes the mandatory IEs of the
 /// scope (§7.2.3.2: those of a conditional grouped IE as conditional, those of an
 /// optional one as optional).
-#[doc(hidden)]
 #[derive(Debug, Clone, Copy)]
-pub struct Context {
+pub(crate) struct Context {
     pub(crate) interface: Interfaces,
     pub(crate) view: Presence,
     /// In a request that the receiver answers with a Cause: not a Heartbeat Request.
@@ -422,7 +414,7 @@ impl fmt::Display for Path<'_> {
 }
 
 /// Check a value of a row of a scope: itself, and its length against Table 8.1.2-1.
-pub(crate) fn check_field<T: Check + crate::ie::Codec + crate::ie::IeType>(
+pub(crate) fn check_field<T: crate::ie::Listed + crate::ie::IeType>(
     value: &T,
     path: &Path<'_>,
     presence: Presence,
@@ -483,7 +475,7 @@ fn value_deviations(
 /// position in the tree, which the IEs of the row that the scope keeps as octets share.
 #[inline(always)]
 pub(crate) fn check_field_values<
-    T: Check + crate::ie::Codec + crate::ie::IeType,
+    T: crate::ie::Listed + crate::ie::IeType,
     F: crate::table::FieldValues<T>,
     S: Scope,
 >(

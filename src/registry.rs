@@ -605,7 +605,7 @@ pfcp_table! {
         cp_function_features: "CP Function Features" C CpFunctionFeatures [SXA SXB SXC N4 N4MB],
         alternative_smf_ip_address: "Alternative SMF IP Address" O* AlternativeSmfIpAddress [N4 N4MB],
         smf_set_id: "SMF Set ID" C SmfSetId [N4 N4MB] if |s| of_mpas(&s.cp_function_features),
-        pfcp_session_retention_information: "PFCP Session Retention Information" O PfcpSessionRetentionInformation [SXA SXB SXC N4 N4MB],
+        pfcp_session_retention_information: "PFCP Session Retention Information" Ob PfcpSessionRetentionInformation [SXA SXB SXC N4 N4MB],
         ue_ip_address_pool_information: "UE IP address Pool Information" O* UeIpAddressPoolInformation [SXB N4],
         gtp_u_path_qos_control_information: "GTP-U Path QoS Control Information" C* GtpUPathQoSControlInformation [N4],
         clock_drift_control_information: "Clock Drift Control Information" O* ClockDriftControlInformation [N4],
@@ -697,11 +697,11 @@ pfcp_table! {
         node_id: "Node ID" M NodeId [SXA SXB SXC N4 N4MB],
         node_report_type: "Node Report Type" M NodeReportType [SXA SXB SXC N4 N4MB],
         vendor_specific_node_report_type: "Vendor-Specific Node Report Type" C VendorSpecificNodeReportType [SXA SXB SXC N4 N4MB] if |s| s.node_report_type.as_ref().is_some_and(|t| t.vsr),
-        user_plane_path_failure_report: "User Plane Path Failure Report" C UserPlanePathFailureReport [SXA SXB N4 N4MB] if |s| s.node_report_type.as_ref().is_some_and(|t| t.upfr),
-        user_plane_path_recovery_report: "User Plane Path Recovery Report" C UserPlanePathRecoveryReport [SXA SXB N4 N4MB] if |s| s.node_report_type.as_ref().is_some_and(|t| t.uprr),
+        user_plane_path_failure_report: "User Plane Path Failure Report" Cb UserPlanePathFailureReport [SXA SXB N4 N4MB] if |s| s.node_report_type.as_ref().is_some_and(|t| t.upfr),
+        user_plane_path_recovery_report: "User Plane Path Recovery Report" Cb UserPlanePathRecoveryReport [SXA SXB N4 N4MB] if |s| s.node_report_type.as_ref().is_some_and(|t| t.uprr),
         clock_drift_report: "Clock Drift Report" C* ClockDriftReport [N4] if |s| s.node_report_type.as_ref().is_some_and(|t| t.ckdr),
         gtp_u_path_qos_report: "GTP-U Path QoS Report" C* GtpuPathQosReport [N4] if |s| s.node_report_type.as_ref().is_some_and(|t| t.gpqr),
-        peer_up_restart_report: "Peer UP Restart Report" C PeerUpRestartReport [SXA SXB N4] if |s| s.node_report_type.as_ref().is_some_and(|t| t.purr),
+        peer_up_restart_report: "Peer UP Restart Report" Cb PeerUpRestartReport [SXA SXB N4] if |s| s.node_report_type.as_ref().is_some_and(|t| t.purr),
         n6_delay_measurement_report: "N6 Delay Measurement Report" C* N6DelayMeasurementReport [N4] if |s| s.node_report_type.as_ref().is_some_and(|t| t.n6dr),
     }
 }
@@ -760,7 +760,7 @@ pfcp_table! {
         create_far: "Create FAR" M* CreateFar [SXA SXB SXC N4 N4MB],
         create_urr: "Create URR" C* CreateUrr [SXA SXB SXC N4 N4MB],
         create_qer: "Create QER" C* CreateQer [SXB SXC N4 N4MB],
-        create_bar: "Create BAR" O CreateBar [SXA N4],
+        create_bar: "Create BAR" Ob CreateBar [SXA N4],
         create_traffic_endpoint: "Create Traffic Endpoint" C* CreateTrafficEndpoint [SXA SXB SXC N4 N4MB],
         pdn_type: "PDN Type" C PdnType [SXA SXB N4],
         fq_csid: "FQ-CSID" C*5 FqCsid [SXA SXB N4]
@@ -773,14 +773,14 @@ pfcp_table! {
         pfcpsereq_flags: "PFCPSEReq-Flags" C PFCPSEReqFlags [SXA SXB N4],
         create_bridge_router_info: "Create Bridge/Router Info" C CreateBridgeRouterInfo [N4],
         create_srr: "Create SRR" O* CreateSrr [N4],
-        provide_atsss_control_information: "Provide ATSSS Control Information" C ProvideAtsssControlInformation [N4],
+        provide_atsss_control_information: "Provide ATSSS Control Information" Cb ProvideAtsssControlInformation [N4],
         recovery_time_stamp: "Recovery Time Stamp" O RecoveryTimeStamp [SXA SXB SXC N4],
         s_nssai: "S-NSSAI" O SNssai [N4 N4MB],
         hplmn_s_nssai: "HPLMN S-NSSAI" C HplmnSNssai [N4],
-        provide_rds_configuration_information: "Provide RDS configuration information" O ProvideRdsConfigurationInformation [SXB N4],
+        provide_rds_configuration_information: "Provide RDS configuration information" Ob ProvideRdsConfigurationInformation [SXB N4],
         rat_type: "RAT Type" O RatType [SXA SXB N4],
         l2tp_tunnel_information: "L2TP Tunnel Information" C* L2tpTunnelInformation [SXB N4],
-        l2tp_session_information: "L2TP Session Information" C L2tpSessionInformation [SXB N4],
+        l2tp_session_information: "L2TP Session Information" Cb L2tpSessionInformation [SXB N4],
         group_id: "Group Id" O GroupId [SXB N4],
         mbs_session_n4mb_control_information: "MBS Session N4mb Control Information" M MbsSessionN4mbControlInformation [N4MB],
         mbs_session_n4_control_information: "MBS Session N4 Control Information" C* MbsSessionN4ControlInformation [N4],
@@ -801,20 +801,20 @@ pfcp_table! {
         offending_ie: "Offending IE" C OffendingIe [SXA SXB SXC N4 N4MB] if |s| cause_is(&s.cause, &OF_AN_IE),
         up_f_seid: "UP F-SEID" C FSeid [SXA SXB SXC N4 N4MB] if |s| cause_is(&s.cause, &[CauseValue::RequestAccepted]),
         created_pdr: "Created PDR" C* CreatedPdr [SXA SXB N4 N4MB],
-        load_control_information: "Load Control Information" O LoadControlInformation [SXA SXB SXC N4 N4MB],
-        overload_control_information: "Overload Control Information" O OverloadControlInformation [SXA SXB SXC N4 N4MB],
+        load_control_information: "Load Control Information" Ob LoadControlInformation [SXA SXB SXC N4 N4MB],
+        overload_control_information: "Overload Control Information" Ob OverloadControlInformation [SXA SXB SXC N4 N4MB],
         pgw_u_sgw_u_upf_fq_csid: "PGW-U/SGW-U /UPF FQ-CSID" C FqCsid [SXA SXB N4],
         failed_rule_id: "Failed Rule ID" C FailedRuleId [SXA SXB SXC N4 N4MB] if |s| cause_is(&s.cause, &[CauseValue::RuleCreationModificationFailure]),
         created_traffic_endpoint: "Created Traffic Endpoint" C* CreatedTrafficEndpoint [SXA SXB N4 N4MB],
-        created_bridge_router_info: "Created Bridge/Router Info" C CreatedBridgeRouterInfo [N4],
-        atsss_control_parameters: "ATSSS Control Parameters" C AtsssControlParameters [N4],
+        created_bridge_router_info: "Created Bridge/Router Info" Cb CreatedBridgeRouterInfo [N4],
+        atsss_control_parameters: "ATSSS Control Parameters" Cb AtsssControlParameters [N4],
         rds_configuration_information: "RDS configuration information" O RdsConfigurationInformation [SXB N4],
         partial_failure_information: "Partial Failure Information" C* PartialFailureInformation [SXB SXC N4 N4MB] if |s| cause_is(&s.cause, &[CauseValue::RequestPartiallyAccepted]),
-        created_l2tp_session: "Created L2TP Session" O CreatedL2tpSession [SXB N4],
-        mbs_session_n4mb_information: "MBS Session N4mb Information" C MbsSessionN4mbInformation [N4MB],
+        created_l2tp_session: "Created L2TP Session" Ob CreatedL2tpSession [SXB N4],
+        mbs_session_n4mb_information: "MBS Session N4mb Information" Cb MbsSessionN4mbInformation [N4MB],
         mbs_session_n4_information: "MBS Session N4 Information" C* MbsSessionN4Information [N4],
         tl_container: "TL-Container" C TlContainer [N4],
-        moq_information: "MoQ Information" C MoQInformation [N4],
+        moq_information: "MoQ Information" Cb MoQInformation [N4],
     }
 }
 
@@ -826,19 +826,19 @@ pfcp_table! {
         remove_far: "Remove FAR" C* RemoveFar [SXA SXB SXC N4 N4MB],
         remove_urr: "Remove URR" C* RemoveUrr [SXA SXB SXC N4 N4MB],
         remove_qer: "Remove QER" C* RemoveQer [SXB SXC N4 N4MB],
-        remove_bar: "Remove BAR" C RemoveBar [SXA N4],
+        remove_bar: "Remove BAR" Cb RemoveBar [SXA N4],
         remove_traffic_endpoint: "Remove Traffic Endpoint" C* RemoveTrafficEndpoint [SXA SXB SXC N4 N4MB],
         create_pdr: "Create PDR" C* CreatePdr [SXA SXB SXC N4 N4MB],
         create_far: "Create FAR" C* CreateFar [SXA SXB SXC N4 N4MB],
         create_urr: "Create URR" C* CreateUrr [SXA SXB SXC N4 N4MB],
         create_qer: "Create QER" C* CreateQer [SXB SXC N4 N4MB],
-        create_bar: "Create BAR" C CreateBar [SXA N4],
+        create_bar: "Create BAR" Cb CreateBar [SXA N4],
         create_traffic_endpoint: "Create Traffic Endpoint" C* CreateTrafficEndpoint [SXA SXB SXC N4 N4MB],
         update_pdr: "Update PDR" C* UpdatePdr [SXA SXB SXC N4 N4MB],
         update_far: "Update FAR" C* UpdateFar [SXA SXB SXC N4 N4MB],
         update_urr: "Update URR" C* UpdateUrr [SXA SXB SXC N4 N4MB],
         update_qer: "Update QER" C* UpdateQer [SXB SXC N4 N4MB],
-        update_bar: "Update BAR" C UpdateBar [SXA N4],
+        update_bar: "Update BAR" Cb UpdateBar [SXA N4],
         update_traffic_endpoint: "Update Traffic Endpoint" C* UpdateTrafficEndpoint [SXA SXB SXC N4 N4MB],
         pfcpsmreq_flags: "PFCPSMReq-Flags" C PFCPSMReqFlags [SXA SXB SXC N4 N4MB],
         // NOTE 3: "The QAURR (Query All URRs) flag in the PFCPSMReq-Flags IE and the Query
@@ -857,8 +857,8 @@ pfcp_table! {
         remove_srr: "Remove SRR" C* RemoveSrr [N4],
         create_srr: "Create SRR" C* CreateSrr [N4],
         update_srr: "Update SRR" C* UpdateSrr [N4],
-        provide_atsss_control_information: "Provide ATSSS Control Information" C ProvideAtsssControlInformation [N4],
-        ethernet_context_information: "Ethernet Context Information" C EthernetContextInformation [N4],
+        provide_atsss_control_information: "Provide ATSSS Control Information" Cb ProvideAtsssControlInformation [N4],
+        ethernet_context_information: "Ethernet Context Information" Cb EthernetContextInformation [N4],
         access_availability_information: "Access Availability Information" O*2 AccessAvailabilityInformation [N4],
         query_packet_rate_status: "Query Packet Rate Status" C* QueryPacketRateStatus [SXB N4],
         s_nssai: "S-NSSAI" O SNssai [N4 N4MB],
@@ -866,7 +866,7 @@ pfcp_table! {
         dnn: "DNN" C ApnDnn [N4],
         group_id: "Group Id" C GroupId [SXB N4],
         mbs_session_n4_control_information: "MBS Session N4 Control Information" C* MbsSessionN4ControlInformation [N4],
-        dscp_to_ppi_control_information: "DSCP to PPI Control Information" C DscpToPpiControlInformation [N4],
+        dscp_to_ppi_control_information: "DSCP to PPI Control Information" Cb DscpToPpiControlInformation [N4],
         tl_container: "TL-Container" C* TlContainer [N4],
         trace_collection_entity_uri: "Trace Collection Entity URI" O Uri [SXA SXB SXC N4],
         ue_level_measurements_configuration: "UE Level Measurements Configuration" O UeLevelMeasurementsConfiguration [N4],
@@ -881,20 +881,20 @@ pfcp_table! {
         cause: "Cause" M Cause [SXA SXB SXC N4 N4MB],
         offending_ie: "Offending IE" C OffendingIe [SXA SXB SXC N4 N4MB] if |s| cause_is(&s.cause, &OF_AN_IE),
         created_pdr: "Created PDR" C* CreatedPdr [SXA SXB N4 N4MB],
-        load_control_information: "Load Control Information" O LoadControlInformation [SXA SXB SXC N4 N4MB],
-        overload_control_information: "Overload Control Information" O OverloadControlInformation [SXA SXB SXC N4 N4MB],
+        load_control_information: "Load Control Information" Ob LoadControlInformation [SXA SXB SXC N4 N4MB],
+        overload_control_information: "Overload Control Information" Ob OverloadControlInformation [SXA SXB SXC N4 N4MB],
         usage_report: "Usage Report" C* UsageReportModification [SXA SXB SXC N4 N4MB],
         failed_rule_id: "Failed Rule ID" C FailedRuleId [SXA SXB SXC N4 N4MB] if |s| cause_is(&s.cause, &[CauseValue::RuleCreationModificationFailure]),
         additional_usage_reports_information: "Additional Usage Reports Information" C AdditionalUsageReportsInformation [SXA SXB SXC N4 N4MB],
         created_updated_traffic_endpoint: "Created/Updated Traffic Endpoint" C* CreatedTrafficEndpoint [SXA SXB N4 N4MB],
         tsc_management_information: "TSC Management Information" C* TscManagementInformationResponse [N4],
-        atsss_control_parameters: "ATSSS Control Parameters" C AtsssControlParameters [N4],
+        atsss_control_parameters: "ATSSS Control Parameters" Cb AtsssControlParameters [N4],
         updated_pdr: "Updated PDR" C* UpdatedPdr [SXB N4],
         packet_rate_status_report: "Packet Rate Status Report" C* PacketRateStatusReportModification [SXB N4],
         partial_failure_information: "Partial Failure Information" C* PartialFailureInformation [SXB SXC N4 N4MB] if |s| cause_is(&s.cause, &[CauseValue::RequestPartiallyAccepted]),
         mbs_session_n4_information: "MBS Session N4 Information" C* MbsSessionN4Information [N4],
         tl_container: "TL-Container" C* TlContainer [N4],
-        moq_information: "MoQ Information" C MoQInformation [N4],
+        moq_information: "MoQ Information" Cb MoQInformation [N4],
     }
 }
 
@@ -912,11 +912,11 @@ pfcp_table! {
     message SessionDeletionResponse = 55, "PFCP Session Deletion Response", "7.5.7.1-1" {
         cause: "Cause" M Cause [SXA SXB SXC N4 N4MB],
         offending_ie: "Offending IE" C OffendingIe [SXA SXB SXC N4 N4MB] if |s| cause_is(&s.cause, &OF_AN_IE),
-        load_control_information: "Load Control Information" O LoadControlInformation [SXA SXB SXC N4 N4MB],
-        overload_control_information: "Overload Control Information" O OverloadControlInformation [SXA SXB SXC N4 N4MB],
+        load_control_information: "Load Control Information" Ob LoadControlInformation [SXA SXB SXC N4 N4MB],
+        overload_control_information: "Overload Control Information" Ob OverloadControlInformation [SXA SXB SXC N4 N4MB],
         usage_report: "Usage Report" C* UsageReportDeletion [SXA SXB SXC N4 N4MB],
         additional_usage_reports_information: "Additional Usage Reports Information" C AdditionalUsageReportsInformation [SXA SXB SXC N4 N4MB],
-        packet_rate_status_report: "Packet Rate Status Report" C PacketRateStatusReport [SXB N4],
+        packet_rate_status_report: "Packet Rate Status Report" Cb PacketRateStatusReport [SXB N4],
         mbs_session_n4_information: "MBS Session N4 Information" C* MbsSessionN4Information [N4],
         pfcpsdrsp_flags: "PFCPSDRsp-Flags" C PFCPSDRspFlags [SXA SXB SXC N4],
         tl_container: "TL-Container" C* TlContainer [N4],
@@ -928,16 +928,16 @@ pfcp_table! {
     /// PFCP Session Report Request (Table 7.5.8.1-1).
     message SessionReportRequest = 56, "PFCP Session Report Request", "7.5.8.1-1" {
         report_type: "Report Type" M ReportType [SXA SXB SXC N4 N4MB],
-        downlink_data_report: "Downlink Data Report" C DownlinkDataReport [SXA N4 N4MB] if |s| s.report_type.as_ref().is_some_and(|t| t.dldr),
+        downlink_data_report: "Downlink Data Report" Cb DownlinkDataReport [SXA N4 N4MB] if |s| s.report_type.as_ref().is_some_and(|t| t.dldr),
         usage_report: "Usage Report" C* UsageReport [SXA SXB SXC N4 N4MB] if |s| s.report_type.as_ref().is_some_and(|t| t.usar),
-        error_indication_report: "Error Indication Report" C ErrorIndicationReport [SXA SXB N4 N4MB] if |s| s.report_type.as_ref().is_some_and(|t| t.erir),
-        load_control_information: "Load Control Information" O LoadControlInformation [SXA SXB SXC N4 N4MB],
-        overload_control_information: "Overload Control Information" O OverloadControlInformation [SXA SXB SXC N4 N4MB],
+        error_indication_report: "Error Indication Report" Cb ErrorIndicationReport [SXA SXB N4 N4MB] if |s| s.report_type.as_ref().is_some_and(|t| t.erir),
+        load_control_information: "Load Control Information" Ob LoadControlInformation [SXA SXB SXC N4 N4MB],
+        overload_control_information: "Overload Control Information" Ob OverloadControlInformation [SXA SXB SXC N4 N4MB],
         additional_usage_reports_information: "Additional Usage Reports Information" C AdditionalUsageReportsInformation [SXA SXB SXC N4 N4MB],
         pfcpsrreq_flags: "PFCPSRReq-Flags" C PFCPSRReqFlags [SXA SXB SXC N4 N4MB],
         old_cp_f_seid: "Old CP F-SEID" C FSeid [N4 N4MB],
         smf_change_reason: "SMF Change Reason" O SmfChangeReason [N4 N4MB],
-        packet_rate_status_report: "Packet Rate Status Report" C PacketRateStatusReport [SXB N4],
+        packet_rate_status_report: "Packet Rate Status Report" Cb PacketRateStatusReport [SXB N4],
         tsc_management_information: "TSC Management Information" C* TscManagementInformationReport [N4] if |s| s.report_type.as_ref().is_some_and(|t| t.tmir),
         session_report: "Session Report" C* SessionReport [N4] if |s| s.report_type.as_ref().is_some_and(|t| t.sesr),
         cause: "Cause" O Cause [SXB N4],
@@ -949,7 +949,7 @@ pfcp_table! {
     message SessionReportResponse = 57, "PFCP Session Report Response", "7.5.9.1-1" {
         cause: "Cause" M Cause [SXA SXB SXC N4 N4MB],
         offending_ie: "Offending IE" C OffendingIe [SXA SXB SXC N4 N4MB] if |s| cause_is(&s.cause, &OF_AN_IE),
-        update_bar: "Update BAR" C UpdateBarReport [SXA N4],
+        update_bar: "Update BAR" Cb UpdateBarReport [SXA N4],
         pfcpsrrsp_flags: "PFCPSRRsp-Flags" C PFCPSRRspFlags [SXA N4],
         cp_f_seid: "CP F-SEID" O FSeid [N4 N4MB],
         n4_u_f_teid: "N4-u F-TEID" O FTeid [N4],
@@ -1036,7 +1036,7 @@ pfcp_table! {
         measurement_endpoint_address: "Measurement Endpoint Address" M* MeasurementEndpointAddress [N4],
         network_instance: "Network Instance" M NetworkInstance [N4],
         measurement_protocols: "Measurement Protocols" M* N6DelayMeasurementProtocols [N4],
-        protocol_specific_configuration_parameters: "Protocol Specific Configuration Parameters" O ProtocolSpecificConfigurationParameters [N4],
+        protocol_specific_configuration_parameters: "Protocol Specific Configuration Parameters" Ob ProtocolSpecificConfigurationParameters [N4],
         measurement_reporting_type: "Measurement Reporting Type" M MeasurementReportingType [N4],
         measurement_period: "Measurement Period" C MeasurementPeriod [N4] if |s| s.measurement_reporting_type.as_ref().is_some_and(|t| t.per),
         average_packet_delay_threshold: "Average Packet Delay Threshold" O AveragePacketDelay [N4],
@@ -1220,7 +1220,7 @@ pfcp_table! {
         ip_multicast_addressing_info: "IP Multicast Addressing Info" O* IpMulticastAddressingInfo [N4],
         ue_ip_address_pool_identity: "UE IP address Pool Identity" O*2 UeIpAddressPoolIdentity [SXB N4],
         multipath_applicable_indication: "Multipath Applicable Indication" C MultipathApplicableIndication [N4],
-        transport_delay_reporting: "Transport Delay Reporting" C TransportDelayReporting [N4],
+        transport_delay_reporting: "Transport Delay Reporting" Cb TransportDelayReporting [N4],
         rat_type: "RAT Type" O RatType [N4],
     }
 }
@@ -1236,7 +1236,7 @@ pfcp_table! {
         local_f_teid: "Local F-TEID" O FTeid [SXA SXB N4] absent(|s| !s.traffic_endpoint_id.is_empty()),
         local_ingress_tunnel: "Local Ingress Tunnel" C LocalIngressTunnel [N4MB] absent(|s| !s.traffic_endpoint_id.is_empty()),
         network_instance: "Network Instance" O NetworkInstance [SXA SXB SXC N4 N4MB] absent(|s| !s.traffic_endpoint_id.is_empty()) if |s| s.traffic_endpoint_id.is_empty() && s.ue_ip_address.iter().any(|ue| ue.chv4 || ue.chv6),
-        redundant_transmission_detection_parameters: "Redundant Transmission Detection Parameters" O RedundantTransmissionParameters [N4],
+        redundant_transmission_detection_parameters: "Redundant Transmission Detection Parameters" Ob RedundantTransmissionParameters [N4],
         ue_ip_address: "UE IP address" O* UeIpAddress [SXB SXC N4] absent(|s| !s.traffic_endpoint_id.is_empty()),
         mapped_n6_ip_address: "Mapped N6 IP Address" O MappedN6IpAddress [N4],
         n6_routing_information: "N6 Routing Information" O N6RoutingInformation [N4],
@@ -1257,7 +1257,7 @@ pfcp_table! {
             roles ["DNS Query Filter" O [N4], "DNS Response Filter" O [N4]],
         mbs_session_identifier: "MBS Session Identifier" C MbsSessionIdentifier [N4],
         area_session_id: "Area Session ID" C AreaSessionId [N4],
-        protocol_description: "Protocol Description" O ProtocolDescription [N4],
+        protocol_description: "Protocol Description" Ob ProtocolDescription [N4],
         expedited_transfer_indication: "Expedited Transfer Indication" O ExpeditedTransferIndication [N4],
     }
 }
@@ -1332,13 +1332,13 @@ pfcp_table! {
     group CreateFar = 3, "Create FAR", "7.5.2.3-1" {
         far_id: "FAR ID" M FarId [SXA SXB SXC N4 N4MB],
         apply_action: "Apply Action" M ApplyAction [SXA SXB SXC N4 N4MB],
-        forwarding_parameters: "Forwarding Parameters" Ci ForwardingParameters [SXA SXB SXC N4] if |s| s.apply_action.as_ref().is_some_and(|a| a.forw),
+        forwarding_parameters: "Forwarding Parameters" C ForwardingParameters [SXA SXB SXC N4] if |s| s.apply_action.as_ref().is_some_and(|a| a.forw),
         duplicating_parameters: "Duplicating Parameters" C* DuplicatingParameters [SXA SXB] if |s| s.apply_action.as_ref().is_some_and(|a| a.dupl),
         bar_id: "BAR ID" O BarId [SXA N4],
         // V19.6.0 marks no interface for this row; its row in Update FAR (Table
         // 7.5.4.3-1) and clause 5.24 have it on N4.
-        redundant_transmission_forwarding_parameters: "Redundant Transmission Forwarding Parameters" C RedundantTransmissionForwardingParameters [N4] if |s| s.apply_action.as_ref().is_some_and(|a| a.dfrt) && s.forwarding_parameters.is_some(),
-        mbs_multicast_parameters: "MBS Multicast Parameters" C MbsMulticastParameters [N4MB] if |s| s.apply_action.as_ref().is_some_and(|a| a.fssm),
+        redundant_transmission_forwarding_parameters: "Redundant Transmission Forwarding Parameters" Cb RedundantTransmissionForwardingParameters [N4] if |s| s.apply_action.as_ref().is_some_and(|a| a.dfrt) && s.forwarding_parameters.is_some(),
+        mbs_multicast_parameters: "MBS Multicast Parameters" Cb MbsMulticastParameters [N4MB] if |s| s.apply_action.as_ref().is_some_and(|a| a.fssm),
         add_mbs_unicast_parameters: "Add MBS Unicast Parameters" C* AddMbsUnicastParameters [N4MB] if |s| s.apply_action.as_ref().is_some_and(|a| a.mbsu),
     }
 }
@@ -1554,7 +1554,7 @@ pfcp_table! {
         traffic_endpoint_id: "Traffic Endpoint ID" M TrafficEndpointId [SXA SXB SXC N4 N4MB],
         local_f_teid: "Local F-TEID" O FTeid [SXA SXB N4],
         network_instance: "Network Instance" O NetworkInstance [SXA SXB SXC N4 N4MB],
-        redundant_transmission_detection_parameters: "Redundant Transmission Detection Parameters" O RedundantTransmissionParameters [N4],
+        redundant_transmission_detection_parameters: "Redundant Transmission Detection Parameters" Ob RedundantTransmissionParameters [N4],
         ue_ip_address: "UE IP address" O* UeIpAddress [SXB SXC N4],
         mapped_n6_ip_address: "Mapped N6 IP Address" O MappedN6IpAddress [N4],
         n6_routing_information: "N6 Routing Information" O N6RoutingInformation [N4],
@@ -1565,7 +1565,7 @@ pfcp_table! {
         qfi: "QFI" O* Qfi [N4],
         source_interface_type: "Source Interface Type" C InterfaceType3gpp [SXA SXB N4 N4MB],
         local_ingress_tunnel: "Local Ingress Tunnel" C LocalIngressTunnel [N4MB],
-        ip_multicast_addressing_info: "IP Multicast Addressing Info" C IpMulticastAddressingInfo [N4MB],
+        ip_multicast_addressing_info: "IP Multicast Addressing Info" Cb IpMulticastAddressingInfo [N4MB],
         mbs_session_identifier: "MBS Session Identifier" C MbsSessionIdentifier [N4],
         area_session_id: "Area Session ID" C AreaSessionId [N4],
         rat_type: "RAT Type" O RatType [N4],
@@ -1578,8 +1578,8 @@ pfcp_table! {
         mar_id: "MAR ID" M MarId [N4],
         steering_functionality: "Steering Functionality" M SteeringFunctionality [N4],
         steering_mode: "Steering Mode" M SteeringMode [N4],
-        n3gpp_access_forwarding_action_information: "3GPP Access Forwarding Action Information" C ThreeGppAccessForwardingActionInformation [N4],
-        non_3gpp_access_forwarding_action_information: "Non-3GPP Access Forwarding Action Information" C NonThreeGppAccessForwardingActionInformation [N4],
+        n3gpp_access_forwarding_action_information: "3GPP Access Forwarding Action Information" Cb ThreeGppAccessForwardingActionInformation [N4],
+        non_3gpp_access_forwarding_action_information: "Non-3GPP Access Forwarding Action Information" Cb NonThreeGppAccessForwardingActionInformation [N4],
         // NOTE 2: "The Threshold Values IE and the Steering Mode Indicator IE shall not be
         // present together", one deviation, at the second.
         threshold_values: "Threshold Values" C Thresholds [N4],
@@ -1615,9 +1615,9 @@ pfcp_table! {
     /// Create SRR IE within PFCP Session Establishment Request (Table 7.5.2.9-1).
     group CreateSrr = 212, "Create SRR", "7.5.2.9-1" {
         srr_id: "SRR ID" M SrrId [N4],
-        access_availability_control_information: "Access Availability Control Information" C AccessAvailabilityControlInformation [N4],
+        access_availability_control_information: "Access Availability Control Information" Cb AccessAvailabilityControlInformation [N4],
         qos_monitoring_per_qos_flow_control_information: "QoS Monitoring per QoS flow Control Information" C* QoSMonitoringPerQoSFlowControlInformation [N4],
-        direct_reporting_information: "Direct Reporting Information" C DirectReportingInformation [N4],
+        direct_reporting_information: "Direct Reporting Information" Cb DirectReportingInformation [N4],
         traffic_parameter_measurement_control_information: "Traffic Parameter Measurement Control Information" C* TrafficParameterMeasurementControlInformation [N4],
         reporting_control_information: "Reporting Control Information" C ReportingControlInformation [N4],
     }
@@ -1783,10 +1783,10 @@ pfcp_table! {
 pfcp_table! {
     /// ATSSS Control Parameters IE within PFCP Session Establishment Response (Table 7.5.3.7-1).
     group AtsssControlParameters = 221, "ATSSS Control Parameters", "7.5.3.7-1" {
-        mptcp_parameters: "MPTCP Parameters" C MptcpParameters [N4],
-        atsss_ll_parameters: "ATSSS-LL Parameters" C AtsssLlParameters [N4],
+        mptcp_parameters: "MPTCP Parameters" Cb MptcpParameters [N4],
+        atsss_ll_parameters: "ATSSS-LL Parameters" Cb AtsssLlParameters [N4],
         pmf_parameters: "PMF Parameters" C* PmfParameters [N4],
-        mpquic_parameters: "MPQUIC Parameters" C MpquicParameters [N4],
+        mpquic_parameters: "MPQUIC Parameters" Cb MpquicParameters [N4],
     }
 }
 
@@ -1827,7 +1827,7 @@ pfcp_table! {
         pdr_id: "PDR ID" M PdrId [SXA SXB SXC N4 N4MB],
         outer_header_removal: "Outer Header Removal" C OuterHeaderRemoval [SXA SXB N4 N4MB],
         precedence: "Precedence" C Precedence [SXB SXC N4 N4MB],
-        pdi: "PDI" C Pdi [SXA SXB SXC N4 N4MB],
+        pdi: "PDI" Cb Pdi [SXA SXB SXC N4 N4MB],
         far_id: "FAR ID" C FarId [SXA SXB SXC N4 N4MB],
         urr_id: "URR ID" C* UrrId [SXA SXB SXC N4],
         qer_id: "QER ID" C* QerId [SXB SXC N4 N4MB],
@@ -1836,7 +1836,7 @@ pfcp_table! {
         activation_time: "Activation Time" O ActivationTime [SXB SXC N4],
         deactivation_time: "Deactivation Time" O DeactivationTime [SXB SXC N4],
         ip_multicast_addressing_info: "IP Multicast Addressing Info" O* IpMulticastAddressingInfo [N4],
-        transport_delay_reporting: "Transport Delay Reporting" C TransportDelayReporting [N4],
+        transport_delay_reporting: "Transport Delay Reporting" Cb TransportDelayReporting [N4],
         rat_type: "RAT Type" O RatType [N4],
     }
 }
@@ -1846,9 +1846,9 @@ pfcp_table! {
     group UpdateFar = 10, "Update FAR", "7.5.4.3-1" {
         far_id: "FAR ID" M FarId [SXA SXB SXC N4 N4MB],
         apply_action: "Apply Action" C ApplyAction [SXA SXB SXC N4 N4MB],
-        update_forwarding_parameters: "Update Forwarding parameters" Ci UpdateForwardingParameters [SXA SXB SXC N4],
+        update_forwarding_parameters: "Update Forwarding parameters" C UpdateForwardingParameters [SXA SXB SXC N4],
         update_duplicating_parameters: "Update Duplicating Parameters" C* UpdateDuplicatingParameters [SXA SXB],
-        redundant_transmission_forwarding_parameters: "Redundant Transmission Forwarding Parameters" C RedundantTransmissionForwardingParameters [N4],
+        redundant_transmission_forwarding_parameters: "Redundant Transmission Forwarding Parameters" Cb RedundantTransmissionForwardingParameters [N4],
         bar_id: "BAR ID" C BarId [SXA N4],
         add_mbs_unicast_parameters: "Add MBS Unicast Parameters" C* AddMbsUnicastParameters [N4MB],
         remove_mbs_unicast_parameters: "Remove MBS Unicast Parameters" C* RemoveMbsUnicastParameters [N4MB],
@@ -1863,7 +1863,7 @@ pfcp_table! {
         redirect_information: "Redirect Information" C RedirectInformation [SXB SXC N4],
         outer_header_creation: "Outer Header Creation" C OuterHeaderCreation [SXA SXB N4],
         transport_level_marking: "Transport Level Marking" C TransportLevelMarking [SXA SXB N4],
-        extended_transport_level_marking: "Extended Transport Level Marking" C ExtendedTransportLevelMarking [N4],
+        extended_transport_level_marking: "Extended Transport Level Marking" Cb ExtendedTransportLevelMarking [N4],
         transport_level_marking_indications: "Transport Level Marking Indications" C TransportLevelMarkingIndications [N4],
         forwarding_policy: "Forwarding Policy" C ForwardingPolicy [SXB SXC N4],
         metadata: "Metadata" C Metadata [N4],
@@ -1873,7 +1873,7 @@ pfcp_table! {
         destination_interface_type: "Destination Interface Type" C InterfaceType3gpp [SXA SXB N4],
         data_network_access_identifier: "Data Network Access Identifier" C DataNetworkAccessIdentifier [],
         ip_address_and_port_number_replacement: "IP Address and Port Number Replacement" C IpAddressAndPortNumberReplacement [N4],
-        header_handling_control_rule: "Header Handling Control Rule" C HeaderHandlingControlRule [N4],
+        header_handling_control_rule: "Header Handling Control Rule" Cb HeaderHandlingControlRule [N4],
     }
 }
 
@@ -1924,7 +1924,7 @@ pfcp_table! {
         aggregated_urrs: "Aggregated URRs" C* AggregatedURRs [SXB],
         far_id_for_quota_action: "FAR ID for Quota Action" C FarId [SXB SXC N4],
         ethernet_inactivity_timer: "Ethernet Inactivity Timer" C EthernetInactivityTimer [N4],
-        additional_monitoring_time: "Additional Monitoring Time" O AdditionalMonitoringTime [SXA SXB SXC N4],
+        additional_monitoring_time: "Additional Monitoring Time" Ob AdditionalMonitoringTime [SXA SXB SXC N4],
         number_of_reports: "Number of Reports" O NumberOfReports [SXA SXB SXC N4],
         exempted_application_id_for_quota_action: "Exempted Application ID for Quota Action" C* ApplicationId [SXB SXC N4],
         exempted_sdf_filter_for_quota_action: "Exempted SDF Filter for Quota Action" C* SdfFilter [SXB SXC N4],
@@ -2014,7 +2014,7 @@ pfcp_table! {
         traffic_endpoint_id: "Traffic Endpoint ID" M TrafficEndpointId [SXA SXB SXC N4 N4MB],
         local_f_teid: "Local F-TEID" C FTeid [SXA N4],
         network_instance: "Network Instance" O NetworkInstance [SXA SXB SXC N4 N4MB],
-        redundant_transmission_detection_parameters: "Redundant Transmission Detection Parameters" C RedundantTransmissionParameters [N4],
+        redundant_transmission_detection_parameters: "Redundant Transmission Detection Parameters" Cb RedundantTransmissionParameters [N4],
         ue_ip_address: "UE IP address" C* UeIpAddress [SXB SXC N4],
         framed_route: "Framed-Route" C* FramedRoute [SXB N4],
         framed_routing: "Framed-Routing" C FramedRouting [SXB N4],
@@ -2045,10 +2045,10 @@ pfcp_table! {
         mar_id: "MAR ID" M MarId [N4],
         steering_functionality: "Steering Functionality" C SteeringFunctionality [N4],
         steering_mode: "Steering Mode" C SteeringMode [N4],
-        update_3gpp_access_forwarding_action_information: "Update 3GPP Access Forwarding Action Information" C UpdateThreeGppAccessForwardingActionInformation [N4],
-        update_non_3gpp_access_forwarding_action_information: "Update Non-3GPP Access Forwarding Action Information" C UpdateNonThreeGppAccessForwardingActionInformation [N4],
-        n3gpp_access_forwarding_action_information: "3GPP Access Forwarding Action Information" C ThreeGppAccessForwardingActionInformation [N4],
-        non_3gpp_access_forwarding_action_information: "Non-3GPP Access Forwarding Action Information" C NonThreeGppAccessForwardingActionInformation [N4],
+        update_3gpp_access_forwarding_action_information: "Update 3GPP Access Forwarding Action Information" Cb UpdateThreeGppAccessForwardingActionInformation [N4],
+        update_non_3gpp_access_forwarding_action_information: "Update Non-3GPP Access Forwarding Action Information" Cb UpdateNonThreeGppAccessForwardingActionInformation [N4],
+        n3gpp_access_forwarding_action_information: "3GPP Access Forwarding Action Information" Cb ThreeGppAccessForwardingActionInformation [N4],
+        non_3gpp_access_forwarding_action_information: "Non-3GPP Access Forwarding Action Information" Cb NonThreeGppAccessForwardingActionInformation [N4],
         threshold_values: "Threshold values" C Thresholds [N4],
         steering_mode_indicator: "Steering Mode Indicator" C SteeringModeIndicator [N4],
         transport_mode: "Transport Mode" C TransportMode [N4],
@@ -2083,7 +2083,7 @@ pfcp_table! {
         port_management_information_container: "Port Management Information Container" O PortManagementInformationContainer [N4],
         user_plane_node_management_information_container: "User Plane Node Management Information Container" O UserPlaneNodeManagementInformationContainer [N4],
         nw_tt_port_number: "NW-TT Port Number" C NwTtPortNumber [N4],
-        direct_reporting_information: "Direct Reporting Information" C DirectReportingInformationTsc [N4],
+        direct_reporting_information: "Direct Reporting Information" Cb DirectReportingInformationTsc [N4],
     }
 }
 
@@ -2107,9 +2107,9 @@ pfcp_table! {
     /// Update SRR IE within PFCP Session Modification Request (Table 7.5.4.20-1).
     group UpdateSrr = 213, "Update SRR", "7.5.4.20-1" {
         srr_id: "SRR ID" M SrrId [N4],
-        access_availability_control_information: "Access Availability Control Information" C AccessAvailabilityControlInformation [N4],
+        access_availability_control_information: "Access Availability Control Information" Cb AccessAvailabilityControlInformation [N4],
         qos_monitoring_per_qos_flow_control_information: "QoS Monitoring per QoS flow Control Information" C* QoSMonitoringPerQoSFlowControlInformation [N4],
-        direct_reporting_information: "Direct Reporting Information" C DirectReportingInformationTsc [N4],
+        direct_reporting_information: "Direct Reporting Information" Cb DirectReportingInformationTsc [N4],
         traffic_parameter_measurement_control_information: "Traffic Parameter Measurement Control Information" C* TrafficParameterMeasurementControlInformation [N4],
     }
 }
@@ -2142,7 +2142,7 @@ pfcp_table! {
         time_of_last_packet: "Time of Last Packet" C TimeOfLastPacket [SXB SXC N4 N4MB],
         usage_information: "Usage Information" C UsageInformation [SXA SXB SXC N4],
         query_urr_reference: "Query URR Reference" C QueryUrrReference [SXA SXB SXC N4 N4MB],
-        ethernet_traffic_information: "Ethernet Traffic Information" C EthernetTrafficInformation [N4],
+        ethernet_traffic_information: "Ethernet Traffic Information" Cb EthernetTrafficInformation [N4],
     }
 }
 
@@ -2194,7 +2194,7 @@ pfcp_table! {
         time_of_first_packet: "Time of First Packet" C TimeOfFirstPacket [SXB SXC N4 N4MB],
         time_of_last_packet: "Time of Last Packet" C TimeOfLastPacket [SXB SXC N4 N4MB],
         usage_information: "Usage Information" C UsageInformation [SXA SXB SXC N4],
-        ethernet_traffic_information: "Ethernet Traffic Information" C EthernetTrafficInformation [N4],
+        ethernet_traffic_information: "Ethernet Traffic Information" Cb EthernetTrafficInformation [N4],
     }
 }
 
@@ -2226,7 +2226,7 @@ pfcp_table! {
         end_time: "End Time" C EndTime [SXA SXB SXC N4 N4MB] if |s| timed(&s.usage_report_trigger),
         volume_measurement: "Volume Measurement" C VolumeMeasurement [SXA SXB SXC N4 N4MB],
         duration_measurement: "Duration Measurement" C DurationMeasurement [SXA SXB SXC N4],
-        application_detection_information: "Application Detection Information" C ApplicationDetectionInformation [SXB SXC N4],
+        application_detection_information: "Application Detection Information" Cb ApplicationDetectionInformation [SXB SXC N4],
         ue_ip_address: "UE IP address" C UeIpAddress [SXC N4],
         network_instance: "Network Instance" C NetworkInstance [SXC N4],
         time_of_first_packet: "Time of First Packet" C TimeOfFirstPacket [SXB SXC N4 N4MB],
@@ -2234,7 +2234,7 @@ pfcp_table! {
         usage_information: "Usage Information" C UsageInformation [SXA SXB SXC N4],
         query_urr_reference: "Query URR Reference" C QueryUrrReference [SXA SXB SXC N4 N4MB],
         event_time_stamp: "Event Time Stamp" C* TimeStamp [SXB SXC N4],
-        ethernet_traffic_information: "Ethernet Traffic Information" C EthernetTrafficInformation [N4],
+        ethernet_traffic_information: "Ethernet Traffic Information" Cb EthernetTrafficInformation [N4],
         join_ip_muticast_information: "Join IP Muticast Information" C* JoinIpMulticastInformation [N4],
         leave_ip_muticast_information: "Leave IP Muticast Information" C* LeaveIpMulticastInformation [N4],
         predefined_rules_name: "Predefined Rules Name" O* PredefinedRulesName [SXB N4],
@@ -2295,7 +2295,7 @@ pfcp_table! {
     /// Session Report IE within PFCP Session Report Request (Table 7.5.8.6-1).
     group SessionReport = 214, "Session Report", "7.5.8.6-1" {
         srr_id: "SRR ID" M SrrId [N4],
-        access_availability_report: "Access Availability Report" C AccessAvailabilityReport [N4],
+        access_availability_report: "Access Availability Report" Cb AccessAvailabilityReport [N4],
         qos_monitoring_report: "QoS Monitoring Report" C* QoSMonitoringReport [N4],
         traffic_parameter_measurement_report: "Traffic Parameter Measurement Report" C* TrafficParameterMeasurementReport [N4],
     }
@@ -2313,7 +2313,7 @@ pfcp_table! {
     group QoSMonitoringReport = 247, "QoS Monitoring Report", "7.5.8.6-3" {
         qfi: "QFI" M Qfi [N4],
         qos_monitoring_measurement: "QoS Monitoring Measurement" M QoSMonitoringMeasurement [N4],
-        redundant_n3_n9_transmission_information: "Redundant N3/N9 Transmission Information" C RedundantN3n9TransmissionInformation [N4],
+        redundant_n3_n9_transmission_information: "Redundant N3/N9 Transmission Information" Cb RedundantN3n9TransmissionInformation [N4],
         time_stamp: "Time Stamp" M TimeStamp [N4],
         start_time: "Start Time" O StartTime [N4],
     }

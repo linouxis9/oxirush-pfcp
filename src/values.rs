@@ -2014,11 +2014,6 @@ listed_value!(
 );
 
 impl<const N: u16> crate::ie::Listed for Raw<N> {
-    type Slot = Option<Self>;
-    fn decode_slot(slot: &mut Self::Slot, octets: &[u8]) -> bool {
-        *slot = Some(Self(Octets::copied(octets)));
-        true
-    }
     #[inline]
     fn decode_push(list: &mut Vec<Self>, octets: &[u8]) -> bool {
         list.push(Self(Octets::copied(octets)));
