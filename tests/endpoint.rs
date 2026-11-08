@@ -503,7 +503,8 @@ async fn the_incoming_queue_is_bounded_by_what_its_requests_take() {
     }
     let dropped = statistics_once(&handle, |statistics| statistics.incoming_dropped == 3).await;
     assert_eq!(dropped.incoming_dropped, 3);
-    assert_eq!(upf.incoming().await.unwrap().request.sequence, 1);
+    let first = within(upf.incoming()).await.unwrap().request.sequence;
+    assert_eq!(first, 1);
     peer.send_to(&large(2), address).await.unwrap();
     let again = within(upf.incoming()).await.unwrap();
     assert_eq!(again.request.sequence, 2);
