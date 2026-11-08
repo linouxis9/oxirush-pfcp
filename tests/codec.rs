@@ -1999,32 +1999,52 @@ fn a_header_value_that_its_bits_cannot_hold() {
         header,
         body: SessionDeletionRequest::default().into(),
     };
-    for header in [
-        Header::session(1, 0x0100_0005),
-        Header {
-            priority: Some(17),
-            ..Header::session(1, 5)
-        },
-        Header {
-            priority: Some(1),
-            spare_last: 0x35,
-            ..Header::session(1, 5)
-        },
-        Header {
-            version: 9,
-            ..Header::session(1, 5)
-        },
-        Header {
-            spare: 4,
-            ..Header::session(1, 5)
-        },
+    for (header, field) in [
+        (Header::session(1, 0x0100_0005), "Sequence Number"),
+        (
+            Header {
+                priority: Some(17),
+                ..Header::session(1, 5)
+            },
+            "Message Priority",
+        ),
+        (
+            Header {
+                priority: Some(1),
+                spare_last: 0x35,
+                ..Header::session(1, 5)
+            },
+            "Spare octet",
+        ),
+        (
+            Header {
+                version: 9,
+                ..Header::session(1, 5)
+            },
+            "Version",
+        ),
+        (
+            Header {
+                spare: 4,
+                ..Header::session(1, 5)
+            },
+            "Spare",
+        ),
     ] {
         let message = message(header);
         assert!(
-            matches!(message.encode(), Err(Error::HeaderField { .. })),
+            matches!(message.encode(), Err(Error::HeaderField { field: named, .. }) if named == field),
             "{header:?}"
         );
-        assert!(!message.check(Interfaces::N4).is_empty(), "{header:?}");
+        // At the member of the field in the tree of the message
+        let wide = message.check(Interfaces::N4).into_iter().find(|deviation| {
+            deviation.clause == "7.2.2.1" && matches!(deviation.kind, DeviationKind::Rule(_))
+        });
+        assert_eq!(
+            wide.map(|deviation| deviation.path),
+            Some(format!("/{field}")),
+            "{header:?}"
+        );
     }
     // The spare bits after the priority are spare (§7.2.2.3)
     let mut octets = message(Header {
