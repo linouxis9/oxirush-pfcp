@@ -721,7 +721,8 @@ fn mandatory_missing<S: Scope>(
 /// The IEs that a scope keeps as octets: of no row, repeated (§7.6.10), or incorrect
 /// (§7.6.8): a conditional one semantically invalid, an optional one taken as absent. Of a
 /// row there once, the first IE is the one handled, and the others are repetitions; an IE
-/// of a null length is no error (§8.1.2).
+/// of a null length is no error (§8.1.2). A row of kept IEs alone is checked as one of
+/// values ([`check_row`]): on the interface, and in a rejection (§7.2.3.2).
 #[cold]
 #[inline(never)]
 fn raw_deviations<S: Scope>(
@@ -733,7 +734,8 @@ fn raw_deviations<S: Scope>(
     let table = S::table();
     let raws = scope.raw();
     let positions = crate::table::kept_positions(scope);
-    let mut handled: Vec<u16> = Vec::new();
+    // The rows of the kept IEs met so far: a few, whatever the number of the IEs.
+    let mut handled: alloc::collections::BTreeSet<u16> = alloc::collections::BTreeSet::new();
     for (at, ie) in raws.iter().enumerate() {
         let Some(row) = table.row_of(ie.ie_type) else {
             // By its name in the tree, and its position among those of its type there.
@@ -756,13 +758,14 @@ fn raw_deviations<S: Scope>(
             found.push(Deviation::new(here, clause, kind));
             continue;
         };
+        let alone = handled.insert(row.ie_type) && scope.count(row.ie_type) == 0;
+        if alone {
+            check_row(table.id, row, 0, path, context, found);
+        }
         let first = match row.repeat {
-            Repeat::Once => scope.count(row.ie_type) == 0 && !handled.contains(&row.ie_type),
+            Repeat::Once => alone,
             _ => !ie.octets.is_empty() && !scope.decodes(ie.ie_type, &ie.octets),
         };
-        if row.repeat == Repeat::Once {
-            handled.push(row.ie_type);
-        }
         let here = || Path::Row {
             parent: path,
             row: row.name,

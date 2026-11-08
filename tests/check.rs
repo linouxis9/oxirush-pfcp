@@ -243,6 +243,62 @@ fn a_rejection_carries_only_what_it_may() {
     );
 }
 
+/// §7.2.3.2: a rejection carries no Created PDR, whatever its octets: one of a null length,
+/// one that does not decode, and one that does, beside one that does not, each once at
+/// the row. A row of kept IEs is on its interfaces alone, as one of values.
+#[test]
+fn a_rejection_carries_no_ie_that_it_may_not_as_octets_either() {
+    let checked = |cause: u8, pdrs: &[&[u8]], interface: Interfaces| {
+        let mut ies = vec![ie(60, &[0, 10, 0, 0, 1]), ie(19, &[cause])];
+        ies.extend(pdrs.iter().map(|pdr| ie(8, pdr)));
+        let octets = session_message(51, 0x1001, &ies);
+        let message = Message::decode(&octets).unwrap();
+        message
+            .check(interface)
+            .into_iter()
+            .map(|deviation| (deviation.path, deviation.kind))
+            .collect::<Vec<_>>()
+    };
+    let rejected = |pdrs: &[&[u8]]| checked(64, pdrs, Interfaces::N4);
+    let with_rejection = (
+        "/pfcp/Created PDR".to_string(),
+        DeviationKind::WithRejection { ie_type: 8 },
+    );
+    let pdr = ie(56, &[0, 1]);
+    let broken = [0, 56, 0, 9, 0];
+    assert_eq!(rejected(&[&[]]), [with_rejection.clone()]);
+    assert_eq!(rejected(&[&[], &[]]), [with_rejection.clone()]);
+    let found = rejected(&[&broken]);
+    assert_eq!(found[0], with_rejection);
+    assert_eq!(
+        found
+            .iter()
+            .filter(|found| **found == with_rejection)
+            .count(),
+        1
+    );
+    let found = rejected(&[&pdr, &broken]);
+    assert_eq!(
+        found
+            .iter()
+            .filter(|found| **found == with_rejection)
+            .count(),
+        1,
+        "{found:?}"
+    );
+    let off = (
+        "/pfcp/Created PDR".to_string(),
+        DeviationKind::NotOnInterface { ie_type: 8 },
+    );
+    assert_eq!(
+        checked(64, &[&[]], Interfaces::SXC),
+        [with_rejection, off.clone()]
+    );
+    let found = checked(1, &[&[]], Interfaces::SXC);
+    assert!(found.contains(&off), "{found:?}");
+    assert!(!checked(1, &[&[]], Interfaces::N4).contains(&off));
+}
+
 /// §7.2.2.4.2: SEID 0 in an establishment, or in an answer that rejects; not in a
 /// modification, nor in an answer that accepts.
 #[test]
