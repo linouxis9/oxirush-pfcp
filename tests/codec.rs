@@ -436,8 +436,9 @@ fn set_adds_an_entry_at_the_end_of_a_list() {
     for (path, value) in [
         ("/pfcp/Create PDR/2/PDR ID", tree!(3)),
         ("/pfcp/Create PDR/2/Precedence", tree!(9)),
-        ("/pfcp/Create PDR/2/PDI/Source Interface", tree!("Core")),
+        // A list in a grouped IE that the entry does not have yet
         ("/pfcp/Create PDR/2/PDI/SDF Filter/0/Spare octet", tree!(0)),
+        ("/pfcp/Create PDR/2/PDI/Source Interface", tree!("Core")),
         (
             "/pfcp/Create PDR/3",
             tree!({"PDR ID": 4, "Precedence": 1, "PDI": {"Source Interface": "Access"}}),

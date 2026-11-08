@@ -515,7 +515,7 @@ impl tree::Family for Paths {
         let shape = place.shape();
         let list = matches!(shape.0, Of::List(_) | Of::Below(Below::List(_)));
         if next.edit() == Some(Edit::Open)
-            && let Some(opened) = room(place.value(), shape.0, list, segment, next.is_last())
+            && let Some(opened) = room(place.value(), shape.0, list, segment)
         {
             next.open(place, opened);
             return Ok(Step::Taken);
@@ -630,10 +630,10 @@ impl tree::Family for Paths {
 
 /// What an edit opens at a place so that `segment` goes into it: a list with one more
 /// entry, `null`, for the position of its length, and a message without IEs, or an object
-/// of IEs without the list or the grouped IE of the row, with them empty, for a path that
-/// goes on into them. `None` where the place has what the segment names, or is not there
-/// to open, as its holder is opened first.
-fn room(value: Option<&Value>, of: Of, list: bool, segment: &str, last: bool) -> Option<Value> {
+/// of IEs without the list or the grouped IE of the row, with them empty. `None` where the
+/// place has what the segment names, or is not there to open, as its holder is opened
+/// first.
+fn room(value: Option<&Value>, of: Of, list: bool, segment: &str) -> Option<Value> {
     match (value?, of) {
         (Value::Array(entries), _) if list && tree::position(segment) == Some(entries.len()) => {
             let mut grown = entries.clone();
@@ -641,15 +641,13 @@ fn room(value: Option<&Value>, of: Of, list: bool, segment: &str, last: bool) ->
             Some(Value::Array(grown))
         }
         (Value::Object(members), Of::Message(_))
-            if !last
-                && tree::same_name(segment, "ies")
-                && tree::member(members, "ies").is_none() =>
+            if tree::same_name(segment, "ies") && tree::member(members, "ies").is_none() =>
         {
             let mut members = members.clone();
             members.insert("ies".into(), Value::Object(Map::new()));
             Some(Value::Object(members))
         }
-        (Value::Null | Value::Object(_), Of::Ies(tables)) if !last => {
+        (Value::Null | Value::Object(_), Of::Ies(tables)) => {
             let row = row_named(tables, segment)?;
             let empty = match (row.repeat, ie_type_info(row.ie_type)?.form) {
                 (Repeat::Once, Form::Grouped) => Value::Object(Map::new()),
