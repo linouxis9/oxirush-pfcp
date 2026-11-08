@@ -21,7 +21,7 @@
 #![allow(dead_code)]
 
 use libfuzzer_sys::arbitrary::{self, Arbitrary};
-use oxirush_pfcp::Message;
+use oxirush_pfcp::{DeviationKind, Interfaces, Message};
 use oxirush_pfcp::tree::{self, Value};
 use std::collections::BTreeMap;
 use std::sync::LazyLock;
@@ -180,7 +180,9 @@ fn same(written: &Value, read: &Value) -> bool {
 
 /// What holds of a message that the crate wrote from a tree: it encodes, its octets decode
 /// to a message that encodes to the same octets and whose tree is that of the message, but
-/// for the IEs that one of them keeps as octets, and its tree writes it again.
+/// for the IEs that one of them keeps as octets, and its tree writes it again. A tree may
+/// write a false Length or Message Length, for a test tool: the octets of such a message
+/// do not decode, and `check()` says so.
 pub fn written(message: &Message) {
     let octets = match message.encode() {
         Ok(octets) => octets,
@@ -191,10 +193,18 @@ pub fn written(message: &Message) {
     let tree = message.to_tree();
     let read = match Message::decode(&octets) {
         Ok(read) => read,
-        Err(error) => panic!(
-            "a message that the crate wrote does not decode: {error}: {}",
-            hex(&octets)
-        ),
+        Err(error) => {
+            let unframed = message.check(Interfaces::ALL).into_iter().any(|deviation| {
+                matches!(deviation.kind, DeviationKind::InvalidLength { .. })
+                    || deviation.path == "/Message Length"
+            });
+            assert!(
+                unframed,
+                "a message that the crate wrote does not decode: {error}: {}",
+                hex(&octets)
+            );
+            return;
+        }
     };
     assert_eq!(read.encode().as_ref(), Ok(&octets), "{}", hex(&octets));
     let read_tree = read.to_tree();
