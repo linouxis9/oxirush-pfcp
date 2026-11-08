@@ -47,8 +47,7 @@ pub enum Repeat {
 }
 
 /// The interfaces of a row: its Appl. columns. One of them, or a set of them that
-/// [`BitOr`](core::ops::BitOr) makes; of a row, the set may be empty (none for
-/// [`Row::mandatory`] of a row mandatory on none).
+/// [`BitOr`](core::ops::BitOr) makes.
 ///
 /// ```compile_fail
 /// // Not of bits of the caller's own: from_bits() refuses those of no interface.
@@ -117,16 +116,13 @@ pub struct Row {
     pub name: &'static str,
     /// The IE type.
     pub ie_type: u16,
-    /// Its presence: of a shared field, the strongest of its rows, and
-    /// [`presence_on`](Self::presence_on) that of the rows of an interface.
+    /// Its presence: of a shared field, the strongest of its rows, and [`on`](Self::on)
+    /// that of the rows of an interface.
     pub presence: Presence,
     /// How many times it may be there.
     pub repeat: Repeat,
     /// The interfaces that have it.
     pub interfaces: Interfaces,
-    /// The interfaces on which it is mandatory: of a shared field, those of its mandatory
-    /// roles.
-    pub mandatory: Interfaces,
     /// The rows that share the field, when several do.
     pub roles: &'static [Role],
     /// Whether `check()` checks a condition of the row that the IEs of its scope show: of
@@ -205,30 +201,6 @@ pub(crate) fn emit_field<T: IeType + Codec, F: FieldValues<T>>(
     }
 }
 
-/// The interfaces on which a row is mandatory, from its presence and interfaces, or from
-/// its roles when it has some.
-pub(crate) const fn mandatory(
-    presence: Presence,
-    interfaces: Interfaces,
-    roles: &[Role],
-) -> Interfaces {
-    if roles.is_empty() {
-        return match presence {
-            Presence::Mandatory => interfaces,
-            _ => Interfaces(0),
-        };
-    }
-    let mut on = 0;
-    let mut at = 0;
-    while at < roles.len() {
-        if let Presence::Mandatory = roles[at].presence {
-            on |= roles[at].interfaces.0;
-        }
-        at += 1;
-    }
-    Interfaces(on)
-}
-
 /// One of the rows of a table that share a field: the wire does not tell them apart.
 #[derive(Debug)]
 pub struct Role {
@@ -259,37 +231,91 @@ pub struct Table {
     pub constructors: Interfaces,
 }
 
+/// What a row is on an interface, or on a set of them, as [`Row::on`] gives it: what
+/// `check()` holds a message to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct On {
+    /// Its presence: of a shared field, the weakest of its rows there; on a set of
+    /// interfaces, the weakest on each, and `None` where one of them lacks the row, which a
+    /// message on the set may have and needs on none, whatever the condition beside it.
+    pub presence: Option<Presence>,
+    /// How many IEs of it a message needs: one for a mandatory row, and of a shared field,
+    /// one for each of its mandatory rows there.
+    pub needed: usize,
+    /// How many IEs of it a message may have: of a shared field, as many as its rows there
+    /// allow.
+    pub most: Repeat,
+}
+
+impl Repeat {
+    /// Whether `count` IEs may be there.
+    pub(crate) const fn allows(self, count: usize) -> bool {
+        match self {
+            Self::Once => count <= 1,
+            Self::Any => true,
+            Self::AtMost(most) => count <= most as usize,
+        }
+    }
+}
+
 impl Row {
-    /// Its presence on `interface`, `None` where the interface does not have it: of a
-    /// shared field, the weakest of its rows there. On a set of interfaces, the weakest on
-    /// each of them, as mandatory is on each, and optional where one of them lacks it: a
-    /// message on the set may have it, and needs it on none.
-    pub fn presence_on(&self, interface: Interfaces) -> Option<Presence> {
+    /// What the row is on `interfaces`: `None` where none of them has it, as its IEs are
+    /// discarded there (§7.6.9). On a set of interfaces, a message may have the IEs of the
+    /// rows of any of them, and needs what each of them needs: the weakest presence of
+    /// each, none where one of them lacks the row, and the fewest IEs that one of them
+    /// needs.
+    pub fn on(&self, interfaces: Interfaces) -> Option<On> {
+        if !self.interfaces.has(interfaces) {
+            return None;
+        }
+        let roles = self.roles;
+        if roles.is_empty() {
+            let presence = self.interfaces.has_all(interfaces).then_some(self.presence);
+            return Some(On {
+                presence,
+                needed: usize::from(presence == Some(Presence::Mandatory)),
+                most: self.repeat,
+            });
+        }
         let rank = |presence: &Presence| match presence {
             Presence::Mandatory => 0,
             Presence::Conditional => 1,
             Presence::Optional => 2,
         };
-        let on = |one: Interfaces| match self.roles {
-            [] => self.interfaces.has(one).then_some(self.presence),
-            roles => roles
-                .iter()
-                .filter(|role| role.interfaces.has(one))
-                .map(|role| role.presence)
-                .max_by_key(rank),
+        // Of each interface: the weakest presence of its rows, and the IEs of its mandatory
+        // rows.
+        let each = (0..5).map(|bit| Interfaces(1 << bit));
+        let each = each.filter(|one| interfaces.has(*one)).map(|one| {
+            let there = roles.iter().filter(move |role| role.interfaces.has(one));
+            let presence = there.clone().map(|role| role.presence).max_by_key(rank);
+            let needed = there.filter(|role| role.presence == Presence::Mandatory);
+            (presence, needed.count())
+        });
+        let (presence, needed) = each
+            .reduce(|(was, before), (presence, needed)| {
+                let weakest = was
+                    .zip(presence)
+                    .map(|(was, presence)| core::cmp::max_by_key(was, presence, rank));
+                (weakest, before.min(needed))
+            })
+            .unwrap_or_default();
+        let most = roles
+            .iter()
+            .filter(|role| role.interfaces.has(interfaces))
+            .try_fold(0usize, |most, role| match role.repeat {
+                Repeat::Once => Some(most + 1),
+                Repeat::AtMost(at) => Some(most + usize::from(at)),
+                Repeat::Any => None,
+            });
+        let most = match most.map(u8::try_from) {
+            Some(Ok(most)) => Repeat::AtMost(most),
+            _ => Repeat::Any,
         };
-        let each = || {
-            (0..5)
-                .map(|bit| Interfaces(1 << bit))
-                .filter(|one| interface.has(*one))
-                .map(on)
-        };
-        if each().all(|presence| presence.is_none()) {
-            return None;
-        }
-        each()
-            .map(|presence| presence.unwrap_or(Presence::Optional))
-            .max_by_key(rank)
+        Some(On {
+            presence,
+            needed,
+            most,
+        })
     }
 }
 
@@ -624,4 +650,76 @@ pub(crate) fn encode_scope<S: Scope>(scope: &S, out: &mut Vec<u8>) -> Result<(),
         ie.encode(out)?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A field that rows share is, on an interface, of the weakest presence of its rows
+    /// there, needs an IE for each of its mandatory rows there, and takes as many as they
+    /// allow; on a set of interfaces, it is of the weakest presence on each, of none where
+    /// one of them lacks it, needs the
+    /// fewest IEs that one of them needs, as each needs an IE of the field, which the wire
+    /// does not tell apart, and takes the IEs of the rows of any of them.
+    #[test]
+    fn a_shared_field_on_each_interface_and_on_a_set() {
+        const fn role(
+            name: &'static str,
+            presence: Presence,
+            repeat: Repeat,
+            interfaces: Interfaces,
+        ) -> Role {
+            Role {
+                name,
+                presence,
+                repeat,
+                interfaces,
+            }
+        }
+        static ROLES: [Role; 4] = [
+            role("on N4", Presence::Mandatory, Repeat::Once, Interfaces::N4),
+            role(
+                "optional on N4",
+                Presence::Optional,
+                Repeat::AtMost(2),
+                Interfaces::N4,
+            ),
+            role(
+                "on N4mb",
+                Presence::Mandatory,
+                Repeat::Once,
+                Interfaces::N4MB,
+            ),
+            role("on Sxb", Presence::Optional, Repeat::Any, Interfaces::SXB),
+        ];
+        let both = Interfaces::N4 | Interfaces::N4MB;
+        let row = Row {
+            name: "shared",
+            ie_type: 1,
+            presence: Presence::Mandatory,
+            repeat: Repeat::Any,
+            interfaces: both | Interfaces::SXB,
+            roles: &ROLES,
+            checked: false,
+        };
+        let optional = Some(Presence::Optional);
+        let on = |presence, needed, most| {
+            Some(On {
+                presence,
+                needed,
+                most,
+            })
+        };
+        assert_eq!(row.on(Interfaces::N4), on(optional, 1, Repeat::AtMost(3)));
+        assert_eq!(
+            row.on(Interfaces::N4MB),
+            on(Some(Presence::Mandatory), 1, Repeat::AtMost(1))
+        );
+        assert_eq!(row.on(both), on(optional, 1, Repeat::AtMost(4)));
+        assert_eq!(row.on(Interfaces::SXB), on(optional, 0, Repeat::Any));
+        assert_eq!(row.on(both | Interfaces::SXB), on(optional, 0, Repeat::Any));
+        assert_eq!(row.on(Interfaces::SXA), None);
+        assert_eq!(row.on(Interfaces::SXA_SXB), on(None, 0, Repeat::Any));
+    }
 }

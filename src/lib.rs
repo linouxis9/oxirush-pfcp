@@ -73,7 +73,7 @@ pub use message::{
 };
 pub use octets::Octets;
 pub use registry::*;
-pub use table::{Interfaces, Presence, Repeat, Role, Row, Table};
+pub use table::{Interfaces, On, Presence, Repeat, Role, Row, Table};
 pub use values::*;
 pub use values_clauses::*;
 pub use values_figures::*;

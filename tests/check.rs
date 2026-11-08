@@ -115,42 +115,64 @@ fn a_grouped_ie_on_its_own_needs_what_its_interfaces_need() {
 /// A field that rows of several presences share is of the strongest, and on an
 /// interface of the presence of its row there: the Source IP Address of an IP Multicast
 /// Addressing Info is O on N4 and M on N4mb (Table 7.5.2.2-4), the weakest on both. A row
-/// is on no interface that lacks it, and on a set of interfaces that one of them lacks,
-/// optional, as no IE is needed there: Precedence is M in Create PDR on Sxb, and not on
+/// is on no interface that lacks it, and on a set of interfaces that one of them lacks, of
+/// no presence, as no IE is needed there: Precedence is M in Create PDR on Sxb, and not on
 /// Sxa (Table 7.5.2.2-1).
 #[test]
 fn a_shared_field_has_the_presence_of_its_row_on_the_interface() {
     let row = IpMulticastAddressingInfo::table().row_of(192).unwrap();
     assert_eq!(row.presence, Presence::Mandatory);
-    assert_eq!(row.presence_on(Interfaces::N4), Some(Presence::Optional));
-    assert_eq!(row.presence_on(Interfaces::N4MB), Some(Presence::Mandatory));
     assert_eq!(
-        row.presence_on(Interfaces::N4 | Interfaces::N4MB),
+        row.on(Interfaces::N4).and_then(|on| on.presence),
         Some(Presence::Optional)
     );
-    assert_eq!(row.presence_on(Interfaces::SXA), None);
-    let pdr_id = CreatePdr::table().row_of(56).unwrap();
-    assert_eq!(pdr_id.presence_on(Interfaces::N4), Some(pdr_id.presence));
-    let precedence = CreatePdr::table().row_of(29).unwrap();
-    assert_eq!(precedence.presence_on(Interfaces::SXA), None);
     assert_eq!(
-        precedence.presence_on(Interfaces::SXB | Interfaces::N4),
+        row.on(Interfaces::N4MB).and_then(|on| on.presence),
         Some(Presence::Mandatory)
     );
     assert_eq!(
-        precedence.presence_on(Interfaces::SXA_SXB),
+        row.on(Interfaces::N4 | Interfaces::N4MB)
+            .and_then(|on| on.presence),
         Some(Presence::Optional)
+    );
+    assert_eq!(row.on(Interfaces::SXA).and_then(|on| on.presence), None);
+    let pdr_id = CreatePdr::table().row_of(56).unwrap();
+    assert_eq!(
+        pdr_id.on(Interfaces::N4).and_then(|on| on.presence),
+        Some(pdr_id.presence)
+    );
+    let precedence = CreatePdr::table().row_of(29).unwrap();
+    assert_eq!(
+        precedence.on(Interfaces::SXA).and_then(|on| on.presence),
+        None
+    );
+    assert_eq!(
+        precedence
+            .on(Interfaces::SXB | Interfaces::N4)
+            .and_then(|on| on.presence),
+        Some(Presence::Mandatory)
+    );
+    assert_eq!(
+        precedence
+            .on(Interfaces::SXA_SXB)
+            .and_then(|on| on.presence),
+        None
     );
     // A shared field of no row on N4mb
     let fq_csid = SessionEstablishmentRequest::table().row_of(65).unwrap();
-    assert_eq!(fq_csid.presence_on(Interfaces::N4MB), None);
     assert_eq!(
-        fq_csid.presence_on(Interfaces::SXA_SXB),
+        fq_csid.on(Interfaces::N4MB).and_then(|on| on.presence),
+        None
+    );
+    assert_eq!(
+        fq_csid.on(Interfaces::SXA_SXB).and_then(|on| on.presence),
         Some(Presence::Conditional)
     );
     assert_eq!(
-        fq_csid.presence_on(Interfaces::SXA | Interfaces::N4MB),
-        Some(Presence::Optional)
+        fq_csid
+            .on(Interfaces::SXA | Interfaces::N4MB)
+            .and_then(|on| on.presence),
+        None
     );
 }
 
@@ -199,6 +221,40 @@ fn a_shared_field_whose_rows_are_lists_takes_as_many_ies_as_they_allow() {
         repeated(&message, Interfaces::N4 | Interfaces::N4MB),
         Vec::<String>::new()
     );
+}
+
+/// On a set of interfaces, a message needs what each of them needs: a conditional IE
+/// that one of them lacks is not missing where its condition holds, as a mandatory one
+/// that one of them lacks is not. Volume Quota is conditional in Create URR on Sxb, and
+/// not on Sxa (Table 7.5.2.4-1); Precedence is mandatory in Create PDR on Sxb, and not on
+/// Sxa (Table 7.5.2.2-1).
+#[test]
+fn on_a_set_of_interfaces_a_conditional_ie_that_one_lacks_is_not_missing() {
+    let urr = CreateUrr::new(
+        UrrId::new(1),
+        MeasurementMethod {
+            volum: true,
+            ..Default::default()
+        },
+        ReportingTriggers {
+            volqu: true,
+            ..Default::default()
+        },
+    );
+    let message = Message::session(
+        1,
+        1,
+        SessionModificationRequest::default().with_create_urr(urr),
+    );
+    let missing = DeviationKind::ConditionalMissing { ie_type: 73 };
+    assert_eq!(kinds(&message, Interfaces::SXB), [missing]);
+    assert_eq!(kinds(&message, Interfaces::SXA), []);
+    assert_eq!(kinds(&message, Interfaces::SXA_SXB), []);
+    let row = CreateUrr::table().row_of(73).unwrap();
+    let on = |interfaces| row.on(interfaces).and_then(|on| on.presence);
+    assert_eq!(on(Interfaces::SXB), Some(Presence::Conditional));
+    assert_eq!(on(Interfaces::SXA), None);
+    assert_eq!(on(Interfaces::SXA_SXB), None);
 }
 
 /// §7.6.9: an IE of a row that is not on the interface is discarded, and the message
@@ -1836,21 +1892,44 @@ fn the_conditions_that_the_ies_of_a_rule_show() {
         ..Default::default()
     };
     shown(&payload, &["RTP Payload Type"]);
-    // Table 7.5.2.3-1: a FAR that forwards and duplicates for redundant transmission
+    // Table 7.5.2.3-1: a FAR that forwards and duplicates for redundant transmission, on
+    // N4, which alone has its parameters, and one that forwards without its parameters,
+    // which N4mb lacks: on its own, on every interface of its table, a FAR needs neither
+    let on_n4 = |far: &CreateFar| {
+        let mut message = establishment();
+        request_with(&mut message, |request| request.create_far[0] = far.clone());
+        let found = message.check(Interfaces::N4).into_iter();
+        let paths = found.map(|deviation| deviation.path.replace("/pfcp/Create FAR/0/", ""));
+        paths.collect::<Vec<_>>()
+    };
     let mut far = far(1);
     far.apply_action = Some(ApplyAction {
         forw: true,
         dfrt: true,
         ..Default::default()
     });
-    shown(&far, &["Redundant Transmission Forwarding Parameters"]);
+    shown(&far, &[]);
+    assert_eq!(
+        on_n4(&far),
+        ["Redundant Transmission Forwarding Parameters"]
+    );
     far.forwarding_parameters = None;
-    shown(&far, &["Forwarding Parameters"]);
-    // Table 7.5.2.3-2: forwarding to SGi-LAN/N6-LAN has a Forwarding Policy
+    shown(&far, &[]);
+    assert_eq!(on_n4(&far), ["Forwarding Parameters"]);
+    // Table 7.5.2.3-2: forwarding to SGi-LAN/N6-LAN has a Forwarding Policy, which Sxa
+    // lacks
     let forwarding = ForwardingParameters::new(DestinationInterface::new(
         DestinationInterfaceValue::SgiLanN6Lan,
     ));
-    shown(&forwarding, &["Forwarding Policy"]);
+    shown(&forwarding, &[]);
+    let mut far = far.clone();
+    far.apply_action = Some(ApplyAction {
+        forw: true,
+        ..Default::default()
+    });
+    far.forwarding_parameters = Some(forwarding);
+    let policy = "Forwarding Parameters/Forwarding Policy";
+    assert_eq!(on_n4(&far), [policy]);
     let forwarding =
         ForwardingParameters::new(DestinationInterface::new(DestinationInterfaceValue::Core));
     shown(&forwarding, &[]);

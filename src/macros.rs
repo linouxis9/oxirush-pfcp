@@ -910,16 +910,6 @@ macro_rules! pfcp_table {
                     presence: pfcp_table!(@presence $p),
                     repeat: pfcp_table!(@repeat $(* $($max)?)?),
                     interfaces: crate::table::Interfaces(0 $(| crate::table::Interfaces::$interface.0)*),
-                    mandatory: crate::table::mandatory(
-                        pfcp_table!(@presence $p),
-                        crate::table::Interfaces(0 $(| crate::table::Interfaces::$interface.0)*),
-                        &[$($(crate::table::Role {
-                            name: $role,
-                            presence: pfcp_table!(@presence $rp),
-                            repeat: pfcp_table!(@repeat $(* $($rmax)?)?),
-                            interfaces: crate::table::Interfaces(0 $(| crate::table::Interfaces::$ri.0)*),
-                        }),*)?],
-                    ),
                     roles: &[$($(crate::table::Role {
                         name: $role,
                         presence: pfcp_table!(@presence $rp),

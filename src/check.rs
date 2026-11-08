@@ -533,7 +533,8 @@ pub(crate) fn check_field_values<
 /// have is taken as optional: its IEs are discarded (§7.6.9), and what they break has no
 /// Cause.
 fn presence(row: &Row, context: Context) -> Presence {
-    row.presence_on(context.interface)
+    row.on(context.interface)
+        .and_then(|on| on.presence)
         .unwrap_or(Presence::Optional)
 }
 
@@ -560,27 +561,14 @@ fn with_rejection(table: &str, row: &Row, cause: CauseValue) -> usize {
         .map_or(0, |(.., most)| *most)
 }
 
-/// The IEs of a row that mandatory rows need on the interface, in the context: of a set
-/// of interfaces, those that each needs. One, or one for each mandatory row of a shared
-/// field.
+/// The IEs of a row that a message needs on the interface ([`Row::on`]), in the context.
 #[inline]
 fn mandatory(row: &Row, context: Context) -> usize {
-    if !row.mandatory.has_all(context.interface) {
-        return 0;
-    }
-    let mandatory = match row.roles {
-        [] => 1,
-        roles => roles
-            .iter()
-            .filter(|role| {
-                role.presence == Presence::Mandatory && role.interfaces.has_all(context.interface)
-            })
-            .count(),
-    };
+    let needed = row.on(context.interface).map_or(0, |on| on.needed);
     match context.rejected {
         // The Cause and the Node ID follow their rows; the others may be missing.
-        Some(_) => mandatory.min(usize::from(matches!(row.ie_type, 19 | 60))),
-        None => mandatory,
+        Some(_) => needed.min(usize::from(matches!(row.ie_type, 19 | 60))),
+        None => needed,
     }
 }
 
@@ -599,19 +587,10 @@ pub(crate) fn check_row(
     let rejected = context
         .rejected
         .is_some_and(|cause| count.max(1) > with_rejection(table, row, cause));
-    let off = !row.interfaces.has(context.interface);
-    // A field that rows share has as many IEs as its rows on the interface allow.
-    let most = |role: &crate::table::Role| match role.repeat {
-        Repeat::Once => 1,
-        Repeat::AtMost(most) => usize::from(most),
-        Repeat::Any => usize::MAX,
-    };
-    let roles = row.roles.iter();
-    let on = roles.filter(|role| role.interfaces.has(context.interface));
-    let shared = !row.roles.is_empty() && count > on.map(most).fold(0, usize::saturating_add);
+    let on = row.on(context.interface);
     // The receiver discards each IE of a row that is not on the interface (§7.6.9).
-    let over =
-        !off && (shared || matches!(row.repeat, Repeat::AtMost(most) if count > usize::from(most)));
+    let off = on.is_none();
+    let over = on.is_some_and(|on| !on.most.allows(count));
     if rejected || off || over {
         row_deviations(table, row, [rejected, off, over], path, found);
     }
@@ -836,6 +815,13 @@ fn raw_deviations<S: Scope>(
     }
 }
 
+/// Whether each interface of the context has a row, which the condition beside it then
+/// needs.
+fn on_each(row: &Row, context: Context) -> bool {
+    row.on(context.interface)
+        .is_some_and(|on| on.presence.is_some())
+}
+
 /// A C row that is not there where the condition that its table writes beside it holds
 /// (§7.6.6), on the interface: missing, or of a null length (§8.1.2). One that is there
 /// and incorrect is answered as such.
@@ -850,7 +836,7 @@ pub(crate) fn condition_missing<S: Scope>(
     let row = &table.rows[at];
     let mut kept = scope.raw().iter().filter(|ie| ie.ie_type == row.ie_type);
     let null = match kept.next() {
-        _ if scope.count(row.ie_type) > 0 || !row.interfaces.has(context.interface) => return,
+        _ if scope.count(row.ie_type) > 0 || !on_each(row, context) => return,
         Some(ie) if ie.octets.is_empty() => true,
         Some(_) => return,
         None => false,
@@ -891,7 +877,7 @@ pub(crate) fn condition_absent<S: Scope>(
     let row = &table.rows[at];
     let there =
         scope.count(row.ie_type) > 0 || scope.raw().iter().any(|ie| ie.ie_type == row.ie_type);
-    if !there || !row.interfaces.has(context.interface) {
+    if !there || row.on(context.interface).is_none() {
         return;
     }
     let at = Path::Row {
@@ -903,52 +889,4 @@ pub(crate) fn condition_absent<S: Scope>(
         ie_type: row.ie_type,
     };
     found.push(Deviation::new(at, table.id, kind));
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::table::Role;
-
-    /// A field that rows share needs an IE for each of its mandatory rows that each
-    /// interface of the set has: not for an optional one, nor for a mandatory one that an
-    /// interface of the set lacks. Of the tables, one shared field has a mandatory row, and
-    /// its optional row is on another interface (Table 7.5.2.2-4).
-    #[test]
-    fn a_shared_field_needs_an_ie_for_each_mandatory_row_of_the_interface() {
-        static ROLES: [Role; 3] = [
-            Role {
-                name: "on N4",
-                presence: Presence::Mandatory,
-                repeat: Repeat::Once,
-                interfaces: Interfaces::N4,
-            },
-            Role {
-                name: "optional on N4",
-                presence: Presence::Optional,
-                repeat: Repeat::Once,
-                interfaces: Interfaces::N4,
-            },
-            Role {
-                name: "on N4mb",
-                presence: Presence::Mandatory,
-                repeat: Repeat::Once,
-                interfaces: Interfaces::N4MB,
-            },
-        ];
-        let both = Interfaces(Interfaces::N4.0 | Interfaces::N4MB.0);
-        let row = Row {
-            name: "shared",
-            ie_type: 1,
-            presence: Presence::Mandatory,
-            repeat: Repeat::AtMost(3),
-            interfaces: both,
-            mandatory: both,
-            roles: &ROLES,
-            checked: false,
-        };
-        assert_eq!(mandatory(&row, Context::on(Interfaces::N4)), 1);
-        assert_eq!(mandatory(&row, Context::on(Interfaces::N4MB)), 1);
-        assert_eq!(mandatory(&row, Context::on(both)), 0);
-    }
 }
