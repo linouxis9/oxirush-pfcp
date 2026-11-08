@@ -295,6 +295,16 @@ async fn a_probe_answers_twice() {
     assert!(matches!(upf.event().await, Some(Event::Associated { .. })));
     let quiet = tokio::time::timeout(Duration::from_millis(100), upf.event()).await;
     assert!(quiet.is_err(), "one association: {quiet:?}");
+    // Answered, the request stays answered once dropped: its retransmission has the
+    // answer again, and is no request for the caller
+    drop(incoming);
+    peer.send_to(&setup(4), handle.local_addr()).await.unwrap();
+    let mut buffer = [0; 1500];
+    for _ in 0..3 {
+        within(peer.recv_from(&mut buffer)).await.unwrap();
+    }
+    let none = tokio::time::timeout(Duration::from_millis(100), upf.incoming()).await;
+    assert!(none.is_err(), "no request again");
 }
 
 #[tokio::test]

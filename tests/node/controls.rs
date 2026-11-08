@@ -113,6 +113,67 @@ fn load_control_from_any_message() {
     let (received, _) = request(&mut smf);
     assert_eq!(received.seid, Some(cp_seid));
     assert_eq!(smf.load_control(UPF).map(|load| load.metric), Some(55));
+    // In a Session Deletion Response
+    smf.session_request(at(2), cp_seid, SessionDeletionRequest::default())
+        .unwrap();
+    pass(&mut smf, &mut upf, UPF, at(2));
+    let (received, _) = request(&mut upf);
+    let load = LoadControlInformation::new(SequenceNumber::new(4), Metric::new(Percent(65)));
+    let deletion = SessionDeletionResponse::new(accepted()).with_load_control_information(load);
+    upf.respond(at(2), &received, deletion).unwrap();
+    pass(&mut upf, &mut smf, SMF, at(2));
+    assert_eq!(smf.load_control(UPF).map(|load| load.metric), Some(65));
+}
+
+/// The end of the period of validity of an overload is when the node is next due, before
+/// its heartbeats: a period of the timer's units (Table 8.2.35.1), or none of an infinite
+/// timer.
+#[test]
+fn the_end_of_an_overload_is_a_timeout_of_the_node() {
+    let (mut smf, mut upf) = associated(at(0));
+    let (cp_seid, _) = established(&mut smf, &mut upf, at(0));
+    let overload = |sequence: u32, timer_unit: TimerUnit, timer_value: u8| {
+        let timer = Timer {
+            timer_unit,
+            timer_value,
+            ..Default::default()
+        };
+        // Of no reduction, which throttles none of the requests that follow
+        let overload = OverloadControlInformation::new(
+            SequenceNumber::new(sequence),
+            Metric::new(Percent(0)),
+            timer,
+        );
+        SessionModificationResponse::new(accepted()).with_overload_control_information(overload)
+    };
+    modified(
+        &mut smf,
+        &mut upf,
+        cp_seid,
+        at(10),
+        overload(1, TimerUnit::TwoSeconds, 5),
+    );
+    assert_eq!(smf.poll_timeout(), Some(at(20)));
+    let units = [
+        (TimerUnit::OneMinute, Some(60)),
+        (TimerUnit::TenMinutes, Some(600)),
+        (TimerUnit::OneHour, Some(3600)),
+        (TimerUnit::TenHours, Some(36_000)),
+        (TimerUnit::Infinite, None),
+    ];
+    for (sequence, (unit, seconds)) in (2..).zip(units) {
+        modified(
+            &mut smf,
+            &mut upf,
+            cp_seid,
+            at(11),
+            overload(sequence, unit, 1),
+        );
+        let until = smf
+            .overload_control(UPF)
+            .and_then(|overload| overload.until);
+        assert_eq!(until, seconds.map(|seconds| at(11 + seconds)), "{unit:?}");
+    }
 }
 
 #[test]
@@ -535,6 +596,24 @@ fn throttling_loss_algorithm() {
         })
         .count();
     assert_eq!(throttled, 30, "30% of the requests");
+    // An overload of the UP function's node (AOCI) throttles the requests of its sessions
+    // as one of their address does
+    let (mut smf, mut upf) = associated(at(0));
+    let (cp_seid, _) = established(&mut smf, &mut upf, at(0));
+    modified(
+        &mut smf,
+        &mut upf,
+        cp_seid,
+        at(1),
+        with_overload(1, 30, 30, true),
+    );
+    let throttled = (0..100)
+        .filter(|_| {
+            smf.session_request(at(2), cp_seid, SessionModificationRequest::default())
+                == Err(NodeError::Throttled)
+        })
+        .count();
+    assert_eq!(throttled, 30, "30% of the requests, of the node");
     // A new number of the same overload keeps what the algorithm owes: 40 + 40, then
     // past 100 at the third request
     let (mut smf, cp_seid) = overloaded(config(SMF, Function::Cp), 40);

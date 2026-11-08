@@ -440,3 +440,16 @@ pub(super) fn timer(timer: &Timer) -> Option<Duration> {
     };
     Some(Duration::from_secs(value * unit))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A sequence number is newer than another up to half of the 32 bits ahead, through a
+    /// roll-over, and not at that half or past it.
+    #[test]
+    fn a_number_is_newer_up_to_half_the_bits_ahead() {
+        assert!(newer(1, 0) && newer(0x7fff_ffff, 0) && newer(0, u32::MAX));
+        assert!(!newer(0, 0) && !newer(0x8000_0000, 0) && !newer(0, 1));
+    }
+}

@@ -168,6 +168,28 @@ fn association_update() {
     );
 }
 
+/// §7.6.10: of a request that names its Node ID or its CP F-SEID twice, the node reads the
+/// first before it decodes the rest, as the decode takes it: an update of the host's Node
+/// ID and then another's is the host's, and an establishment of a CP F-SEID and then one
+/// of SEID 0 is of the first.
+#[test]
+fn the_first_node_id_and_cp_f_seid_of_a_request_are_the_ones_read() {
+    let (_, mut upf) = associated(at(0));
+    let mut update = AssociationUpdateRequest::new(node_id(SMF));
+    update.raw.push(RawIe::new(60, vec![0, 10, 9, 9, 9]));
+    let octets = Message::node(5, update).encode().unwrap();
+    upf.handle_datagram(at(1), SMF, &octets);
+    assert_eq!(request(&mut upf).0.sequence, 5);
+    let mut establishment = establishment(7);
+    let Body::SessionEstablishmentRequest(body) = &mut establishment.body else {
+        panic!()
+    };
+    body.raw
+        .push(RawIe::new(57, vec![2, 0, 0, 0, 0, 0, 0, 0, 0, 10, 0, 0, 1]));
+    upf.handle_datagram(at(1), SMF, &establishment.encode().unwrap());
+    assert_eq!(request(&mut upf).0.peer_seid, Some(7));
+}
+
 #[test]
 fn association_update_unknown_node() {
     let mut upf = node(UPF, Function::Up);
@@ -184,6 +206,17 @@ fn association_update_unknown_node() {
 
 #[test]
 fn association_release() {
+    // One that the UP function rejects keeps the association
+    let (mut smf, mut upf) = associated(at(0));
+    let release = AssociationReleaseRequest::new(node_id(SMF));
+    smf.request(at(1), UPF, Message::node(0, release)).unwrap();
+    pass(&mut smf, &mut upf, UPF, at(1));
+    let (received, _) = request(&mut upf);
+    let rejected = Cause::new(CauseValue::RequestRejected);
+    let answer = AssociationReleaseResponse::new(node_id(UPF), rejected);
+    upf.respond(at(1), &received, answer).unwrap();
+    pass(&mut upf, &mut smf, SMF, at(1));
+    assert!(smf.association(UPF).is_some() && upf.association(SMF).is_some());
     let (mut smf, mut upf) = associated(at(0));
     let release = AssociationReleaseRequest::new(node_id(SMF));
     smf.request(at(1), UPF, Message::node(0, release)).unwrap();
@@ -275,7 +308,9 @@ fn session_needs_association() {
 }
 
 /// §6.2.9: a node report, and the session set procedures, run as the other requests:
-/// Table 7.3-1 makes 12, 14 and 16 requests, and 13, 15 and 17 their responses.
+/// Table 7.3-1 makes 12, 14 and 16 requests, and 13, 15 and 17 their responses. The
+/// receiver has the Node ID of each, and a node without the association rejects each
+/// with its response.
 #[test]
 fn node_report_and_session_sets() {
     let (mut smf, mut upf) = associated(at(0));
@@ -311,14 +346,22 @@ fn node_report_and_session_sets() {
     ];
     for (from_smf, body, answer) in exchanges {
         let message_type = body.message_type();
-        let (sender, receiver, to, back) = match from_smf {
-            true => (&mut smf, &mut upf, UPF, SMF),
-            false => (&mut upf, &mut smf, SMF, UPF),
+        let (sender, receiver, to, back, from) = match from_smf {
+            true => (&mut smf, &mut upf, UPF, SMF, node_id(SMF)),
+            false => (&mut upf, &mut smf, SMF, UPF, node_id(UPF)),
         };
+        let mut stranger = node(to, if from_smf { Function::Up } else { Function::Cp });
+        let octets = Message::node(9, body.clone()).encode().unwrap();
+        stranger.handle_datagram(at(1), back, &octets);
+        let rejection = decoded(&sent(&mut stranger)[0]);
+        assert_eq!(rejection.body.message_type(), message_type + 1);
+        let none = Some(CauseValue::NoEstablishedPfcpAssociation);
+        assert_eq!(rejection.body.cause(), none);
         let id = sender.request(at(1), to, Message::node(0, body)).unwrap();
         pass(sender, receiver, to, at(1));
         let (received, message) = request(receiver);
         assert_eq!(message.body.message_type(), message_type);
+        assert_eq!(received.node_id, Some(from));
         receiver.respond(at(1), &received, answer).unwrap();
         pass(receiver, sender, back, at(1));
         let got = events(sender);

@@ -980,10 +980,23 @@ fn a_session_moved_to_another_smf_of_the_set() {
         ..Default::default()
     })
     .with_old_cp_f_seid(old);
+    // One that the other SMF rejects, whatever CP F-SEID it carries, moves nothing
+    let new = FSeid::ipv4(0x99, Ipv4Addr::new(10, 0, 0, 7));
+    upf.request(at(1), other, Message::session(0, 0, report.clone()))
+        .unwrap();
+    let sequence = decoded(&sent(&mut upf)[0]).header.sequence;
+    let rejected = Cause::new(CauseValue::RequestRejected);
+    let response = Message::session(
+        up_seid,
+        sequence,
+        SessionReportResponse::new(rejected).with_cp_f_seid(new.clone()),
+    );
+    upf.handle_datagram(at(1), other, &response.encode().unwrap());
+    let session = upf.session(up_seid).unwrap();
+    assert_eq!((session.peer, session.peer_seid), (SMF, Some(0x51)));
     upf.request(at(1), other, Message::session(0, 0, report))
         .unwrap();
     let sequence = decoded(&sent(&mut upf)[0]).header.sequence;
-    let new = FSeid::ipv4(0x99, Ipv4Addr::new(10, 0, 0, 7));
     let response = Message::session(
         up_seid,
         sequence,
@@ -997,6 +1010,57 @@ fn a_session_moved_to_another_smf_of_the_set() {
         [],
         "a CP F-SEID of a SEID other than 0"
     );
+}
+
+/// A session is adopted of a local and a peer's SEID other than 0, which is of no session
+/// (§7.2.2.4.2).
+#[test]
+fn a_session_of_seid_0_is_not_adopted() {
+    let (mut smf, _) = associated(at(0));
+    assert_eq!(smf.adopt_session(0, UPF, 0x66), Err(NodeError::SeidZero));
+    assert_eq!(smf.adopt_session(0x55, UPF, 0), Err(NodeError::SeidZero));
+    assert!(smf.adopt_session(0x55, UPF, 0x66).is_ok());
+}
+
+/// The receiver of an establishment has the Node ID that it carries, as of the node
+/// requests (Table 7.5.2.1-1).
+#[test]
+fn an_establishment_says_the_node_id_that_it_carries() {
+    let (mut smf, mut upf) = associated(at(0));
+    let cp_seid = smf.new_session();
+    smf.request(at(1), UPF, establishment(cp_seid)).unwrap();
+    pass(&mut smf, &mut upf, UPF, at(1));
+    let (received, _) = request(&mut upf);
+    assert_eq!(received.node_id, Some(node_id(SMF)));
+}
+
+/// A request that the caller sends with the peer's SEID of a session is of that session:
+/// the UP function's report through `request`, whose accepted response with a new CP
+/// F-SEID moves the session to it (§5.22.2), whatever Old CP F-SEID it carries, which a
+/// report of SEID 0 alone hands over.
+#[test]
+fn a_request_of_the_peers_seid_is_of_its_session() {
+    let (mut smf, mut upf) = associated(at(0));
+    let (first_cp_seid, first) = established(&mut smf, &mut upf, at(0));
+    let (cp_seid, up_seid) = established(&mut smf, &mut upf, at(0));
+    // An Old CP F-SEID of the first session does not make a report of another SEID a
+    // handover of the first
+    let old = FSeid::ipv4(first_cp_seid, Ipv4Addr::new(10, 0, 0, 1));
+    let report = SessionReportRequest::new(ReportType {
+        uisr: true,
+        ..Default::default()
+    })
+    .with_old_cp_f_seid(old);
+    upf.request(at(1), SMF, Message::session(cp_seid, 0, report))
+        .unwrap();
+    pass(&mut upf, &mut smf, SMF, at(1));
+    let (received, _) = request(&mut smf);
+    let new = FSeid::ipv4(0x99, Ipv4Addr::new(10, 0, 0, 1));
+    let answer = SessionReportResponse::new(accepted()).with_cp_f_seid(new);
+    smf.respond(at(1), &received, answer).unwrap();
+    pass(&mut smf, &mut upf, UPF, at(1));
+    assert_eq!(upf.session(up_seid).unwrap().peer_seid, Some(0x99));
+    assert_ne!(upf.session(first).unwrap().peer_seid, Some(0x99));
 }
 
 /// Table 7.5.4.1-1 NOTE 2, §6.3.3: the accepted response to a session's outstanding

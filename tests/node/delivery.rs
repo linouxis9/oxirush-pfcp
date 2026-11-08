@@ -393,6 +393,47 @@ fn a_request_of_a_false_length_is_answered_invalid_length() {
         panic!()
     };
     assert_eq!(response.offending_ie.map(|ie| ie.value), Some(57));
+    // One that the peer does not send is discarded, and not answered (§7.6.5)
+    let report = SessionReportRequest::new(ReportType::default());
+    let mut octets = Message::session(up_seid, 11, report).encode().unwrap();
+    octets.extend_from_slice(&[0, 1]);
+    let length = (octets.len() - 4) as u16;
+    octets[2..4].copy_from_slice(&length.to_be_bytes());
+    upf.handle_datagram(at(1), SMF, &octets);
+    assert!(sent(&mut upf).is_empty());
+}
+
+/// §7.6.3, §7.6.7: a request of each type that the UP function takes, whose IEs run past
+/// it, is answered with its response, "Invalid length"; one of a session that the node
+/// does not have, "Session context not found" first; one of a session, of SEID 0, as the
+/// node knows no session of it.
+#[test]
+fn a_request_of_each_type_that_does_not_decode_is_answered_invalid_length() {
+    let (_, mut upf) = associated(at(0));
+    for message_type in [3, 5, 7, 9, 16, 50, 52, 54] {
+        let session = message_type >= 50;
+        let mut octets = vec![0x20 | u8::from(session), message_type, 0, 0];
+        if session {
+            octets.extend(1u64.to_be_bytes());
+        }
+        octets.extend([0, 0, 9, 0]);
+        octets.extend([0, 60, 0, 9, 0]);
+        let length = (octets.len() - 4) as u16;
+        octets[2..4].copy_from_slice(&length.to_be_bytes());
+        upf.handle_datagram(at(1), SMF, &octets);
+        let answer = decoded(&sent(&mut upf)[0]);
+        assert_eq!(
+            answer.body.message_type(),
+            message_type + 1,
+            "{message_type}"
+        );
+        let cause = match message_type {
+            52 | 54 => CauseValue::SessionContextNotFound,
+            _ => CauseValue::InvalidLength,
+        };
+        assert_eq!(answer.body.cause(), Some(cause), "{message_type}");
+        assert_eq!(answer.header.seid, session.then_some(0), "{message_type}");
+    }
 }
 
 /// §7.6.1, §7.6.3: a response that does not decode, or of another version, ends its
@@ -1133,6 +1174,10 @@ fn the_requests_of_strangers_are_bounded() {
 /// message as their number, and an IE kept as octets that may hold a key as its length.
 #[test]
 fn debug_prints_no_key() {
+    assert_eq!(
+        format!("{:?}", Datagram(vec![1, 2, 3])),
+        "Datagram(3 octets)"
+    );
     let (mut smf, mut upf) = associated(at(0));
     let password: String = b"hunter2"
         .iter()
@@ -1468,6 +1513,37 @@ fn a_probe_answer_that_the_peer_cannot_read_changes_nothing() {
         pass(&mut upf, &mut smf, SMF, at(0));
         assert!(smf.association(UPF).is_none(), "{at_case}");
     }
+    // A Version Not Supported Response ends the peer's request unread, as one of another
+    // version of the request's sequence number; one of another version and sequence
+    // number, or a request, the peer discards
+    let answer_by = |change: &dyn Fn(&mut Message), body: Option<Body>| {
+        let mut smf = node(SMF, Function::Cp);
+        let mut upf = node(UPF, Function::Up);
+        let setup = AssociationSetupRequest::new(node_id(SMF), RecoveryTimeStamp::new(1000));
+        smf.request(at(0), UPF, Message::node(0, setup)).unwrap();
+        pass(&mut smf, &mut upf, UPF, at(0));
+        let (received, _) = request(&mut upf);
+        let mut first = answer(received.sequence);
+        if let Some(body) = body {
+            first.body = body;
+        }
+        change(&mut first);
+        upf.respond_message(at(0), &received, first, Delivery::Send)
+            .unwrap();
+        upf.respond_message(at(0), &received, answer(received.sequence), Delivery::Send)
+            .unwrap();
+        upf.association(SMF).is_some()
+    };
+    let unsupported = Some(VersionNotSupportedResponse::default().into());
+    assert!(!answer_by(&|_| {}, unsupported));
+    assert!(!answer_by(&|message| message.header.version = 2, None));
+    let other = |message: &mut Message| {
+        message.header.version = 2;
+        message.header.sequence += 1;
+    };
+    assert!(answer_by(&other, None));
+    let heartbeat = Some(HeartbeatRequest::new(RecoveryTimeStamp::new(5)).into());
+    assert!(answer_by(&|_| {}, heartbeat));
     // A message type of no table is discarded, and the answer after it taken
     let mut smf = node(SMF, Function::Cp);
     let mut upf = node(UPF, Function::Up);
