@@ -413,11 +413,10 @@ pub(crate) enum Below {
         Option<&'static str>,
         &'static [(&'static str, &'static Below)],
     ),
-    /// The entries of a list, with what each may hold below it.
-    List(&'static Below),
 }
 
-/// What an IE that a scope keeps as its octets may hold below it, and a list of them.
+/// What an IE that a scope keeps as its octets may hold below it, and each entry of a list
+/// of them.
 const KEPT: Below = Below::Object(
     None,
     &[
@@ -426,7 +425,6 @@ const KEPT: Below = Below::Object(
         ("Enterprise ID", &Below::Scalar),
     ],
 );
-const KEPT_LIST: Below = Below::List(&KEPT);
 
 impl Below {
     /// What the member `name` of the object may hold below it.
@@ -529,14 +527,6 @@ fn of_value(row: &'static Row, value: Option<&Value>) -> Of {
     }
 }
 
-/// What a member of IEs that is of no row is: an IE kept as its octets, or a list of them.
-fn of_kept(value: Option<&Value>) -> Of {
-    match value.is_some_and(Value::is_array) {
-        true => Of::Below(&KEPT_LIST),
-        false => Of::Below(&KEPT),
-    }
-}
-
 /// The IE type of no row of `table` that `name` writes, as [`scope_from_tree`] reads it:
 /// its number, or the name of its type.
 fn of_no_row(table: &Table, name: &str) -> Option<u16> {
@@ -604,7 +594,7 @@ impl tree::Family for Paths {
         next: &mut Next<'v, Shape>,
     ) -> Result<Step<Shape>, tree::Error> {
         let shape = place.shape();
-        let list = matches!(shape.0, Of::List(_) | Of::Below(Below::List(_)));
+        let list = place.value().is_some_and(Value::is_array);
         if next.edit() == Some(Edit::Open)
             && let Some(opened) = room(place.value(), shape.0, list, segment)
         {
@@ -631,7 +621,7 @@ impl tree::Family for Paths {
                     if row_named(table, written).is_none()
                         && of_no_row(table, written) == Some(ie_type)
                     {
-                        next.member(written, value, Shape(of_kept(Some(value))));
+                        next.member(written, value, Shape(Of::Below(&KEPT)));
                         found = true;
                     }
                 }
@@ -669,7 +659,7 @@ impl tree::Family for Paths {
             // The other members of the header are scalars.
             Of::Message(_) => Of::Below(&Below::Scalar),
             Of::Ies(table) => {
-                row_named(table, name).map_or(of_kept(value), |row| of_row(row, value))
+                row_named(table, name).map_or(Of::Below(&KEPT), |row| of_row(row, value))
             }
             Of::Value(info)
                 if info
@@ -687,7 +677,8 @@ impl tree::Family for Paths {
     fn entry(&self, shape: &Shape, value: Option<&Value>) -> Shape {
         Shape(match shape.0 {
             Of::List(row) => of_value(row, value),
-            Of::Below(Below::List(below)) => Of::Below(below),
+            // An entry of a list of a field is of the kind of the field.
+            Of::Below(below) => Of::Below(below),
             _ => Of::Nothing,
         })
     }

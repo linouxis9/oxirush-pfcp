@@ -693,7 +693,7 @@ pub struct Counted<T>(pub Vec<T>);
 
 impl<T: Field> Field for Counted<T> {
     #[cfg(feature = "tree")]
-    const BELOW: &'static crate::paths::Below = &crate::paths::Below::List(T::BELOW);
+    const BELOW: &'static crate::paths::Below = T::BELOW;
     fn read(octets: &mut &[u8]) -> Option<Self> {
         let count = u8::read(octets)?;
         let mut values = Vec::with_capacity(usize::from(count).min(octets.len()));
@@ -753,7 +753,7 @@ impl<T: Field> Field for Each<T> {
     #[cfg(feature = "spec")]
     const CELLS: &'static [NarrowCell] = T::CELLS;
     #[cfg(feature = "tree")]
-    const BELOW: &'static crate::paths::Below = &crate::paths::Below::List(T::BELOW);
+    const BELOW: &'static crate::paths::Below = T::BELOW;
     fn read(octets: &mut &[u8]) -> Option<Self> {
         let mut values = Vec::new();
         while !octets.is_empty() {

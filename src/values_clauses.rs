@@ -894,13 +894,8 @@ impl FqCsid {
     ];
     /// What the tree of each field may hold below it.
     #[cfg(feature = "tree")]
-    pub(crate) const MEMBERS_BELOW: &'static [(&'static str, &'static crate::paths::Below)] = &[
-        (
-            "PDN Connection Set Identifiers",
-            &crate::paths::Below::List(&crate::paths::Below::Scalar),
-        ),
-        ("Node Type", <Narrow<NodeType> as Field>::BELOW),
-    ];
+    pub(crate) const MEMBERS_BELOW: &'static [(&'static str, &'static crate::paths::Below)] =
+        &[("Node Type", <Narrow<NodeType> as Field>::BELOW)];
     /// Read by hand: its layout depends on its type.
     #[doc(hidden)]
     #[cfg(feature = "spec")]
@@ -1119,7 +1114,7 @@ macro_rules! mac_addresses {
             pub(crate) const MEMBERS: &'static [&'static str] = &["MAC address values", "C-TAG", "S-TAG", crate::ie::UNKNOWN_OCTETS];
             /// What the tree of each field may hold below it.
             #[cfg(feature = "tree")]
-            pub(crate) const MEMBERS_BELOW: &'static [(&'static str, &'static crate::paths::Below)] = &[("MAC address values", &crate::paths::Below::List(&crate::paths::Below::Scalar))];
+            pub(crate) const MEMBERS_BELOW: &'static [(&'static str, &'static crate::paths::Below)] = &[];
             /// Read by hand: a list after its number, then fields after their lengths.
             #[doc(hidden)]
             #[cfg(feature = "spec")]
