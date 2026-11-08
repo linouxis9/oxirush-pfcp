@@ -107,16 +107,16 @@ fn a_grouped_ie_on_its_own_needs_what_its_interfaces_need() {
     );
 }
 
-/// A field that rows of several presences share is of the strongest, and on an
-/// interface of the presence of its row there: the Source IP Address of an IP Multicast
-/// Addressing Info is O on N4 and M on N4mb (Table 7.5.2.2-4), the weakest on both. A row
+/// A field that rows of several presences share is, on an interface, of the presence of
+/// its row there: the Source IP Address of an IP Multicast Addressing Info is O on N4 and
+/// M on N4mb (Table 7.5.2.2-4), the weakest on both. A row
 /// is on no interface that lacks it, and on a set of interfaces that one of them lacks, of
 /// no presence, as no IE is needed there: Precedence is M in Create PDR on Sxb, and not on
 /// Sxa (Table 7.5.2.2-1).
 #[test]
 fn a_shared_field_has_the_presence_of_its_row_on_the_interface() {
     let row = IpMulticastAddressingInfo::table().row_of(192).unwrap();
-    assert_eq!(row.presence, Presence::Mandatory);
+    assert_eq!(row.roles.len(), 2);
     assert_eq!(
         row.on(Interfaces::N4).and_then(|on| on.presence),
         Some(Presence::Optional)
@@ -134,7 +134,7 @@ fn a_shared_field_has_the_presence_of_its_row_on_the_interface() {
     let pdr_id = CreatePdr::table().row_of(56).unwrap();
     assert_eq!(
         pdr_id.on(Interfaces::N4).and_then(|on| on.presence),
-        Some(pdr_id.presence)
+        Some(Presence::Mandatory)
     );
     let precedence = CreatePdr::table().row_of(29).unwrap();
     assert_eq!(
@@ -192,7 +192,7 @@ fn a_shared_field_whose_rows_are_lists_takes_as_many_ies_as_they_allow() {
         ipv4_address: Some(Ipv4Addr::new(10, 1, 1, 1)),
         ..Default::default()
     };
-    let multicast = IpMulticastAddressingInfo::new(
+    let multicast = IpMulticastAddressingInfo::new_n4mb(
         IpMulticastAddress {
             v4: true,
             ipv4_address: Some(Ipv4Addr::new(232, 0, 0, 1)),
@@ -2367,13 +2367,11 @@ fn the_rows_whose_condition_is_checked() {
     assert!(checked.iter().all(|(_, name)| !name.is_empty()));
     for info in MESSAGE_TYPES {
         for row in info.table.rows.iter().filter(|row| row.checked) {
-            assert_eq!(
-                row.presence,
-                Presence::Conditional,
-                "{} {}",
-                info.name(),
-                row.name
-            );
+            let conditional = row
+                .roles
+                .iter()
+                .any(|role| role.presence == Presence::Conditional);
+            assert!(conditional, "{} {}", info.name(), row.name);
         }
     }
 }

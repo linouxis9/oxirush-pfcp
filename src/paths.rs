@@ -43,7 +43,7 @@ use oxirush_utils::tree::Value;
 use crate::ie::{Placed, RawIe};
 use crate::message::{MESSAGE_TYPES, MessageTypeInfo};
 use crate::registry::{Form, IE_TYPES, IeTypeInfo, ie_type_info, members_below};
-use crate::table::{Entry, FieldValues, Repeat, Row, Scope, Table, each_entry, keep_order};
+use crate::table::{Entry, FieldValues, Row, Scope, Table, each_entry, keep_order};
 
 /// The tree hook of a scope, which the table macro writes.
 pub(crate) trait TreeScope {
@@ -116,7 +116,7 @@ pub(crate) fn scope_to_tree<S: Scope + TreeScope>(scope: &S) -> Value {
     let raws = scope.raw();
     let mut members = Map::new();
     for row in table.rows {
-        let list = row.repeat != Repeat::Once;
+        let list = row.is_list();
         each_entry(scope, row.ie_type, |entry| {
             let value = match entry {
                 Entry::Value(nth) => scope.field_tree(row.ie_type, nth),
@@ -343,7 +343,7 @@ fn read_ies<S: TreeScope>(
     held: &Value,
     reading: &mut Reading,
 ) -> Result<Vec<Option<RawIe>>, Refused> {
-    let list = row.is_some_and(|row| row.repeat != Repeat::Once);
+    let list = row.is_some_and(Row::is_list);
     let mut read = Vec::new();
     let mut entry = |value: &Value, reading: &mut Reading| -> Result<(), Refused> {
         if is_octets(value) || row.is_none() {
@@ -517,7 +517,7 @@ fn of_row(row: &Row, value: Option<&Value>) -> Of {
     let Some(info) = ie_type_info(row.ie_type) else {
         return Of::Nothing;
     };
-    match value.map_or(row.repeat != Repeat::Once, Value::is_array) {
+    match value.map_or(row.is_list(), Value::is_array) {
         true => Of::List(info),
         false => of_value(info, value),
     }
@@ -787,9 +787,9 @@ fn room(value: Option<&Value>, of: Of, list: bool, segment: &str) -> Option<Valu
         }
         (Value::Object(members), Of::Ies(tables)) if lacks(members, segment) => {
             let row = row_named(tables, segment)?;
-            let empty = match (row.repeat, ie_type_info(row.ie_type)?.form) {
-                (Repeat::Once, Form::Grouped) => Value::Object(Map::new()),
-                (Repeat::Once, _) => return None,
+            let empty = match (row.is_list(), ie_type_info(row.ie_type)?.form) {
+                (false, Form::Grouped) => Value::Object(Map::new()),
+                (false, _) => return None,
                 _ => Value::Array(Vec::new()),
             };
             let name = tree::member(members, segment).map_or(row.name, |(name, _)| name);

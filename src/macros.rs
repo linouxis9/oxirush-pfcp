@@ -885,7 +885,8 @@ macro_rules! pfcp_messages {
 /// `raw N` for an IE type that the crate keeps as octets. `Cb` and `Ob` are `C` and `O` of
 /// a grouped IE that the field boxes, as it is large and most scopes lack it. A field that several rows
 /// share, which the wire does not tell apart, lists them after `roles`, each with its
-/// presence and its interfaces. A row whose condition the scope alone shows ends with
+/// presence and its interfaces, which are the row's; its own are those where a constructor
+/// takes it: where one of its rows is mandatory. A row whose condition the scope alone shows ends with
 /// `absent(|scope| condition)`, where `check()` reports it there, and `if |scope|
 /// condition`, where it reports it missing.
 macro_rules! pfcp_table {
@@ -930,6 +931,14 @@ macro_rules! pfcp_table {
             <[&str]>::len(&[$($row),*]) < crate::table::MAX_ROWS,
             "a table of more rows than the encoder counts"
         );
+        // A field holds as many IEs as its roles allow.
+        const _: () = {$(
+            let roles: &[crate::table::Role] = pfcp_table!(@roles $row $p [$(* $($max)?)?] [$($interface)*] $([$($role $rp [$(* $($rmax)?)?] [$($ri)*]),*])?);
+            assert!(
+                crate::table::capacity(roles) == crate::table::capacity(&[pfcp_table!(@role $row $p [$(* $($max)?)?] [])]),
+                concat!("the field of ", $row, " holds other than its roles")
+            );
+        )*};
 
         pub(crate) static [<$ty:snake:upper _TABLE>]: crate::table::Table = crate::table::Table {
             id: $id,
@@ -940,15 +949,7 @@ macro_rules! pfcp_table {
                 crate::table::Row {
                     name: $row,
                     ie_type: <$vty as crate::ie::IeType>::IE_TYPE,
-                    presence: pfcp_table!(@presence $p),
-                    repeat: pfcp_table!(@repeat $(* $($max)?)?),
-                    interfaces: crate::table::Interfaces(0 $(| crate::table::Interfaces::$interface.0)*),
-                    roles: &[$($(crate::table::Role {
-                        name: $role,
-                        presence: pfcp_table!(@presence $rp),
-                        repeat: pfcp_table!(@repeat $(* $($rmax)?)?),
-                        interfaces: crate::table::Interfaces(0 $(| crate::table::Interfaces::$ri.0)*),
-                    }),*)?],
+                    roles: pfcp_table!(@roles $row $p [$(* $($max)?)?] [$($interface)*] $([$($role $rp [$(* $($rmax)?)?] [$($ri)*]),*])?),
                     checked: pfcp_table!(@checked $($scope)? $($ascope)?),
                 },
             )*],
@@ -1156,6 +1157,21 @@ macro_rules! pfcp_table {
     (@presence O) => { crate::table::Presence::Optional };
     (@presence Cb) => { crate::table::Presence::Conditional };
     (@presence Ob) => { crate::table::Presence::Optional };
+    // The roles of a row: the row itself, or the rows that share its field.
+    (@roles $row:literal $p:ident [$($repeat:tt)*] [$($interface:ident)*]) => {
+        &[pfcp_table!(@role $row $p [$($repeat)*] [$($interface)*])]
+    };
+    (@roles $row:literal $p:ident $repeat:tt $interfaces:tt [$($role:literal $rp:ident [$($rrepeat:tt)*] [$($ri:ident)*]),*]) => {
+        &[$(pfcp_table!(@role $role $rp [$($rrepeat)*] [$($ri)*])),*]
+    };
+    (@role $name:literal $p:ident [$($repeat:tt)*] [$($interface:ident)*]) => {
+        crate::table::Role {
+            name: $name,
+            presence: pfcp_table!(@presence $p),
+            repeat: pfcp_table!(@repeat $($repeat)*),
+            interfaces: crate::table::Interfaces(0 $(| crate::table::Interfaces::$interface.0)*),
+        }
+    };
     (@repeat) => { crate::table::Repeat::Once };
     (@repeat *) => { crate::table::Repeat::Any };
     (@repeat * $max:literal) => { crate::table::Repeat::AtMost($max) };

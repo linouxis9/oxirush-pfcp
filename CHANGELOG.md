@@ -14,11 +14,11 @@ The first version, of TS 29.244 V19.6.0 (2026-06):
   and `FSeid::ipv6()` build an F-SEID of one address, as `FTeid::ipv4()` an F-TEID.
 - `check()`: how a message breaks the tables and clauses on an interface, each deviation
   with its path, its clause and the Cause of the answer; `deviations()` of a value on its
-  own. `Row::on` gives what a row is on an interface, or on a set of them: its presence,
-  the IEs that a message needs and how many it may have, and `None` where it is not: its
-  IEs have no Cause there (§7.6.9). A field that rows share, which the wire does not tell
-  apart, has them in `Row::roles`, each with its presence, its interfaces and how many IEs
-  of it may be there. A field that its clause encodes as another IE is checked as that IE:
+  own. A `Row` is its roles, each with its presence, its interfaces and how many IEs of
+  it may be there: the row itself, or the rows that share a field, which the wire does not
+  tell apart. `Row::on` gives what a row is on an interface, or on a set of them: its
+  presence, the IEs that a message needs and how many it may have, and `None` where it is
+  not: its IEs have no Cause there (§7.6.9); `Row::is_list` whether its tree is a list. A field that its clause encodes as another IE is checked as that IE:
   the Destination Interface of a Remote GTP-U Peer, and the QFIs of a PMF Control
   Information, which are `SixBits` as a QFI is. A message is checked as its receiver
   reads it: an IE that a scope keeps as octets, which the receiver reads as the value of

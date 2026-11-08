@@ -254,7 +254,7 @@ fn a_decoded_message_takes_at_most_243_times_its_octets() {
                     if outer.len() < 2 {
                         scopes.push(([&outer[..], &[row.ie_type]].concat(), inner));
                     }
-                    if row.repeat == Repeat::Once {
+                    if !row.is_list() {
                         continue;
                     }
                     // The entries: the row's IE, and in it up to two levels of grouped IEs,
@@ -275,7 +275,7 @@ fn a_decoded_message_takes_at_most_243_times_its_octets() {
                         // The last empty, with an IE of a null length and of no type, or with
                         // a value of each of its lists of values, of its fixed octets.
                         let mut leaves = vec![Vec::new(), ie(0, &[])];
-                        for row in last.rows.iter().filter(|row| row.repeat != Repeat::Once) {
+                        for row in last.rows.iter().filter(|row| row.is_list()) {
                             let Some(value) = ie_type_info(row.ie_type) else {
                                 continue;
                             };

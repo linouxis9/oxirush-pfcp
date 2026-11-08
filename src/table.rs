@@ -107,23 +107,19 @@ impl core::ops::BitOr for Interfaces {
     }
 }
 
-/// One row of a table: an IE that the scope can have.
+/// One row of a table: an IE that the scope can have, a field of the scope. A field that
+/// several rows of one IE type share, which the wire does not tell apart, is one row of
+/// those roles.
 #[derive(Debug)]
 pub struct Row {
-    /// The name that the table gives the IE: `Local F-TEID`. A field that several rows of
-    /// one IE type share, which the wire does not tell apart, has the name of the IE type,
-    /// and `roles` has the names of the rows.
+    /// The name that the table gives the IE: `Local F-TEID`. A field that several rows
+    /// share has the name of the IE type, and `roles` the names of the rows.
     pub name: &'static str,
     /// The IE type.
     pub ie_type: u16,
-    /// Its presence: of a shared field, the strongest of its rows, and [`on`](Self::on)
-    /// that of the rows of an interface.
-    pub presence: Presence,
-    /// How many times it may be there.
-    pub repeat: Repeat,
-    /// The interfaces that have it.
-    pub interfaces: Interfaces,
-    /// The rows that share the field, when several do.
+    /// The rows of the table that the field is, each with its presence, its interfaces
+    /// and how many IEs of it may be there: the row itself, or each row that shares the
+    /// field. [`on`](Self::on) gives what they are on an interface.
     pub roles: &'static [Role],
     /// Whether `check()` checks a condition of the row that the IEs of its scope show: of
     /// its presence (§7.6.6) or of its absence. A NOTE of two rows, as one of two IEs that
@@ -192,7 +188,8 @@ pub(crate) fn emit_field<T: IeType + Codec, F: FieldValues<T>>(
     }
 }
 
-/// One of the rows of a table that share a field: the wire does not tell them apart.
+/// A row of a table, as the field of a scope has it: the one of a field of its own, or one
+/// of the rows that share a field, which the wire does not tell apart.
 #[derive(Debug)]
 pub struct Role {
     /// The name that the table gives the row: `SGW-C FQ-CSID`.
@@ -226,16 +223,31 @@ pub struct Table {
 /// `check()` holds a message to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct On {
-    /// Its presence: of a shared field, the weakest of its rows there; on a set of
-    /// interfaces, the weakest on each, and `None` where one of them lacks the row, which a
-    /// message on the set may have and needs on none, whatever the condition beside it.
+    /// Its presence: the weakest of its roles there; on a set of interfaces, the weakest on
+    /// each, and `None` where one of them lacks the row, which a message on the set may
+    /// have and needs on none, whatever the condition beside it.
     pub presence: Option<Presence>,
-    /// How many IEs of it a message needs: one for a mandatory row, and of a shared field,
-    /// one for each of its mandatory rows there.
+    /// How many IEs of it a message needs: one for each of its mandatory roles there.
     pub needed: usize,
-    /// How many IEs of it a message may have: of a shared field, as many as its rows there
-    /// allow.
+    /// How many IEs of it a message may have: as many as its roles there allow, `Once` for
+    /// one.
     pub most: Repeat,
+}
+
+/// How many IEs `roles` allow together, `usize::MAX` for any number: what the field of a
+/// row holds, which the table macro asserts.
+pub(crate) const fn capacity(roles: &[Role]) -> usize {
+    let mut at = 0;
+    let mut most = 0usize;
+    while at < roles.len() {
+        most = most.saturating_add(match roles[at].repeat {
+            Repeat::Once => 1,
+            Repeat::AtMost(at_most) => at_most as usize,
+            Repeat::Any => usize::MAX,
+        });
+        at += 1;
+    }
+    most
 }
 
 impl Repeat {
@@ -252,29 +264,21 @@ impl Repeat {
 impl Row {
     /// What the row is on `interfaces`: `None` where none of them has it, as its IEs are
     /// discarded there (§7.6.9). On a set of interfaces, a message may have the IEs of the
-    /// rows of any of them, and needs what each of them needs: the weakest presence of
+    /// roles of any of them, and needs what each of them needs: the weakest presence of
     /// each, none where one of them lacks the row, and the fewest IEs that one of them
     /// needs.
     pub fn on(&self, interfaces: Interfaces) -> Option<On> {
-        if !self.interfaces.has(interfaces) {
-            return None;
-        }
         let roles = self.roles;
-        if roles.is_empty() {
-            let presence = self.interfaces.has_all(interfaces).then_some(self.presence);
-            return Some(On {
-                presence,
-                needed: usize::from(presence == Some(Presence::Mandatory)),
-                most: self.repeat,
-            });
+        if !roles.iter().any(|role| role.interfaces.has(interfaces)) {
+            return None;
         }
         let rank = |presence: &Presence| match presence {
             Presence::Mandatory => 0,
             Presence::Conditional => 1,
             Presence::Optional => 2,
         };
-        // Of each interface: the weakest presence of its rows, and the IEs of its mandatory
-        // rows.
+        // Of each interface: the weakest presence of its roles, and the IEs of its mandatory
+        // roles.
         let each = (0..5).map(|bit| Interfaces(1 << bit));
         let each = each.filter(|one| interfaces.has(*one)).map(|one| {
             let there = roles.iter().filter(move |role| role.interfaces.has(one));
@@ -299,6 +303,7 @@ impl Row {
                 Repeat::Any => None,
             });
         let most = match most.map(u8::try_from) {
+            Some(Ok(1)) => Repeat::Once,
             Some(Ok(most)) => Repeat::AtMost(most),
             _ => Repeat::Any,
         };
@@ -308,16 +313,22 @@ impl Row {
             most,
         })
     }
+
+    /// Whether the row is a list in the tree of its scope: of a role that may be there more
+    /// than once, or of roles that share the field.
+    pub fn is_list(&self) -> bool {
+        match self.roles {
+            [role] => role.repeat != Repeat::Once,
+            _ => true,
+        }
+    }
 }
 
 impl Table {
     /// The interfaces that its rows have.
     pub fn interfaces(&self) -> Interfaces {
-        let bits = self
-            .rows
-            .iter()
-            .fold(0, |bits, row| bits | row.interfaces.0);
-        Interfaces(bits)
+        let roles = self.rows.iter().flat_map(|row| row.roles.iter());
+        Interfaces(roles.fold(0, |bits, role| bits | role.interfaces.0))
     }
 
     /// The row of `ie_type`.
@@ -447,9 +458,7 @@ pub(crate) fn decode_scope_sized<S: Scope>(
         // No row is of a vendor's type, which a null length leaves out.
         if (placing == Placing::Malformed || body.is_empty())
             && !kept_first.contains(&ie_type)
-            && S::table()
-                .row_of(ie_type)
-                .is_some_and(|row| row.repeat == Repeat::Once)
+            && S::table().row_of(ie_type).is_some_and(|row| !row.is_list())
         {
             kept_first.push(ie_type);
         }
@@ -576,7 +585,7 @@ pub(crate) fn kept_positions<S: Scope>(scope: &S) -> Vec<Option<usize>> {
                 of_row.push((at, position));
             }
         });
-        let listed = row.repeat != Repeat::Once || entries > 1;
+        let listed = row.is_list() || entries > 1;
         for (at, position) in of_row {
             positions[at] = listed.then_some(position);
         }
@@ -735,9 +744,6 @@ mod tests {
         let row = Row {
             name: "shared",
             ie_type: 1,
-            presence: Presence::Mandatory,
-            repeat: Repeat::Any,
-            interfaces: both | Interfaces::SXB,
             roles: &ROLES,
             checked: false,
         };
@@ -752,7 +758,7 @@ mod tests {
         assert_eq!(row.on(Interfaces::N4), on(optional, 1, Repeat::AtMost(3)));
         assert_eq!(
             row.on(Interfaces::N4MB),
-            on(Some(Presence::Mandatory), 1, Repeat::AtMost(1))
+            on(Some(Presence::Mandatory), 1, Repeat::Once)
         );
         assert_eq!(row.on(both), on(optional, 1, Repeat::AtMost(4)));
         assert_eq!(row.on(Interfaces::SXB), on(optional, 0, Repeat::Any));

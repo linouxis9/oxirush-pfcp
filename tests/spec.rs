@@ -437,46 +437,6 @@ fn tables() {
         // The rows of the crate, a role each, with the field that has it.
         let mut entries: Vec<CrateRow> = Vec::new();
         for (field, row) in table.rows.iter().enumerate() {
-            // A shared field is of the strongest presence of its rows.
-            let strongest = row
-                .roles
-                .iter()
-                .map(|role| role.presence)
-                .min_by_key(|presence| match presence {
-                    Presence::Mandatory => 0,
-                    Presence::Conditional => 1,
-                    Presence::Optional => 2,
-                });
-            if let Some(strongest) = strongest
-                && strongest != row.presence
-            {
-                problems.push(format!(
-                    "Table {id}, field {:?}: {:?} in the crate, and its rows are at most {strongest:?}",
-                    row.name, row.presence
-                ));
-            }
-            // and on the interfaces of its rows.
-            let of_roles = row
-                .roles
-                .iter()
-                .fold(0, |bits, role| bits | role.interfaces.bits());
-            if !row.roles.is_empty() && of_roles != row.interfaces.bits() {
-                problems.push(format!(
-                    "Table {id}, field {:?}: interfaces {:?} in the crate, and its rows are on {of_roles:#b}",
-                    row.name, row.interfaces
-                ));
-            }
-            if row.roles.is_empty() {
-                entries.push((
-                    field,
-                    row.name,
-                    row.presence,
-                    row.interfaces,
-                    row.ie_type,
-                    row.repeat,
-                    Cell::new(false),
-                ));
-            }
             for role in row.roles {
                 entries.push((
                     field,
@@ -519,7 +479,7 @@ fn tables() {
                     entry.5
                 ));
             }
-            if !table.rows[entry.0].roles.is_empty() {
+            if table.rows[entry.0].roles.len() > 1 {
                 shared.entry(entry.0).or_default().push(*several);
             }
             match ie_type_of(ie_type, id) {
@@ -541,10 +501,11 @@ fn tables() {
                 true => Repeat::AtMost(cells.len() as u8),
                 false => Repeat::Any,
             };
-            if table.rows[field].repeat != expected {
+            let most = table.rows[field].on(Interfaces::ALL).map(|on| on.most);
+            if most != Some(expected) {
                 problems.push(format!(
-                    "Table {id}, field {:?}: {:?} in the crate, and its rows are {cells:?}",
-                    table.rows[field].name, table.rows[field].repeat
+                    "Table {id}, field {:?}: {most:?} in the crate, and its rows are {cells:?}",
+                    table.rows[field].name
                 ));
             }
         }
@@ -1182,7 +1143,8 @@ fn applicable() -> BTreeMap<&'static str, u8> {
                 };
                 for inner in info.tables {
                     let here = on.entry(inner.id).or_insert(0);
-                    let more = *here | (scope & row.interfaces.bits());
+                    let of_row = row.roles.iter().map(|role| role.interfaces.bits());
+                    let more = *here | (scope & of_row.fold(0, |bits, role| bits | role));
                     if more != *here {
                         *here = more;
                         changed = true;
@@ -1223,8 +1185,11 @@ fn constructors_by_interface() {
             table
                 .rows
                 .iter()
-                .filter(|row| row.presence == Presence::Mandatory && row.interfaces.has(interface))
-                .map(|row| row.name)
+                .flat_map(|row| row.roles.iter())
+                .filter(|role| {
+                    role.presence == Presence::Mandatory && role.interfaces.has(interface)
+                })
+                .map(|role| role.name)
                 .collect()
         };
         let differ = each

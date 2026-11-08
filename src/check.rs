@@ -27,7 +27,7 @@ use core::fmt;
 use crate::enums::CauseValue;
 use crate::ie::VENDOR;
 use crate::registry::ie_type_info;
-use crate::table::{Interfaces, Presence, Repeat, Row, Scope};
+use crate::table::{Interfaces, Presence, Row, Scope};
 
 /// One deviation: where, which clause, what, and the Cause of the answer.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -564,7 +564,7 @@ pub(crate) fn check_field_values<
     };
     for (nth, value) in values.iter().enumerate() {
         let nth = match kept {
-            false => (row.repeat != Repeat::Once).then_some(nth),
+            false => row.is_list().then_some(nth),
             true => Some(positions[nth]),
         };
         let here = Path::Row {
@@ -727,8 +727,8 @@ fn mandatory_missing<S: Scope>(
     if kept.clone().any(|ie| !ie.frames()) {
         return;
     }
-    let (nulls, incorrect) = match row.repeat {
-        Repeat::Once => match kept.next() {
+    let (nulls, incorrect) = match row.is_list() {
+        false => match kept.next() {
             Some(ie) if ie.octets.is_empty() => (1, false),
             Some(_) => (0, true),
             None => (0, false),
@@ -845,9 +845,9 @@ fn raw_deviations<S: Scope>(
         if row.on(context.interface).is_none() {
             continue;
         }
-        let first = match row.repeat {
-            Repeat::Once => alone,
-            _ => !ie.octets.is_empty() && !scope.decodes(ie.ie_type, &ie.octets),
+        let first = match row.is_list() {
+            false => alone,
+            true => !ie.octets.is_empty() && !scope.decodes(ie.ie_type, &ie.octets),
         };
         let deviation = match (first, ie.octets.is_empty()) {
             // A null length says what its row allows it to (§5.6.3).
@@ -870,7 +870,7 @@ fn raw_deviations<S: Scope>(
                 }
                 deviation
             }
-            (false, true) if row.repeat != Repeat::Once => continue,
+            (false, true) if row.is_list() => continue,
             (false, _) => Deviation::new(
                 here(),
                 "7.6.10",
