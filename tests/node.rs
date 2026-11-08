@@ -2343,7 +2343,8 @@ fn a_request_of_a_false_length_is_answered_invalid_length() {
         answer.check(Interfaces::N4)
     );
     // An IE that runs past its message is named in the answer (§7.6.7): of a session
-    // that the node has, as a session that it does not have is answered so first
+    // that the node has, as a session that it does not have is answered so first. The
+    // answer says the priority that the request says.
     let modification = SessionModificationRequest::default().with_cp_f_seid(FSeid {
         v4: true,
         seid: Some(1),
@@ -2351,14 +2352,19 @@ fn a_request_of_a_false_length_is_answered_invalid_length() {
         ..Default::default()
     });
     let mut octets = Message {
-        header: Header::session(up_seid, 10),
+        header: Header {
+            priority: Some(3),
+            ..Header::session(up_seid, 10)
+        },
         body: modification.into(),
     }
     .encode()
     .unwrap();
     octets[19] = 99;
     upf.handle_datagram(at(1), SMF, &octets);
-    let Body::SessionModificationResponse(response) = decoded(&sent(&mut upf)[0]).body else {
+    let answer = decoded(&sent(&mut upf)[0]);
+    assert_eq!(answer.header.priority, Some(3));
+    let Body::SessionModificationResponse(response) = answer.body else {
         panic!()
     };
     assert_eq!(response.offending_ie.map(|ie| ie.value), Some(57));
