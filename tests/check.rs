@@ -154,6 +154,53 @@ fn a_shared_field_has_the_presence_of_its_row_on_the_interface() {
     );
 }
 
+/// A field that rows share takes as many IEs as its rows allow on the interface: one for
+/// a row there once, any number for a row that is a list. The DNS Query and Response
+/// Filters of a PDI are lists on N4 (Table 7.5.2.2-2), and so is the Source IP Address of
+/// an IP Multicast Addressing Info, which is one on N4mb (Table 7.5.2.2-4).
+#[test]
+fn a_shared_field_whose_rows_are_lists_takes_as_many_ies_as_they_allow() {
+    let repeated = |message: &Message, interface: Interfaces| -> Vec<String> {
+        let found = message.check(interface).into_iter();
+        let repeated =
+            found.filter(|deviation| matches!(deviation.kind, DeviationKind::Repeated { .. }));
+        repeated.map(|deviation| deviation.path).collect()
+    };
+    let filter = DnsQueryResponseFilter {
+        domain_name_pattern: Lv16(b"example".to_vec().into()),
+        ..Default::default()
+    };
+    let source = SourceIpAddress {
+        v4: true,
+        ipv4_address: Some(Ipv4Addr::new(10, 1, 1, 1)),
+        ..Default::default()
+    };
+    let multicast = IpMulticastAddressingInfo::new(
+        IpMulticastAddress {
+            v4: true,
+            ipv4_address: Some(Ipv4Addr::new(232, 0, 0, 1)),
+            ..Default::default()
+        },
+        source.clone(),
+    )
+    .with_source_ip_address(source);
+    let mut message = establishment();
+    request_with(&mut message, |request| {
+        let pdi = request.create_pdr[0].pdi.as_mut().unwrap();
+        pdi.dns_query_response_filter = vec![filter; 3];
+        pdi.ip_multicast_addressing_info.push(multicast);
+    });
+    assert_eq!(repeated(&message, Interfaces::N4), Vec::<String>::new());
+    assert_eq!(
+        repeated(&message, Interfaces::N4MB),
+        ["/pfcp/Create PDR/0/PDI/IP Multicast Addressing Info/0/Source IP Address"]
+    );
+    assert_eq!(
+        repeated(&message, Interfaces::N4 | Interfaces::N4MB),
+        Vec::<String>::new()
+    );
+}
+
 /// §7.6.9: an IE of a row that is not on the interface is discarded, and the message
 /// processed: what its value breaks, and a value that does not decode, have no Cause. A
 /// Precedence of three octets on Sxa, which has no Precedence in Create PDR, and on the

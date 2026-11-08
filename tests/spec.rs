@@ -326,9 +326,17 @@ type DocumentTable = (
     )>,
 );
 
-/// A row of the crate: the field that has it, its name, presence, interfaces and IE type,
-/// and whether a row of the document is it.
-type CrateRow = (usize, &'static str, Presence, Interfaces, u16, Cell<bool>);
+/// A row of the crate: the field that has it, its name, presence, interfaces, IE type and
+/// repetition, and whether a row of the document is it.
+type CrateRow = (
+    usize,
+    &'static str,
+    Presence,
+    Interfaces,
+    u16,
+    Repeat,
+    Cell<bool>,
+);
 
 /// The tables of clause 7: each row, with its name, its presence, its interfaces, its IE
 /// type and how many IEs of it may be there, in the order of the table; a field that
@@ -460,6 +468,7 @@ fn tables() {
                     row.presence,
                     row.interfaces,
                     row.ie_type,
+                    row.repeat,
                     Cell::new(false),
                 ));
             }
@@ -470,6 +479,7 @@ fn tables() {
                     role.presence,
                     role.interfaces,
                     row.ie_type,
+                    role.repeat,
                     Cell::new(false),
                 ));
             }
@@ -479,12 +489,12 @@ fn tables() {
         for (at, (name, p, ifs, ie_type, several)) in rows.iter().enumerate() {
             let Some(entry) = entries
                 .iter()
-                .find(|entry| !entry.5.get() && entry.1 == *name)
+                .find(|entry| !entry.6.get() && entry.1 == *name)
             else {
                 problems.push(format!("Table {id}, row {name:?}: not in the crate"));
                 continue;
             };
-            entry.5.set(true);
+            entry.6.set(true);
             first_of_field[entry.0] = first_of_field[entry.0].min(at);
             if entry.2 != presence(p) {
                 problems.push(format!(
@@ -495,17 +505,17 @@ fn tables() {
             if entry.3.bits() != interfaces(ifs) {
                 problems.push(format!("Table {id}, row {name:?}: interfaces {:?} in the crate, {ifs:?} in the document", entry.3));
             }
-            // A field that rows share is a list of their IEs, as many as they are; another
-            // is a list where its comment lets several IEs be there, of the number that
-            // it says.
-            let field = &table.rows[entry.0];
-            if !field.roles.is_empty() {
-                shared.entry(entry.0).or_default().push(*several);
-            } else if field.repeat != repetition(several) {
+            // A row is a list where its comment lets several IEs be there, of the number
+            // that it says; a field that rows share is a list of their IEs, as many as
+            // they are, or any number where one of them is a list.
+            if entry.5 != repetition(several) {
                 problems.push(format!(
                     "Table {id}, row {name:?}: {:?} in the crate, {several} in the document",
-                    field.repeat
+                    entry.5
                 ));
+            }
+            if !table.rows[entry.0].roles.is_empty() {
+                shared.entry(entry.0).or_default().push(*several);
             }
             match ie_type_of(ie_type, id) {
                 Some(number) if number == entry.4 => {}
@@ -515,7 +525,7 @@ fn tables() {
                 )),
             }
         }
-        for entry in entries.iter().filter(|entry| !entry.5.get()) {
+        for entry in entries.iter().filter(|entry| !entry.6.get()) {
             problems.push(format!(
                 "Table {id}, row {:?}: not in the document",
                 entry.1

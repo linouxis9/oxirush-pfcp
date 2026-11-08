@@ -236,6 +236,8 @@ pub struct Role {
     pub name: &'static str,
     /// Its presence.
     pub presence: Presence,
+    /// How many IEs of it may be there.
+    pub repeat: Repeat,
     /// The interfaces that have it.
     pub interfaces: Interfaces,
 }

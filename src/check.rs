@@ -600,15 +600,18 @@ pub(crate) fn check_row(
         .rejected
         .is_some_and(|cause| count.max(1) > with_rejection(table, row, cause));
     let off = !row.interfaces.has(context.interface);
-    // A field that rows share has at most one IE for each of them on the interface.
-    let shared = !row.roles.is_empty()
-        && count
-            > row
-                .roles
-                .iter()
-                .filter(|role| role.interfaces.has(context.interface))
-                .count();
-    let over = shared || matches!(row.repeat, Repeat::AtMost(most) if count > usize::from(most));
+    // A field that rows share has as many IEs as its rows on the interface allow.
+    let most = |role: &crate::table::Role| match role.repeat {
+        Repeat::Once => 1,
+        Repeat::AtMost(most) => usize::from(most),
+        Repeat::Any => usize::MAX,
+    };
+    let roles = row.roles.iter();
+    let on = roles.filter(|role| role.interfaces.has(context.interface));
+    let shared = !row.roles.is_empty() && count > on.map(most).fold(0, usize::saturating_add);
+    // The receiver discards each IE of a row that is not on the interface (§7.6.9).
+    let over =
+        !off && (shared || matches!(row.repeat, Repeat::AtMost(most) if count > usize::from(most)));
     if rejected || off || over {
         row_deviations(table, row, [rejected, off, over], path, found);
     }
@@ -917,16 +920,19 @@ mod tests {
             Role {
                 name: "on N4",
                 presence: Presence::Mandatory,
+                repeat: Repeat::Once,
                 interfaces: Interfaces::N4,
             },
             Role {
                 name: "optional on N4",
                 presence: Presence::Optional,
+                repeat: Repeat::Once,
                 interfaces: Interfaces::N4,
             },
             Role {
                 name: "on N4mb",
                 presence: Presence::Mandatory,
+                repeat: Repeat::Once,
                 interfaces: Interfaces::N4MB,
             },
         ];

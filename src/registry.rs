@@ -1251,7 +1251,7 @@ pfcp_table! {
         source_interface_type: "Source Interface Type" C InterfaceType3gpp [SXA SXB N4 N4MB],
         ip_multicast_addressing_info: "IP Multicast Addressing Info" O* IpMulticastAddressingInfo [N4 N4MB],
         dns_query_response_filter: "DNS Query/Response Filter" O* DnsQueryResponseFilter [N4]
-            roles ["DNS Query Filter" O [N4], "DNS Response Filter" O [N4]],
+            roles ["DNS Query Filter" O* [N4], "DNS Response Filter" O* [N4]],
         mbs_session_identifier: "MBS Session Identifier" C MbsSessionIdentifier [N4],
         area_session_id: "Area Session ID" C AreaSessionId [N4],
         protocol_description: "Protocol Description" Ob ProtocolDescription [N4],
@@ -1277,7 +1277,7 @@ pfcp_table! {
     group IpMulticastAddressingInfo = 188, "IP Multicast Addressing Info", "7.5.2.2-4" {
         ip_multicast_address: "IP Multicast Address" M IpMulticastAddress [N4 N4MB],
         source_ip_address: "Source IP Address" M* SourceIpAddress [N4 N4MB]
-            roles ["Source IP Address" O [N4], "Source IP Address" M [N4MB]],
+            roles ["Source IP Address" O* [N4], "Source IP Address" M [N4MB]],
     }
 }
 

@@ -13,7 +13,9 @@ The first version, of TS 29.244 V19.6.0 (2026-06):
 - `check()`: how a message breaks the tables and clauses on an interface, each deviation
   with its path, its clause and the Cause of the answer; `deviations()` of a value on its
   own. `Row::presence_on` gives the presence of a row on an interface, or on a set of
-  them, and `None` where it is not: its IEs have no Cause there (§7.6.9).
+  them, and `None` where it is not: its IEs have no Cause there (§7.6.9). A field that
+  rows share, which the wire does not tell apart, has them in `Row::roles`, each with its
+  presence, its interfaces and how many IEs of it may be there.
 - With `tree`, a message as a tree that prints as JSON, on oxirush-utils 0.2, whose
   `tree` the crate exports at its root, and read and edited by path (`paths::select`,
   `paths::set`); with `serde`, serialized as its tree. What a message lacks selects

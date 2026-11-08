@@ -875,7 +875,7 @@ macro_rules! pfcp_table {
         $(#[$meta:meta])*
         $kind:ident $ty:ident = $code:literal, $name:literal, $id:literal {
             $( $field:ident : $row:literal $p:ident $(* $($max:literal)?)? $vty:ident $($raw:literal)?
-                [$($interface:ident)*] $(roles [$($role:literal $rp:ident [$($ri:ident)*]),*])?
+                [$($interface:ident)*] $(roles [$($role:literal $rp:ident $(* $($rmax:literal)?)? [$($ri:ident)*]),*])?
                 $(absent(|$ascope:ident| $absent:expr))? $(if |$scope:ident| $condition:expr)? , )*
         }
     ) => { pastey::paste! {
@@ -916,12 +916,14 @@ macro_rules! pfcp_table {
                         &[$($(crate::table::Role {
                             name: $role,
                             presence: pfcp_table!(@presence $rp),
+                            repeat: pfcp_table!(@repeat $(* $($rmax)?)?),
                             interfaces: crate::table::Interfaces(0 $(| crate::table::Interfaces::$ri.0)*),
                         }),*)?],
                     ),
                     roles: &[$($(crate::table::Role {
                         name: $role,
                         presence: pfcp_table!(@presence $rp),
+                        repeat: pfcp_table!(@repeat $(* $($rmax)?)?),
                         interfaces: crate::table::Interfaces(0 $(| crate::table::Interfaces::$ri.0)*),
                     }),*)?],
                     checked: pfcp_table!(@checked $($scope)? $($ascope)?),
