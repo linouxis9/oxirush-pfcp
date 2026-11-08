@@ -227,7 +227,7 @@ impl Message {
     pub fn check(&self, interface: Interfaces) -> Vec<Deviation> {
         let mut found = self.header_deviations(interface);
         let message_type = self.body.message_type();
-        let rejection = self.body.cause().filter(|cause| cause.value() >= 64);
+        let rejection = self.body.cause().filter(|cause| cause.rejects());
         // "This flag shall be set to "1" by the UP function, if the "Overload Control
         // Information" is included in the PFCP Session Establishment Response and the Cause
         // IE is set to a rejection cause value" (§8.2.76): AOCI, which the value of the IE
@@ -298,9 +298,8 @@ impl Message {
         let cause = self.body.cause();
         // SEID 0: an establishment, a report to another SMF, or an answer to a session
         // that the node does not have or to a request that it rejects (§7.2.2.4.2).
-        let rejection = cause.is_some_and(|cause| cause.value() >= 64);
         let seid_zero_known = seid == Some(0) && matches!(message_type, 52 | 54)
-            || seid == Some(0) && cause.is_some() && !rejection;
+            || seid == Some(0) && cause.is_some_and(|cause| cause.accepts());
         // A Session Report Request of SEID 0 moves the session to another SMF of the set
         // and carries the Old CP F-SEID of the previous one; one of a known SEID has none
         // (§7.2.2.4.2 bullet 4, §5.22.2 bullet 4, Table 7.5.8.1-1).

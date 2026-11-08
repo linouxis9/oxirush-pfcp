@@ -558,7 +558,8 @@ fn a_rejection_carries_no_ie_that_it_may_not_as_octets_either() {
 }
 
 /// §7.2.2.4.2: SEID 0 in an establishment, or in an answer that rejects; not in a
-/// modification, nor in an answer that accepts.
+/// modification, nor in an answer that accepts. A Cause of 0, reserved (Table 8.2.1-1),
+/// neither accepts nor rejects, and is told once.
 #[test]
 fn seid_0_only_where_the_peer_seid_is_not_known() {
     let establishment = establishment();
@@ -590,6 +591,9 @@ fn seid_0_only_where_the_peer_seid_is_not_known() {
             .iter()
             .any(|deviation| deviation.clause == "7.2.2.4.2")
     );
+    let deletion = SessionDeletionResponse::new(Cause::new(CauseValue::from_value(0)));
+    let reserved = DeviationKind::ReservedValue { value: 0 };
+    assert_eq!(kinds(&Message::session(0, 8, deletion), Interfaces::N4), [reserved]);
 }
 
 /// §7.2.2.4.2 bullet 4, §5.22.2 bullet 4, Table 7.5.8.1-1: a Session Report Request of

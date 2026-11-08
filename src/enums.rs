@@ -364,4 +364,10 @@ impl CauseValue {
     pub(crate) const fn accepts(self) -> bool {
         matches!(self.effective().value(), 1..=63)
     }
+
+    /// Whether the Cause rejects the request: 64 to 255. A Cause of 0, which Table 8.2.1-1
+    /// reserves, neither accepts nor rejects.
+    pub(crate) const fn rejects(self) -> bool {
+        self.value() >= 64
+    }
 }
