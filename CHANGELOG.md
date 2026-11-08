@@ -16,7 +16,8 @@ The first version, of TS 29.244 V19.6.0 (2026-06):
   with its path, its clause and the Cause of the answer; `deviations()` of a value on its
   own. A `Row` is its roles, each with its presence, its interfaces and how many IEs of
   it may be there: the row itself, or the rows that share a field, which the wire does not
-  tell apart. `Row::on` gives what a row is on an interface, or on a set of them: its
+  tell apart; `Row::content` the table of a grouped IE in its place, of an IE type whose
+  content differs by place. `Row::on` gives what a row is on an interface, or on a set of them: its
   presence, the IEs that a message needs and how many it may have, and `None` where it is
   not: its IEs have no Cause there (§7.6.9); `Row::is_list` whether its tree is a list. A field that its clause encodes as another IE is checked as that IE:
   the Destination Interface of a Remote GTP-U Peer, and the QFIs of a PMF Control

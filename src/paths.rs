@@ -473,13 +473,11 @@ enum Of {
     Nothing,
     /// A message.
     Message(&'static MessageTypeInfo),
-    /// The IEs of a message or of a grouped IE, of the tables of its content: one, or each
-    /// of those of a grouped IE that has other content in other places, which the tree does
-    /// not tell apart.
-    Ies(&'static [&'static Table]),
-    /// The values of an IE type, as a row that is a list has them, and an IE that is there
-    /// more times than its row allows.
-    List(&'static IeTypeInfo),
+    /// The IEs of a message or of a grouped IE, of the table of their place.
+    Ies(&'static Table),
+    /// The values of a row, as a row that is a list has them, and one that is there more
+    /// times than it allows.
+    List(&'static Row),
     /// A value of an IE type that is no grouped IE: the members that its tree may have.
     Value(&'static IeTypeInfo),
     /// A field of a value, or of the header, an entry of a list of them, or a member of a
@@ -493,43 +491,41 @@ impl core::fmt::Debug for Of {
         match self {
             Self::Nothing => f.write_str("Nothing"),
             Self::Message(info) => f.debug_tuple("Message").field(&info.name()).finish(),
-            Self::Ies(tables) => {
-                let ids = tables.iter().map(|table| table.id);
-                f.debug_tuple("Ies")
-                    .field(&ids.collect::<Vec<_>>())
-                    .finish()
-            }
-            Self::List(info) => f.debug_tuple("List").field(&info.name).finish(),
+            Self::Ies(table) => f.debug_tuple("Ies").field(&table.id).finish(),
+            Self::List(row) => f.debug_tuple("List").field(&row.name).finish(),
             Self::Value(info) => f.debug_tuple("Value").field(&info.name).finish(),
             Self::Below(below) => f.debug_tuple("Below").field(below).finish(),
         }
     }
 }
 
-/// The row of `name` of `tables`, as the tree names it.
-fn row_named(tables: &[&'static Table], name: &str) -> Option<&'static Row> {
-    let mut rows = tables.iter().flat_map(|table| table.rows.iter());
-    rows.find(|row| tree::same_name(row.name, name))
+/// The row of `name` of `table`, as the tree names it.
+fn row_named(table: &'static Table, name: &str) -> Option<&'static Row> {
+    table
+        .rows
+        .iter()
+        .find(|row| tree::same_name(row.name, name))
 }
 
 /// What `value` is, of a row: the list of its values, or its value.
-fn of_row(row: &Row, value: Option<&Value>) -> Of {
-    let Some(info) = ie_type_info(row.ie_type) else {
-        return Of::Nothing;
-    };
+fn of_row(row: &'static Row, value: Option<&Value>) -> Of {
     match value.map_or(row.is_list(), Value::is_array) {
-        true => Of::List(info),
-        false => of_value(info, value),
+        true => Of::List(row),
+        false => of_value(row, value),
     }
 }
 
-/// What `value` is, of an IE type: the IEs of a grouped IE, or a value with the flags and
-/// fields of its figure. An IE that the scope keeps as its octets has none of them.
-fn of_value(info: &'static IeTypeInfo, value: Option<&Value>) -> Of {
-    match info.form {
+/// What `value` is, of a row: the IEs of a grouped IE, of the table of its place, or a
+/// value with the flags and fields of its figure. An IE that the scope keeps as its octets
+/// has none of them.
+fn of_value(row: &'static Row, value: Option<&Value>) -> Of {
+    let Some(info) = ie_type_info(row.ie_type) else {
+        return Of::Nothing;
+    };
+    match row.content {
         _ if value.is_some_and(is_octets) => Of::Below(&KEPT),
-        Form::Grouped => Of::Ies(info.tables),
-        _ => Of::Value(info),
+        Some(table) => Of::Ies(table),
+        None => Of::Value(info),
     }
 }
 
@@ -541,12 +537,11 @@ fn of_kept(value: Option<&Value>) -> Of {
     }
 }
 
-/// The IE type of no row of `tables` that `name` writes, as [`scope_from_tree`] reads it:
+/// The IE type of no row of `table` that `name` writes, as [`scope_from_tree`] reads it:
 /// its number, or the name of its type.
-fn of_no_row(tables: &[&'static Table], name: &str) -> Option<u16> {
+fn of_no_row(table: &Table, name: &str) -> Option<u16> {
     let ie_type = type_of_name(name)?;
-    let row = tables.iter().any(|table| table.row_of(ie_type).is_some());
-    (!row).then_some(ie_type)
+    table.row_of(ie_type).is_none().then_some(ie_type)
 }
 
 impl Paths {
@@ -627,21 +622,21 @@ impl tree::Family for Paths {
         match shape.0 {
             // An IE of no row, by its number or the name of its type: each member that
             // names it so, or the name that the tree prints, where `set` adds it.
-            Of::Ies(tables) if row_named(tables, segment).is_none() => {
-                let Some(ie_type) = of_no_row(tables, segment) else {
+            Of::Ies(table) if row_named(table, segment).is_none() => {
+                let Some(ie_type) = of_no_row(table, segment) else {
                     return Ok(Step::Plain);
                 };
                 let mut found = false;
                 for (written, value) in value.as_object().into_iter().flatten() {
-                    if row_named(tables, written).is_none()
-                        && of_no_row(tables, written) == Some(ie_type)
+                    if row_named(table, written).is_none()
+                        && of_no_row(table, written) == Some(ie_type)
                     {
                         next.member(written, value, Shape(of_kept(Some(value))));
                         found = true;
                     }
                 }
                 if !found {
-                    let name = crate::tree_name(ie_type, tables.first().copied());
+                    let name = crate::tree_name(ie_type, Some(table));
                     next.absent(&name, Shape(Of::Nothing));
                 }
                 Ok(Step::Taken)
@@ -670,13 +665,11 @@ impl tree::Family for Paths {
 
     fn member(&self, shape: &Shape, name: &str, value: Option<&Value>) -> Shape {
         Shape(match shape.0 {
-            Of::Message(info) if tree::same_name(name, "ies") => {
-                Of::Ies(core::slice::from_ref(&info.table))
-            }
+            Of::Message(info) if tree::same_name(name, "ies") => Of::Ies(info.table),
             // The other members of the header are scalars.
             Of::Message(_) => Of::Below(&Below::Scalar),
-            Of::Ies(tables) => {
-                row_named(tables, name).map_or(of_kept(value), |row| of_row(row, value))
+            Of::Ies(table) => {
+                row_named(table, name).map_or(of_kept(value), |row| of_row(row, value))
             }
             Of::Value(info)
                 if info
@@ -693,7 +686,7 @@ impl tree::Family for Paths {
 
     fn entry(&self, shape: &Shape, value: Option<&Value>) -> Shape {
         Shape(match shape.0 {
-            Of::List(info) => of_value(info, value),
+            Of::List(row) => of_value(row, value),
             Of::Below(Below::List(below)) => Of::Below(below),
             _ => Of::Nothing,
         })
@@ -704,7 +697,7 @@ impl tree::Family for Paths {
             Of::Message(_) => crate::message::forms::NAMES
                 .iter()
                 .any(|member| tree::same_name(member, name)),
-            Of::Ies(tables) => row_named(tables, name).is_some(),
+            Of::Ies(table) => row_named(table, name).is_some(),
             Of::Value(info) => info
                 .members
                 .iter()
@@ -735,18 +728,15 @@ fn no_such_member(of: Of, name: &str) -> Option<String> {
         ),
     };
     Some(match of {
-        Of::Ies(tables) => {
-            let row = type_of_name(name)
-                .and_then(|ie_type| tables.iter().find_map(|table| table.row_of(ie_type)));
-            if let Some(row) = row {
+        Of::Ies(table) => {
+            if let Some(row) = type_of_name(name).and_then(|ie_type| table.row_of(ie_type)) {
                 return Some(alloc::format!(
                     "{name:?} is the IE type of the row {}, which goes by its name",
                     row.name
                 ));
             }
-            let rows = tables.iter().flat_map(|table| table.rows.iter());
-            let names: Vec<&str> = rows.map(|row| row.name).collect();
-            no_such_ie(tables.first()?, &names, name)
+            let names: Vec<&str> = table.rows.iter().map(|row| row.name).collect();
+            no_such_ie(table, &names, name)
         }
         Of::Message(_) => members(crate::message::forms::NAMES),
         Of::Value(info) => members(info.members),
@@ -785,8 +775,8 @@ fn room(value: Option<&Value>, of: Of, list: bool, segment: &str) -> Option<Valu
             members.insert(name.into(), Value::Object(Map::new()));
             Some(Value::Object(members))
         }
-        (Value::Object(members), Of::Ies(tables)) if lacks(members, segment) => {
-            let row = row_named(tables, segment)?;
+        (Value::Object(members), Of::Ies(table)) if lacks(members, segment) => {
+            let row = row_named(table, segment)?;
             let empty = match (row.is_list(), ie_type_info(row.ie_type)?.form) {
                 (false, Form::Grouped) => Value::Object(Map::new()),
                 (false, _) => return None,
@@ -862,7 +852,7 @@ mod tests {
             r#"Shape(Message("PFCP Heartbeat Request"))"#
         );
         let ies = Paths.member(&message, "ies", Some(&heartbeat["ies"]));
-        assert_eq!(alloc::format!("{ies:?}"), r#"Shape(Ies(["7.4.2.1-1"]))"#);
+        assert_eq!(alloc::format!("{ies:?}"), r#"Shape(Ies("7.4.2.1-1"))"#);
         // The header is no table of IEs: its fields are scalars
         let sequence = Paths.member(&message, "Sequence Number", None);
         assert_eq!(alloc::format!("{sequence:?}"), "Shape(Below(Scalar))");

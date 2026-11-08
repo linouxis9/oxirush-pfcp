@@ -2117,6 +2117,29 @@ fn a_message_too_long_for_its_length() {
     );
 }
 
+/// An IE type whose content differs by place, as Session Report (Tables 7.5.7.3-1 and
+/// 7.5.8.6-1), has the rows of its place: in a Session Deletion Response, an Access
+/// Availability Report, of the other table, is an IE of no row there, by the name of its
+/// type, which is written by its octets, and `set` writes no row of it; in a Session
+/// Report Request, it is a row.
+#[test]
+fn a_grouped_ie_has_the_rows_of_its_place() {
+    let information =
+        "/pfcp/Session Report/0/Access Availability Report/Access Availability Information";
+    let value = || tree!([{"Access Type": "3GPP access type"}]);
+    let mut deletion = tree!({"message": "PFCP Session Deletion Response", "SEID": 1, "Sequence Number": 1,
+        "ies": {"Cause": "Request accepted (success)", "Session Report": [{"SRR ID": 1}]}});
+    let availability = "/pfcp/Session Report/0/Access Availability Report";
+    assert!(select(&deletion, availability).unwrap().is_empty());
+    assert!(set(&mut deletion, information, value()).is_err());
+    set(&mut deletion, availability, tree!({"octets": "0001"})).unwrap();
+    Message::from_tree(&deletion).unwrap();
+    let mut request = tree!({"message": "PFCP Session Report Request", "SEID": 1, "Sequence Number": 1,
+        "ies": {"Report Type": {"SESR": true}, "Session Report": [{"SRR ID": 1}]}});
+    set(&mut request, information, value()).unwrap();
+    Message::from_tree(&request).unwrap();
+}
+
 /// A spare octet of a value is 0 where its tree leaves it out, and its tree has it only
 /// where it is set, as the spare bits of the header and of a narrow value: an SDF Filter,
 /// PFD Contents, an SMF Set ID, a Multicast Transport Information and the DL and UL

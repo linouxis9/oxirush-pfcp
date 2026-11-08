@@ -48,7 +48,7 @@ macro_rules! pfcp_ies {
                 _ => (&[], None),
             }
         }
-        $( pfcp_ies!(@impls $num $name [pfcp_ies!(@length $form $(($fixed))?)] $($($ty),+)?); )*
+        $( pfcp_ies!(@impls $form $num $name [pfcp_ies!(@length $form $(($fixed))?)] $($($ty),+)?); )*
 
         /// What the tree of each field of a value of `ie_type` may hold below it, of those
         /// whose tree is no scalar: none for a grouped IE.
@@ -60,15 +60,21 @@ macro_rules! pfcp_ies {
             }
         }
     };
-    (@impls $num:literal $name:literal [$fixed:expr] $($ty:ident),*) => {
+    (@impls $form:ident $num:literal $name:literal [$fixed:expr] $($ty:ident),*) => {
         $(
             impl crate::ie::IeType for $ty {
                 const IE_TYPE: u16 = $num;
                 const TYPE_NAME: &'static str = $name;
                 const FIXED: Option<u16> = $fixed;
             }
+
+            impl crate::table::Content for $ty {
+                const TABLE: Option<&'static crate::table::Table> = pfcp_ies!(@content $form $ty);
+            }
         )*
     };
+    (@content grouped $ty:ident) => { pastey::paste! { Some(&[<$ty:snake:upper _TABLE>]) } };
+    (@content $form:ident $ty:ident) => { None };
     (@form fixed) => { crate::registry::Form::Fixed };
     (@form variable) => { crate::registry::Form::Variable };
     (@form extendable) => { crate::registry::Form::Extendable };
@@ -950,6 +956,7 @@ macro_rules! pfcp_table {
                     name: $row,
                     ie_type: <$vty as crate::ie::IeType>::IE_TYPE,
                     roles: pfcp_table!(@roles $row $p [$(* $($max)?)?] [$($interface)*] $([$($role $rp [$(* $($rmax)?)?] [$($ri)*]),*])?),
+                    content: <$vty as crate::table::Content>::TABLE,
                     checked: pfcp_table!(@checked $($scope)? $($ascope)?),
                 },
             )*],

@@ -121,10 +121,21 @@ pub struct Row {
     /// and how many IEs of it may be there: the row itself, or each row that shares the
     /// field. [`on`](Self::on) gives what they are on an interface.
     pub roles: &'static [Role],
+    /// The table of the content of a grouped IE in this place: of an IE type whose content
+    /// differs by place, as Session Report (Tables 7.5.7.3-1 and 7.5.8.6-1), the one of
+    /// this place. `None` for another IE.
+    pub content: Option<&'static Table>,
     /// Whether `check()` checks a condition of the row that the IEs of its scope show: of
     /// its presence (§7.6.6) or of its absence. A NOTE of two rows, as one of two IEs that
     /// one of them is needed, is checked at one of them.
     pub checked: bool,
+}
+
+/// The table of the content of a value: of a grouped IE, the table of its type of the
+/// crate, which is one place's; none for another value. The registry writes it for each
+/// type.
+pub(crate) trait Content {
+    const TABLE: Option<&'static Table> = None;
 }
 
 /// The values of a field of a scope: one, in its place or boxed, or a list. The
@@ -745,6 +756,7 @@ mod tests {
             name: "shared",
             ie_type: 1,
             roles: &ROLES,
+            content: None,
             checked: false,
         };
         let optional = Some(Presence::Optional);
