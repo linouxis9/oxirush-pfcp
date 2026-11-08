@@ -819,6 +819,16 @@ fn a_report_of_seid_0_carries_the_old_cp_f_seid() {
             .iter()
             .any(|deviation| deviation.clause == "7.2.2.4.2")
     );
+    // On Sxb, whose table has no Old CP F-SEID, its receiver discards it (§7.6.9): a known
+    // SEID with it breaks nothing more, and SEID 0 is without it
+    let off = DeviationKind::NotOnInterface { ie_type: 57 };
+    assert_eq!(
+        kinds(&report(0x1001, true), Interfaces::SXB),
+        std::slice::from_ref(&off)
+    );
+    let without =
+        DeviationKind::Rule("a Session Report Request of SEID 0 without the Old CP F-SEID");
+    assert_eq!(kinds(&report(0, true), Interfaces::SXB), [without, off]);
 }
 
 /// Table 7.3-1: PFD management is not on Sxa; a message type of no table is reported.
@@ -881,6 +891,36 @@ fn check_one_change_per_rule() {
     assert_eq!(
         kinds(&message, Interfaces::N4),
         [DeviationKind::RuleChangedTwice { rule: "PDR", id: 5 }]
+    );
+    // On Sxb, whose table has no MAR nor BAR, their receiver discards them (§7.6.9): what
+    // they hold breaks nothing more
+    let mar = || {
+        CreateMar::new(
+            MarId::new(1),
+            SteeringFunctionality::new(SteeringFunctionalityValue::AtsssLl),
+            SteeringMode::new(SteeringModeValue::ActiveStandby),
+        )
+    };
+    let mars = SessionModificationRequest::default()
+        .with_create_mar(mar())
+        .with_create_mar(mar());
+    let mars = Message::session(0x2002, 10, mars);
+    let twice = DeviationKind::RuleChangedTwice { rule: "MAR", id: 1 };
+    assert!(kinds(&mars, Interfaces::N4).contains(&twice));
+    assert_eq!(
+        kinds(&mars, Interfaces::SXB),
+        [DeviationKind::NotOnInterface { ie_type: 165 }]
+    );
+    let bars = SessionModificationRequest::default()
+        .with_create_bar(CreateBar::new(BarId::new(1)))
+        .with_remove_bar(RemoveBar::new(BarId::new(1)));
+    let bars = Message::session(0x2002, 11, bars);
+    let twice = DeviationKind::RuleChangedTwice { rule: "BAR", id: 1 };
+    assert_eq!(kinds(&bars, Interfaces::N4), [twice]);
+    assert!(
+        kinds(&bars, Interfaces::SXB)
+            .iter()
+            .all(|kind| matches!(kind, DeviationKind::NotOnInterface { .. }))
     );
 }
 

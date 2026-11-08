@@ -185,7 +185,8 @@ impl RawIe {
     /// that is not does not frame, nor do the IEs after it (§7.6.7).
     pub(crate) fn frames(&self) -> bool {
         let content = self.octets.len() + 2 * usize::from(self.enterprise_id.is_some());
-        self.length.is_none_or(|length| usize::from(length) == content)
+        self.length
+            .is_none_or(|length| usize::from(length) == content)
     }
 
     /// Write the IE.

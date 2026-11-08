@@ -254,6 +254,7 @@ impl Message {
         // does not show alone.
         if let Body::SessionEstablishmentResponse(response) = &self.body
             && rejection.is_some()
+            && self.body.takes(54, interface)
             && let Some(overload) = &response.overload_control_information
             && !overload
                 .overload_control_information_flags
@@ -288,7 +289,7 @@ impl Message {
         } else {
             "6.3.3.2"
         };
-        for (rule, id) in self.body.rules_changed_twice() {
+        for (rule, id) in self.body.rules_changed_twice(interface) {
             found.push(Deviation::new(
                 "/pfcp",
                 clause,
@@ -318,7 +319,9 @@ impl Message {
         // and carries the Old CP F-SEID of the previous one; one of a known SEID has none
         // (§7.2.2.4.2 bullet 4, §5.22.2 bullet 4, Table 7.5.8.1-1).
         let old = match &self.body {
-            Body::SessionReportRequest(request) => Some(request.old_cp_f_seid.is_some()),
+            Body::SessionReportRequest(request) => {
+                Some(request.old_cp_f_seid.is_some() && self.body.takes(57, interface))
+            }
             _ => None,
         };
         // A field of more than its bits, at its member of the tree of the message.
@@ -455,6 +458,14 @@ pub fn is_request(message_type: u8) -> bool {
 }
 
 impl Body {
+    /// Whether its receiver on `interface` takes the IEs of the row of `ie_type`: it
+    /// discards those of a row that is not on the interface, and nothing that they hold is
+    /// told (§7.6.9).
+    fn takes(&self, ie_type: u16, interface: Interfaces) -> bool {
+        let row = self.table().and_then(|table| table.row_of(ie_type));
+        row.is_some_and(|row| row.on(interface).is_some())
+    }
+
     /// The Cause of a response.
     pub fn cause(&self) -> Option<CauseValue> {
         let cause = match self {
@@ -476,15 +487,16 @@ impl Body {
 
     /// Each rule that the message creates, updates or removes more than once (§5.2.1,
     /// §6.3.3.2), by the name of its type and its ID.
-    fn rules_changed_twice(&self) -> Vec<(&'static str, u32)> {
+    fn rules_changed_twice(&self, interface: Interfaces) -> Vec<(&'static str, u32)> {
         let mut twice = Vec::new();
         let mut ids = Ids::default();
         // The IDs of the rules of a type, of each of the lists of the message that change
-        // them, and those that are there twice.
+        // them on the interface, and those that are there twice.
         macro_rules! rules {
-            ($body:ident: $($rule:literal [$($list:ident),+] $id:ident),+ $(,)?) => {{$(
+            ($body:ident: $($rule:literal [$($list:ident: $of:ident),+] $id:ident),+ $(,)?) => {{$(
                 $(
-                    for rule in $body.$list.iter() {
+                    let taken = self.takes(<$of as crate::ie::IeType>::IE_TYPE, interface);
+                    for rule in $body.$list.iter().filter(|_| taken) {
                         if let Some(id) = rule.$id.as_ref() {
                             ids.push(id.value.into());
                         }
@@ -494,23 +506,24 @@ impl Body {
                 ids.clear();
             )+}};
         }
+        use crate::registry::*;
         match self {
             Self::SessionEstablishmentRequest(body) => rules!(body:
-                "PDR" [create_pdr] pdr_id,
-                "FAR" [create_far] far_id,
-                "URR" [create_urr] urr_id,
-                "QER" [create_qer] qer_id,
-                "MAR" [create_mar] mar_id,
-                "SRR" [create_srr] srr_id,
+                "PDR" [create_pdr: CreatePdr] pdr_id,
+                "FAR" [create_far: CreateFar] far_id,
+                "URR" [create_urr: CreateUrr] urr_id,
+                "QER" [create_qer: CreateQer] qer_id,
+                "MAR" [create_mar: CreateMar] mar_id,
+                "SRR" [create_srr: CreateSrr] srr_id,
             ),
             Self::SessionModificationRequest(body) => rules!(body:
-                "PDR" [create_pdr, update_pdr, remove_pdr] pdr_id,
-                "FAR" [create_far, update_far, remove_far] far_id,
-                "URR" [create_urr, update_urr, remove_urr] urr_id,
-                "QER" [create_qer, update_qer, remove_qer] qer_id,
-                "BAR" [create_bar, update_bar, remove_bar] bar_id,
-                "MAR" [create_mar, update_mar, remove_mar] mar_id,
-                "SRR" [create_srr, update_srr, remove_srr] srr_id,
+                "PDR" [create_pdr: CreatePdr, update_pdr: UpdatePdr, remove_pdr: RemovePdr] pdr_id,
+                "FAR" [create_far: CreateFar, update_far: UpdateFar, remove_far: RemoveFar] far_id,
+                "URR" [create_urr: CreateUrr, update_urr: UpdateUrr, remove_urr: RemoveUrr] urr_id,
+                "QER" [create_qer: CreateQer, update_qer: UpdateQer, remove_qer: RemoveQer] qer_id,
+                "BAR" [create_bar: CreateBar, update_bar: UpdateBar, remove_bar: RemoveBar] bar_id,
+                "MAR" [create_mar: CreateMar, update_mar: UpdateMar, remove_mar: RemoveMar] mar_id,
+                "SRR" [create_srr: CreateSrr, update_srr: UpdateSrr, remove_srr: RemoveSrr] srr_id,
             ),
             _ => {}
         }
