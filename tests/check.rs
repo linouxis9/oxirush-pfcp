@@ -2676,7 +2676,7 @@ fn node_messages_of_each_interface() {
     let pfd = PfdContents {
         fd: true,
         spare_octet: Spare(0),
-        flow_description: Some(Lv16(b"permit out ip from any to any".into())),
+        flow_description: Some(TextLv16(b"permit out ip from any to any".into())),
         ..Default::default()
     };
     on_and_off(vec![

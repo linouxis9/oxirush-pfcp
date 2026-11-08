@@ -38,7 +38,7 @@ pfcp_layout! {
     pub struct SdfFilter "8.2.5" {
         flags(u8) { smmii "SMMII": 6, bid "BID": 5, fl "FL": 4, spi "SPI": 3, ttc "TTC": 2, fd "FD": 1 }
         spare_octet "Spare octet": Spare,
-        flow_description "Flow Description": Lv16 if fd,
+        flow_description "Flow Description": TextLv16 if fd,
         tos_traffic_class "ToS Traffic Class": u16 if ttc,
         security_parameter_index "Security Parameter Index": u32 if spi,
         flow_label "Flow Label": U24 if fl,
@@ -94,9 +94,9 @@ pfcp_layout! {
     pub struct PfdContents "8.2.39" {
         flags(u8) { adnp "ADNP": 8, aurl "AURL": 7, afd "AFD": 6, dnp "DNP": 5, cp "CP": 4, dn "DN": 3, url "URL": 2, fd "FD": 1 }
         spare_octet "Spare octet": Spare,
-        flow_description "Flow Description": Lv16 if fd,
-        url_field "URL field": Lv16 if url,
-        domain_name "Domain Name": Lv16 if dn,
+        flow_description "Flow Description": TextLv16 if fd,
+        url_field "URL field": TextLv16 if url,
+        domain_name "Domain Name": TextLv16 if dn,
         custom_pfd_content "Custom PFD Content": Lv16 if cp,
         domain_name_protocol "Domain Name Protocol": Lv16 if dnp,
         additional_flow_description "Additional Flow Description": Lv16 if afd,
@@ -109,7 +109,7 @@ pfcp_layout! {
     /// Flow Information (§8.2.61): the Flow Direction of Table 8.2.61-1 and the flow.
     pub struct FlowInformation "8.2.61" {
         flags(u8) { flow_direction "Flow Direction": 1 / 3 as FlowDirection }
-        flow_description "Flow Description": Lv16,
+        flow_description "Flow Description": TextLv16,
     }
 }
 
@@ -708,7 +708,7 @@ impl From<&str> for TextLv8 {
 }
 
 macro_rules! identity_lv8 {
-    ($($ty:ident $as_text:ident $from_text:expr),*) => {$(
+    ($($ty:ident($length:ty) $as_text:ident $from_text:expr),*) => {$(
         impl Field for $ty {
             #[cfg(feature = "tree")]
             const BELOW: &'static crate::paths::Below = &crate::paths::Below::Object(
@@ -716,17 +716,21 @@ macro_rules! identity_lv8 {
                 &[("octets", &crate::paths::Below::Scalar)],
             );
             fn read(octets: &mut &[u8]) -> Option<Self> {
-                Lv8::read(octets).map(|value| Self(value.0))
+                let length = usize::from(<$length as Field>::read(octets)?);
+                let (value, rest) = octets.split_at_checked(length)?;
+                *octets = rest;
+                Some(Self(Octets::copied(value)))
             }
             fn write(&self, out: &mut Vec<u8>) {
-                out.push(u8::try_from(self.0.len()).unwrap_or(u8::MAX));
+                let length = <$length>::try_from(self.0.len()).unwrap_or(<$length>::MAX);
+                out.extend_from_slice(&length.to_be_bytes());
                 out.extend_from_slice(&self.0);
             }
             fn size(&self) -> usize {
-                1 + self.0.len()
+                core::mem::size_of::<$length>() + self.0.len()
             }
             fn fits(&self) -> bool {
-                self.0.len() <= usize::from(u8::MAX)
+                self.0.len() <= usize::from(<$length>::MAX)
             }
             fn check(&self, path: &crate::check::Path, clause: &'static str, found: &mut Vec<Deviation>) {
                 if !self.fits() {
@@ -755,8 +759,8 @@ macro_rules! identity_lv8 {
                         reading.within("octets", content, |content, reading| reading.octets(content))?
                     }
                 };
-                if octets.len() > usize::from(u8::MAX) {
-                    return Err(reading.mismatch("at most 255 octets", value));
+                if octets.len() > usize::from(<$length>::MAX) {
+                    return Err(reading.mismatch("octets that their length can say", value));
                 }
                 Ok(Self(octets.into()))
             }
@@ -764,14 +768,39 @@ macro_rules! identity_lv8 {
     )*};
 }
 identity_lv8!(
-    DigitsLv8 digits |text| oxirush_utils::identity::tbcd::encode(text).ok(),
-    TextLv8 text_owned |text| Some(text.as_bytes().to_vec())
+    DigitsLv8(u8) digits |text| oxirush_utils::identity::tbcd::encode(text).ok(),
+    TextLv8(u8) text_owned |text| Some(text.as_bytes().to_vec()),
+    TextLv16(u16) text_owned |text| Some(text.as_bytes().to_vec())
 );
 
 impl TextLv8 {
     #[cfg(feature = "tree")]
     fn text_owned(&self) -> Option<alloc::string::String> {
         self.text().map(alloc::string::String::from)
+    }
+}
+
+/// Text after a length of two octets: a Flow Description, an IPFilterRule of TS 29.212
+/// clause 5.4.2, and the URL and the Domain Name of PFD Contents (§8.2.39). Its tree is
+/// the text, or `{"octets": ...}` for octets that are no UTF-8.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct TextLv16(pub Octets);
+
+impl TextLv16 {
+    /// The text.
+    pub fn text(&self) -> Option<&str> {
+        core::str::from_utf8(&self.0).ok()
+    }
+
+    #[cfg(feature = "tree")]
+    fn text_owned(&self) -> Option<alloc::string::String> {
+        self.text().map(alloc::string::String::from)
+    }
+}
+
+impl From<&str> for TextLv16 {
+    fn from(text: &str) -> Self {
+        Self(Octets::copied(text.as_bytes()))
     }
 }
 

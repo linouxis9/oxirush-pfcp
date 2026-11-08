@@ -37,7 +37,9 @@ The first version, of TS 29.244 V19.6.0 (2026-06):
   each field that its value always has; it leaves out a flag that is not set and a field
   that its flags do not have; a value of one field without flags is that field, while it
   has no unknown octets. A spare octet is written where it is set, and is 0 where a tree
-  leaves it out, as the spare bits of the header and of a value.
+  leaves it out, as the spare bits of the header and of a value. A Flow Description, an
+  IPFilterRule, and the URL and the Domain Name of PFD Contents are their text
+  (`TextLv16`), or `{"octets": ...}` for octets that are no UTF-8.
 - With `node`, `Node`, a PFCP entity without I/O: delivery and retransmission (§6.4),
   heartbeat, associations, sessions, load and overload control, and bundles (§6.5). A
   request that names another's session or association, as another SMF of a set sends

@@ -251,13 +251,13 @@ fn a_spare_octet_is_in_the_tree_where_it_is_set() {
     }
     spare::<SdfFilter>(
         "010000026161",
-        tree!({"FD": true, "Flow Description": "6161"}),
+        tree!({"FD": true, "Flow Description": "aa"}),
     );
     spare::<SdfFilter>(
         "010700026161",
-        tree!({"FD": true, "Spare octet": 7, "Flow Description": "6161"}),
+        tree!({"FD": true, "Spare octet": 7, "Flow Description": "aa"}),
     );
-    spare::<PfdContents>("0100000161", tree!({"FD": true, "Flow Description": "61"}));
+    spare::<PfdContents>("0100000161", tree!({"FD": true, "Flow Description": "a"}));
     spare::<SmfSetId>("0003736d66", tree!({"FQDN": "smf"}));
     spare::<SmfSetId>("0103736d66", tree!({"Spare": 1, "FQDN": "smf"}));
     spare::<DlPeriodicity>("0000000014", tree!({"DL Periodicity": 20}));
@@ -308,6 +308,34 @@ fn the_length_of_a_value_of_bits_is_what_it_writes() {
     );
     let found: Vec<_> = past.deviations().into_iter().map(|d| d.kind).collect();
     assert_eq!(found, [DeviationKind::Inconsistent { field: "length" }]);
+}
+
+/// A Flow Description, an IPFilterRule of text (TS 29.212 clause 5.4.2), and the URL and
+/// the Domain Name of PFD Contents are their text in a tree, or `{"octets": ...}` for
+/// octets that are no UTF-8.
+#[test]
+fn a_flow_description_is_its_text() {
+    let rule = "permit out ip from any to assigned";
+    let filter = tree!({"FD": true, "Flow Description": rule});
+    let read = tree::from_value::<SdfFilter>(&filter).unwrap();
+    assert_eq!(
+        read.flow_description.as_ref().and_then(TextLv16::text),
+        Some(rule)
+    );
+    assert_eq!(tree::Tree::to_tree(&read), filter);
+    let mut octets = Vec::new();
+    read.encode(&mut octets).unwrap();
+    assert_eq!(&octets[4..], rule.as_bytes());
+    let other = tree!({"FD": true, "Flow Description": {"octets": "ff"}});
+    let read = tree::from_value::<SdfFilter>(&other).unwrap();
+    assert_eq!(
+        read.flow_description,
+        Some(TextLv16(Octets::copied(&[0xff])))
+    );
+    assert_eq!(tree::Tree::to_tree(&read), other);
+    let contents = tree!({"URL": true, "DN": true, "URL field": "http://a.example/", "Domain Name": "a.example"});
+    let read = tree::from_value::<PfdContents>(&contents).unwrap();
+    assert_eq!(tree::Tree::to_tree(&read), contents);
 }
 
 /// The octets after the fields of an IE, of a later release, are "the unknown octets" of
