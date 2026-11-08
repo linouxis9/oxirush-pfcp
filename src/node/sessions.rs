@@ -270,7 +270,12 @@ impl Node {
     }
 
     /// What an answer of the caller changes: the association, the session.
-    pub(super) fn answered_effects(&mut self, now: Duration, request: &Inbound, message: &Message) {
+    pub(super) fn answered_effects(
+        &mut self,
+        now: Duration,
+        request: &Received,
+        message: &Message,
+    ) {
         if !accepts(&message.body) {
             return;
         }
@@ -336,7 +341,7 @@ impl Node {
     fn answered_association(
         &mut self,
         now: Duration,
-        request: &Inbound,
+        request: &Received,
         body: &Body,
         effect: Effect,
     ) {
@@ -373,7 +378,7 @@ impl Node {
     /// SEID of its UP F-SEID: not a SEID of another session, which a probe may answer with.
     fn answered_establishment(
         &mut self,
-        request: &Inbound,
+        request: &Received,
         response: &SessionEstablishmentResponse,
         effect: Effect,
     ) {

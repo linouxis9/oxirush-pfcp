@@ -37,7 +37,7 @@ use std::time::Duration;
 
 use libfuzzer_sys::fuzz_target;
 use oxirush_pfcp::node::{
-    ControlScope, Delivery, Event, Function, Inbound, Node, NodeConfig, RequestId,
+    ControlScope, Delivery, Event, Function, Received, Node, NodeConfig, RequestId,
 };
 use oxirush_pfcp::*;
 
@@ -179,7 +179,7 @@ fn deliver(
 /// probe, a message of another type and each delivery. An establishment gets a UP F-SEID,
 /// a setup the UP Function Features of a set; a stranger's request may have its session
 /// adopted first.
-fn answer(node: &mut Node, now: Duration, how: u8, kept: &mut Vec<Inbound>) {
+fn answer(node: &mut Node, now: Duration, how: u8, kept: &mut Vec<Received>) {
     let cause = Cause::new(if how & 1 == 0 {
         CauseValue::RequestAccepted
     } else {
@@ -282,7 +282,7 @@ fn answer(node: &mut Node, now: Duration, how: u8, kept: &mut Vec<Inbound>) {
 
 /// Answer both nodes, and deliver what they send each other until it settles, twice at
 /// most.
-fn settle(upf: &mut Node, smf: &mut Node, now: Duration, how: u8, kept: &mut Vec<Inbound>) {
+fn settle(upf: &mut Node, smf: &mut Node, now: Duration, how: u8, kept: &mut Vec<Received>) {
     for _ in 0..2 {
         answer(upf, now, how, kept);
         answer(smf, now, how, kept);
@@ -310,7 +310,7 @@ fuzz_target!(|octets: &[u8]| {
     let mut upf = Node::new(config(UPF, Function::Up));
     let mut smf = Node::new(config(SMFS[0], Function::Cp));
     let mut now = Duration::ZERO;
-    let mut kept: Vec<Inbound> = Vec::new();
+    let mut kept: Vec<Received> = Vec::new();
     let mut sent: Vec<RequestId> = Vec::new();
     // The SMF node sets up its association and establishes a session; the other SMFs of
     // the set set up theirs, with the features of the set.

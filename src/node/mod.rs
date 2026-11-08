@@ -35,7 +35,7 @@
 //! node does not have. What a peer does wrong is an [`Event::Violation`]. Every
 //! other request is the caller's to answer with [`Node::respond`]: one that names a
 //! session or an association that is not its sender's, as another SMF of a set sends
-//! (§5.22), comes [`Inbound::stranger`].
+//! (§5.22), comes [`Received::stranger`].
 
 mod controls;
 mod delivery;
@@ -200,7 +200,7 @@ pub struct RequestId(pub u64);
 
 /// A request that the node received, which [`Node::respond`] answers.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Inbound {
+pub struct Received {
     /// From whom.
     pub from: SocketAddr,
     /// Its message type.
@@ -231,14 +231,14 @@ pub struct Inbound {
     pub(crate) id: u64,
 }
 
-impl Inbound {
-    /// The request as one of the session of `local_seid`, which its answer goes to.
-    pub(crate) fn of_session(&self, local_seid: u64) -> Self {
-        Self {
+impl Received {
+    /// The request as one of the session of `local_seid`, which its answer goes to: one of
+    /// SEID 0 that hands a session over (§5.22.2), and `None` for another.
+    pub(crate) fn of_session(&self, local_seid: u64) -> Option<Self> {
+        (self.message_type == 56 && self.seid == Some(0)).then(|| Self {
             seid: Some(local_seid),
-            mark: None,
             ..self.clone()
-        }
+        })
     }
 }
 
@@ -353,7 +353,7 @@ pub enum Event {
     /// node answers.
     Request {
         /// What to answer.
-        request: Inbound,
+        request: Received,
         /// The request.
         message: Message,
     },
@@ -490,6 +490,9 @@ pub enum NodeError {
     SeidInUse,
     /// A local SEID of 0, which says that the peer's is not known (§7.2.2.4.2).
     SeidZero,
+    /// An answer as one of a session to a request that hands no session over: a Session
+    /// Report Request of SEID 0 does (§5.22.2).
+    NotAHandover,
     /// It does not encode.
     Encode(crate::Error),
 }
@@ -523,6 +526,10 @@ impl core::fmt::Display for NodeError {
             Self::WrongResponse => write!(f, "the answer is not the response of the request"),
             Self::SeidInUse => write!(f, "the local SEID is of another session"),
             Self::SeidZero => write!(f, "a SEID of 0 is of no session (TS 29.244 7.2.2.4.2)"),
+            Self::NotAHandover => write!(
+                f,
+                "the request hands no session over, as one of SEID 0 does (TS 29.244 5.22.2)"
+            ),
             Self::Encode(error) => write!(f, "the message does not encode: {error}"),
         }
     }
@@ -583,7 +590,7 @@ pub struct Node {
     next_sequence: u32,
     next_request: u64,
     next_seid: u64,
-    next_inbound: u64,
+    next_received: u64,
     next_mark: u64,
     reserved: BTreeSet<u32>,
     outstanding: BTreeMap<u32, Outstanding>,
@@ -634,7 +641,7 @@ impl Node {
             next_sequence: 1,
             next_request: 1,
             next_seid: 1,
-            next_inbound: 1,
+            next_received: 1,
             next_mark: 1,
             reserved: BTreeSet::new(),
             outstanding: BTreeMap::new(),
@@ -666,7 +673,7 @@ impl Node {
     }
 
     /// The priority of the answer to `request`: its own, or the default (§6.2.4.5.2).
-    fn priority_of(&self, request: &Inbound) -> u8 {
+    fn priority_of(&self, request: &Received) -> u8 {
         request.priority.unwrap_or(self.config.default_priority)
     }
 

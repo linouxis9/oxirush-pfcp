@@ -124,7 +124,7 @@ impl Node {
     /// What the node tells from the header of a message, and from the IEs that name the
     /// peer of a request, before it decodes the rest: a message that it discards or
     /// rejects costs it no more than its octets. `None` for a message that it handled, and
-    /// whether a request is a stranger's ([`Inbound::stranger`]) for one to decode.
+    /// whether a request is a stranger's ([`Received::stranger`]) for one to decode.
     pub(super) fn screen(
         &mut self,
         now: Duration,
@@ -168,7 +168,7 @@ impl Node {
             return Some(stranger);
         };
         self.violation(from, kind, octets);
-        let inbound = Inbound {
+        let received = Received {
             from,
             message_type,
             sequence: header.sequence,
@@ -181,7 +181,7 @@ impl Node {
             stranger: false,
             id: 0,
         };
-        self.reject(now, octets, &inbound, cause, kind);
+        self.reject(now, octets, &received, cause, kind);
         None
     }
 
@@ -258,7 +258,7 @@ impl Node {
     }
 
     /// Whether a request of `message_type` that names `node_id` and the peer's SEID
-    /// `peer_seid` is a stranger's ([`Inbound::stranger`]), and how the node rejects it,
+    /// `peer_seid` is a stranger's ([`Received::stranger`]), and how the node rejects it,
     /// if it does: a request of a node or a session of a host without an association, or
     /// of a session that the host does not have (§6.2.6, §7.2.2.4.2).
     fn judge(
@@ -333,17 +333,17 @@ impl Node {
         &mut self,
         now: Duration,
         octets: &[u8],
-        inbound: &Inbound,
+        received: &Received,
         cause: CauseValue,
         kind: ViolationKind,
     ) {
-        let message_type = inbound.message_type;
+        let message_type = received.message_type;
         let offending = (kind == ViolationKind::SeidZero).then_some(57);
         let Some(body) = rejection_body(message_type, cause, offending, &self.config.node_id)
         else {
             return;
         };
-        let mut header = self.response_header(inbound);
+        let mut header = self.response_header(received);
         // The peer's SEID is not known: SEID 0 (§7.2.2.4.2), but that of the CP F-SEID of
         // an establishment without an association, which the SMF matches its response by.
         // A report of SEID 0 carries the previous SMF's SEID in its Old CP F-SEID, not the
@@ -351,7 +351,7 @@ impl Node {
         if header.seid.is_some() {
             header.seid = Some(
                 if message_type == 50 && kind == ViolationKind::SessionWithoutAssociation {
-                    inbound.peer_seid.unwrap_or(0)
+                    received.peer_seid.unwrap_or(0)
                 } else {
                     0
                 },
@@ -359,13 +359,13 @@ impl Node {
         }
         if let Ok(response) = (Message { header, body }).encode() {
             let expires = now.saturating_add(self.config.keep);
-            let key = (inbound.from, inbound.sequence);
+            let key = (received.from, received.sequence);
             let capacity = self.config.capacity;
             self.answers
                 .reject(key, Digest::of(octets), response.clone(), expires, capacity);
             self.queue(Transmit {
-                to: inbound.from,
-                priority: self.priority_of(inbound),
+                to: received.from,
+                priority: self.priority_of(received),
                 octets: response.into(),
             });
         }
@@ -506,7 +506,7 @@ impl Node {
             .header
             .seid
             .map(|seid| self.sessions.resolve(seid).unwrap_or(seid));
-        let inbound = Inbound {
+        let received = Received {
             from,
             message_type,
             sequence,
@@ -524,20 +524,20 @@ impl Node {
             node_id: node_id_of(&message.body),
             effect,
             stranger,
-            id: self.next_inbound,
+            id: self.next_received,
         };
-        self.next_inbound += 1;
+        self.next_received += 1;
         if message_type == 1 {
             // Answered from the state, the same each time: not kept.
             let stamp = RecoveryTimeStamp::new(self.config.recovery_time_stamp);
             let message = Message {
-                header: self.response_header(&inbound),
+                header: self.response_header(&received),
                 body: HeartbeatResponse::new(stamp).into(),
             };
             if let Ok(octets) = message.encode() {
                 self.queue(Transmit {
                     to: from,
-                    priority: self.priority_of(&inbound),
+                    priority: self.priority_of(&received),
                     octets: octets.into(),
                 });
             }
@@ -547,7 +547,7 @@ impl Node {
         if !self.answers.wait(
             (from, sequence),
             Digest::of(octets),
-            inbound.id,
+            received.id,
             now.saturating_add(self.config.keep),
             self.config.capacity,
             unassociated,
@@ -555,10 +555,10 @@ impl Node {
             // Full of requests that wait for their answer: the peer sends it again.
             return;
         }
-        self.put_off(now, inbound.seid);
-        self.note_controls(now, from, octets, &message.body, inbound.seid);
+        self.put_off(now, received.seid);
+        self.note_controls(now, from, octets, &message.body, received.seid);
         self.events.push_back(Event::Request {
-            request: inbound,
+            request: received,
             message,
         });
     }
@@ -620,7 +620,7 @@ impl Node {
     /// lasts: wherever it moved since the request came, and not a session that took its SEID
     /// after it ended. A request that came of no session is of the one of its `seid`, which
     /// [`respond_as`](Self::respond_as) gives it.
-    pub(super) fn answered_session(&self, request: &Inbound) -> Option<u64> {
+    pub(super) fn answered_session(&self, request: &Received) -> Option<u64> {
         match request.mark {
             Some(mark) => self.sessions.of_mark(mark),
             None => self.sessions.resolve(request.seid?),

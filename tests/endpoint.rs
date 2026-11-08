@@ -974,7 +974,10 @@ async fn an_entity_of_the_smf_takes_a_session_over() {
         .unwrap();
     let response = within(modification).await.unwrap().unwrap();
     assert_eq!(response.body.cause(), Some(CauseValue::RequestAccepted));
-    drop(incoming);
+    // A report of the session hands nothing over
+    let answer = SessionReportResponse::new(accepted());
+    let refused = incoming.respond_as(local, answer).await;
+    assert_eq!(refused, Err(EndpointError::Node(NodeError::NotAHandover)));
 }
 
 /// Queues of no entry are of one, as a node takes its zeroes: the endpoint runs, and its

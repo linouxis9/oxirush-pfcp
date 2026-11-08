@@ -58,7 +58,7 @@ use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
 
 use crate::message::{Body, Message};
-use crate::node::{Delivery, Event, Failure, Inbound, Node, NodeConfig, NodeError, RequestId};
+use crate::node::{Delivery, Event, Failure, Node, NodeConfig, NodeError, Received, RequestId};
 
 /// The largest datagram that the endpoint takes.
 const DATAGRAM: usize = 65_535;
@@ -168,9 +168,9 @@ pub struct Incoming {
     /// The request.
     pub message: Message,
     /// Who sent it, and what the answer takes from it.
-    pub request: Inbound,
+    pub request: Received,
     commands: mpsc::WeakSender<Command>,
-    forgets: mpsc::UnboundedSender<Inbound>,
+    forgets: mpsc::UnboundedSender<Received>,
     answered: bool,
     /// The octets that it takes in the incoming queue ([`Queues::incoming_octets`]).
     held: usize,
@@ -214,13 +214,15 @@ impl Incoming {
     ///
     /// # Errors
     ///
-    /// Those of [`respond`](Self::respond).
+    /// A request that hands no session over, which is then forgotten, and those of
+    /// [`respond`](Self::respond).
     pub async fn respond_as(
         mut self,
         local_seid: u64,
         body: impl Into<Body>,
     ) -> Result<(), EndpointError> {
-        self.request = self.request.of_session(local_seid);
+        let request = self.request.of_session(local_seid);
+        self.request = request.ok_or(EndpointError::Node(NodeError::NotAHandover))?;
         self.respond(body).await
     }
 
@@ -284,12 +286,12 @@ enum Command {
         reply: Reply,
     },
     Respond {
-        request: Inbound,
+        request: Received,
         body: Body,
         reply: oneshot::Sender<Result<(), NodeError>>,
     },
     RespondMessage {
-        request: Inbound,
+        request: Received,
         message: Message,
         delivery: Delivery,
         reply: oneshot::Sender<Result<(), NodeError>>,
@@ -568,8 +570,8 @@ struct Task {
     /// The commands of the answers: weak, so that they do not keep the task.
     responder: mpsc::WeakSender<Command>,
     /// The requests whose Incoming the caller dropped unanswered.
-    forgets: mpsc::UnboundedReceiver<Inbound>,
-    forgetting: mpsc::UnboundedSender<Inbound>,
+    forgets: mpsc::UnboundedReceiver<Received>,
+    forgetting: mpsc::UnboundedSender<Received>,
     /// The tokens of the requests whose futures the caller dropped.
     cancelled: mpsc::UnboundedReceiver<u64>,
     incoming: mpsc::Sender<Incoming>,

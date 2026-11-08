@@ -349,7 +349,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 - TS 29.244 V19.6.0: an IE of a later release stays octets.
 - A `Node` is one PFCP entity. A request that names another's session or
   association, as another SMF of a set sends (§5.22), comes to the caller as
-  `Inbound::stranger`.
+  `Received::stranger`.
 
 ## Performance
 

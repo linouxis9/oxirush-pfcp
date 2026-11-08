@@ -578,7 +578,7 @@ impl Node {
     pub fn respond(
         &mut self,
         now: Duration,
-        request: &Inbound,
+        request: &Received,
         body: impl Into<Body>,
     ) -> Result<(), NodeError> {
         let body = body.into();
@@ -617,20 +617,21 @@ impl Node {
     ///
     /// # Errors
     ///
-    /// Those of [`respond`](Self::respond).
+    /// A request that hands no session over, and those of [`respond`](Self::respond).
     pub fn respond_as(
         &mut self,
         now: Duration,
-        request: &Inbound,
+        request: &Received,
         local_seid: u64,
         body: impl Into<Body>,
     ) -> Result<(), NodeError> {
-        self.respond(now, &request.of_session(local_seid), body)
+        let request = request.of_session(local_seid);
+        self.respond(now, &request.ok_or(NodeError::NotAHandover)?, body)
     }
 
     /// The header of the response to `request`: its sequence number, the peer's SEID of
     /// its session, and its priority.
-    pub(super) fn response_header(&self, request: &Inbound) -> Header {
+    pub(super) fn response_header(&self, request: &Received) -> Header {
         if is_node_related(request.message_type) {
             return Header::node(request.sequence);
         }
@@ -661,7 +662,7 @@ impl Node {
     pub fn respond_message(
         &mut self,
         now: Duration,
-        request: &Inbound,
+        request: &Received,
         message: Message,
         delivery: Delivery,
     ) -> Result<(), NodeError> {
@@ -675,7 +676,7 @@ impl Node {
     pub(super) fn respond_with(
         &mut self,
         now: Duration,
-        request: &Inbound,
+        request: &Received,
         header: Header,
         body: Body,
         delivery: Delivery,
@@ -710,7 +711,7 @@ impl Node {
 
     /// Forget a request that the caller does not answer, as one that it dropped: a
     /// retransmission of it comes again as a request.
-    pub fn forget(&mut self, request: &Inbound) {
+    pub fn forget(&mut self, request: &Received) {
         let key = (request.from, request.sequence);
         if self.answers.waits(&key, request.id) {
             self.answers.forget(&key, request.id);
