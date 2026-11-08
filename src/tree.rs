@@ -629,16 +629,25 @@ impl tree::Family for Paths {
 }
 
 /// What an edit opens at a place so that `segment` goes into it: a list with one more
-/// entry, `null`, for the position of its length, and an object of IEs with the list or the
-/// grouped IE of the row that it lacks, empty, for a path that goes on into it. `None` where
-/// the place has what the segment names, or is not there to open, as its holder is opened
-/// first.
+/// entry, `null`, for the position of its length, and a message without IEs, or an object
+/// of IEs without the list or the grouped IE of the row, with them empty, for a path that
+/// goes on into them. `None` where the place has what the segment names, or is not there
+/// to open, as its holder is opened first.
 fn room(value: Option<&Value>, of: Of, list: bool, segment: &str, last: bool) -> Option<Value> {
     match (value?, of) {
         (Value::Array(entries), _) if list && tree::position(segment) == Some(entries.len()) => {
             let mut grown = entries.clone();
             grown.push(Value::Null);
             Some(Value::Array(grown))
+        }
+        (Value::Object(members), Of::Message(_))
+            if !last
+                && tree::same_name(segment, "ies")
+                && tree::member(members, "ies").is_none() =>
+        {
+            let mut members = members.clone();
+            members.insert("ies".into(), Value::Object(Map::new()));
+            Some(Value::Object(members))
         }
         (Value::Null | Value::Object(_), Of::Ies(tables)) if !last => {
             let row = row_named(tables, segment)?;

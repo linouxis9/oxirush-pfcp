@@ -466,6 +466,15 @@ fn set_adds_an_entry_at_the_end_of_a_list() {
     let pdi = request.create_pdr[2].pdi.as_ref().unwrap();
     assert_eq!(pdi.sdf_filter.len(), 1);
     assert_eq!(request.create_urr.len(), 1);
+    // Below the IEs of a message that has none
+    let mut written =
+        tree!({"message": "PFCP Session Modification Request", "SEID": 1, "Sequence Number": 1});
+    set(&mut written, "/pfcp/Remove PDR/0/PDR ID", 4).unwrap();
+    let Body::SessionModificationRequest(request) = Message::from_tree(&written).unwrap().body
+    else {
+        panic!()
+    };
+    assert_eq!(request.remove_pdr.len(), 1);
     let before = tree.clone();
     for path in [
         "/pfcp/Create PDR/9/PDR ID",
