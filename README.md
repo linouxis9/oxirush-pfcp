@@ -207,12 +207,9 @@ encoding gives the octets back, byte for byte.
 ## Check a message, and answer a faulty one
 
 `check()` lists how a message breaks TS 29.244 on an interface, or on a set of
-them, as a combined SGW/PGW's (`Interfaces::SXA_SXB`). It finds IEs that are
-missing, excluded, repeated or incorrect, and wrong values, flags and header
-fields. Each deviation has its path in the tree, its clause and the Cause of the
-answer. `Row::checked` says which conditions of the tables it checks. A table
-whose mandatory IEs differ between interfaces has a constructor for each, as
-`CreatePdr::new_sxa()` and `new_n4()`.
+them, each deviation with its path in the tree, its clause and the Cause of the
+answer. A table whose mandatory IEs differ between interfaces has a constructor
+for each, as `CreatePdr::new_sxa()` and `new_n4()`.
 
 ```rust
 use std::net::Ipv4Addr;
@@ -252,9 +249,6 @@ the message changes PDR 3 more than once (TS 29.244 6.3.3.2), at /pfcp
 PFCP Session Modification Response (SEID 0x1001, sequence 8): 213500170000000000001001000008000013000143002800020038
 0 deviations in the answer
 ```
-
-A mandatory IE of a conditional grouped IE is answered "Conditional IE missing"
-(§7.2.3.2).
 
 ## A message as JSON
 
@@ -309,15 +303,9 @@ the wire.
 
 ## Read and edit by path
 
-`paths::select` and `paths::set` take the same paths on the tree of a message:
-`/pfcp` stands for its IEs, a list has the positions of its entries, `*` stands
-for each, and names go in any case. A name with a `/` has it written `~1`, as a
-JSON pointer does: `/pfcp/APN~1DNN`, which the path of a deviation writes too. An IE of no row of its table, a vendor's or
-one of a later release, goes by its number or the name of its type. What a
-message lacks selects nothing, whatever the path names below it: a misspelt name
-is an error where the value is there, and is not told below what is not. `set`
-adds the grouped IEs and the lists on its way, an entry at the position of a
-list's length, and writes a value that a message lacks whole.
+`paths::select` and `paths::set` take the same paths on the tree of a message,
+in any case: `/pfcp` stands for its IEs, a list has the positions of its
+entries, and `*` stands for each. The documentation of `paths` has their rules.
 
 ```rust
 use oxirush_pfcp::*;

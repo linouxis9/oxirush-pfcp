@@ -29,6 +29,15 @@
 //! order of its tables, and from any tree, in whatever order its rows are written, the
 //! crate encodes the latter. The octets keep the order of the wire: decoding and encoding
 //! them is byte-exact.
+//!
+//! A path names the members of the tree in any case, a list the positions of its entries,
+//! and `*` each entry. `/pfcp` stands for the IEs of the message, and the path of a
+//! deviation of `check()` is one of them. An IE of no row of its table, a vendor's or one
+//! of a later release, goes by its number or the name of its type. What a message lacks
+//! selects nothing, whatever the path names below it: a misspelt name is an error where
+//! the value is there, and is not told below what is not. [`set`] adds the grouped IEs
+//! and the lists on its way, an entry at the position of a list's length, and writes a
+//! value that a message lacks whole.
 
 use alloc::string::String;
 use alloc::vec::Vec;

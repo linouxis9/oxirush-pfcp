@@ -223,9 +223,13 @@ impl Message {
     /// of a combined SGW/PGW (§5.2.6), a message may have the IEs of any of them, and
     /// needs those that each of them needs.
     ///
-    /// A message is checked as its receiver reads it: an IE that it keeps as octets, which
-    /// the receiver reads as the value of its row, is checked as that value, and
-    /// `check(m)` is `check(Message::decode(m.encode()))`.
+    /// It finds the IEs that are missing, excluded, repeated or incorrect, and the wrong
+    /// values, flags, lengths and header fields; [`Row::checked`](crate::Row::checked) says
+    /// which conditions of the tables it checks. A mandatory IE of a conditional grouped
+    /// IE is answered "Conditional IE missing" (§7.2.3.2). A message is checked as its
+    /// receiver reads it: an IE that it keeps as octets, which the receiver reads as the
+    /// value of its row, is checked as that value, and `check(m)` is
+    /// `check(Message::decode(m.encode()))`.
     pub fn check(&self, interface: Interfaces) -> Vec<Deviation> {
         let read = match self.body.reads_otherwise() {
             true => self
