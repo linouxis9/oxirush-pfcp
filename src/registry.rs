@@ -1049,10 +1049,10 @@ pfcp_table! {
         measurement_protocol: "Measurement Protocol" M N6DelayMeasurementProtocols [N4],
         measurement_endpoint_port_number: "Measurement EndPoint Port Number" O MeasurementEndpointPortNumber [N4],
         security_mode_stamp: "Security Mode (STAMP)" O SecurityMode [N4],
-        hmac_key_stamp: "HMAC Key / (STAMP)" O HmacKeyStamp [N4],
+        hmac_key_stamp: "HMAC Key (STAMP)" O HmacKeyStamp [N4],
         session_reflector_mode_stamp: "Session Reflector Mode (STAMP)" O SessionReflectorMode [N4],
-        security_mode_owamp_or_twamp: "Security Mode / (OWAMP or TWAMP)" O SecurityModeValue [N4],
-        key_id_and_shared_secret_owamp_or_twamp: "Key ID and Shared Secret / (OWAMP or TWAMP)" O* KeyIdAndSharedSecret [N4],
+        security_mode_owamp_or_twamp: "Security Mode (OWAMP or TWAMP)" O SecurityModeValue [N4],
+        key_id_and_shared_secret_owamp_or_twamp: "Key ID and Shared Secret (OWAMP or TWAMP)" O* KeyIdAndSharedSecret [N4],
     }
 }
 

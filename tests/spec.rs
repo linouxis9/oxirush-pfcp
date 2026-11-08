@@ -372,6 +372,11 @@ fn tables() {
                         cells[2].into()
                     }
                 );
+                // A cell of two lines is one name, as the document writes it: "HMAC Key
+                // (STAMP)" (Table 7.4.4.1.4-2), which no "/" joins.
+                if cells[2].contains(" / ") {
+                    problems.push(format!("{place}: a name of two lines joined by \" / \""));
+                }
                 let name = errata.apply("row-name", &place, cells[2]);
                 let place = format!(
                     "{current}/{}",

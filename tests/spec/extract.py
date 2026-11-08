@@ -109,8 +109,10 @@ def blocks(body):
                     span = cell.find(f'{W}tcPr/{W}gridSpan')
                     width = cell.find(f'{W}tcPr/{W}tcW')
                     merged = cell.find(f'{W}tcPr/{W}vMerge')
+                    # The paragraphs of a cell, one to a line: a name that the
+                    # document writes on two lines is one name, which clean() reads.
                     paragraphs = [text(p) for p in cell.iter(W + 'p')]
-                    value = ' / '.join(p for p in paragraphs if p)
+                    value = '\n'.join(p for p in paragraphs if p)
                     if merged is not None and merged.get(W + 'val') != 'restart' and not value:
                         value = above.get(column, '')
                     above[column] = value
@@ -377,7 +379,7 @@ def value_rows(number, title, rows):
     head = [cell.lower() for cell in rows[0]]
     if len(rows[0]) == 1:   # units in prose, one cell: "0 0 0 value is incremented in multiples of 2 seconds"
         out = []
-        for bits, words in re.findall(r'([01] [01] [01]) ([^/]+)', rows[0][0]):
+        for bits, words in re.findall(r'([01] [01] [01]) ([^\n]+)', rows[0][0]):
             words = re.sub(r'^value is incremented in multiples of ', '', words.strip())
             words = 'infinite' if words == 'value indicates that the timer is infinite' else words
             out.append([number, title, str(int(bits.replace(' ', ''), 2)), words])

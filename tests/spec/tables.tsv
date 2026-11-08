@@ -76,10 +76,10 @@ table	7.4.4.1.4-2	Protocol Specific Configuration Parameters	7.4.4.1.4 N6 Delay 
 row	7.4.4.1.4-2	Measurement Protocol	M	N4	N6 Delay Measurement Protocols	once
 row	7.4.4.1.4-2	Measurement EndPoint Port Number	O	N4	Measurement EndPoint Port Number	once
 row	7.4.4.1.4-2	Security Mode (STAMP)	O	N4	Security Mode (STAMP)	once
-row	7.4.4.1.4-2	HMAC Key / (STAMP)	O	N4	HMAC Key / (STAMP)	once
-row	7.4.4.1.4-2	Session Reflector Mode (STAMP)	O	N4	Session Reflector Mode / (STAMP)	once
-row	7.4.4.1.4-2	Security Mode / (OWAMP or TWAMP)	O	N4	Security Mode (OWAMP or TWAMP)	once
-row	7.4.4.1.4-2	Key ID and Shared Secret / (OWAMP or TWAMP)	O	N4	Key ID and Shared Secret (OWAMP or TWAMP)	several
+row	7.4.4.1.4-2	HMAC Key (STAMP)	O	N4	HMAC Key (STAMP)	once
+row	7.4.4.1.4-2	Session Reflector Mode (STAMP)	O	N4	Session Reflector Mode (STAMP)	once
+row	7.4.4.1.4-2	Security Mode (OWAMP or TWAMP)	O	N4	Security Mode (OWAMP or TWAMP)	once
+row	7.4.4.1.4-2	Key ID and Shared Secret (OWAMP or TWAMP)	O	N4	Key ID and Shared Secret (OWAMP or TWAMP)	several
 table	7.4.4.2-1	Information Elements in a PFCP Association Setup Response	7.4.4.2 PFCP Association Setup Response	
 row	7.4.4.2-1	Node ID	M	Sxa Sxb Sxc N4 N4mb	Node ID	once
 row	7.4.4.2-1	Cause	M	Sxa Sxb Sxc N4 N4mb	Cause	once
