@@ -1167,7 +1167,8 @@ macro_rules! mac_addresses {
                 for tag in [&self.c_tag, &self.s_tag].into_iter().flatten() {
                     Field::check(tag, path, $clause, found);
                 }
-                check_tags(self.c_tag.as_ref(), self.s_tag.as_ref(), path, $clause, found);
+                let (c_tag, s_tag) = (self.c_tag.as_ref(), self.s_tag.as_ref());
+                check_tags(c_tag.map(|tag| &tag.0[..]), s_tag.map(|tag| &tag.0[..]), path, $clause, found);
             }
         }
 
@@ -1203,50 +1204,53 @@ macro_rules! mac_addresses {
     )*};
 }
 
-/// The C-TAG and the S-TAG of MAC Addresses Detected or Removed, of `clause`: "encoded as
-/// the Customer-VLAN tag defined in clause 8.2.94" and the Service-VLAN tag of §8.2.95,
-/// "excluding octets 1 to 4", whose first octet has the flags PCP, DEI and VID, at least one
-/// of them set, and spare bits. A length of 0 says that a field is absent; the octets after
-/// the three of a tag are a later release's, as those of the tag itself (Table 8.1.2-1).
-fn check_tags(
-    c_tag: Option<&Lv8>,
-    s_tag: Option<&Lv8>,
+/// A C-TAG and an S-TAG field of the IE of `clause`, which it encodes as the octets 5 to 7
+/// of the C-TAG and S-TAG IEs (§8.2.94, §8.2.95), checked as those IEs: of MAC Addresses
+/// Detected and Removed (§8.2.103, §8.2.104), after their lengths, and of Outer Header
+/// Creation (§8.2.56). A field of no octets is absent; one of fewer than three is
+/// `clause`'s fault, and the octets after the three are a later release's, as those of
+/// the IE (Table 8.1.2-1).
+pub(crate) fn check_tags(
+    c_tag: Option<&[u8]>,
+    s_tag: Option<&[u8]>,
     path: &crate::check::Path,
     clause: &'static str,
     found: &mut Vec<Deviation>,
 ) {
-    use crate::check::DeviationKind;
-    let tags = [
-        (
-            c_tag,
-            "a C-TAG field of fewer than three octets",
-            "a C-TAG field with none of PCP, DEI and VID set",
-        ),
-        (
-            s_tag,
-            "an S-TAG field of fewer than three octets",
-            "an S-TAG field with none of PCP, DEI and VID set",
-        ),
-    ];
-    for (tag, short, unflagged) in tags {
-        let Some(tag) = tag.map(|tag| &tag.0[..]) else {
-            continue;
-        };
-        let rule = match tag {
-            [] => continue,
-            [_] | [_, _] => short,
-            [flags, ..] => {
-                if flags & 0xf8 != 0 {
-                    found.push(Deviation::new(path, "8.1.2", DeviationKind::SpareBits));
-                }
-                if flags & 0x07 != 0 {
-                    continue;
-                }
-                unflagged
+    fn as_ie<T: Codec + Rules>(
+        tag: Option<&[u8]>,
+        short: &'static str,
+        path: &crate::check::Path,
+        clause: &'static str,
+        found: &mut Vec<Deviation>,
+    ) {
+        match tag {
+            None | Some([]) => {}
+            Some([_] | [_, _]) => {
+                let rule = crate::check::DeviationKind::Rule(short);
+                found.push(Deviation::new(path, clause, rule));
             }
-        };
-        found.push(Deviation::new(path, clause, DeviationKind::Rule(rule)));
+            Some(octets) => {
+                if let Some(tag) = T::decode(octets) {
+                    tag.check(path, found);
+                }
+            }
+        }
     }
+    as_ie::<CTag>(
+        c_tag,
+        "a C-TAG field of fewer than three octets",
+        path,
+        clause,
+        found,
+    );
+    as_ie::<STag>(
+        s_tag,
+        "an S-TAG field of fewer than three octets",
+        path,
+        clause,
+        found,
+    );
 }
 
 mac_addresses! {

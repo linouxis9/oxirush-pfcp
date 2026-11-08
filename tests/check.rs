@@ -3058,9 +3058,11 @@ fn the_mask_of_a_transport_level_marking() {
 
 /// §8.2.103 and §8.2.104: the C-TAG and the S-TAG of MAC Addresses Detected and Removed,
 /// after their lengths, "encoded as the Customer-VLAN tag defined in clause 8.2.94" and
-/// the Service-VLAN tag of §8.2.95, "excluding octets 1 to 4": of three octets, the more
-/// of a later release as the tag has them (Table 8.1.2-1), with at least one of PCP, DEI
-/// and VID set, and spare bits of 0. A length of 0 says that the field is absent.
+/// the Service-VLAN tag of §8.2.95, "excluding octets 1 to 4", checked as those IEs: of
+/// three octets, the more of a later release as the IE has them (Table 8.1.2-1), with at
+/// least one of PCP, DEI and VID set, and spare bits of 0. A length of 0 says that the
+/// field is absent. The C-TAG and S-TAG fields of Outer Header Creation are octets 5 to 7
+/// of those IEs (§8.2.56).
 #[test]
 fn the_tags_of_mac_addresses() {
     let mac = "01aabbccddeeff";
@@ -3075,25 +3077,33 @@ fn the_tags_of_mac_addresses() {
         detected("020400"),
         [rule("a C-TAG field of fewer than three octets")]
     );
-    assert_eq!(
-        detected("03000064"),
-        [rule("a C-TAG field with none of PCP, DEI and VID set")]
-    );
+    let unflagged = |clause| {
+        (
+            clause,
+            DeviationKind::Rule("none of PCP, DEI and VID is set"),
+        )
+    };
+    assert_eq!(detected("03000064"), [unflagged("8.2.94")]);
     assert_eq!(
         detected("03040064020400"),
         [rule("an S-TAG field of fewer than three octets")]
     );
-    assert_eq!(
-        detected("0304006403000064"),
-        [rule("an S-TAG field with none of PCP, DEI and VID set")]
-    );
+    assert_eq!(detected("0304006403000064"), [unflagged("8.2.95")]);
     assert_eq!(detected("030c0064"), [("8.1.2", DeviationKind::SpareBits)]);
     assert_eq!(
         value_found::<MacAddressesRemoved>(&format!("{mac}03000064")),
-        [(
-            "8.2.104",
-            DeviationKind::Rule("a C-TAG field with none of PCP, DEI and VID set")
-        )]
+        [unflagged("8.2.94")]
+    );
+    // The C-TAG and S-TAG fields of Outer Header Creation, three octets each (§8.2.56)
+    let creation = |tags: &str| value_found::<OuterHeaderCreation>(&format!("c000{tags}"));
+    assert_eq!(creation("040064040064"), []);
+    assert_eq!(
+        creation("f80000000000"),
+        [
+            ("8.1.2", DeviationKind::SpareBits),
+            unflagged("8.2.94"),
+            unflagged("8.2.95")
+        ]
     );
 }
 

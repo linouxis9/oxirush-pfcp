@@ -450,7 +450,8 @@ impl Field for U40 {
     }
 }
 
-/// A VLAN tag of three octets: the C-TAG and S-TAG of Outer Header Creation.
+/// A VLAN tag of three octets: the C-TAG and S-TAG of Outer Header Creation, the octets 5
+/// to 7 of the C-TAG and S-TAG IEs, which `check()` checks as those IEs (§8.2.56).
 pub type VlanTag = [u8; 3];
 
 /// Sixteen octets that their clause does not split: an NF Instance ID (a UUID).
@@ -1733,6 +1734,8 @@ pfcp_layout! {
         if !(creation.gtpu_udp_ipv4 || creation.gtpu_udp_ipv6 || creation.udp_ipv4 || creation.udp_ipv6 || creation.ipv4_header || creation.ipv6_header || creation.c_tag_header || creation.s_tag_header || creation.n19_indication || creation.n6_indication || creation.low_layer_ssm_and_c_teid) {
             found.push(Deviation::new(path, "8.2.56", DeviationKind::Rule("no bit of the description is set")));
         }
+        let (c_tag, s_tag) = (creation.c_tag.as_ref(), creation.s_tag.as_ref());
+        crate::values_clauses::check_tags(c_tag.map(|tag| &tag[..]), s_tag.map(|tag| &tag[..]), path, "8.2.56", found);
     }
 }
 
