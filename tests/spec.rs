@@ -917,10 +917,6 @@ fn requirements() {
             Some(("test", name)) => {
                 problems.push(format!("requirement {clause}/{n}: no test {name}"))
             }
-            Some(("planned", name))
-                if name
-                    .chars()
-                    .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_') => {}
             Some(("application:" | "informative:", reason)) if !reason.is_empty() => {}
             _ => problems.push(format!(
                 "requirement {clause}/{n}: {by:?} says nothing that checks it"

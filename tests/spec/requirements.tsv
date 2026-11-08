@@ -3,7 +3,6 @@
 # numbered 0 for a heading that has none. Each says what checks it:
 #
 #   test NAME          a test of the crate, which the test `spec` finds
-#   planned NAME       a test that the node layer or check() is to have in 0.1.0
 #   application: ...   what the CP or UP function above the crate does, not the crate
 #   informative: ...   a heading or a statement that requires nothing
 #
