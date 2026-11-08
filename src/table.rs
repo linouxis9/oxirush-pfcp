@@ -488,20 +488,16 @@ pub(crate) fn each_entry<S: Scope>(scope: &S, ie_type: u16, mut each: impl FnMut
     }
 }
 
-/// The position in the tree of the scope of each value of `row`, in the list of the row:
-/// `None` for the one entry of a row there once, which the tree has alone.
-pub(crate) fn value_positions<S: Scope>(scope: &S, row: &Row) -> Vec<Option<usize>> {
+/// The position of each value of `row` in the list of the row in the tree of the scope,
+/// which keeps IEs of the row as octets: the tree lists the values and those IEs.
+pub(crate) fn value_positions<S: Scope>(scope: &S, row: &Row) -> Vec<usize> {
     let mut positions = Vec::new();
-    let entries = positions_of(scope, row, |entry, position| {
+    positions_of(scope, row, |entry, position| {
         if let Entry::Value(_) = entry {
             positions.push(position);
         }
     });
-    let listed = row.repeat != Repeat::Once || entries > 1;
     positions
-        .into_iter()
-        .map(|at| listed.then_some(at))
-        .collect()
 }
 
 /// The same of each IE that the scope keeps as octets, by its position in `raw`: `None`

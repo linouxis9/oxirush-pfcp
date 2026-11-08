@@ -502,7 +502,7 @@ pub(crate) fn check_field_values<
     for (nth, value) in values.iter().enumerate() {
         let nth = match kept {
             false => (row.repeat != Repeat::Once).then_some(nth),
-            true => positions[nth],
+            true => Some(positions[nth]),
         };
         let here = Path::Row {
             parent: path,
