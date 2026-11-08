@@ -12,14 +12,14 @@ association-setup-request_test.go	Multiple IEs	/pfcp/GTP-U Path QoS Control Info
 association-setup-request_test.go	Multiple IEs	/pfcp/GTP-U Path QoS Control Information/1/Measurement Period	7.4.4.1.3-1	ConditionalMissing { ie_type: 64 }	ConditionalIeMissing
 association-setup-request_test.go	Multiple IEs	/pfcp/SMF Set ID	8.1.2	SpareBits	-
 association-setup-request_test.go	Multiple IEs	/pfcp/SMF Set ID	8.2.131	Rule("labels that are no FQDN of RFC 1035: each of 1 to 63 octets, after its length, and 255 octets at most with the trailing zero byte")	MandatoryIeIncorrect
-association-setup-request_test.go	Multiple IEs	/pfcp/UE IP address Pool Information/0/UE IP address Pool Identity	7.4.4.1-3	MandatoryIncorrect { ie_type: 177 }	-
-association-setup-request_test.go	Multiple IEs	/pfcp/UE IP address Pool Information/1/UE IP address Pool Identity	7.4.4.1-3	MandatoryIncorrect { ie_type: 177 }	-
+association-setup-request_test.go	Multiple IEs	/pfcp/UE IP address Pool Information/0/UE IP address Pool Identity	7.6.8	MandatoryIncorrect { ie_type: 177 }	-
+association-setup-request_test.go	Multiple IEs	/pfcp/UE IP address Pool Information/1/UE IP address Pool Identity	7.6.8	MandatoryIncorrect { ie_type: 177 }	-
 association-setup-request_test.go	Single IEs	/pfcp/GTP-U Path QoS Control Information/0/DSCP/0	8.2.12	Rule("a ToS/Traffic Class mask other than 0xFC")	MandatoryIeIncorrect
 association-setup-request_test.go	Single IEs	/pfcp/GTP-U Path QoS Control Information/0/Measurement Method	7.6.9	Unexpected { ie_type: 62 }	-
 association-setup-request_test.go	Single IEs	/pfcp/GTP-U Path QoS Control Information/0/Measurement Period	7.4.4.1.3-1	ConditionalMissing { ie_type: 64 }	ConditionalIeMissing
 association-setup-request_test.go	Single IEs	/pfcp/SMF Set ID	8.1.2	SpareBits	-
 association-setup-request_test.go	Single IEs	/pfcp/SMF Set ID	8.2.131	Rule("labels that are no FQDN of RFC 1035: each of 1 to 63 octets, after its length, and 255 octets at most with the trailing zero byte")	MandatoryIeIncorrect
-association-setup-request_test.go	Single IEs	/pfcp/UE IP address Pool Information/0/UE IP address Pool Identity	7.4.4.1-3	MandatoryIncorrect { ie_type: 177 }	-
+association-setup-request_test.go	Single IEs	/pfcp/UE IP address Pool Information/0/UE IP address Pool Identity	7.6.8	MandatoryIncorrect { ie_type: 177 }	-
 association-setup-response_test.go	Multiple IEs	/pfcp/GTP-U Path QoS Control Information/0/DSCP/0	8.2.12	Rule("a ToS/Traffic Class mask other than 0xFC")	-
 association-setup-response_test.go	Multiple IEs	/pfcp/GTP-U Path QoS Control Information/0/Measurement Method	7.6.9	Unexpected { ie_type: 62 }	-
 association-setup-response_test.go	Multiple IEs	/pfcp/GTP-U Path QoS Control Information/0/Measurement Period	7.4.4.1.3-1	ConditionalMissing { ie_type: 64 }	-
@@ -27,13 +27,13 @@ association-setup-response_test.go	Multiple IEs	/pfcp/GTP-U Path QoS Control Inf
 association-setup-response_test.go	Multiple IEs	/pfcp/GTP-U Path QoS Control Information/1/Measurement Method	7.6.9	Unexpected { ie_type: 62 }	-
 association-setup-response_test.go	Multiple IEs	/pfcp/GTP-U Path QoS Control Information/1/Measurement Period	7.4.4.1.3-1	ConditionalMissing { ie_type: 64 }	-
 association-setup-response_test.go	Multiple IEs	/pfcp/SMF Set ID	7.4.4.2-1	ConditionalMissing { ie_type: 180 }	-
-association-setup-response_test.go	Multiple IEs	/pfcp/UE IP address Pool Information/0/UE IP address Pool Identity	7.4.4.1-3	MandatoryIncorrect { ie_type: 177 }	-
-association-setup-response_test.go	Multiple IEs	/pfcp/UE IP address Pool Information/1/UE IP address Pool Identity	7.4.4.1-3	MandatoryIncorrect { ie_type: 177 }	-
+association-setup-response_test.go	Multiple IEs	/pfcp/UE IP address Pool Information/0/UE IP address Pool Identity	7.6.8	MandatoryIncorrect { ie_type: 177 }	-
+association-setup-response_test.go	Multiple IEs	/pfcp/UE IP address Pool Information/1/UE IP address Pool Identity	7.6.8	MandatoryIncorrect { ie_type: 177 }	-
 association-setup-response_test.go	Single IE	/pfcp/GTP-U Path QoS Control Information/0/DSCP/0	8.2.12	Rule("a ToS/Traffic Class mask other than 0xFC")	-
 association-setup-response_test.go	Single IE	/pfcp/GTP-U Path QoS Control Information/0/Measurement Method	7.6.9	Unexpected { ie_type: 62 }	-
 association-setup-response_test.go	Single IE	/pfcp/GTP-U Path QoS Control Information/0/Measurement Period	7.4.4.1.3-1	ConditionalMissing { ie_type: 64 }	-
 association-setup-response_test.go	Single IE	/pfcp/SMF Set ID	7.4.4.2-1	ConditionalMissing { ie_type: 180 }	-
-association-setup-response_test.go	Single IE	/pfcp/UE IP address Pool Information/0/UE IP address Pool Identity	7.4.4.1-3	MandatoryIncorrect { ie_type: 177 }	-
+association-setup-response_test.go	Single IE	/pfcp/UE IP address Pool Information/0/UE IP address Pool Identity	7.6.8	MandatoryIncorrect { ie_type: 177 }	-
 association-update-request_test.go	Multiple IEs	/pfcp/GTP-U Path QoS Control Information/0/DSCP/0	8.2.12	Rule("a ToS/Traffic Class mask other than 0xFC")	MandatoryIeIncorrect
 association-update-request_test.go	Multiple IEs	/pfcp/GTP-U Path QoS Control Information/0/Measurement Method	7.6.9	Unexpected { ie_type: 62 }	-
 association-update-request_test.go	Multiple IEs	/pfcp/GTP-U Path QoS Control Information/0/Measurement Period	7.4.4.1.3-1	ConditionalMissing { ie_type: 64 }	ConditionalIeMissing
@@ -41,13 +41,13 @@ association-update-request_test.go	Multiple IEs	/pfcp/GTP-U Path QoS Control Inf
 association-update-request_test.go	Multiple IEs	/pfcp/GTP-U Path QoS Control Information/1/Measurement Method	7.6.9	Unexpected { ie_type: 62 }	-
 association-update-request_test.go	Multiple IEs	/pfcp/GTP-U Path QoS Control Information/1/Measurement Period	7.4.4.1.3-1	ConditionalMissing { ie_type: 64 }	ConditionalIeMissing
 association-update-request_test.go	Multiple IEs	/pfcp/UE IP Address Usage Information/0/UE IP Address Pool Id	7.6.8	Incorrect { ie_type: 177 }	-
-association-update-request_test.go	Multiple IEs	/pfcp/UE IP address Pool Information/0/UE IP address Pool Identity	7.4.4.1-3	MandatoryIncorrect { ie_type: 177 }	-
-association-update-request_test.go	Multiple IEs	/pfcp/UE IP address Pool Information/1/UE IP address Pool Identity	7.4.4.1-3	MandatoryIncorrect { ie_type: 177 }	-
+association-update-request_test.go	Multiple IEs	/pfcp/UE IP address Pool Information/0/UE IP address Pool Identity	7.6.8	MandatoryIncorrect { ie_type: 177 }	-
+association-update-request_test.go	Multiple IEs	/pfcp/UE IP address Pool Information/1/UE IP address Pool Identity	7.6.8	MandatoryIncorrect { ie_type: 177 }	-
 association-update-request_test.go	Single IE	/pfcp/GTP-U Path QoS Control Information/0/DSCP/0	8.2.12	Rule("a ToS/Traffic Class mask other than 0xFC")	MandatoryIeIncorrect
 association-update-request_test.go	Single IE	/pfcp/GTP-U Path QoS Control Information/0/Measurement Method	7.6.9	Unexpected { ie_type: 62 }	-
 association-update-request_test.go	Single IE	/pfcp/GTP-U Path QoS Control Information/0/Measurement Period	7.4.4.1.3-1	ConditionalMissing { ie_type: 64 }	ConditionalIeMissing
 association-update-request_test.go	Single IE	/pfcp/UE IP Address Usage Information/0/UE IP Address Pool Id	7.6.8	Incorrect { ie_type: 177 }	-
-association-update-request_test.go	Single IE	/pfcp/UE IP address Pool Information/0/UE IP address Pool Identity	7.4.4.1-3	MandatoryIncorrect { ie_type: 177 }	-
+association-update-request_test.go	Single IE	/pfcp/UE IP address Pool Information/0/UE IP address Pool Identity	7.6.8	MandatoryIncorrect { ie_type: 177 }	-
 generic_test.go	No-SEID	/pfcp/Application ID	7.6.9	Unexpected { ie_type: 24 }	-
 generic_test.go	No-SEID	/pfcp/Recovery Time Stamp	7.4.2.1-1	MandatoryMissing { ie_type: 96 }	-
 generic_test.go	Normal	/SEID	7.2.2.4.2	Rule("a Session Establishment Request of a SEID other than 0")	-

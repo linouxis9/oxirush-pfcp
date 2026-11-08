@@ -224,6 +224,44 @@ fn an_ie_of_a_row_not_on_the_interface_has_no_cause() {
     assert!(found.iter().all(|(_, cause)| cause.is_none()), "{found:?}");
 }
 
+/// §7.6.8: a mandatory IE that does not decode is of the clause of an incorrect IE,
+/// whether the scope needs it, or has it beyond what it needs: a Precedence of three
+/// octets, and the Recovery Time Stamp of a rejection.
+#[test]
+fn a_mandatory_ie_that_does_not_decode_is_of_7_6_8() {
+    let incorrect = |octets: &[u8]| {
+        let message = Message::decode(octets).unwrap();
+        message
+            .check(Interfaces::N4)
+            .into_iter()
+            .filter(|deviation| matches!(deviation.kind, DeviationKind::MandatoryIncorrect { .. }))
+            .map(|deviation| (deviation.kind, deviation.clause))
+            .collect::<Vec<_>>()
+    };
+    let [_, far] = rules();
+    let pdr = ie(
+        1,
+        &[
+            ie(56, &[0, 1]),
+            ie(29, &[0, 0, 1]),
+            ie(2, &ie(20, &[0])),
+            ie(108, &[0, 0, 0, 1]),
+        ]
+        .concat(),
+    );
+    let f_seid = [2, 0, 0, 0, 0, 0, 0, 0x10, 0x01, 10, 0, 0, 1];
+    let ies = [ie(60, &[0, 10, 0, 0, 1]), ie(57, &f_seid), pdr, far];
+    assert_eq!(
+        incorrect(&session_message(50, 0, &ies)),
+        [(DeviationKind::MandatoryIncorrect { ie_type: 29 }, "7.6.8")]
+    );
+    let rejection = node_message(6, &[ie(60, &[0, 10, 0, 0, 1]), ie(19, &[64]), ie(96, &[0])]);
+    assert_eq!(
+        incorrect(&rejection),
+        [(DeviationKind::MandatoryIncorrect { ie_type: 96 }, "7.6.8")]
+    );
+}
+
 /// A set of interfaces is of the bits of the constants, and not empty.
 #[test]
 fn interfaces_of_their_bits() {

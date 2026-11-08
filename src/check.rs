@@ -695,18 +695,19 @@ fn mandatory_missing<S: Scope>(
         found.push(Deviation::new(at, S::table().id, kind));
         return;
     }
-    let (kind, missing) = match incorrect {
+    // Missing where its table has it, or there and incorrect (§7.6.8).
+    let (clause, kind) = match incorrect {
         false => (
+            S::table().id,
             DeviationKind::MandatoryMissing {
                 ie_type: row.ie_type,
             },
-            true,
         ),
         true => (
+            "7.6.8",
             DeviationKind::MandatoryIncorrect {
                 ie_type: row.ie_type,
             },
-            false,
         ),
     };
     let mut deviation = Deviation::new(
@@ -715,10 +716,10 @@ fn mandatory_missing<S: Scope>(
             row: row.name,
             nth: None,
         },
-        S::table().id,
+        clause,
         kind,
     );
-    deviation.cause = context.cause(missing);
+    deviation.cause = context.cause(!incorrect);
     found.push(deviation);
 }
 
