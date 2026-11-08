@@ -363,6 +363,40 @@ fn a_rejection_carries_only_what_it_may() {
     );
 }
 
+/// §5.22.2: an SMF redirects a UPF's request to another SMF of its set by rejecting it
+/// with "Redirection Requested" and the IP address of the new SMF, the Alternative SMF IP
+/// Address that Table 7.5.9.1-1 writes beside the Cause; the other row of that IE, the
+/// address kept for the session, does not accompany a rejection, nor does either
+/// accompany another Cause, or another message.
+#[test]
+fn a_redirection_carries_the_address_of_the_new_smf() {
+    let address = AlternativeSmfIpAddress {
+        v4: true,
+        ipv4_address: Some(Ipv4Addr::new(10, 0, 0, 9)),
+        ..Default::default()
+    };
+    let report = |cause: CauseValue, addresses: usize| {
+        let response = SessionReportResponse {
+            cause: Some(Cause::new(cause)),
+            alternative_smf_ip_address: vec![address.clone(); addresses],
+            ..Default::default()
+        };
+        kinds(&Message::session(0x1001, 7, response), Interfaces::N4)
+    };
+    let with_rejection = [DeviationKind::WithRejection { ie_type: 178 }];
+    assert_eq!(report(CauseValue::RedirectionRequested, 1), []);
+    assert_eq!(report(CauseValue::RedirectionRequested, 2), with_rejection);
+    assert_eq!(report(CauseValue::RequestRejected, 1), with_rejection);
+    let setup = AssociationSetupResponse::new(
+        NodeId::Ipv4(SMF),
+        Cause::new(CauseValue::RedirectionRequested),
+        RecoveryTimeStamp::new(1),
+    )
+    .with_alternative_smf_ip_address(address);
+    let found = kinds(&Message::node(7, setup), Interfaces::N4);
+    assert!(found.contains(&with_rejection[0]), "{found:?}");
+}
+
 /// §7.2.3.2: a rejection carries no Created PDR, whatever its octets: one of a null length,
 /// one that does not decode, and one that does, beside one that does not, each once at
 /// the row. A row of kept IEs is on its interfaces alone, as one of values.

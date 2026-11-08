@@ -116,7 +116,8 @@ pub enum DeviationKind {
     },
     /// An IE in a response with a rejection Cause, which only the Cause, the Node ID, the
     /// Offending IE, the Load and Overload Control Information and the Failed Rule ID may
-    /// accompany (§7.2.3.2).
+    /// accompany (§7.2.3.2), and a row whose condition names that Cause: the address of
+    /// the new SMF of a redirection (§5.22.2).
     WithRejection {
         /// Its IE type.
         ie_type: u16,
@@ -337,8 +338,8 @@ pub(crate) struct Context {
     pub(crate) view: Presence,
     /// In a request that the receiver answers with a Cause: not a Heartbeat Request.
     pub(crate) request: bool,
-    /// The message level of a response whose Cause rejects the request.
-    pub(crate) rejected: bool,
+    /// The Cause of a response that rejects the request, at the message level.
+    pub(crate) rejected: Option<CauseValue>,
 }
 
 impl Context {
@@ -348,7 +349,7 @@ impl Context {
             interface,
             view: Presence::Mandatory,
             request: false,
-            rejected: false,
+            rejected: None,
         }
     }
 
@@ -361,7 +362,7 @@ impl Context {
         };
         Self {
             view,
-            rejected: false,
+            rejected: None,
             ..self
         }
     }
@@ -540,6 +541,25 @@ fn presence(row: &Row, context: Context) -> Presence {
 /// Offending IE, Load Control Information, Overload Control Information, Failed Rule ID.
 const WITH_REJECTION: [u16; 6] = [19, 60, 40, 51, 54, 114];
 
+/// The rows that a response with a rejection Cause may have besides, as many IEs of each
+/// as there are rows of that Cause, by their table, their IE type and the Cause that their
+/// condition names: the address of the new SMF of a redirection, which a row of the
+/// Alternative SMF IP Address of a Session Report Response is (Table 7.5.9.1-1, §5.22.2);
+/// the other is the address kept for the session.
+const WITH_CAUSE: [(&str, u16, CauseValue, usize); 1] =
+    [("7.5.9.1-1", 178, CauseValue::RedirectionRequested, 1)];
+
+/// How many IEs of a row a response with the rejection Cause `cause` may have.
+fn with_rejection(table: &str, row: &Row, cause: CauseValue) -> usize {
+    if WITH_REJECTION.contains(&row.ie_type) {
+        return usize::MAX;
+    }
+    WITH_CAUSE
+        .iter()
+        .find(|(id, ie_type, of, _)| *id == table && *ie_type == row.ie_type && *of == cause)
+        .map_or(0, |(.., most)| *most)
+}
+
 /// The IEs of a row that mandatory rows need on the interface, in the context: of a set
 /// of interfaces, those that each needs. One, or one for each mandatory row of a shared
 /// field.
@@ -559,13 +579,14 @@ fn mandatory(row: &Row, context: Context) -> usize {
     };
     match context.rejected {
         // The Cause and the Node ID follow their rows; the others may be missing.
-        true => mandatory.min(usize::from(matches!(row.ie_type, 19 | 60))),
-        false => mandatory,
+        Some(_) => mandatory.min(usize::from(matches!(row.ie_type, 19 | 60))),
+        None => mandatory,
     }
 }
 
-/// Check a row that has `count` values: whether the interface has it, whether a
-/// rejection may carry it, and whether the table allows that many.
+/// Check a row that has `count` values, or IEs kept as octets alone when 0: whether the
+/// interface has it, whether a rejection may carry it, and whether the table allows that
+/// many.
 #[inline]
 pub(crate) fn check_row(
     table: &'static str,
@@ -575,7 +596,9 @@ pub(crate) fn check_row(
     context: Context,
     found: &mut Vec<Deviation>,
 ) {
-    let rejected = context.rejected && !WITH_REJECTION.contains(&row.ie_type);
+    let rejected = context
+        .rejected
+        .is_some_and(|cause| count.max(1) > with_rejection(table, row, cause));
     let off = !row.interfaces.has(context.interface);
     // A field that rows share has at most one IE for each of them on the interface.
     let shared = !row.roles.is_empty()

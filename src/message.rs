@@ -227,13 +227,13 @@ impl Message {
     pub fn check(&self, interface: Interfaces) -> Vec<Deviation> {
         let mut found = self.header_deviations(interface);
         let message_type = self.body.message_type();
-        let rejection = self.body.cause().is_some_and(|cause| cause.value() >= 64);
+        let rejection = self.body.cause().filter(|cause| cause.value() >= 64);
         // "This flag shall be set to "1" by the UP function, if the "Overload Control
         // Information" is included in the PFCP Session Establishment Response and the Cause
         // IE is set to a rejection cause value" (§8.2.76): AOCI, which the value of the IE
         // does not show alone.
         if let Body::SessionEstablishmentResponse(response) = &self.body
-            && rejection
+            && rejection.is_some()
             && let Some(overload) = &response.overload_control_information
             && !overload
                 .overload_control_information_flags
