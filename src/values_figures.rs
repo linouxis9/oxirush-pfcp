@@ -777,8 +777,8 @@ pfcp_bits! {
 pfcp_octets! {
     /// Application ID (§8.2.6).
     ApplicationId "Application Identifier" "8.2.6";
-    /// DL Buffering Suggested Packet Count (§8.2.30).
-    DlBufferingSuggestedPacketCount "Packet Count Value" "8.2.30";
+    /// DL Buffering Suggested Packet Count (§8.2.30): a number of one or two octets.
+    DlBufferingSuggestedPacketCount "Packet Count Value" "8.2.30" lengths 1..=2 => "a Packet Count value of neither one nor two octets";
     /// Application Instance ID (§8.2.60).
     ApplicationInstanceId "Application Instance Identifier" "8.2.60";
     /// Activate Predefined Rules (§8.2.72).

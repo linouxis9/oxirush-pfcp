@@ -1930,9 +1930,10 @@ impl<const N: u16> crate::ie::Listed for Raw<N> {
     }
 }
 
-/// A value that is octets that its clause does not split.
+/// A value that is octets that its clause does not split, of the lengths that it gives, if
+/// it gives some.
 macro_rules! pfcp_octets {
-    ($( $(#[$meta:meta])* $ty:ident $name:literal $clause:literal; )*) => {$(
+    ($( $(#[$meta:meta])* $ty:ident $name:literal $clause:literal $(lengths $lengths:pat => $rule:literal)?; )*) => {$(
         $(#[$meta])*
         #[derive(Debug, Clone, Default, PartialEq, Eq)]
         pub struct $ty(pub Octets);
@@ -1964,7 +1965,13 @@ macro_rules! pfcp_octets {
             }
         }
 
-        impl Rules for $ty {}
+        impl Rules for $ty {
+            $(
+                fn check(&self, path: &crate::check::Path, found: &mut alloc::vec::Vec<crate::check::Deviation>) {
+                    crate::values::flag_rule(!matches!(self.0.len(), $lengths), path, $clause, $rule, found);
+                }
+            )?
+        }
 
         #[cfg(feature = "serde")]
         oxirush_utils::impl_serde!($ty);

@@ -86,7 +86,8 @@ macro_rules! pfcp_ies {
 /// A value of a layout of clause 8.2: fields that are always there, then an octet of
 /// flags and fields each present when its condition over the flags holds, then the octets
 /// that a later release adds ("present only if explicitly specified"), which the value
-/// keeps. A value of fields alone has no flags.
+/// keeps. A value of fields alone has no flags. A field of a length that the flags give,
+/// `[length]` after its kind, is read from that many octets.
 ///
 /// ```text
 /// pub struct FTeid "8.2.3" {
@@ -103,7 +104,7 @@ macro_rules! pfcp_layout {
             $( fields { $( $head:ident $head_name:literal : $hkind:ty ),* $(,)? } )?
             $(
                 flags($fk:ty) { $( $flag:ident $flag_name:literal : $bit:literal $(/ $width:literal $(as $fkind:ident)?)? ),* $(,)? }
-                $( $field:ident $field_name:literal : $kind:ident $(<$param:ident>)? if $cond:expr ),* $(,)?
+                $( $field:ident $field_name:literal : $kind:ident $(<$param:ident>)? $([$length:expr])? if $cond:expr ),* $(,)?
             )?
         }
         $( check($this:ident, $path:ident, $found:ident) $rules:block )?
@@ -205,7 +206,7 @@ macro_rules! pfcp_layout {
                     $( let $flag = pfcp_layout!(@fread first, $bit $(, $width $(as $fkind)?)?); )*
                     $(
                         let $field = match $cond {
-                            true => Some(<$kind $(<$param>)? as crate::values::Field>::read(&mut rest)?),
+                            true => Some(pfcp_layout!(@read rest, [$kind $(<$param>)?] $(, $length)?)?),
                             false => None,
                         };
                     )*
@@ -365,6 +366,14 @@ macro_rules! pfcp_layout {
         }
     )*};
     (@spare $fk:ty) => { "Spare" };
+    // A field read from the octets left, or from the first `length` of them, the others
+    // being the next field's or the unknown octets.
+    (@read $rest:ident, [$($kind:tt)+]) => { <$($kind)+ as crate::values::Field>::read(&mut $rest) };
+    (@read $rest:ident, [$($kind:tt)+], $length:expr) => {{
+        let (mut head, tail) = $rest.split_at(usize::min($length, $rest.len()));
+        $rest = tail;
+        <$($kind)+ as crate::values::Field>::read(&mut head)
+    }};
     // A field of the octet of flags is one of `pfcp_bits`: a flag of one bit, or a number
     // of `width` bits or a value of its table (`as`), at its bit of the octet.
     (@bits $op:ident [] $($rest:tt)*) => { pfcp_bits!(@ $op 1 [] $($rest)*) };

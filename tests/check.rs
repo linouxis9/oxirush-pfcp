@@ -651,6 +651,87 @@ fn reserved_values_and_fixed_lengths() {
     assert_eq!(found[0].cause, None, "an optional IE");
 }
 
+/// The lengths of clause 8.2: a DL Buffering Suggested Packet Count of one or two octets
+/// (§8.2.30); a Failed Rule ID whose value has the length of the ID of its type, a type
+/// that a receiver reads as FAR that of a FAR ID, and octets after it of a later release
+/// (§8.2.80, §8.1.2); an LNS Address and the IP Address of the Trace Collection Entity of a
+/// Trace Information of four or sixteen octets (§8.2.188, §8.2.108); a Key ID of 80 octets
+/// at most (§8.2.276).
+#[test]
+fn the_lengths_of_clause_8_2() {
+    fn rules<T: Codec + Check>(octets: &[u8]) -> Vec<(&'static str, DeviationKind)> {
+        let value = T::decode(octets).unwrap();
+        let mut again = Vec::new();
+        value.encode(&mut again).unwrap();
+        assert_eq!(again, octets, "byte for byte");
+        let found = value.deviations().into_iter();
+        let rules = found.filter(|deviation| matches!(deviation.kind, DeviationKind::Rule(_)));
+        rules
+            .map(|deviation| (deviation.clause, deviation.kind))
+            .collect()
+    }
+    let count = |octets: &[u8]| rules::<DlBufferingSuggestedPacketCount>(octets);
+    assert_eq!(count(&[1]), []);
+    assert_eq!(count(&[1, 2]), []);
+    let rule = DeviationKind::Rule("a Packet Count value of neither one nor two octets");
+    assert_eq!(count(&[1, 2, 3]), [("8.2.30", rule)]);
+    let failed = |octets: &[u8]| rules::<FailedRuleId>(octets);
+    let rule = || {
+        [(
+            "8.2.80",
+            DeviationKind::Rule("a Rule ID value of another length than the ID of its type"),
+        )]
+    };
+    for good in [
+        &[0, 0, 1][..],
+        &[1, 0, 0, 0, 1],
+        &[4, 1],
+        &[5, 0, 1],
+        &[6, 1],
+        &[7, 0, 0, 0, 1],
+    ] {
+        assert_eq!(failed(good), [], "{good:?}");
+    }
+    for short in [&[4][..], &[0, 1], &[1, 0, 1], &[3, 0, 0, 1], &[31, 0, 0, 1]] {
+        assert_eq!(failed(short), rule(), "{short:?}");
+    }
+    let later = FailedRuleId::decode(&[0, 0, 0, 0, 1]).unwrap();
+    assert_eq!(later.rule_id_value, Some(Rest(vec![0, 0].into())));
+    assert_eq!(&later.extra[..], [0, 1]);
+    let built = FailedRuleId {
+        rule_id_value: Some(Rest(vec![0, 0, 0, 1].into())),
+        ..Default::default()
+    };
+    assert_eq!(built.deviations()[0].kind, rule()[0].1);
+    let lns = |octets: &[u8]| rules::<LnsAddress>(octets);
+    assert_eq!(lns(&[10, 0, 0, 1]), []);
+    assert_eq!(lns(&[0x20; 16]), []);
+    let rule = DeviationKind::Rule("an LNS Address value of neither 4 nor 16 octets");
+    for wrong in [&[][..], &[10, 0, 0], &[10, 0, 0, 1, 9], &[0x20; 17]] {
+        assert_eq!(lns(wrong), [("8.2.188", rule.clone())], "{wrong:?}");
+    }
+    let trace = |address: &[u8]| {
+        let head = [0x02, 0xf8, 0x39, 0, 0, 1, 1, 0xff, 1, 1, 0xff];
+        let octets = [&head[..], &[address.len() as u8], address].concat();
+        rules::<TraceInformation>(&octets)
+    };
+    assert_eq!(trace(&[10, 0, 0, 1]), []);
+    assert_eq!(trace(&[0x20; 16]), []);
+    let rule = DeviationKind::Rule(
+        "an IP Address of the Trace Collection Entity of neither 4 nor 16 octets",
+    );
+    for wrong in [&[][..], &[10, 0, 0, 1, 9]] {
+        assert_eq!(trace(wrong), [("8.2.108", rule.clone())], "{wrong:?}");
+    }
+    let key = |id: usize| {
+        let octets = [&[id as u8][..], &vec![b'k'; id], &[1, b's']].concat();
+        rules::<KeyIdAndSharedSecret>(&octets)
+    };
+    assert_eq!(key(80), []);
+    let rule = DeviationKind::Rule("a Key ID of more than 80 octets");
+    assert_eq!(key(81), [("8.2.276", rule)]);
+}
+
 /// Table 7.3-1: after 11, Version Not Supported Response, a request has an even type: 12
 /// Node Report, 14 Session Set Deletion and 16 Session Set Modification.
 #[test]

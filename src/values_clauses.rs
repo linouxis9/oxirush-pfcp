@@ -144,10 +144,25 @@ pfcp_layout! {
 
 pfcp_layout! {
     /// Failed Rule ID (§8.2.80): the Rule ID Type of Table 8.2.80-1 and the rule ID, of the
-    /// length of its type.
+    /// length of the ID of its type; the octets after it are a later release's.
     pub struct FailedRuleId "8.2.80" {
         flags(u8) { rule_id_type "Rule ID Type": 1 / 5 as RuleIdType }
-        rule_id_value "Rule ID value": Rest if true,
+        rule_id_value "Rule ID value": Rest [rule_id_length(rule_id_type)] if true,
+    }
+    check(this, path, found) {
+        let length = rule_id_length(this.rule_id_type);
+        let other = this.rule_id_value.as_ref().is_some_and(|value| value.0.len() != length);
+        flag_rule(other, path, "8.2.80", "a Rule ID value of another length than the ID of its type", found);
+    }
+}
+
+/// The length of the ID of a rule of a Rule ID Type (Table 8.1.2-1), as a receiver reads
+/// the type: 7 to 31 as a FAR (Table 8.2.80-1).
+fn rule_id_length(kind: RuleIdType) -> usize {
+    match kind.effective() {
+        RuleIdType::Bar | RuleIdType::Srr => 1,
+        RuleIdType::Pdr | RuleIdType::Mar => 2,
+        _ => 4,
     }
 }
 
@@ -514,8 +529,8 @@ pfcp_number! {
 }
 
 pfcp_octets! {
-    /// LNS Address (§8.2.188): an IPv4 or an IPv6 address.
-    LnsAddress "LNS Address value" "8.2.188";
+    /// LNS Address (§8.2.188): an IPv4 or an IPv6 address, of its length.
+    LnsAddress "LNS Address value" "8.2.188" lengths 4 | 16 => "an LNS Address value of neither 4 nor 16 octets";
     /// Binding Indication (§8.2.281).
     BindingIndication "Binding Indication" "8.2.281";
 }
@@ -763,6 +778,9 @@ pfcp_layout! {
     pub struct KeyIdAndSharedSecret "8.2.276" {
         fields { key_id "Key ID": Lv8, shared_secret "Shared Secret": SecretLv8 }
     }
+    check(this, path, found) {
+        flag_rule(this.key_id.0.len() > 80, path, "8.2.276", "a Key ID of more than 80 octets", found);
+    }
 }
 
 /// Octets that are a key, which `Debug` does not print: their number only.
@@ -892,6 +910,10 @@ pfcp_layout! {
     /// the Trace Collection Entity.
     pub struct TraceInformation "8.2.108" {
         fields { mcc_mnc "MCC and MNC": PlmnId, trace_id "Trace ID": U24, triggering_events "Triggering Events": Lv8, session_trace_depth "Session Trace Depth": u8, list_of_interfaces "List of Interfaces": Lv8, ip_address_of_trace_collection_entity "IP Address of Trace Collection Entity": Lv8, }
+    }
+    check(this, path, found) {
+        let address = this.ip_address_of_trace_collection_entity.0.len();
+        flag_rule(!matches!(address, 4 | 16), path, "8.2.108", "an IP Address of the Trace Collection Entity of neither 4 nor 16 octets", found);
     }
 }
 
