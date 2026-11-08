@@ -12,9 +12,13 @@ datagram that makes a decoder or a node panic, loop or allocate without bound
 is a vulnerability, and so is a node that a peer can make answer for another
 peer.
 
-A decoded message takes up to 191 times its octets, in its lists of grouped
-IEs: a datagram of 64 KiB, some 12.5 MB (the test `allocation` measures it). An
-`Endpoint` bounds its queue of requests by what they take
+A decoded message takes up to 243.3 times its octets, in its lists of grouped
+IEs: a datagram of 64 KiB, some 15.9 MB. The worst is a Session Establishment
+or Modification Request full of Create URRs of 12 octets, each with an
+Additional Monitoring Time that holds an IE of a null length; the test
+`allocation` finds it by search, over the lists of grouped IEs of every table
+with one to three levels of grouped IEs in each entry, and fails when the figure
+changes. An `Endpoint` bounds its queue of requests by what they take
 (`Queues::incoming_octets`); a caller that keeps decoded messages itself bounds
 them so.
 

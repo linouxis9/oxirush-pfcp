@@ -184,38 +184,123 @@ fn what_is_kept_of_a_rejection_is_small() {
     assert!(upf.poll_event().is_none());
 }
 
+/// An IE of `ie_type` and `content`.
+fn ie(ie_type: u16, content: &[u8]) -> Vec<u8> {
+    [
+        &ie_type.to_be_bytes()[..],
+        &(content.len() as u16).to_be_bytes(),
+        content,
+    ]
+    .concat()
+}
+
+/// The tables of the content of the IE type of a row: none for an IE that is no grouped
+/// IE, and each of those of one that has other content in other places.
+fn tables_of(row: &Row) -> &'static [&'static Table] {
+    ie_type_info(row.ie_type)
+        .filter(|info| info.form == Form::Grouped)
+        .map_or(&[], |info| info.tables)
+}
+
+/// The IEs of `ie_types`, each in the one before, around `content`.
+fn nested(ie_types: &[u16], content: &[u8]) -> Vec<u8> {
+    let inner = content.to_vec();
+    ie_types
+        .iter()
+        .rev()
+        .fold(inner, |inner, ie_type| ie(*ie_type, &inner))
+}
+
+/// A message of `message_type` whose IEs are the IEs of `outer`, each in the one before,
+/// around as many `units` as a datagram of 64 KiB holds.
+fn filled(message_type: u8, outer: &[u16], unit: &[u8]) -> Vec<u8> {
+    let session = !is_node_related(message_type);
+    let head = if session { 16 } else { 8 };
+    let room = 65_535 - head - 4 * outer.len();
+    let units = unit.repeat(room / unit.len());
+    let mut octets = vec![0x20 | u8::from(session), message_type, 0, 0];
+    if session {
+        octets.extend(1u64.to_be_bytes());
+    }
+    octets.extend([0, 0, 1, 0]);
+    octets.extend(nested(outer, &units));
+    let length = (octets.len() - 4) as u16;
+    octets[2..4].copy_from_slice(&length.to_be_bytes());
+    octets
+}
+
 /// What a decoded message takes, per octet of its datagram, at most: the figure of
-/// SECURITY.md and of `Queues::incoming_octets`. The worst is a datagram of 64 KiB full of
-/// entries of a list of grouped IEs, each of the fewest octets that hold an IE: each
-/// entry is a struct of every row of its table, with its kept IE.
+/// SECURITY.md and of `Queues::incoming_octets`, found by search. A datagram of 64 KiB is
+/// filled with entries of a list of grouped IEs, the message's own or one in a grouped IE
+/// of one or two levels: each entry is a struct of every row of its table, with one, two
+/// or three levels of grouped IEs in it, the last empty, with an IE of a null length and
+/// of no type, which it keeps, or with a value of one of its lists. Every list of grouped
+/// IEs of each table is searched so, each grouped IE of its table with each of its tables.
+/// The worst is an entry of 12 octets: a Create URR with an Additional Monitoring Time
+/// that holds an IE of a null length.
 #[test]
-fn a_decoded_message_takes_at_most_191_times_its_octets() {
-    let mut worst = (0.0, "");
+fn a_decoded_message_takes_at_most_244_times_its_octets() {
+    let mut worst = (0.0, String::new());
+    let mut measured = std::collections::BTreeSet::new();
     for info in MESSAGE_TYPES {
-        for row in info.table.rows {
-            let grouped = ie_type_info(row.ie_type).is_some_and(|ie| ie.form == Form::Grouped);
-            if !grouped || row.repeat == Repeat::Once {
-                continue;
-            }
-            let [high, low] = row.ie_type.to_be_bytes();
-            let mut octets = vec![0x20, info.message_type, 0, 0];
-            if !is_node_related(info.message_type) {
-                octets[0] |= 1;
-                octets.extend(1u64.to_be_bytes());
-            }
-            octets.extend([0, 0, 1, 0]);
-            while octets.len() + 8 <= 65_535 {
-                octets.extend([high, low, 0, 4, 0, 0, 0, 0]);
-            }
-            let length = (octets.len() - 4) as u16;
-            octets[2..4].copy_from_slice(&length.to_be_bytes());
-            let mut message = None;
-            let taken = held(|| message = Some(Message::decode(&octets).unwrap()));
-            let ratio = taken as f64 / octets.len() as f64;
-            if ratio > worst.0 {
-                worst = (ratio, row.name);
+        // The scopes of the message: its own, and those of the grouped IEs of its rows and
+        // of theirs, with the IE types that are around them.
+        let mut scopes: Vec<(Vec<u16>, &'static Table)> = vec![(Vec::new(), info.table)];
+        let mut at = 0;
+        while let Some((outer, table)) = scopes.get(at).cloned() {
+            at += 1;
+            for row in table.rows {
+                for inner in tables_of(row) {
+                    if outer.len() < 2 {
+                        scopes.push(([&outer[..], &[row.ie_type]].concat(), inner));
+                    }
+                    if row.repeat == Repeat::Once {
+                        continue;
+                    }
+                    // The entries: the row's IE, and in it up to two levels of grouped IEs,
+                    // each with the table of the last.
+                    let mut chains = vec![(vec![row.ie_type], *inner)];
+                    for middle in inner.rows {
+                        for deeper in tables_of(middle) {
+                            chains.push((vec![row.ie_type, middle.ie_type], deeper));
+                            for last in deeper.rows {
+                                for innermost in tables_of(last) {
+                                    let chain = vec![row.ie_type, middle.ie_type, last.ie_type];
+                                    chains.push((chain, innermost));
+                                }
+                            }
+                        }
+                    }
+                    for (chain, last) in chains {
+                        // The last empty, with an IE of a null length and of no type, or with
+                        // a value of each of its lists of values, of its fixed octets.
+                        let mut leaves = vec![Vec::new(), ie(0, &[])];
+                        for row in last.rows.iter().filter(|row| row.repeat != Repeat::Once) {
+                            let Some(value) = ie_type_info(row.ie_type) else {
+                                continue;
+                            };
+                            if value.form != Form::Grouped {
+                                let octets = usize::from(value.fixed.unwrap_or(1));
+                                leaves.push(ie(row.ie_type, &vec![0; octets]));
+                            }
+                        }
+                        for leaf in &leaves {
+                            let unit = nested(&chain, leaf);
+                            if !measured.insert((table.id, unit.clone())) {
+                                continue;
+                            }
+                            let octets = filled(info.message_type, &outer, &unit);
+                            let mut message = None;
+                            let taken = held(|| message = Message::decode(&octets).ok());
+                            let ratio = taken as f64 / octets.len() as f64;
+                            if ratio > worst.0 {
+                                worst = (ratio, format!("{} {outer:?} {unit:02x?}", info.name()));
+                            }
+                        }
+                    }
+                }
             }
         }
     }
-    assert!((190.0..=191.0).contains(&worst.0), "{worst:?}");
+    assert!((243.0..=244.0).contains(&worst.0), "{worst:?}");
 }
