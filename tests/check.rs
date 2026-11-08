@@ -265,8 +265,9 @@ fn a_rejection_carries_no_ie_that_it_may_not_as_octets_either() {
     );
     let pdr = ie(56, &[0, 1]);
     let broken = [0, 56, 0, 9, 0];
-    assert_eq!(rejected(&[&[]]), [with_rejection.clone()]);
-    assert_eq!(rejected(&[&[], &[]]), [with_rejection.clone()]);
+    let alone = std::slice::from_ref(&with_rejection);
+    assert_eq!(rejected(&[&[]]), alone);
+    assert_eq!(rejected(&[&[], &[]]), alone);
     let found = rejected(&[&broken]);
     assert_eq!(found[0], with_rejection);
     assert_eq!(
@@ -2466,10 +2467,8 @@ fn a_spare_cause_is_read_as_its_receiver_reads_it() {
     };
     let up_f_seid = DeviationKind::ConditionalMissing { ie_type: 57 };
     let read_as = |value| DeviationKind::ReadAs { value, read: 1 };
-    assert_eq!(
-        kinds(&establishment(1, false), Interfaces::N4),
-        [up_f_seid.clone()]
-    );
+    let found = kinds(&establishment(1, false), Interfaces::N4);
+    assert_eq!(found, std::slice::from_ref(&up_f_seid));
     for cause in [5, 63] {
         let found = kinds(&establishment(cause, false), Interfaces::N4);
         assert_eq!(found, [read_as(cause.into()), up_f_seid.clone()]);
