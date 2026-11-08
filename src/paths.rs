@@ -607,6 +607,7 @@ impl tree::Family for Paths {
                     next.absent(segment, inside);
                     Ok(Step::Taken)
                 }
+                Absent::Refused(error) => Err(error),
                 _ => {
                     let reason = alloc::format!("{segment:?} is no member of what is not there");
                     Err(tree::Error::new(ErrorKind::NoSuchMember, "", reason))
@@ -678,11 +679,49 @@ impl tree::Family for Paths {
             Of::Below(below) => below.member(name).is_some(),
             _ => false,
         };
-        match there {
-            true => Absent::Optional(self.member(shape, name, None)),
-            false => Absent::Unknown,
+        match (there, no_such_member(shape.0, name)) {
+            (true, _) => Absent::Optional(self.member(shape, name, None)),
+            (false, Some(reason)) => {
+                Absent::Refused(tree::Error::new(ErrorKind::NoSuchMember, "", reason))
+            }
+            (false, None) => Absent::Unknown,
         }
     }
+}
+
+/// Why `name` is nothing at a place of `of`, in the words of
+/// [`Message::from_tree`](crate::Message::from_tree): the row whose IE type it is, which
+/// goes by its name, the nearest names of the table, or the members of the value. `None`
+/// for a place that the paths know nothing of.
+fn no_such_member(of: Of, name: &str) -> Option<String> {
+    let members = |members: &[&str]| match members {
+        [] => alloc::format!("{name:?} is not a member that its type has: it has none"),
+        _ => alloc::format!(
+            "{name:?} is not a member that its type has: it has {}",
+            members.join(", ")
+        ),
+    };
+    Some(match of {
+        Of::Ies(tables) => {
+            let row = type_of_name(name)
+                .and_then(|ie_type| tables.iter().find_map(|table| table.row_of(ie_type)));
+            if let Some(row) = row {
+                return Some(alloc::format!(
+                    "{name:?} is the IE type of the row {}, which goes by its name",
+                    row.name
+                ));
+            }
+            let rows = tables.iter().flat_map(|table| table.rows.iter());
+            let names: Vec<&str> = rows.map(|row| row.name).collect();
+            no_such_ie(tables.first()?, &names, name)
+        }
+        Of::Message(_) => members(crate::message::forms::NAMES),
+        Of::Value(info) => members(info.members),
+        Of::Below(Below::Object(_, below)) => {
+            members(&below.iter().map(|(member, _)| *member).collect::<Vec<_>>())
+        }
+        _ => return None,
+    })
 }
 
 /// What an edit opens at a place so that `segment` goes into it: a list with one more
@@ -745,9 +784,15 @@ pub fn select<'v>(tree: &'v Value, path: &str) -> Result<Vec<&'v Value>, tree::E
 /// the scalar as its member if it is one: `{"value": "minute", "Spare": 8}` from
 /// `"minute"`. The tree is left as it was when the edit fails.
 ///
+/// `set` checks the names of the path, and not the value, which
+/// [`Message::from_tree`](crate::Message::from_tree) reads: a value that a message lacks,
+/// whose fields are always there, is written whole, as one of its fields alone is no
+/// value (`set(&mut tree, ".../Maximum Bitrate", tree!({"UL MBR": 5, "DL MBR": 6}))`).
+///
 /// # Errors
 ///
-/// Those of `oxirush_utils::tree::set_in`.
+/// Those of `oxirush_utils::tree::set_in`: `NoSuchMember` for a name that [`select`]
+/// refuses, the last of the path too.
 pub fn set(tree: &mut Value, path: &str, value: impl Into<Value>) -> Result<(), tree::Error> {
     let mut edited = tree.clone();
     tree::open_in(&Paths, &mut edited, path)?;

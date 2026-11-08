@@ -689,6 +689,73 @@ fn a_misspelt_name_below_a_field_that_a_value_lacks_is_an_error() {
     );
 }
 
+/// A misspelt name of a path says what `Message::from_tree` says of it: the IE type of a
+/// row goes by the name of the row, and a name that is no IE of a table, or no member of
+/// a value, has the nearest names of the table, or the members of the value, whether the
+/// place is there or not.
+#[test]
+fn a_misspelt_name_says_what_from_tree_says() {
+    let qer = CreateQer::new(QerId::new(1), GateStatus::default());
+    let modification = SessionModificationRequest::default().with_create_qer(qer);
+    let tree = Message::session(1, 1, modification).to_tree();
+    let refused = |path: &str| {
+        let error = select(&tree, path).unwrap_err();
+        assert_eq!(error.kind(), tree::ErrorKind::NoSuchMember, "{path}");
+        error.to_string()
+    };
+    let read = |written: tree::Value| Message::from_tree(&written).unwrap_err().to_string();
+    let by_type = refused("/pfcp/7");
+    assert!(
+        by_type.contains("the row Create QER, which goes by its name"),
+        "{by_type}"
+    );
+    let mut written = tree.clone();
+    written["ies"]["7"] = tree!([]);
+    assert!(read(written).contains("the row Create QER, which goes by its name"));
+    for path in [
+        "/pfcp/Create QER/0/Gate Statsu",
+        "/pfcp/Create QER/0/Gate Statsu/UL Gate",
+    ] {
+        let near = refused(path);
+        assert!(
+            near.contains("is no IE of Create QER: the nearest are Gate Status"),
+            "{near}"
+        );
+    }
+    for path in [
+        "/pfcp/Create QER/0/Gate Status/UL Gat",
+        "/pfcp/Create QER/0/Maximum Bitrate/UL MBRR",
+    ] {
+        let members = refused(path);
+        assert!(
+            members.contains("is not a member that its type has: it has "),
+            "{members}"
+        );
+    }
+    assert!(refused("/pfcp/Create QER/0/Gate Status/UL Gat").contains("DL Gate, UL Gate"));
+    // `set` refuses a misspelt name, the last of its path too, and leaves the tree
+    let mut edited = tree.clone();
+    let misspelt = set(&mut edited, "/pfcp/Create QER/0/Gate Statsu", 1u64);
+    assert_eq!(
+        misspelt.map_err(|error| error.kind()),
+        Err(tree::ErrorKind::NoSuchMember)
+    );
+    assert_eq!(edited, tree);
+    // A value whose fields are always there is written whole: one of its fields alone is
+    // no value that from_tree reads.
+    set(
+        &mut edited,
+        "/pfcp/Create QER/0/Maximum Bitrate/UL MBR",
+        5u64,
+    )
+    .unwrap();
+    assert!(read(edited).contains("the member is missing"));
+    let mut whole = tree.clone();
+    let bitrate = tree!({"UL MBR": 5, "DL MBR": 6});
+    set(&mut whole, "/pfcp/Create QER/0/Maximum Bitrate", bitrate).unwrap();
+    assert!(Message::from_tree(&whole).is_ok());
+}
+
 #[test]
 fn what_the_table_does_not_have_is_kept_in_its_place() {
     let message = establishment();
