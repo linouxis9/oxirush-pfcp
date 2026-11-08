@@ -327,10 +327,12 @@ impl<E: Narrowable> Field for Narrow<E> {
             true => {
                 let read = reading.members(value, &["value", "Spare"])?;
                 let spare = reading
-                    .optional(&read, 1, |value, reading| reading.unsigned(value, 0, 255))?
+                    .optional(&read, "Spare", |value, reading| {
+                        reading.unsigned(value, 0, 255)
+                    })?
                     .unwrap_or(0) as u8;
                 Self {
-                    value: reading.member(&read, 0, E::from_tree)?,
+                    value: reading.member(&read, "value", E::from_tree)?,
                     spare,
                 }
             }
@@ -941,9 +943,10 @@ impl Field for TypedAddress {
                 .map_err(|_| reading.mismatch("an IP address", value));
         }
         let read = reading.members(value, &["Address Type", "Address"])?;
-        let address_type =
-            reading.member(&read, 0, |value, reading| reading.unsigned(value, 0, 3))? as u8;
-        let address = reading.member(&read, 1, |value, reading| reading.octets(value))?;
+        let address_type = reading.member(&read, "Address Type", |value, reading| {
+            reading.unsigned(value, 0, 3)
+        })? as u8;
+        let address = reading.member(&read, "Address", |value, reading| reading.octets(value))?;
         if address.len() > 0x3f {
             return Err(reading.mismatch("at most 63 octets", value));
         }
@@ -1142,8 +1145,8 @@ macro_rules! pfcp_number {
                 }
                 let read = reading.members(value, Self::MEMBERS)?;
                 Ok(Self {
-                    value: reading.member(&read, 0, <$t as Field>::from_tree)?,
-                    extra: reading.optional(&read, 1, |value, reading| reading.octets(value))?.map(Octets::from).unwrap_or_default(),
+                    value: reading.member(&read, $field, <$t as Field>::from_tree)?,
+                    extra: reading.optional(&read, crate::ie::UNKNOWN_OCTETS, |value, reading| reading.octets(value))?.map(Octets::from).unwrap_or_default(),
                 })
             }
         }
@@ -1795,12 +1798,10 @@ macro_rules! pfcp_fields {
                 reading: &mut oxirush_utils::tree::Reading,
             ) -> Result<Self, oxirush_utils::tree::Refused> {
                 let read = reading.members(value, Self::MEMBERS)?;
-                let mut at = 0;
                 $(
-                    let $field = reading.member(&read, at, <$kind as Field>::from_tree)?;
-                    at += 1;
+                    let $field = reading.member(&read, $name, <$kind as Field>::from_tree)?;
                 )*
-                let extra = reading.optional(&read, at, |value, reading| reading.octets(value))?;
+                let extra = reading.optional(&read, crate::ie::UNKNOWN_OCTETS, |value, reading| reading.octets(value))?;
                 Ok(Self { $($field,)* extra: extra.map(Octets::from).unwrap_or_default() })
             }
         }

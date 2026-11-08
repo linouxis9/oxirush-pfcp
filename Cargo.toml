@@ -31,7 +31,7 @@ include = [
 # The tree of a message, its paths and its edits, on the engine of oxirush-utils.
 tree = ["oxirush-utils/tree"]
 # `Serialize` and `Deserialize` for a message and each of its IEs, through its tree.
-serde = ["tree", "oxirush-utils/serde"]
+serde = ["tree"]
 # A PFCP entity without I/O: delivery, heartbeat, associations, sessions, load and
 # overload control.
 node = []
@@ -44,7 +44,7 @@ spec = []
 [dependencies]
 pastey = "0.2"
 tokio = { version = "1.38", features = ["macros", "net", "rt", "sync", "time"], optional = true }
-oxirush-utils = { version = "0.1.0", default-features = false, features = ["alloc"] }
+oxirush-utils = { version = "0.2.0", default-features = false, features = ["alloc"] }
 
 [dev-dependencies]
 hex = "0.4.3"

@@ -338,8 +338,12 @@ impl Field for SsmAddress {
             &["IP Multicast Distribution Address", "IP Source Address"],
         )?;
         Ok(Self {
-            distribution: reading.member(&read, 0, TypedAddress::from_tree)?,
-            source: reading.member(&read, 1, TypedAddress::from_tree)?,
+            distribution: reading.member(
+                &read,
+                "IP Multicast Distribution Address",
+                TypedAddress::from_tree,
+            )?,
+            source: reading.member(&read, "IP Source Address", TypedAddress::from_tree)?,
         })
     }
 }
@@ -1072,9 +1076,10 @@ impl oxirush_utils::tree::Tree for FqCsid {
         reading: &mut oxirush_utils::tree::Reading,
     ) -> Result<Self, oxirush_utils::tree::Refused> {
         let read = reading.members(value, Self::MEMBERS)?;
-        let node_id_type =
-            reading.member(&read, 0, |value, reading| reading.unsigned(value, 0, 15))? as u8;
-        let node_address = reading.member(&read, 1, |value, reading| {
+        let node_id_type = reading.member(&read, "FQ-CSID Node-ID Type", |value, reading| {
+            reading.unsigned(value, 0, 15)
+        })? as u8;
+        let node_address = reading.member(&read, "Node-Address", |value, reading| {
             let text = value.as_str().unwrap_or_default();
             match node_id_type {
                 0 => text
@@ -1088,13 +1093,15 @@ impl oxirush_utils::tree::Tree for FqCsid {
                 _ => reading.octets(value),
             }
         })?;
-        let csids = reading.member(&read, 2, |value, reading| {
+        let csids = reading.member(&read, "PDN Connection Set Identifiers", |value, reading| {
             reading.list(value, |value, reading| {
                 Ok(reading.unsigned(value, 0, 0xffff)? as u16)
             })
         })?;
-        let node_type = reading.optional(&read, 3, Narrow::from_tree)?;
-        let extra = reading.optional(&read, 4, |value, reading| reading.octets(value))?;
+        let node_type = reading.optional(&read, "Node Type", Narrow::from_tree)?;
+        let extra = reading.optional(&read, crate::ie::UNKNOWN_OCTETS, |value, reading| {
+            reading.octets(value)
+        })?;
         let fq_csid = Self {
             node_id_type,
             node_address: node_address.into(),
@@ -1213,10 +1220,10 @@ macro_rules! mac_addresses {
                 reading: &mut oxirush_utils::tree::Reading,
             ) -> Result<Self, oxirush_utils::tree::Refused> {
                 let read = reading.members(value, Self::MEMBERS)?;
-                let mac_addresses = reading.member(&read, 0, |value, reading| reading.list(value, |value, reading| reading.octet_array::<6>(value)))?;
-                let c_tag = reading.optional(&read, 1, Lv8::from_tree)?;
-                let s_tag = reading.optional(&read, 2, Lv8::from_tree)?;
-                let extra = reading.optional(&read, 3, |value, reading| reading.octets(value))?;
+                let mac_addresses = reading.member(&read, "MAC address values", |value, reading| reading.list(value, |value, reading| reading.octet_array::<6>(value)))?;
+                let c_tag = reading.optional(&read, "C-TAG", Lv8::from_tree)?;
+                let s_tag = reading.optional(&read, "S-TAG", Lv8::from_tree)?;
+                let extra = reading.optional(&read, crate::ie::UNKNOWN_OCTETS, |value, reading| reading.octets(value))?;
                 Ok(Self { mac_addresses, c_tag, s_tag, extra: extra.map(Octets::from).unwrap_or_default() })
             }
         }

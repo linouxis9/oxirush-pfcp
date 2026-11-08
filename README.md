@@ -68,7 +68,7 @@ hex = "0.4" # for the examples of this page
 | Feature | Adds | Needs |
 | ------- | ---- | ----- |
 | `tree` | a message and its IEs as trees, read and edited by path | `oxirush-utils` with `tree` |
-| `serde` | `Serialize` and `Deserialize`, through the trees | `oxirush-utils` with `serde` |
+| `serde` | `Serialize` and `Deserialize`, through the trees | `oxirush-utils` with `tree` |
 | `node` | `Node`, a PFCP entity without I/O | no dependency |
 | `endpoint` | `Endpoint`, a `Node` on a UDP socket | a Tokio runtime |
 

@@ -10,8 +10,8 @@ The first version, of TS 29.244 V19.6.0 (2026-06):
   for byte, and built with `new()` and `with_*()`.
 - `check()`: how a message breaks the tables and clauses on an interface, each deviation
   with its path, its clause and the Cause of the answer.
-- With `tree`, a message as a tree that prints as JSON, read and edited by path; with
-  `serde`, serialized as its tree.
+- With `tree`, a message as a tree that prints as JSON, read and edited by path, on
+  oxirush-utils 0.2; with `serde`, serialized as its tree.
 - With `node`, `Node`, a PFCP entity without I/O: delivery and retransmission (§6.4),
   heartbeat, associations, sessions, load and overload control, and bundles (§6.5). A
   request that names another's session or association, as another SMF of a set sends

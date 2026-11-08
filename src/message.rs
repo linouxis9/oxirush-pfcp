@@ -537,40 +537,47 @@ pub(crate) mod forms {
         fn from_tree(value: &Value, reading: &mut Reading) -> Result<Self, Refused> {
             let read = reading.members(value, NAMES)?;
             // A message of Table 7.3-1 by its name, and one of no table by its number.
-            let kind = reading.member(&read, 0, |value, reading| match value.is_number() {
-                true => {
-                    let code = reading.unsigned(value, 0, 255)? as u8;
-                    match super::message_type_info(code) {
-                        Some(info) => Err(reading.refuse(
-                            tree::ErrorKind::Value,
-                            alloc::format!(
-                                "message type {code} is the {}, which goes by its name",
-                                info.name()
-                            ),
-                        )),
-                        None => Ok(Err(code)),
+            let kind =
+                reading.member(&read, "message", |value, reading| match value.is_number() {
+                    true => {
+                        let code = reading.unsigned(value, 0, 255)? as u8;
+                        match super::message_type_info(code) {
+                            Some(info) => Err(reading.refuse(
+                                tree::ErrorKind::Value,
+                                alloc::format!(
+                                    "message type {code} is the {}, which goes by its name",
+                                    info.name()
+                                ),
+                            )),
+                            None => Ok(Err(code)),
+                        }
                     }
-                }
-                false => Ok(Ok(reading.named(value, &Body::names())?)),
-            })?;
-            let small = |reading: &mut Reading, at: usize, most: u64| {
-                reading.optional(&read, at, |value, reading| reading.unsigned(value, 0, most))
+                    false => Ok(Ok(reading.named(value, &Body::names())?)),
+                })?;
+            let small = |reading: &mut Reading, name: &'static str, most: u64| {
+                reading.optional(&read, name, |value, reading| {
+                    reading.unsigned(value, 0, most)
+                })
             };
-            let version = small(reading, 1, 7)?.unwrap_or(1) as u8;
-            let spare = small(reading, 2, 3)?.unwrap_or(0) as u8;
+            let version = small(reading, "Version", 7)?.unwrap_or(1) as u8;
+            let spare = small(reading, "Spare", 3)?.unwrap_or(0) as u8;
             let follow_on = reading
-                .optional(&read, 3, |value, reading| reading.boolean(value))?
+                .optional(&read, "FO", |value, reading| reading.boolean(value))?
                 .unwrap_or(false);
-            let seid = reading.optional(&read, 4, |value, reading| {
+            let seid = reading.optional(&read, "SEID", |value, reading| {
                 reading.unsigned(value, 0, u64::MAX)
             })?;
-            let sequence = reading.member(&read, 5, |value, reading| {
+            let sequence = reading.member(&read, "Sequence Number", |value, reading| {
                 reading.unsigned(value, 0, 0xff_ffff)
             })? as u32;
-            let priority = small(reading, 6, 15)?.map(|priority| priority as u8);
-            let spare_last =
-                small(reading, 7, if priority.is_some() { 15 } else { 255 })?.unwrap_or(0) as u8;
-            let length = small(reading, 8, 65535)?.map(|length| length as u16);
+            let priority = small(reading, "Message Priority", 15)?.map(|priority| priority as u8);
+            let spare_last = small(
+                reading,
+                "Spare octet",
+                if priority.is_some() { 15 } else { 255 },
+            )?
+            .unwrap_or(0) as u8;
+            let length = small(reading, "Message Length", 65535)?.map(|length| length as u16);
             let header = Header {
                 version,
                 spare,
@@ -581,7 +588,7 @@ pub(crate) mod forms {
                 spare_last,
                 length,
             };
-            let body = reading.member(&read, 9, |value, reading| {
+            let body = reading.member(&read, "ies", |value, reading| {
                 Body::from_ies_tree(kind, value, reading)
             })?;
             Ok(Self { header, body })

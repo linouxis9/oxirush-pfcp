@@ -146,10 +146,13 @@ fn is_octets(value: &Value) -> bool {
 
 fn read_raw(ie_type: u16, value: &Value, reading: &mut Reading) -> Result<RawIe, Refused> {
     let read = reading.members(value, &["octets", "length", "Enterprise ID"])?;
-    let octets = reading.member(&read, 0, |value, reading| reading.octets(value))?;
-    let length = reading.optional(&read, 1, |value, reading| reading.unsigned(value, 0, 65535))?;
-    let enterprise =
-        reading.optional(&read, 2, |value, reading| reading.unsigned(value, 0, 65535))?;
+    let octets = reading.member(&read, "octets", |value, reading| reading.octets(value))?;
+    let length = reading.optional(&read, "length", |value, reading| {
+        reading.unsigned(value, 0, 65535)
+    })?;
+    let enterprise = reading.optional(&read, "Enterprise ID", |value, reading| {
+        reading.unsigned(value, 0, 65535)
+    })?;
     Ok(RawIe {
         ie_type,
         enterprise_id: enterprise.map(|id| id as u16),

@@ -2222,7 +2222,8 @@ fn values_as_their_clauses_have_them() {
     );
     let tree = tree::Tree::to_tree(&usage);
     assert_eq!(
-        tree["Number of UE IP Addresses"]["Number of UE IPv4 Addresses"], 10,
+        tree["Number of UE IP Addresses"]["Number of UE IPv4 Addresses"],
+        tree!(10),
         "{tree}"
     );
     // §8.2.63: the spare bits of a Time Unit are not the unit
@@ -2268,7 +2269,7 @@ fn values_as_their_clauses_have_them() {
         extra: Octets::new(),
     };
     let tree = tree::Tree::to_tree(&multiplier);
-    assert_eq!(tree["Exponent"], -2, "{tree}");
+    assert_eq!(tree["Exponent"], tree!(-2), "{tree}");
     assert_eq!(tree::from_value::<Multiplier>(&tree).unwrap(), multiplier);
     let mut octets = Vec::new();
     multiplier.encode(&mut octets).unwrap();
@@ -2313,7 +2314,7 @@ fn values_as_their_clauses_have_them() {
         ..Default::default()
     };
     let tree = tree::Tree::to_tree(&user);
-    assert_eq!(tree["IMSI"], "208930000000001", "{tree}");
+    assert_eq!(tree["IMSI"], tree!("208930000000001"), "{tree}");
     assert!(format!("{user:?}").contains("208930000000001"));
     assert_eq!(tree::from_value::<UserId>(&tree).unwrap(), user);
     // An enumeration compares by its number, and a value wider than its field is refused

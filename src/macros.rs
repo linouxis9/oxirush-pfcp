@@ -302,24 +302,19 @@ macro_rules! pfcp_layout {
                 reading: &mut oxirush_utils::tree::Reading,
             ) -> Result<Self, oxirush_utils::tree::Refused> {
                 let read = reading.members(value, Self::MEMBERS)?;
-                let mut at = 0;
                 $($(
-                    let $head = reading.optional(&read, at, <$hkind as crate::values::Field>::from_tree)?.unwrap_or_default();
-                    at += 1;
+                    let $head = reading.optional(&read, $head_name, <$hkind as crate::values::Field>::from_tree)?.unwrap_or_default();
                 )*)?
                 $(
-                    let $flag = pfcp_layout!(@fget reading, read, at $(, $width $(as $fkind)?)?);
-                    at += 1;
+                    let $flag = pfcp_layout!(@fget reading, read, $flag_name $(, $width $(as $fkind)?)?);
                 )*
                 let spare = reading
-                    .optional(&read, at, |value, reading| reading.unsigned(value, 0, <$fk>::MAX.into()))?
+                    .optional(&read, "Spare", |value, reading| reading.unsigned(value, 0, <$fk>::MAX.into()))?
                     .unwrap_or(0) as $fk;
-                at += 1;
                 $(
-                    let $field = reading.optional(&read, at, <$kind $(<$param>)? as crate::values::Field>::from_tree)?;
-                    at += 1;
+                    let $field = reading.optional(&read, $field_name, <$kind $(<$param>)? as crate::values::Field>::from_tree)?;
                 )*
-                let extra = reading.optional(&read, at, |value, reading| reading.octets(value))?;
+                let extra = reading.optional(&read, crate::ie::UNKNOWN_OCTETS, |value, reading| reading.octets(value))?;
                 let value = Self { $($($head,)*)? $($flag,)* spare, $($field,)* extra: extra.map(crate::octets::Octets::from).unwrap_or_default() };
                 if spare & Self::FLAGS != 0 {
                     return Err(reading.refuse(
@@ -370,15 +365,15 @@ macro_rules! pfcp_layout {
     (@fput $members:ident, $name:literal, $value:expr, $width:literal as $kind:ident) => {
         $members.put($name, $value.tree());
     };
-    (@fget $reading:ident, $read:ident, $at:ident) => {
-        $reading.optional(&$read, $at, |value, reading| reading.boolean(value))?.unwrap_or(false)
+    (@fget $reading:ident, $read:ident, $name:literal) => {
+        $reading.optional(&$read, $name, |value, reading| reading.boolean(value))?.unwrap_or(false)
     };
-    (@fget $reading:ident, $read:ident, $at:ident, $width:literal) => {
-        $reading.optional(&$read, $at, |value, reading| reading.unsigned(value, 0, (1 << $width) - 1))?.unwrap_or(0) as u8
+    (@fget $reading:ident, $read:ident, $name:literal, $width:literal) => {
+        $reading.optional(&$read, $name, |value, reading| reading.unsigned(value, 0, (1 << $width) - 1))?.unwrap_or(0) as u8
     };
-    (@fget $reading:ident, $read:ident, $at:ident, $width:literal as $kind:ident) => {
+    (@fget $reading:ident, $read:ident, $name:literal, $width:literal as $kind:ident) => {
         $reading
-            .optional(&$read, $at, |value, reading| $kind::read_tree(value, reading, ((1u16 << $width) - 1) as u8))?
+            .optional(&$read, $name, |value, reading| $kind::read_tree(value, reading, ((1u16 << $width) - 1) as u8))?
             .unwrap_or_default()
     };
     (@fcheck $value:expr, $path:ident, $found:ident $(, $width:literal)?) => {};
@@ -593,21 +588,19 @@ macro_rules! pfcp_bits {
                     return Ok(bits);
                 }
                 let read = reading.members(value, Self::MEMBERS)?;
-                let mut at = 0;
                 $(
-                    if let Some(value) = reading.optional(&read, at, |value, reading| pfcp_bits!(@get $width [$($kind)? $(+ $octet2 $low2 $width2)?] value, reading))? {
+                    if let Some(value) = reading.optional(&read, $name, |value, reading| pfcp_bits!(@get $width [$($kind)? $(+ $octet2 $low2 $width2)?] value, reading))? {
                         bits.$field = value;
                     }
-                    at += 1;
                 )*
-                if let Some(spare) = reading.optional(&read, at, |value, reading| reading.octet_array::<$n>(value))? {
+                if let Some(spare) = reading.optional(&read, "Spare", |value, reading| reading.octet_array::<$n>(value))? {
                     bits.spare = spare;
                 }
-                if let Some(present) = reading.optional(&read, at + 1, |value, reading| reading.unsigned(value, $min, $n))? {
+                if let Some(present) = reading.optional(&read, "length", |value, reading| reading.unsigned(value, $min, $n))? {
                     bits.present = present as u8;
                 }
                 bits.extra = reading
-                    .optional(&read, at + 2, |value, reading| reading.octets(value))?
+                    .optional(&read, crate::ie::UNKNOWN_OCTETS, |value, reading| reading.octets(value))?
                     .map(crate::octets::Octets::from)
                     .unwrap_or_default();
                 if bits.spare.iter().zip(Self::MASKS).any(|(spare, mask)| spare & mask != 0) {
