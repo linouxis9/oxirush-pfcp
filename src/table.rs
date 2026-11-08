@@ -69,7 +69,7 @@ impl Interfaces {
     pub const N4MB: Self = Self(16);
     /// The combined Sxa/Sxb of a combined SGW/PGW (§5.2.6): a message may have the IEs
     /// of either, and needs those that both need.
-    pub const SXA_SXB: Self = Self(1 | 2);
+    pub const SXA_SXB: Self = Self(3);
     /// Every interface: a message may have the IEs of any, and needs those that all need.
     pub const ALL: Self = Self(31);
 
@@ -417,7 +417,8 @@ pub(crate) fn decode_scope_sized<S: Scope>(
             false if kept_first.contains(&ie_type) => Placing::Repeated,
             false => scope.place(ie_type, body),
         };
-        if (placing == Placing::Malformed || (body.is_empty() && ie_type < VENDOR))
+        // No row is of a vendor's type, which a null length leaves out.
+        if (placing == Placing::Malformed || body.is_empty())
             && !kept_first.contains(&ie_type)
             && S::table()
                 .row_of(ie_type)
