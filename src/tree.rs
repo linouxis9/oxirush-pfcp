@@ -188,69 +188,22 @@ pub(crate) fn scope_from_tree<S: Scope + TreeScope>(
     let mut kept: Vec<(usize, RawIe)> = Vec::new();
     let mut rows_written: Vec<(usize, &str)> = Vec::new();
     for (written, held) in members {
-        let at = tree::named(&names, written);
+        let (at, ie_type) = written_ie(table, &names, written, &mut rows_written, reading)?;
         let row = at.map(|at| &table.rows[at]);
-        let Some(ie_type) = row.map(|row| row.ie_type).or_else(|| type_of_name(written)) else {
-            return Err(reading.refuse(ErrorKind::NoSuchMember, no_such_ie(table, &names, written)));
-        };
-        if let Some(at) = at {
-            if let Some((_, before)) = rows_written.iter().find(|(row, _)| *row == at) {
-                let why = alloc::format!(
-                    "{written:?} and {before:?} are both the row {}",
-                    table.rows[at].name
-                );
-                return Err(reading.refuse(ErrorKind::Value, why));
-            }
-            rows_written.push((at, written));
-        }
-        if row.is_none()
-            && let Some(row) = table.row_of(ie_type)
-        {
-            let why = alloc::format!(
-                "{written:?} is the IE type of the row {}, which goes by its name",
-                row.name
-            );
-            return Err(reading.refuse(ErrorKind::NoSuchMember, why));
-        }
-        let position = at.unwrap_or(usize::MAX);
         let label: &'static str = row.map_or("IE", |row| row.name);
-        let list = row.is_some_and(|row| row.repeat != Repeat::Once);
-        reading.within(label, held, |held, reading| {
-            // A row that is there once has one value; the IEs of its type that the scope
-            // keeps as octets come before or after it.
-            let mut valued = false;
-            let mut entry = |value: &Value, reading: &mut Reading| -> Result<(), Refused> {
-                if is_octets(value) {
-                    kept.push((position, read_raw(ie_type, value, reading)?));
-                    placed.push((position, Placed::Raw));
-                    return Ok(());
-                }
-                if row.is_none() {
-                    return Err(reading.refuse(
-                        ErrorKind::Value,
-                        "an IE that its table does not have is written by its octets: {\"octets\": ...}",
-                    ));
-                }
-                if !list && valued {
-                    return Err(reading.refuse(
-                        ErrorKind::Value,
-                        "its table has it once: a repetition is written by its octets",
-                    ));
-                }
-                valued = true;
-                scope.read_field(ie_type, value, reading)?;
-                placed.push((position, Placed::Field(ie_type)));
-                Ok(())
-            };
-            match held {
-                Value::Array(_) => {
-                    reading.list(held, &mut entry)?;
-                    Ok(())
-                }
-                _ if list => Err(reading.mismatch("a list", held)),
-                single => entry(single, reading),
-            }
+        let read = reading.within(label, held, |held, reading| {
+            read_ies(&mut scope, row, ie_type, held, reading)
         })?;
+        let position = at.unwrap_or(usize::MAX);
+        for ie in read {
+            match ie {
+                Some(ie) => {
+                    kept.push((position, ie));
+                    placed.push((position, Placed::Raw));
+                }
+                None => placed.push((position, Placed::Field(ie_type))),
+            }
+        }
     }
     // The order of the table; within a row, and after the rows, the order written.
     placed.sort_by_key(|(position, _)| *position);
@@ -263,8 +216,90 @@ pub(crate) fn scope_from_tree<S: Scope + TreeScope>(
     Ok(scope)
 }
 
+/// The row, by its position, and the IE type that a name of the tree of a scope writes:
+/// the name of a row, written once, or of an IE type of no row, or its number.
+fn written_ie<'w>(
+    table: &Table,
+    names: &[&str],
+    written: &'w str,
+    rows_written: &mut Vec<(usize, &'w str)>,
+    reading: &mut Reading,
+) -> Result<(Option<usize>, u16), Refused> {
+    let at = tree::named(names, written);
+    let Some(ie_type) = at
+        .map(|at| table.rows[at].ie_type)
+        .or_else(|| type_of_name(written))
+    else {
+        return Err(reading.refuse(ErrorKind::NoSuchMember, no_such_ie(table, names, written)));
+    };
+    match at {
+        Some(at) => {
+            if let Some((_, before)) = rows_written.iter().find(|(row, _)| *row == at) {
+                let row = table.rows[at].name;
+                let why = alloc::format!("{written:?} and {before:?} are both the row {row}");
+                return Err(reading.refuse(ErrorKind::Value, why));
+            }
+            rows_written.push((at, written));
+        }
+        None => {
+            if let Some(row) = table.row_of(ie_type) {
+                let why = alloc::format!(
+                    "{written:?} is the IE type of the row {}, which goes by its name",
+                    row.name
+                );
+                return Err(reading.refuse(ErrorKind::NoSuchMember, why));
+            }
+        }
+    }
+    Ok((at, ie_type))
+}
+
+/// The IEs that a tree writes under the name of `row`, or of an IE type of no row, in the
+/// order written: `None` for a value, which the scope takes, and the IEs written as octets.
+fn read_ies<S: TreeScope>(
+    scope: &mut S,
+    row: Option<&Row>,
+    ie_type: u16,
+    held: &Value,
+    reading: &mut Reading,
+) -> Result<Vec<Option<RawIe>>, Refused> {
+    let list = row.is_some_and(|row| row.repeat != Repeat::Once);
+    let mut read = Vec::new();
+    let mut entry = |value: &Value, reading: &mut Reading| -> Result<(), Refused> {
+        if is_octets(value) {
+            read.push(Some(read_raw(ie_type, value, reading)?));
+            return Ok(());
+        }
+        if row.is_none() {
+            return Err(reading.refuse(
+                ErrorKind::Value,
+                "an IE that its table does not have is written by its octets: {\"octets\": ...}",
+            ));
+        }
+        // A row that is there once has one value; the IEs of its type that the scope keeps
+        // as octets come before or after it.
+        if !list && read.iter().any(Option::is_none) {
+            return Err(reading.refuse(
+                ErrorKind::Value,
+                "its table has it once: a repetition is written by its octets",
+            ));
+        }
+        scope.read_field(ie_type, value, reading)?;
+        read.push(None);
+        Ok(())
+    };
+    match held {
+        Value::Array(_) => {
+            reading.list(held, &mut entry)?;
+        }
+        _ if list => return Err(reading.mismatch("a list", held)),
+        single => entry(single, reading)?,
+    }
+    Ok(read)
+}
+
 /// Why a name is no IE of a table: the nearest names, or the row whose role it is.
-fn no_such_ie(table: &crate::table::Table, names: &[&str], written: &str) -> String {
+fn no_such_ie(table: &Table, names: &[&str], written: &str) -> String {
     if let Some(row) = table.rows.iter().find(|row| {
         row.roles
             .iter()
