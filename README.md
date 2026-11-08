@@ -343,8 +343,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 - `check()` checks one message: not the conditions that depend on the state of
   a node, or on another scope.
 - `encode()` writes spare bits, reserved values, a false Length
-  (`RawIe::length`) and IEs that a table does not have, for a test tool. It
-  refuses, each an `Error`:
+  (`RawIe::length`) or Message Length (`Header::length`) and IEs that a table
+  does not have, for a test tool, which `check()` tells. It refuses, each an
+  `Error`:
   - a field that disagrees with the flags of its IE (`Inconsistent`);
   - a field or a header field too long for its bits or its length
     (`FieldLength`, `HeaderField`);

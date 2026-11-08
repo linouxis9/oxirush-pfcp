@@ -124,6 +124,13 @@ pub enum DeviationKind {
         /// Its IE type.
         ie_type: u16,
     },
+    /// An IE whose Length is not the length of its content (§7.6.7, §8.1.1): it does not
+    /// frame, nor do the IEs after it, and the receiver of a request answers "Invalid
+    /// length" with its type.
+    InvalidLength {
+        /// Its IE type.
+        ie_type: u16,
+    },
     /// An IE of a fixed length (Table 8.1.2-1) that has another.
     FixedLength {
         /// Its IE type.
@@ -208,6 +215,7 @@ impl Deviation {
             | DeviationKind::MandatoryIncorrect { ie_type }
             | DeviationKind::ConditionalMissing { ie_type }
             | DeviationKind::ConditionalIncorrect { ie_type }
+            | DeviationKind::InvalidLength { ie_type }
             | DeviationKind::FixedLength { ie_type, .. } => Some(ie_type),
             _ => self.ie_type,
         };
@@ -264,6 +272,13 @@ impl fmt::Display for Deviation {
             }
             DeviationKind::WithRejection { ie_type } => {
                 write!(f, "{} accompanies a rejection", name(*ie_type))
+            }
+            DeviationKind::InvalidLength { ie_type } => {
+                write!(
+                    f,
+                    "{} has a Length that is not the length of its content",
+                    name(*ie_type)
+                )
             }
             DeviationKind::FixedLength { ie_type, length } => {
                 write!(
@@ -378,6 +393,13 @@ impl Context {
             (true, Presence::Conditional, true) => Some(CauseValue::ConditionalIeMissing),
             (true, _, false) => Some(CauseValue::MandatoryIeIncorrect),
         }
+    }
+
+    /// The Cause of an answer to a request of an IE or a Message Length that is not the
+    /// length of what it counts (§7.6.3, §7.6.7): of any IE, as the IEs after it do not
+    /// frame.
+    pub(crate) fn invalid_length(self) -> Option<CauseValue> {
+        self.request.then_some(CauseValue::InvalidLength)
     }
 
     /// The Cause of an answer to a conditional IE of the scope that is missing where its
@@ -701,6 +723,10 @@ fn mandatory_missing<S: Scope>(
     found: &mut Vec<Deviation>,
 ) {
     let mut kept = scope.raw().iter().filter(|ie| ie.ie_type == row.ie_type);
+    // An IE of the row that does not frame is told as such ([`raw_deviations`]).
+    if kept.clone().any(|ie| !ie.frames()) {
+        return;
+    }
     let (nulls, incorrect) = match row.repeat {
         Repeat::Once => match kept.next() {
             Some(ie) if ie.octets.is_empty() => (1, false),
@@ -782,6 +808,10 @@ fn raw_deviations<S: Scope>(
                 1 => format!("{path}/{name}"),
                 _ => format!("{path}/{name}/{}", raws[..at].iter().filter(same).count()),
             };
+            if !ie.frames() {
+                found.push(invalid_length(here, ie.ie_type, context));
+                continue;
+            }
             let (clause, kind) = match ie.ie_type {
                 VENDOR.. if ie.enterprise_id.is_none_or(|id| id == 10415) => {
                     ("8.1.1", DeviationKind::VendorId)
@@ -799,6 +829,17 @@ fn raw_deviations<S: Scope>(
         if alone {
             check_row(table.id, row, 0, path, context, found);
         }
+        let here = || Path::Row {
+            parent: path,
+            row: row.name,
+            nth: positions[at],
+        };
+        // One that does not frame, whose receiver frames the IEs after it amiss, of the
+        // interface or not
+        if !ie.frames() {
+            found.push(invalid_length(here(), ie.ie_type, context));
+            continue;
+        }
         // The receiver discards each IE of a row that is not on the interface, which its
         // row tells (§7.6.9).
         if row.on(context.interface).is_none() {
@@ -807,11 +848,6 @@ fn raw_deviations<S: Scope>(
         let first = match row.repeat {
             Repeat::Once => alone,
             _ => !ie.octets.is_empty() && !scope.decodes(ie.ie_type, &ie.octets),
-        };
-        let here = || Path::Row {
-            parent: path,
-            row: row.name,
-            nth: positions[at],
         };
         let deviation = match (first, ie.octets.is_empty()) {
             // A null length says what its row allows it to (§5.6.3).
@@ -845,6 +881,13 @@ fn raw_deviations<S: Scope>(
         };
         found.push(deviation);
     }
+}
+
+/// The deviation of an IE at `path` that does not frame, of `ie_type`.
+fn invalid_length(path: impl fmt::Display, ie_type: u16, context: Context) -> Deviation {
+    let mut deviation = Deviation::new(path, "7.6.7", DeviationKind::InvalidLength { ie_type });
+    deviation.cause = context.invalid_length();
+    deviation
 }
 
 /// Whether each interface of the context has a row, which the condition beside it then

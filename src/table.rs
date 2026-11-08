@@ -370,11 +370,11 @@ pub(crate) trait Scope: Default {
 }
 
 /// Whether a decode of its scope reads `ie`, which the scope keeps as octets, as a value of
-/// its row: an IE of 3GPP of a row, of its own length, that decodes as its value, or that
-/// an Enterprise ID makes other octets.
+/// its row: an IE of 3GPP of a row, that frames, that decodes as its value, or that an
+/// Enterprise ID makes other octets.
 pub(crate) fn read_as_value<S: Scope>(scope: &S, ie: &RawIe) -> bool {
     ie.ie_type < VENDOR
-        && ie.length.is_none()
+        && ie.frames()
         && S::position(ie.ie_type).is_some()
         && (ie.enterprise_id.is_some()
             || !ie.octets.is_empty() && scope.decodes(ie.ie_type, &ie.octets))

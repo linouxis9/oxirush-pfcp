@@ -401,6 +401,93 @@ fn an_ie_kept_as_octets_that_decode_is_checked_as_its_value() {
     assert_eq!(kept.check(Interfaces::N4), found);
 }
 
+/// §7.6.3, §7.6.7: a Message Length that is not the length of the octets after the first
+/// four, and an IE whose Length is not the length of its content, which does not frame, are
+/// told, with "Invalid length" in a request and the IE that does not frame; a Length that is
+/// the length is no fault. A Heartbeat Request is answered with no Cause.
+#[test]
+fn a_false_length_is_told_with_its_ie() {
+    let told =
+        |message: &Message| -> Vec<(String, DeviationKind, Option<CauseValue>, Option<u16>)> {
+            let found = message.check(Interfaces::N4).into_iter();
+            let found = found.map(|deviation| {
+                let offending = deviation.offending_ie();
+                (deviation.path, deviation.kind, deviation.cause, offending)
+            });
+            found.collect()
+        };
+    let false_ie = |length| RawIe {
+        length: Some(length),
+        ..RawIe::new(96, vec![0, 0, 0, 7])
+    };
+    let mut setup = AssociationSetupRequest {
+        node_id: Some(NodeId::Ipv4(SMF)),
+        ..Default::default()
+    };
+    setup.raw.push(false_ie(9));
+    let invalid = Some(CauseValue::InvalidLength);
+    assert_eq!(
+        told(&Message::node(1, setup.clone())),
+        [(
+            "/pfcp/Recovery Time Stamp".into(),
+            DeviationKind::InvalidLength { ie_type: 96 },
+            invalid,
+            Some(96)
+        )]
+    );
+    setup.raw[0] = false_ie(4);
+    assert_eq!(told(&Message::node(1, setup)), []);
+    let mut setup = Message::node(
+        1,
+        AssociationSetupRequest::new(NodeId::Ipv4(SMF), RecoveryTimeStamp::new(7)),
+    );
+    let length = Message::decode(&setup.encode().unwrap())
+        .unwrap()
+        .encode()
+        .unwrap()
+        .len()
+        - 4;
+    setup.header.length = Some(length as u16);
+    assert_eq!(told(&setup), []);
+    setup.header.length = Some(4);
+    let rule = DeviationKind::Rule("a Message Length other than the octets after the first four");
+    assert_eq!(
+        told(&setup),
+        [("/Message Length".into(), rule.clone(), invalid, None)]
+    );
+    // A heartbeat, with an IE of a list and one of no row that do not frame
+    let mut heartbeat = HeartbeatRequest::new(RecoveryTimeStamp::new(7));
+    heartbeat.raw.push(RawIe {
+        length: Some(9),
+        ..RawIe::new(192, vec![2, 10, 0, 0, 1])
+    });
+    heartbeat.raw.push(RawIe {
+        enterprise_id: Some(7),
+        length: Some(1),
+        ..RawIe::new(40_000, vec![1])
+    });
+    let mut heartbeat = Message::node(1, heartbeat);
+    heartbeat.header.length = Some(4);
+    assert_eq!(
+        told(&heartbeat),
+        [
+            ("/Message Length".into(), rule, None, None),
+            (
+                "/pfcp/Source IP Address".into(),
+                DeviationKind::InvalidLength { ie_type: 192 },
+                None,
+                None
+            ),
+            (
+                "/pfcp/40000".into(),
+                DeviationKind::InvalidLength { ie_type: 40_000 },
+                None,
+                None
+            ),
+        ]
+    );
+}
+
 /// §7.6.8: a mandatory IE that does not decode is of the clause of an incorrect IE,
 /// whether the scope needs it, or has it beyond what it needs: a Precedence of three
 /// octets, and the Recovery Time Stamp of a rejection.

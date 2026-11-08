@@ -239,9 +239,15 @@ impl Message {
 
     /// The check of a message as it is.
     fn check_read(&self, interface: Interfaces) -> Vec<Deviation> {
-        let mut found = self.header_deviations(interface);
         let message_type = self.body.message_type();
         let rejection = self.body.cause().filter(|cause| cause.rejects());
+        let context = Context {
+            interface,
+            view: Presence::Mandatory,
+            request: is_request(message_type) && message_type != 1,
+            rejected: rejection,
+        };
+        let mut found = self.header_deviations(interface, context);
         // "This flag shall be set to "1" by the UP function, if the "Overload Control
         // Information" is included in the PFCP Session Establishment Response and the Cause
         // IE is set to a rejection cause value" (§8.2.76): AOCI, which the value of the IE
@@ -272,12 +278,6 @@ impl Message {
             }
             _ => {}
         }
-        let context = Context {
-            interface,
-            view: Presence::Mandatory,
-            request: is_request(message_type) && message_type != 1,
-            rejected: rejection,
-        };
         self.body
             .check(&crate::check::Path::Root("/pfcp"), context, &mut found);
         // An establishment that creates a rule twice gives two rules one Rule ID, which
@@ -301,7 +301,7 @@ impl Message {
     /// The deviations of the header (§7.2.2), and of the SEID, which the message type and
     /// the Cause decide (§7.2.2.4.2), each a rule of a table: whether it is broken, where,
     /// the clause and what.
-    fn header_deviations(&self, interface: Interfaces) -> Vec<Deviation> {
+    fn header_deviations(&self, interface: Interfaces, context: Context) -> Vec<Deviation> {
         use DeviationKind::Rule;
         let header = &self.header;
         let message_type = self.body.message_type();
@@ -359,9 +359,22 @@ impl Message {
                 Rule("a Session Report Request of a SEID other than 0 with the Old CP F-SEID")),
         ];
         let broken = rules.into_iter().filter(|(broken, ..)| *broken);
-        broken
+        let mut found: Vec<Deviation> = broken
             .map(|(_, path, clause, kind)| Deviation::new(path, clause, kind))
-            .collect()
+            .collect();
+        // A Message Length that is not the length of the octets after the first four: the
+        // receiver of a request answers "Invalid Length" (§7.6.3).
+        let after = header.encoded_len() - 4 + self.body.encoded_len();
+        if header
+            .length
+            .is_some_and(|length| usize::from(length) != after)
+        {
+            let rule = Rule("a Message Length other than the octets after the first four");
+            let mut deviation = Deviation::new("/Message Length", "7.6.3", rule);
+            deviation.cause = context.invalid_length();
+            found.push(deviation);
+        }
+        found
     }
 }
 

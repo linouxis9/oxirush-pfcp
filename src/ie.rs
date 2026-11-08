@@ -181,6 +181,13 @@ impl RawIe {
         self.enterprise_id.is_none() && self.octets.is_empty()
     }
 
+    /// Whether its Length is that of its content, its Enterprise ID and its octets: one
+    /// that is not does not frame, nor do the IEs after it (§7.6.7).
+    pub(crate) fn frames(&self) -> bool {
+        let content = self.octets.len() + 2 * usize::from(self.enterprise_id.is_some());
+        self.length.is_none_or(|length| usize::from(length) == content)
+    }
+
     /// Write the IE.
     pub(crate) fn encode(&self, out: &mut Vec<u8>) -> Result<(), Error> {
         let at = begin(self.ie_type, out);

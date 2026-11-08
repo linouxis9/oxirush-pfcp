@@ -22,7 +22,9 @@ The first version, of TS 29.244 V19.6.0 (2026-06):
   the Destination Interface of a Remote GTP-U Peer, and the QFIs of a PMF Control
   Information, which are `SixBits` as a QFI is. A message is checked as its receiver
   reads it: an IE that a scope keeps as octets, which the receiver reads as the value of
-  its row, is checked as that value.
+  its row, is checked as that value. A Message Length or an IE Length that is not the
+  length of what it counts is told, with "Invalid length" in a request and the IE that
+  does not frame (§7.6.3, §7.6.7).
 - With `tree`, a message as a tree that prints as JSON, on oxirush-utils 0.2, whose
   `tree` the crate exports at its root, and read and edited by path (`paths::select`,
   `paths::set`); with `serde`, serialized as its tree. What a message lacks selects
