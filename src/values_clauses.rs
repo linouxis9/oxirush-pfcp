@@ -19,12 +19,12 @@
 //! clauses give the conditions of their fields.
 
 use alloc::vec::Vec;
-use core::fmt;
 use core::net::{Ipv4Addr, Ipv6Addr};
 
 use crate::Error;
 use crate::check::{Deviation, Rules};
 use crate::enums::*;
+use crate::fields::*;
 use crate::ie::{Codec, listed_value};
 use crate::macros::{pfcp_bits, pfcp_layout};
 use crate::octets::Octets;
@@ -296,76 +296,6 @@ pfcp_layout! {
     }
 }
 
-/// A Source Specific IP Multicast Address (§8.2.206): octets 10 to m of the Multicast
-/// Transport Information (§8.2.207), the IP Multicast Distribution Address and the IP
-/// Source Address, each after its type and its length.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct SsmAddress {
-    /// The IP Multicast Distribution Address.
-    pub distribution: TypedAddress,
-    /// The IP Source Address.
-    pub source: TypedAddress,
-}
-
-impl Field for SsmAddress {
-    #[cfg(feature = "tree")]
-    const BELOW: &'static crate::paths::Below = &crate::paths::Below::Object(
-        None,
-        &[
-            ("IP Multicast Distribution Address", TypedAddress::BELOW),
-            ("IP Source Address", TypedAddress::BELOW),
-        ],
-    );
-    fn read(octets: &mut &[u8]) -> Option<Self> {
-        Some(Self {
-            distribution: TypedAddress::read(octets)?,
-            source: TypedAddress::read(octets)?,
-        })
-    }
-    fn write(&self, out: &mut Vec<u8>) {
-        self.distribution.write(out);
-        self.source.write(out);
-    }
-    fn size(&self) -> usize {
-        self.distribution.size() + self.source.size()
-    }
-    fn fits(&self) -> bool {
-        self.distribution.fits() && self.source.fits()
-    }
-    fn check(&self, path: &crate::check::Path, clause: &'static str, found: &mut Vec<Deviation>) {
-        self.distribution.check(path, clause, found);
-        self.source.check(path, clause, found);
-    }
-    #[cfg(feature = "tree")]
-    fn to_tree(&self) -> oxirush_utils::tree::Value {
-        let mut members = oxirush_utils::tree::Members::new();
-        members.put(
-            "IP Multicast Distribution Address",
-            self.distribution.to_tree(),
-        );
-        members.put("IP Source Address", self.source.to_tree());
-        members.finish()
-    }
-    #[cfg(feature = "tree")]
-    fn from_tree(
-        value: &oxirush_utils::tree::Value,
-        reading: &mut oxirush_utils::tree::Reading,
-    ) -> Result<Self, oxirush_utils::tree::Refused> {
-        let read = reading.members(
-            value,
-            &["IP Multicast Distribution Address", "IP Source Address"],
-        )?;
-        Ok(Self {
-            distribution: reading.member(
-                &read,
-                "IP Multicast Distribution Address",
-                TypedAddress::from_tree,
-            )?,
-            source: reading.member(&read, "IP Source Address", TypedAddress::from_tree)?,
-        })
-    }
-}
-
 pfcp_layout! {
     /// Local Ingress Tunnel (§8.2.209).
     pub struct LocalIngressTunnel "8.2.209" {
@@ -608,202 +538,6 @@ pfcp_bits! {
     }
 }
 
-// ── Secrets ────────────────────────────────────────────────────────────────
-
-/// Octets of a key or a password, which `Debug` does not print: their length alone.
-#[derive(Clone, Default, PartialEq, Eq)]
-pub struct SecretLv8(pub Octets);
-
-impl fmt::Debug for SecretLv8 {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "SecretLv8({} octets)", self.0.len())
-    }
-}
-
-impl Field for SecretLv8 {
-    fn read(octets: &mut &[u8]) -> Option<Self> {
-        Lv8::read(octets).map(|value| Self(value.0))
-    }
-    fn write(&self, out: &mut Vec<u8>) {
-        Lv8(self.0.clone()).write(out);
-    }
-    fn size(&self) -> usize {
-        1 + self.0.len()
-    }
-    fn fits(&self) -> bool {
-        self.0.len() <= usize::from(u8::MAX)
-    }
-    fn check(&self, path: &crate::check::Path, clause: &'static str, found: &mut Vec<Deviation>) {
-        if !self.fits() {
-            found.push(Deviation::new(
-                path,
-                clause,
-                crate::check::DeviationKind::Rule("more octets than their length can say"),
-            ));
-        }
-    }
-    #[cfg(feature = "tree")]
-    fn to_tree(&self) -> oxirush_utils::tree::Value {
-        oxirush_utils::tree::octets(&self.0)
-    }
-    #[cfg(feature = "tree")]
-    fn from_tree(
-        value: &oxirush_utils::tree::Value,
-        reading: &mut oxirush_utils::tree::Reading,
-    ) -> Result<Self, oxirush_utils::tree::Refused> {
-        reading
-            .secret(|reading| Lv8::from_tree(value, reading))
-            .map(|value| Self(value.0))
-    }
-}
-
-/// Digits after a length of one octet, as TBCD: an IMSI, an IMEI or an MSISDN, as TS
-/// 29.274 §8.3, §8.10 and §8.11 write them. Its tree is the digits, or `{"octets": ...}`
-/// for octets that are no TBCD string.
-#[derive(Clone, Default, PartialEq, Eq)]
-pub struct DigitsLv8(pub Octets);
-
-impl DigitsLv8 {
-    /// The digits, as `tbcd::encode` gives back their octets.
-    pub fn digits(&self) -> Option<alloc::string::String> {
-        let text = oxirush_utils::identity::tbcd::decode(&self.0).ok()?;
-        (oxirush_utils::identity::tbcd::encode(&text).ok()? == *self.0).then_some(text)
-    }
-
-    /// The octets of `digits`.
-    ///
-    /// # Errors
-    ///
-    /// A character that TBCD does not have.
-    pub fn new(digits: &str) -> Result<Self, oxirush_utils::identity::Error> {
-        oxirush_utils::identity::tbcd::encode(digits).map(|octets| Self(octets.into()))
-    }
-}
-
-impl fmt::Debug for DigitsLv8 {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self.digits() {
-            Some(digits) => write!(f, "DigitsLv8({digits:?})"),
-            None => write!(f, "DigitsLv8({:?})", Octets::copied(&self.0)),
-        }
-    }
-}
-
-/// Text after a length of one octet: a NAI, a SUPI, a GPSI or a PEI. Its tree is the
-/// text, or `{"octets": ...}` for octets that are no UTF-8.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct TextLv8(pub Octets);
-
-impl TextLv8 {
-    /// The text.
-    pub fn text(&self) -> Option<&str> {
-        core::str::from_utf8(&self.0).ok()
-    }
-}
-
-impl From<&str> for TextLv8 {
-    fn from(text: &str) -> Self {
-        Self(Octets::copied(text.as_bytes()))
-    }
-}
-
-macro_rules! identity_lv8 {
-    ($($ty:ident($length:ty) $as_text:ident $from_text:expr),*) => {$(
-        impl Field for $ty {
-            #[cfg(feature = "tree")]
-            const BELOW: &'static crate::paths::Below = &crate::paths::Below::Object(
-                None,
-                &[("octets", &crate::paths::Below::Scalar)],
-            );
-            fn read(octets: &mut &[u8]) -> Option<Self> {
-                let length = usize::from(<$length as Field>::read(octets)?);
-                let (value, rest) = octets.split_at_checked(length)?;
-                *octets = rest;
-                Some(Self(Octets::copied(value)))
-            }
-            fn write(&self, out: &mut Vec<u8>) {
-                let length = <$length>::try_from(self.0.len()).unwrap_or(<$length>::MAX);
-                out.extend_from_slice(&length.to_be_bytes());
-                out.extend_from_slice(&self.0);
-            }
-            fn size(&self) -> usize {
-                core::mem::size_of::<$length>() + self.0.len()
-            }
-            fn fits(&self) -> bool {
-                self.0.len() <= usize::from(<$length>::MAX)
-            }
-            fn check(&self, path: &crate::check::Path, clause: &'static str, found: &mut Vec<Deviation>) {
-                if !self.fits() {
-                    found.push(Deviation::new(path, clause, crate::check::DeviationKind::Rule("more octets than their length can say")));
-                }
-            }
-            #[cfg(feature = "tree")]
-            fn to_tree(&self) -> oxirush_utils::tree::Value {
-                match self.$as_text() {
-                    Some(text) => oxirush_utils::tree::text(&text),
-                    None => oxirush_utils::tree::alternative("octets", oxirush_utils::tree::octets(&self.0)),
-                }
-            }
-            #[cfg(feature = "tree")]
-            fn from_tree(
-                value: &oxirush_utils::tree::Value,
-                reading: &mut oxirush_utils::tree::Reading,
-            ) -> Result<Self, oxirush_utils::tree::Refused> {
-                let octets = match value.as_str() {
-                    Some(text) => {
-                        let from_text: fn(&str) -> Option<Vec<u8>> = $from_text;
-                        from_text(text).ok_or_else(|| reading.mismatch(stringify!($ty), value))?
-                    }
-                    None => {
-                        let (_, content) = reading.alternative(value, &["octets"])?;
-                        reading.within("octets", content, |content, reading| reading.octets(content))?
-                    }
-                };
-                if octets.len() > usize::from(<$length>::MAX) {
-                    return Err(reading.mismatch("octets that their length can say", value));
-                }
-                Ok(Self(octets.into()))
-            }
-        }
-    )*};
-}
-identity_lv8!(
-    DigitsLv8(u8) digits |text| oxirush_utils::identity::tbcd::encode(text).ok(),
-    TextLv8(u8) text_owned |text| Some(text.as_bytes().to_vec()),
-    TextLv16(u16) text_owned |text| Some(text.as_bytes().to_vec())
-);
-
-impl TextLv8 {
-    #[cfg(feature = "tree")]
-    fn text_owned(&self) -> Option<alloc::string::String> {
-        self.text().map(alloc::string::String::from)
-    }
-}
-
-/// Text after a length of two octets: a Flow Description, an IPFilterRule of TS 29.212
-/// clause 5.4.2, and the URL and the Domain Name of PFD Contents (§8.2.39). Its tree is
-/// the text, or `{"octets": ...}` for octets that are no UTF-8.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct TextLv16(pub Octets);
-
-impl TextLv16 {
-    /// The text.
-    pub fn text(&self) -> Option<&str> {
-        core::str::from_utf8(&self.0).ok()
-    }
-
-    #[cfg(feature = "tree")]
-    fn text_owned(&self) -> Option<alloc::string::String> {
-        self.text().map(alloc::string::String::from)
-    }
-}
-
-impl From<&str> for TextLv16 {
-    fn from(text: &str) -> Self {
-        Self(Octets::copied(text.as_bytes()))
-    }
-}
-
 pfcp_layout! {
     /// Key ID and Shared Secret (OWAMP or TWAMP) (§8.2.276): the shared secret is a key,
     /// which `Debug` does not print.
@@ -993,7 +727,7 @@ impl Codec for FqCsid {
             });
         }
         if let Some(node_type) = &self.node_type {
-            crate::values::put(node_type, "FQ-CSID", "Node Type", out)?;
+            crate::fields::put(node_type, "FQ-CSID", "Node Type", out)?;
         }
         out.extend_from_slice(&self.extra);
         Ok(())
@@ -1173,10 +907,10 @@ macro_rules! mac_addresses {
                     out.extend_from_slice(mac);
                 }
                 if let Some(tag) = &self.c_tag {
-                    crate::values::put(tag, $name, "C-TAG", out)?;
+                    crate::fields::put(tag, $name, "C-TAG", out)?;
                 }
                 if let Some(tag) = &self.s_tag {
-                    crate::values::put(tag, $name, "S-TAG", out)?;
+                    crate::fields::put(tag, $name, "S-TAG", out)?;
                 }
                 out.extend_from_slice(&self.extra);
                 Ok(())

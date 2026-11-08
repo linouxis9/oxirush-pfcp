@@ -43,6 +43,7 @@ mod check;
 #[cfg_attr(docsrs, doc(cfg(feature = "endpoint")))]
 pub mod endpoint;
 mod enums;
+mod fields;
 pub mod framing;
 mod header;
 mod ie;
@@ -66,6 +67,7 @@ use core::fmt;
 
 pub use check::{Check, Deviation, DeviationKind};
 pub use enums::*;
+pub use fields::*;
 pub use header::Header;
 pub use ie::{Codec, IeFault, IeType, Placed, RawIe, VENDOR};
 pub use message::{

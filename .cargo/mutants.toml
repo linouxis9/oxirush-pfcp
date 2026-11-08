@@ -29,7 +29,7 @@ exclude_re = [
     # oxirush-utils reads a PLMN of its canonical octets alone (a filler of F, digits of
     # 0 to 9), which it writes back the same: the guard keeps a tree byte for byte, should
     # it read others.
-    'src/values\.rs:\d+:\d+: replace match guard plmn\.to_nas_octets\(\) == self\.0 with true in <impl Field for PlmnId>::to_tree$',
+    'src/fields\.rs:\d+:\d+: replace match guard plmn\.to_nas_octets\(\) == self\.0 with true in <impl Field for PlmnId>::to_tree$',
     # No octets are no octets of any representation: an empty list of octets on the heap
     # allocates nothing either, and reads as the same slice.
     'src/octets\.rs:\d+:\d+: delete match arm 0 in Octets::copied$',

@@ -24,11 +24,11 @@ use core::net::{Ipv4Addr, Ipv6Addr};
 use crate::Error;
 use crate::check::Rules;
 use crate::enums::*;
+use crate::fields::*;
 use crate::ie::{Codec, listed_value};
 use crate::macros::{pfcp_bits, pfcp_layout};
 use crate::octets::Octets;
 use crate::values::*;
-use crate::values_clauses::{DigitsLv8, TextLv8};
 
 pfcp_field! {
     /// Cause (§8.2.1).
