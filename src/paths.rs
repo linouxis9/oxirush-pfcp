@@ -19,7 +19,8 @@
 //!
 //! The tree of a message is on the engine of oxirush-utils ([`tree`](mod@crate::tree)): a
 //! scope is an object whose members are its IEs by the names of its table, in the order of
-//! the table; a row that is a list is a list, in the order of the wire. An IE that the
+//! the table; a row that is a list is a list, in the order of the wire. A path writes a
+//! `/` of a name `~1`, as a JSON pointer does: `/pfcp/APN~1DNN`. An IE that the
 //! scope keeps as octets is `{"octets": ...}` under the name of its row, of its type, or
 //! its number.
 //!

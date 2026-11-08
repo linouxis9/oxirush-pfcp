@@ -311,7 +311,8 @@ the wire.
 
 `paths::select` and `paths::set` take the same paths on the tree of a message:
 `/pfcp` stands for its IEs, a list has the positions of its entries, `*` stands
-for each, and names go in any case. An IE of no row of its table, a vendor's or
+for each, and names go in any case. A name with a `/` has it written `~1`, as a
+JSON pointer does: `/pfcp/APN~1DNN`, which the path of a deviation writes too. An IE of no row of its table, a vendor's or
 one of a later release, goes by its number or the name of its type. What a
 message lacks selects nothing, whatever the path names below it: a misspelt name
 is an error where the value is there, and is not told below what is not. `set`

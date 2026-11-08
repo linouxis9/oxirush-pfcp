@@ -32,11 +32,12 @@ use crate::table::{Interfaces, Presence, Repeat, Row, Scope};
 /// One deviation: where, which clause, what, and the Cause of the answer.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Deviation {
-    /// Where the deviation is, as a path of the tree of the message: the IE, at its
-    /// position in the list of its row (`/pfcp/Create PDR/0/PDI`); the row, for what the
-    /// row has as a whole (a mandatory IE missing, more IEs than it allows, an interface
-    /// without it); a field of the header (`/SEID`); `/message` for the message type; and
-    /// `/pfcp` for the IEs together.
+    /// Where the deviation is, as a path of the tree of the message, which `paths::select`
+    /// takes: the IE, at its position in the list
+    /// of its row (`/pfcp/Create PDR/0/PDI`); the row, for what the row has as a whole (a
+    /// mandatory IE missing, more IEs than it allows, an interface without it); a field of
+    /// the header (`/SEID`); `/message` for the message type; and `/pfcp` for the IEs
+    /// together. A name with a `/` has it written `~1`: `/pfcp/APN~1DNN`.
     pub path: String,
     /// The clause or the table that the message breaks.
     pub clause: &'static str,
@@ -419,13 +420,33 @@ impl fmt::Display for Path<'_> {
                 parent,
                 row,
                 nth: Some(nth),
-            } => write!(f, "{parent}/{row}/{nth}"),
+            } => write!(f, "{parent}/{}/{nth}", Segment(row)),
             Self::Row {
                 parent,
                 row,
                 nth: None,
-            } => write!(f, "{parent}/{row}"),
+            } => write!(f, "{parent}/{}", Segment(row)),
         }
+    }
+}
+
+/// A name as a segment of a path writes it: `~0` for its `~` and `~1` for its `/`, as a
+/// JSON pointer (RFC 6901) and the paths of oxirush-utils have them.
+struct Segment<'a>(&'a str);
+
+impl fmt::Display for Segment<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut rest = self.0;
+        while let Some(at) = rest.find(['~', '/']) {
+            f.write_str(&rest[..at])?;
+            f.write_str(if rest[at..].starts_with('~') {
+                "~0"
+            } else {
+                "~1"
+            })?;
+            rest = &rest[at + 1..];
+        }
+        f.write_str(rest)
     }
 }
 
@@ -751,6 +772,7 @@ fn raw_deviations<S: Scope>(
             // By its name in the tree, and its position among those of its type there.
             let name = crate::tree_name(ie.ie_type, Some(table));
             let same = |other: &&crate::ie::RawIe| other.ie_type == ie.ie_type;
+            let name = Segment(&name);
             let here = match raws.iter().filter(same).count() {
                 1 => format!("{path}/{name}"),
                 _ => format!("{path}/{name}/{}", raws[..at].iter().filter(same).count()),
@@ -889,4 +911,27 @@ pub(crate) fn condition_absent<S: Scope>(
         ie_type: row.ie_type,
     };
     found.push(Deviation::new(at, table.id, kind));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A name is written in a path as oxirush-utils' paths read it: `~0` for `~`, `~1` for
+    /// `/`, the name of each row and of each IE type among them.
+    #[test]
+    fn a_name_is_a_segment_of_a_path() {
+        let segment = |name: &str| format!("{}", Segment(name));
+        assert_eq!(segment("APN/DNN"), "APN~1DNN");
+        assert_eq!(segment("a~/b/"), "a~0~1b~1");
+        #[cfg(feature = "tree")]
+        {
+            let tables = crate::IE_TYPES.iter().flat_map(|info| info.tables.iter());
+            let rows = tables.flat_map(|table| table.rows.iter().map(|row| row.name));
+            let types = crate::IE_TYPES.iter().map(|info| info.name);
+            for name in rows.chain(types) {
+                assert_eq!(segment(name), oxirush_utils::tree::escape(name), "{name}");
+            }
+        }
+    }
 }

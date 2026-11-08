@@ -194,3 +194,68 @@ fn each_captured_message_is_read_written_and_checked() {
         .collect();
     assert_eq!(found, expected);
 }
+
+/// Each deviation is at a path that `paths::select` takes on the tree of its message: of
+/// the captures on every interface, and of rows and IE types whose names have a "/",
+/// which a path writes "~1".
+#[test]
+fn each_deviation_is_at_a_path_that_select_takes() {
+    let tree = |written| Message::from_tree(&written).unwrap();
+    let mut messages: Vec<Message> = include_str!("captures/messages.tsv")
+        .lines()
+        .filter(|line| !line.starts_with('#'))
+        .map(|line| Message::decode(&hex::decode(line.split('\t').nth(5).unwrap()).unwrap()))
+        .map(Result::unwrap)
+        .collect();
+    // A Created/Updated Traffic Endpoint without its ID; an APN/DNN of no row of its
+    // table; an HMAC Key (STAMP), of a table of N4 alone, on Sxa
+    messages.push(tree(oxirush_utils::tree!({
+        "message": "PFCP Session Modification Response", "SEID": 1, "Sequence Number": 1,
+        "ies": {"Cause": 1, "Created/Updated Traffic Endpoint": [{"F-TEID": [{"V4": true, "TEID": 1, "IPv4 address": "10.0.0.2"}]}]}
+    })));
+    messages.push(tree(oxirush_utils::tree!({
+        "message": "PFCP Heartbeat Request", "Sequence Number": 1,
+        "ies": {"Recovery Time Stamp": 7, "APN/DNN": {"octets": "03696d73"}}
+    })));
+    messages.push(tree(oxirush_utils::tree!({
+        "message": "PFCP Association Setup Request", "Sequence Number": 1,
+        "ies": {"Node ID": "10.0.0.1", "Recovery Time Stamp": 7,
+            "N6 Delay Measurement Control Information": [{"Measurement Protocols": [{"STAMP": true}],
+                "Protocol Specific Configuration Parameters": {"Measurement Protocol": {"STAMP": true}, "HMAC Key (STAMP)": "00"}}]}
+    })));
+    let mut paths = 0;
+    for message in &messages {
+        let tree = message.to_tree();
+        for interface in [
+            Interfaces::SXA,
+            Interfaces::SXB,
+            Interfaces::SXC,
+            Interfaces::N4,
+            Interfaces::N4MB,
+            Interfaces::SXA_SXB,
+        ] {
+            for deviation in message.check(interface) {
+                let selected = paths::select(&tree, &deviation.path);
+                assert!(selected.is_ok(), "{deviation}: {selected:?}");
+                paths += 1;
+            }
+        }
+    }
+    assert!(paths > 1000, "{paths}");
+    let escaped = |message: &Message| {
+        let found = message.check(Interfaces::N4).into_iter();
+        found
+            .map(|deviation| deviation.path)
+            .filter(|path| path.contains('~'))
+    };
+    let at = |message| escaped(message).collect::<Vec<_>>();
+    let [.., traffic, apn, hmac] = &messages[..] else {
+        panic!()
+    };
+    assert_eq!(
+        at(traffic),
+        ["/pfcp/Created~1Updated Traffic Endpoint/0/Traffic Endpoint ID"]
+    );
+    assert_eq!(at(apn), ["/pfcp/APN~1DNN"]);
+    assert_eq!(at(hmac), Vec::<String>::new());
+}

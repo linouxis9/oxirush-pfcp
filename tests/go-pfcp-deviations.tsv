@@ -104,10 +104,10 @@ session-establishment-request_test.go	Single IE	/pfcp/Create PDR/0/PDI/UE IP add
 session-establishment-request_test.go	Single IE	/pfcp/Create PDR/0/UE IP address Pool Identity/0	7.6.8	Incorrect { ie_type: 177 }	-
 session-establishment-request_test.go	Single IE	/pfcp/Create QER/0/QER Control Indications	8.1.2	SpareBits	-
 session-establishment-request_test.go	Single IE	/pfcp/Create SRR/0/QoS Monitoring per QoS flow Control Information/0/Reporting Frequency	8.2.168	SpareBits	-
-session-establishment-response_test.go	Multiple IEs	/pfcp/Created Bridge/Router Info/NW-TT Port Number	7.6.9	Unexpected { ie_type: 197 }	-
+session-establishment-response_test.go	Multiple IEs	/pfcp/Created Bridge~1Router Info/NW-TT Port Number	7.6.9	Unexpected { ie_type: 197 }	-
 session-establishment-response_test.go	Multiple IEs	/pfcp/Provide ATSSS Control Information	7.6.9	Unexpected { ie_type: 220 }	-
-session-establishment-response_test.go	Single IE	/pfcp/Created Bridge/Router Info/5GS User Plane Node ID	7.6.8	ConditionalIncorrect { ie_type: 198 }	-
-session-establishment-response_test.go	Single IE	/pfcp/Created Bridge/Router Info/NW-TT Port Number	7.6.9	Unexpected { ie_type: 197 }	-
+session-establishment-response_test.go	Single IE	/pfcp/Created Bridge~1Router Info/5GS User Plane Node ID	7.6.8	ConditionalIncorrect { ie_type: 198 }	-
+session-establishment-response_test.go	Single IE	/pfcp/Created Bridge~1Router Info/NW-TT Port Number	7.6.9	Unexpected { ie_type: 197 }	-
 session-establishment-response_test.go	Single IE	/pfcp/Provide ATSSS Control Information	7.6.9	Unexpected { ie_type: 220 }	-
 session-modification-request_test.go	Multiple IEs	/pfcp	6.3.3.2	RuleChangedTwice { rule: "BAR", id: 255 }	-
 session-modification-request_test.go	Multiple IEs	/pfcp	6.3.3.2	RuleChangedTwice { rule: "FAR", id: 4294967295 }	-
@@ -177,9 +177,9 @@ session-modification-request_test.go	Single IE	/pfcp/Update PDR/0/PDI/UE IP addr
 session-modification-request_test.go	Single IE	/pfcp/Update QER/0/Packet Rate Status	7.6.9	Unexpected { ie_type: 193 }	-
 session-modification-request_test.go	Single IE	/pfcp/Update QER/0/QER Control Indications	8.1.2	SpareBits	-
 session-modification-request_test.go	Single IE	/pfcp/Update SRR/0/QoS Monitoring per QoS flow Control Information/0/Reporting Frequency	8.2.168	SpareBits	-
-session-modification-response_test.go	Multiple IEs	/pfcp/Created Bridge/Router Info	7.6.9	Unexpected { ie_type: 195 }	-
+session-modification-response_test.go	Multiple IEs	/pfcp/Created Bridge~1Router Info	7.6.9	Unexpected { ie_type: 195 }	-
 session-modification-response_test.go	Multiple IEs	/pfcp/Usage Report/0/Usage Report Trigger	8.1.2	SpareBits	-
-session-modification-response_test.go	Single IE	/pfcp/Created Bridge/Router Info	7.6.9	Unexpected { ie_type: 195 }	-
+session-modification-response_test.go	Single IE	/pfcp/Created Bridge~1Router Info	7.6.9	Unexpected { ie_type: 195 }	-
 session-modification-response_test.go	Single IE	/pfcp/Usage Report/0/Usage Report Trigger	8.1.2	SpareBits	-
 session-report-request_test.go	Multiple IEs	/pfcp/Old CP F-SEID	7.2.2.4.2	Rule("a Session Report Request of a SEID other than 0 with the Old CP F-SEID")	-
 session-report-request_test.go	Multiple IEs	/pfcp/Downlink Data Report/Downlink Data Service Information/0	8.1.2	SpareBits	-
