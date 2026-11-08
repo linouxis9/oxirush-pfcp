@@ -2272,9 +2272,10 @@ fn a_number_of_six_bits_in_a_tree() {
     assert_eq!(tree::Tree::to_tree(&mapping), written);
 }
 
-/// Values that the crate once misread: each as its clause has it.
+/// Values that the crate once misread, each as its clause has it: a Downlink Data
+/// Service Information for each PDR ID of a Downlink Data Report (Table 7.5.8.2-1).
 #[test]
-fn values_as_their_clauses_have_them() {
+fn a_downlink_data_report_has_a_service_information_for_each_pdr() {
     // Table 7.5.8.2-1: a Downlink Data Service Information for each PDR ID
     let service = DownlinkDataServiceInformation {
         ppi: true,
@@ -2301,6 +2302,12 @@ fn values_as_their_clauses_have_them() {
     );
     let decoded = Message::decode(&message.encode().unwrap()).unwrap();
     assert_eq!(decoded, message);
+}
+
+/// Values that the crate once misread, each as its clause has it: numbers, and the spare
+/// bits beside them.
+#[test]
+fn numbers_and_their_spare_bits_as_their_clauses_have_them() {
     // §8.2.183: the number of UE IPv4 addresses is a number
     let usage = UeIpAddressUsageInformation::default().with_number_of_ue_ip_addresses(
         NumberOfUeIpAddresses {
@@ -2363,6 +2370,12 @@ fn values_as_their_clauses_have_them() {
     let mut octets = Vec::new();
     multiplier.encode(&mut octets).unwrap();
     assert_eq!(&octets[8..], [0xff, 0xff, 0xff, 0xfe]);
+}
+
+/// Values that the crate once misread, each as its clause has it: fields after their
+/// lengths and after other fields, and the enumerations.
+#[test]
+fn fields_after_their_lengths_as_their_clauses_have_them() {
     // §8.2.206: the NID after the Source Specific IP Multicast Address
     let content = [
         &[0x07][..],

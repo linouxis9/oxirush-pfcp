@@ -1624,6 +1624,12 @@ fn the_absence_rules_that_their_scope_shows() {
     ] {
         assert!(paths(&present, missing).is_empty(), "{present:?}");
     }
+}
+
+/// Table 7.5.4.1-1 NOTE 3: QAURR and the Query URR of a modification are exclusive, and
+/// the Query URR is there where QAURR has it absent, without a Cause.
+#[test]
+fn qaurr_and_a_query_urr_exclude_each_other() {
     // Table 7.5.4.1-1 NOTE 3: QAURR and the Query URR, exclusive, without a Cause
     let modification = SessionModificationRequest::default()
         .with_pfcpsmreq_flags(PFCPSMReqFlags {
@@ -1660,11 +1666,12 @@ fn shown(value: &impl Check, expected: &[&str]) {
     assert_eq!(paths(value, missing), expected);
 }
 
-/// §7.6.6: the conditions of the C rows that the IEs beside them show, each where it
-/// holds and where it does not; the NOTEs of Tables 7.4.4.1.3-1, 7.4.5.1.8-1 and 7.5.2.9-5,
-/// of one IE or another, as the condition of each on the other.
+/// §7.6.6: the conditions of the C rows of the node messages and their grouped IEs that
+/// the IEs beside them show, each where it holds and where it does not; the NOTEs of
+/// Tables 7.4.4.1.3-1 and 7.4.5.1.8-1, of one IE or another, as the condition of each on
+/// the other.
 #[test]
-fn the_conditions_that_their_scope_shows() {
+fn the_conditions_that_the_ies_of_a_node_message_show() {
     // Table 7.4.4.1-1 and 7.4.4.2-1: an SMF of MPAS gives its SMF Set ID
     let mpas = CpFunctionFeatures {
         mpas: true,
@@ -1750,6 +1757,13 @@ fn the_conditions_that_their_scope_shows() {
     report.n6_delay_measurement_failure_information =
         Some(N6DelayMeasurementFailureInformation::default());
     shown(&report, &[]);
+}
+
+/// §7.6.6: the conditions of the C rows of the rules of a session that the IEs beside
+/// them show, each where it holds and where it does not; the NOTE of Table 7.5.2.9-5, of
+/// one IE or another, as the condition of each on the other.
+#[test]
+fn the_conditions_that_the_ies_of_a_rule_show() {
     // Table 7.5.2.2-1: a PDR without a predefined rule or a MAR has its FAR
     let mut pdr = CreatePdr::new_n4(
         PdrId::new(1),
@@ -1872,6 +1886,12 @@ fn the_conditions_that_their_scope_shows() {
     shown(&traffic, &["Measurement Period"]);
     traffic.measurement_period = Some(MeasurementPeriod::new(10));
     shown(&traffic, &[]);
+}
+
+/// §7.6.6: a usage report has its start and end times, but of the start or the stop of
+/// traffic, or of MAC addresses.
+#[test]
+fn the_times_that_a_usage_report_has() {
     // Tables 7.5.5.2-1, 7.5.7.2-1 and 7.5.8.3-1: a usage report has its start and end
     // times, but of the start or stop of traffic, or of MAC addresses
     let periodic = UsageReportTrigger {
