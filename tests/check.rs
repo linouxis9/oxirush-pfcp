@@ -2203,20 +2203,36 @@ fn eps_cups_on_its_interfaces() {
     assert!(!both.check(Interfaces::N4).is_empty());
 }
 
-/// Messages of each interface and procedure, built, decoded back and checked where they
-/// are and where they are not: Sxb modification and report, association update and
-/// release, PFD management on Sxb and Sxc, session set deletion with the FQ-CSIDs of
-/// its roles, a TDF's establishment on Sxc, an MB-SMF's on N4mb.
-#[test]
-fn messages_of_each_interface() {
-    let node = NodeId::Ipv4(SMF);
-    let fq_csid = |node_id_type_address: [u8; 4], csid: u16| FqCsid {
+/// That each message, built, decodes back, has no deviation on its interface, and some
+/// on another that it names.
+fn on_and_off(cases: Vec<(Message, Interfaces, Option<Interfaces>)>) {
+    for (message, on, off) in cases {
+        let octets = message.encode().unwrap();
+        assert_eq!(Message::decode(&octets).unwrap(), message);
+        let found = message.check(on);
+        assert!(found.is_empty(), "{message} on {on:?}: {found:?}");
+        if let Some(off) = off {
+            assert!(!message.check(off).is_empty(), "{message} on {off:?}");
+        }
+    }
+}
+
+fn fq_csid(node_address: [u8; 4], csid: u16) -> FqCsid {
+    FqCsid {
         node_id_type: 0,
-        node_address: node_id_type_address.into(),
+        node_address: node_address.into(),
         csids: vec![csid],
         node_type: None,
         extra: Octets::default(),
-    };
+    }
+}
+
+/// Session messages of each interface, built, decoded back and checked where they are and
+/// where they are not: Sxb modification and report, a TDF's establishment on Sxc, an
+/// MB-SMF's on N4mb.
+#[test]
+fn session_messages_of_each_interface() {
+    let node = NodeId::Ipv4(SMF);
     let seid = FSeid::ipv4(0x1001, SMF);
     let pdi = || Pdi::new(SourceInterface::new(SourceInterfaceValue::Core));
     let urr = UsageReport::new(
@@ -2229,13 +2245,7 @@ fn messages_of_each_interface() {
     )
     .with_start_time(StartTime::new(1))
     .with_end_time(EndTime::new(2));
-    let pfd = PfdContents {
-        fd: true,
-        spare_octet: Spare(0),
-        flow_description: Some(Lv16(b"permit out ip from any to any".into())),
-        ..Default::default()
-    };
-    let cases: Vec<(Message, Interfaces, Option<Interfaces>)> = vec![
+    on_and_off(vec![
         (
             Message::session(
                 0x2001,
@@ -2264,37 +2274,6 @@ fn messages_of_each_interface() {
             ),
             Interfaces::SXB,
             None,
-        ),
-        (
-            Message::node(3, AssociationUpdateRequest::new(node.clone())),
-            Interfaces::SXA,
-            None,
-        ),
-        (
-            Message::node(4, AssociationReleaseRequest::new(node.clone())),
-            Interfaces::SXB,
-            None,
-        ),
-        (
-            Message::node(
-                5,
-                PfdManagementRequest::default().with_application_ids_pfds(
-                    ApplicationIDsPFDs::new(ApplicationId(b"app".to_vec().into()))
-                        .with_pfd_context(PfdContext::new(pfd)),
-                ),
-            ),
-            Interfaces::SXC,
-            Some(Interfaces::SXA),
-        ),
-        (
-            Message::node(
-                6,
-                SessionSetDeletionRequest::new(node.clone())
-                    .with_fq_csid(fq_csid([10, 0, 0, 1], 1))
-                    .with_fq_csid(fq_csid([10, 0, 0, 5], 2)),
-            ),
-            Interfaces::SXA,
-            Some(Interfaces::SXC),
         ),
         (
             Message::session(
@@ -2347,18 +2326,61 @@ fn messages_of_each_interface() {
             Interfaces::N4MB,
             Some(Interfaces::SXA),
         ),
-    ];
-    for (message, on, off) in cases {
-        let octets = message.encode().unwrap();
-        assert_eq!(Message::decode(&octets).unwrap(), message);
-        let found = message.check(on);
-        assert!(found.is_empty(), "{message} on {on:?}: {found:?}");
-        if let Some(off) = off {
-            assert!(!message.check(off).is_empty(), "{message} on {off:?}");
-        }
-    }
-    // The FQ-CSIDs of Session Set Deletion: one of each role on the interface
-    let mut deletion = SessionSetDeletionRequest::new(node);
+    ]);
+}
+
+/// Node messages of each interface, built, decoded back and checked where they are and
+/// where they are not: association update and release, PFD management on Sxb and Sxc,
+/// session set deletion with the FQ-CSIDs of its roles.
+#[test]
+fn node_messages_of_each_interface() {
+    let node = NodeId::Ipv4(SMF);
+    let pfd = PfdContents {
+        fd: true,
+        spare_octet: Spare(0),
+        flow_description: Some(Lv16(b"permit out ip from any to any".into())),
+        ..Default::default()
+    };
+    on_and_off(vec![
+        (
+            Message::node(3, AssociationUpdateRequest::new(node.clone())),
+            Interfaces::SXA,
+            None,
+        ),
+        (
+            Message::node(4, AssociationReleaseRequest::new(node.clone())),
+            Interfaces::SXB,
+            None,
+        ),
+        (
+            Message::node(
+                5,
+                PfdManagementRequest::default().with_application_ids_pfds(
+                    ApplicationIDsPFDs::new(ApplicationId(b"app".to_vec().into()))
+                        .with_pfd_context(PfdContext::new(pfd)),
+                ),
+            ),
+            Interfaces::SXC,
+            Some(Interfaces::SXA),
+        ),
+        (
+            Message::node(
+                6,
+                SessionSetDeletionRequest::new(node.clone())
+                    .with_fq_csid(fq_csid([10, 0, 0, 1], 1))
+                    .with_fq_csid(fq_csid([10, 0, 0, 5], 2)),
+            ),
+            Interfaces::SXA,
+            Some(Interfaces::SXC),
+        ),
+    ]);
+}
+
+/// The FQ-CSIDs of a Session Set Deletion Request: one of each of its roles on the
+/// interface, which Sxa has four of and N4 two (Table 7.4.6.1-1): three are too many on N4.
+#[test]
+fn a_session_set_deletion_has_an_fq_csid_of_each_role() {
+    let mut deletion = SessionSetDeletionRequest::new(NodeId::Ipv4(SMF));
     for csid in 0..3 {
         deletion = deletion.with_fq_csid(fq_csid([10, 0, 0, 1], csid));
     }

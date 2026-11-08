@@ -595,14 +595,8 @@ fn throttling_spares_priority() {
         50,
     );
     let send = |smf: &mut Node, priority: u8| {
-        let message = Message {
-            header: Header {
-                priority: Some(priority),
-                ..Header::session(1, 0)
-            },
-            body: SessionModificationRequest::default().into(),
-        };
-        smf.request(at(2), UPF, message)
+        let message = Message::session(1, 0, SessionModificationRequest::default());
+        smf.request(at(2), UPF, of_priority(priority, message))
     };
     // Mixed with as many others, no priority request is dropped
     let mut dropped = [0, 0];
@@ -651,26 +645,9 @@ fn message_priority_default() {
 fn response_copies_priority() {
     let (mut smf, mut upf) = associated(at(0));
     let (cp_seid, _) = established(&mut smf, &mut upf, at(0));
-    let message = Message {
-        header: Header {
-            priority: Some(2),
-            ..Header::session(0, 0)
-        },
-        body: SessionModificationRequest::default().into(),
-    };
     let peer_seid = smf.session(cp_seid).unwrap().peer_seid.unwrap();
-    smf.request(
-        at(1),
-        UPF,
-        Message {
-            header: Header {
-                seid: Some(peer_seid),
-                ..message.header
-            },
-            ..message
-        },
-    )
-    .unwrap();
+    let message = Message::session(peer_seid, 0, SessionModificationRequest::default());
+    smf.request(at(1), UPF, of_priority(2, message)).unwrap();
     pass(&mut smf, &mut upf, UPF, at(1));
     let (received, _) = request(&mut upf);
     assert_eq!(received.priority, Some(2));

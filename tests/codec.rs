@@ -1033,27 +1033,31 @@ fn a_flag_that_disagrees_is_refused_where_it_is_written() {
     );
 }
 
-/// A field whose tree is a scalar or an object, as its value is, has one rule for each
-/// form: a value without or with spare bits, an IPv4 or IPv6 address or another, an
-/// identity of digits or text or of other octets. The member that the scalar is selects
-/// it, as the object's; another member of the object selects nothing at the scalar; another
-/// name is no member, whatever the form. Where the field is absent, nothing is selected.
-#[test]
-fn a_field_of_either_form_has_one_rule() {
-    let found = |tree: &tree::Value, path: &str| {
-        select(tree, path)
-            .map(|values| values.into_iter().cloned().collect::<Vec<_>>())
-            .map_err(|error| error.kind())
+/// The values at `path`, or the kind of the error.
+fn found(tree: &tree::Value, path: &str) -> Result<Vec<tree::Value>, tree::ErrorKind> {
+    select(tree, path)
+        .map(|values| values.into_iter().cloned().collect::<Vec<_>>())
+        .map_err(|error| error.kind())
+}
+
+/// The tree of the establishment of `establishment()`, changed.
+fn establishment_tree(change: &dyn Fn(&mut SessionEstablishmentRequest)) -> tree::Value {
+    let Body::SessionEstablishmentRequest(mut request) = establishment().body else {
+        panic!()
     };
+    change(&mut request);
+    Message::session(0, 1, Body::SessionEstablishmentRequest(request)).to_tree()
+}
+
+/// A field whose tree is a scalar or an object, as its value is, has one rule for each
+/// form: the member that the scalar is selects it, as the object's; another member of the
+/// object selects nothing at the scalar; another name is no member, whatever the form.
+/// Where the field is absent, nothing is selected. Of a value without or with spare bits:
+/// a Time Unit of a Packet Rate.
+#[test]
+fn a_value_with_spare_bits_has_one_rule_in_either_form() {
     let none = Ok(Vec::<tree::Value>::new());
     let misspelt = Err(tree::ErrorKind::NoSuchMember);
-    let request = |change: &dyn Fn(&mut SessionEstablishmentRequest)| {
-        let Body::SessionEstablishmentRequest(mut request) = establishment().body else {
-            panic!()
-        };
-        change(&mut request);
-        Message::session(0, 1, Body::SessionEstablishmentRequest(request)).to_tree()
-    };
     // Spare bits: a Time Unit without them, with them, and none
     let rate = |downlink: Option<Narrow<TimeUnit>>| PacketRate {
         ulpr: true,
@@ -1068,7 +1072,7 @@ fn a_field_of_either_form_has_one_rule() {
         value: TimeUnit::Minute,
         spare: 0x40,
     };
-    let tree = request(&|request| {
+    let tree = establishment_tree(&|request| {
         let qer = CreateQer::new(QerId::new(1), GateStatus::default());
         request
             .create_qer
@@ -1111,6 +1115,17 @@ fn a_field_of_either_form_has_one_rule() {
             "{unit}"
         );
     }
+}
+
+/// A field whose tree is a scalar or an object, as its value is, has one rule for each
+/// form: the member that the scalar is selects it, as the object's; another member of the
+/// object selects nothing at the scalar; another name is no member, whatever the form.
+/// Where the field is absent, nothing is selected. Of an IPv4 or IPv6 address or another:
+/// the addresses of a Source Specific IP Multicast Address.
+#[test]
+fn an_address_has_one_rule_in_either_form() {
+    let none = Ok(Vec::<tree::Value>::new());
+    let misspelt = Err(tree::ErrorKind::NoSuchMember);
     // An address of IPv4, of another type, and none
     let ssm = SsmAddress {
         distribution: TypedAddress::from(core::net::IpAddr::V4(Ipv4Addr::new(232, 0, 0, 1))),
@@ -1128,12 +1143,12 @@ fn a_field_of_either_form_has_one_rule() {
             ..Default::default()
         })
     };
-    let tree = request(&|request| {
+    let tree = establishment_tree(&|request| {
         *request = request
             .clone()
             .with_mbs_session_n4_control_information(mbs(Some(ssm.clone())))
     });
-    let without = request(&|request| {
+    let without = establishment_tree(&|request| {
         *request = request
             .clone()
             .with_mbs_session_n4_control_information(mbs(None))
@@ -1186,6 +1201,17 @@ fn a_field_of_either_form_has_one_rule() {
         );
         assert_eq!(found(tree, &format!("{address}/Bogus")), bogus, "{address}");
     }
+}
+
+/// A field whose tree is a scalar or an object, as its value is, has one rule for each
+/// form: the member that the scalar is selects it, as the object's; another member of the
+/// object selects nothing at the scalar; another name is no member, whatever the form.
+/// Where the field is absent, nothing is selected. Of an identity of digits or text, or of
+/// other octets: the IMSI and the NAI of a User ID.
+#[test]
+fn an_identity_has_one_rule_in_either_form() {
+    let none = Ok(Vec::<tree::Value>::new());
+    let misspelt = Err(tree::ErrorKind::NoSuchMember);
     // An identity of digits, of text, of other octets, and none
     let user = |imsi: Option<DigitsLv8>| UserId {
         imsif: imsi.is_some(),
@@ -1202,7 +1228,7 @@ fn a_field_of_either_form_has_one_rule() {
         ),
         (None, none.clone()),
     ] {
-        let tree = request(&|request| request.user_id = Some(user(imsi.clone())));
+        let tree = establishment_tree(&|request| request.user_id = Some(user(imsi.clone())));
         let bogus = match imsi.is_some() {
             true => misspelt.clone(),
             false => none.clone(),

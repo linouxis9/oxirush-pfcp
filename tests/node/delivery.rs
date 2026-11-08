@@ -110,25 +110,51 @@ fn timeout_after_n1() {
     );
 }
 
-/// What a failure and an error of the node say names the clause that they are of.
+/// Each failure and each error of the node says what it is, apart from the others, and
+/// one that carries an error of the codec says it too.
 #[test]
 fn a_failure_and_an_error_say_what_they_are() {
-    assert!(Failure::Timeout.to_string().ends_with("(TS 29.244 6.4)"));
-    let error = NodeError::NotAHandover.to_string();
-    assert!(error.ends_with("(TS 29.244 5.22.2)"));
+    let codec = Message::decode(&[0x20]).unwrap_err();
+    let failures = [
+        Failure::Timeout,
+        Failure::VersionNotSupported,
+        Failure::Malformed(codec.clone()),
+    ];
+    let errors = [
+        NodeError::NoAssociation,
+        NodeError::NoSession,
+        NodeError::Throttled,
+        NodeError::NotARequest,
+        NodeError::WrongDirection,
+        NodeError::NoSequence,
+        NodeError::Answered,
+        NodeError::Forgotten,
+        NodeError::WrongResponse,
+        NodeError::SeidInUse,
+        NodeError::SeidZero,
+        NodeError::NotAHandover,
+        NodeError::Encode(codec.clone()),
+    ];
+    let failures = failures.iter().map(ToString::to_string);
+    let texts: Vec<String> = failures
+        .chain(errors.iter().map(ToString::to_string))
+        .collect();
+    let distinct: std::collections::BTreeSet<&str> = texts.iter().map(String::as_str).collect();
+    assert_eq!(distinct.len(), texts.len(), "{texts:?}");
+    let carrying = [&texts[2], &texts[texts.len() - 1]];
+    assert!(
+        carrying
+            .iter()
+            .all(|text| text.contains(&codec.to_string())),
+        "{texts:?}"
+    );
 }
 
 #[test]
 fn retransmission_identical() {
     let mut smf = node(SMF, Function::Cp);
-    let message = Message {
-        header: Header {
-            priority: Some(3),
-            ..Header::node(0)
-        },
-        body: HeartbeatRequest::new(RecoveryTimeStamp::new(1000)).into(),
-    };
-    smf.request(at(0), UPF, message).unwrap();
+    smf.request(at(0), UPF, of_priority(3, heartbeat()))
+        .unwrap();
     let original = sent(&mut smf).remove(0);
     smf.handle_timeout(T1);
     let again = sent(&mut smf).remove(0);
@@ -356,15 +382,9 @@ fn a_request_of_a_false_length_is_answered_invalid_length() {
     // answer says the priority that the request says.
     let modification = SessionModificationRequest::default()
         .with_cp_f_seid(FSeid::ipv4(1, Ipv4Addr::new(10, 0, 0, 1)));
-    let mut octets = Message {
-        header: Header {
-            priority: Some(3),
-            ..Header::session(up_seid, 10)
-        },
-        body: modification.into(),
-    }
-    .encode()
-    .unwrap();
+    let mut octets = of_priority(3, Message::session(up_seid, 10, modification))
+        .encode()
+        .unwrap();
     octets[19] = 99;
     upf.handle_datagram(at(1), SMF, &octets);
     let answer = decoded(&sent(&mut upf)[0]);

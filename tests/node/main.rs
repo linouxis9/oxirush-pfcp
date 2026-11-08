@@ -196,6 +196,12 @@ fn decoded(transmit: &Transmit) -> Message {
     Message::decode(&transmit.octets).unwrap()
 }
 
+/// `message`, of the priority `priority` (§7.2.2.3).
+fn of_priority(priority: u8, mut message: Message) -> Message {
+    message.header.priority = Some(priority);
+    message
+}
+
 fn heartbeat() -> Message {
     Message::node(0, HeartbeatRequest::new(RecoveryTimeStamp::new(1000)))
 }
