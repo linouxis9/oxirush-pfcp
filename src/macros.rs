@@ -144,7 +144,7 @@ macro_rules! pfcp_layout {
         impl $ty {
             $(
                 /// The bits of the octet of flags that are flags.
-                const FLAGS: $fk = 0 $( | pfcp_layout!(@fmask $bit $(, $width)?) )*;
+                const FLAGS: $fk = 0 $( | pfcp_layout!(@bits ones [$($width $(as $fkind)?)?] $bit) as $fk )*;
             )?
             /// The names of its fields and flags.
             pub(crate) const FIELDS: &'static [&'static str] = &[$($($head_name,)*)? $($($flag_name,)* $($field_name,)*)?];
@@ -171,7 +171,7 @@ macro_rules! pfcp_layout {
                     ident: stringify!($flag),
                     octet: Self::HEAD_OCTETS + (core::mem::size_of::<$fk>() - 1 - ($bit - 1) / 8),
                     bit: ($bit - 1) % 8 + 1,
-                    width: pfcp_layout!(@fwidth $($width)?),
+                    width: pfcp_layout!(@bits width [$($width $(as $fkind)?)?]),
                 }),*)?],
                 fields: &[$($(crate::values::Member { name: $field_name, octets: <$kind $(<$param>)? as crate::values::Field>::OCTETS, cells: <$kind $(<$param>)? as crate::values::Field>::CELLS, condition: stringify!($cond) }),*)?],
             });
@@ -209,7 +209,7 @@ macro_rules! pfcp_layout {
                 $($( let $head = <$hkind as crate::values::Field>::read(&mut rest)?; )*)?
                 $(
                     let first = <$fk as crate::values::Field>::read(&mut rest)?;
-                    $( let $flag = pfcp_layout!(@fread first, $bit $(, $width $(as $fkind)?)?); )*
+                    $( let $flag = pfcp_layout!(@bits read [$($width $(as $fkind)?)?] first, $bit); )*
                     $(
                         let $field = match $cond {
                             true => Some(pfcp_layout!(@read rest, [$kind $(<$param>)?] $(, $length)?)?),
@@ -250,7 +250,7 @@ macro_rules! pfcp_layout {
                 )*)?
                 $($( crate::values::Field::write(&self.$head, out); )*)?
                 $(
-                    crate::values::Field::write(&(self.spare & !Self::FLAGS $( | pfcp_layout!(@fwrite $fk, self.$flag, $bit $(, $width $(as $fkind)?)?) )*), out);
+                    crate::values::Field::write(&(self.spare & !Self::FLAGS $( | pfcp_layout!(@bits write [$($width $(as $fkind)?)?] $fk, self.$flag, $bit) )*), out);
                     $(
                         if let Some(field) = &self.$field {
                             crate::values::Field::write(field, out);
@@ -385,20 +385,6 @@ macro_rules! pfcp_layout {
     (@bits $op:ident [] $($rest:tt)*) => { pfcp_bits!(@ $op 1 [] $($rest)*) };
     (@bits $op:ident [$width:literal] $($rest:tt)*) => { pfcp_bits!(@ $op $width [] $($rest)*) };
     (@bits $op:ident [$width:literal as $kind:ident] $($rest:tt)*) => { pfcp_bits!(@ $op $width [$kind] $($rest)*) };
-    (@fwidth) => { 1 };
-    (@fwidth $width:literal) => { $width };
-    (@fmask $bit:literal) => { 1 << ($bit - 1) };
-    (@fmask $bit:literal, $width:literal) => { ((1 << $width) - 1) << ($bit - 1) };
-    (@fread $first:ident, $bit:literal) => { $first & 1 << ($bit - 1) != 0 };
-    (@fread $first:ident, $bit:literal, $width:literal) => { (($first >> ($bit - 1)) & ((1 << $width) - 1)) as u8 };
-    (@fread $first:ident, $bit:literal, $width:literal as $kind:ident) => {
-        $kind::from_value(pfcp_layout!(@fread $first, $bit, $width))
-    };
-    (@fwrite $fk:ty, $value:expr, $bit:literal) => { <$fk>::from($value) << ($bit - 1) };
-    (@fwrite $fk:ty, $value:expr, $bit:literal, $width:literal) => { (<$fk>::from($value) & ((1 << $width) - 1)) << ($bit - 1) };
-    (@fwrite $fk:ty, $value:expr, $bit:literal, $width:literal as $kind:ident) => {
-        pfcp_layout!(@fwrite $fk, $value.value(), $bit, $width)
-    };
 }
 
 /// A value of octets of bits: flags of one bit and fields of a few, each at its octet
@@ -516,7 +502,7 @@ macro_rules! pfcp_bits {
                     spare[octet] = octets[octet] & !Self::MASKS[octet];
                 }
                 Some(Self {
-                    $( $field: pfcp_bits!(@read $width [$($kind)? $(+ $octet2 $low2 $width2)?] at, $octet, $low), )*
+                    $( $field: pfcp_bits!(@read $width [$($kind)? $(+ $octet2 $low2 $width2)?] at($octet), $low), )*
                     spare,
                     present: present as u8,
                     extra: crate::octets::Octets::copied(&octets[present..]),
@@ -653,26 +639,29 @@ macro_rules! pfcp_bits {
         pfcp_bits!(@mask $masks, $octet2, $low2, $width2 []);
     };
     (@mask $masks:ident, $octet:literal, $low:literal, $width:tt [$($kind:ident)?]) => {
-        $masks[$octet] |= ((((1u16 << $width) - 1) << ($low - 1)) & 0xff) as u8;
+        $masks[$octet] |= (pfcp_bits!(@ones $width [] $low) & 0xff) as u8;
     };
-    (@read $width:tt [+ $octet2:literal $low2:literal $width2:tt] $at:ident, $octet:literal, $low:literal) => {
-        (u16::from(pfcp_bits!(@read $width [] $at, $octet, $low)) << $width2) | u16::from(pfcp_bits!(@read $width2 [] $at, $octet2, $low2))
-    };
-    (@read 1 [] $at:ident, $octet:literal, $low:literal) => { $at($octet) >> ($low - 1) & 1 == 1 };
-    (@read $width:tt [] $at:ident, $octet:literal, $low:literal) => { ($at($octet) >> ($low - 1)) & (((1u16 << $width) - 1) as u8) };
-    (@read $width:tt [$kind:ident] $at:ident, $octet:literal, $low:literal) => {
-        $kind::from_value(pfcp_bits!(@read $width [] $at, $octet, $low))
+    (@read $width:tt [+ $octet2:literal $low2:literal $width2:tt] $at:ident($octet:literal), $low:literal) => {
+        (u16::from(pfcp_bits!(@read $width [] $at($octet), $low)) << $width2) | u16::from(pfcp_bits!(@read $width2 [] $at($octet2), $low2))
     };
     (@store $octets:ident, $width:tt [+ $octet2:literal $low2:literal $width2:tt] $value:expr, $octet:literal, $low:literal) => {
-        $octets[$octet] |= pfcp_bits!(@write $width [] ($value >> $width2) as u8, $low);
-        $octets[$octet2] |= pfcp_bits!(@write $width2 [] ($value & ((1u16 << $width2) - 1)) as u8, $low2);
+        $octets[$octet] |= pfcp_bits!(@write $width [] u8, ($value >> $width2) as u8, $low);
+        $octets[$octet2] |= pfcp_bits!(@write $width2 [] u8, ($value & ((1u16 << $width2) - 1)) as u8, $low2);
     };
     (@store $octets:ident, $width:tt [$($kind:ident)?] $value:expr, $octet:literal, $low:literal) => {
-        $octets[$octet] |= pfcp_bits!(@write $width [$($kind)?] $value, $low);
+        $octets[$octet] |= pfcp_bits!(@write $width [$($kind)?] u8, $value, $low);
     };
-    (@write 1 [] $value:expr, $low:literal) => { u8::from($value) << ($low - 1) };
-    (@write $width:tt [] $value:expr, $low:literal) => { ($value & (((1u16 << $width) - 1) as u8)) << ($low - 1) };
-    (@write $width:tt [$kind:ident] $value:expr, $low:literal) => { pfcp_bits!(@write $width [] $value.value(), $low) };
+    // A field of `width` bits from bit `low` (from 1) of an integer, of an octet here and of
+    // the flags of a layout: its bits, its value read from the integer, and its value
+    // written as an integer of type `int`.
+    (@width $width:tt [$($kind:ident)?]) => { $width };
+    (@ones $width:tt [$($kind:ident)?] $low:expr) => { ((1u32 << $width) - 1) << ($low - 1) };
+    (@read 1 [] $integer:expr, $low:expr) => { $integer >> ($low - 1) & 1 == 1 };
+    (@read $width:tt [] $integer:expr, $low:expr) => { (u32::from($integer >> ($low - 1)) & ((1u32 << $width) - 1)) as u8 };
+    (@read $width:tt [$kind:ident] $integer:expr, $low:expr) => { $kind::from_value(pfcp_bits!(@read $width [] $integer, $low)) };
+    (@write 1 [] $int:ty, $value:expr, $low:expr) => { <$int>::from($value) << ($low - 1) };
+    (@write $width:tt [] $int:ty, $value:expr, $low:expr) => { (<$int>::from($value) & (((1u32 << $width) - 1) as $int)) << ($low - 1) };
+    (@write $width:tt [$kind:ident] $int:ty, $value:expr, $low:expr) => { pfcp_bits!(@write $width [] $int, $value.value(), $low) };
     (@check $width:tt [+ $($part:tt)*] $value:expr, $path:ident, $found:ident, $clause:literal) => {};
     (@check $width:tt [] $value:expr, $path:ident, $found:ident, $clause:literal) => {};
     (@check $width:tt [$kind:ident] $value:expr, $path:ident, $found:ident, $clause:literal) => {
@@ -917,7 +906,7 @@ macro_rules! pfcp_table {
             rows: &[$(
                 crate::table::Row {
                     name: $row,
-                    ie_type: <pfcp_table!(@type_static $vty $($raw)?) as crate::ie::IeType>::IE_TYPE,
+                    ie_type: <pfcp_table!(@type $vty $($raw)?) as crate::ie::IeType>::IE_TYPE,
                     presence: pfcp_table!(@presence $p),
                     repeat: pfcp_table!(@repeat $(* $($max)?)?),
                     interfaces: crate::table::Interfaces(0 $(| crate::table::Interfaces::$interface.0)*),
@@ -968,7 +957,7 @@ macro_rules! pfcp_table {
             fn position(ie_type: u16) -> Option<usize> {
                 let mut at = 0;
                 $(
-                    if ie_type == <pfcp_table!(@type_any $vty $($raw)?) as crate::ie::IeType>::IE_TYPE {
+                    if ie_type == <pfcp_table!(@type $vty $($raw)?) as crate::ie::IeType>::IE_TYPE {
                         return Some(at);
                     }
                     at += 1;
@@ -976,7 +965,7 @@ macro_rules! pfcp_table {
                 None
             }
 
-            const PRESIZE: bool = false $( || pfcp_table!(@large [$(* $($max)?)?] (pfcp_table!(@type_static $vty $($raw)?))) )*;
+            const PRESIZE: bool = false $( || pfcp_table!(@large [$(* $($max)?)?] (pfcp_table!(@type $vty $($raw)?))) )*;
 
             // Only the IEs that can be values are counted: not one of a null length, nor
             // one whose IEs run past it, which the scope keeps as octets.
@@ -985,8 +974,8 @@ macro_rules! pfcp_table {
                 $( let mut [<count_ $field>] = 0usize; )*
                 for ie in crate::framing::ies(octets).flatten() {
                     $(
-                        if pfcp_table!(@large [$(* $($max)?)?] (pfcp_table!(@type_static $vty $($raw)?)))
-                            && ie.ie_type == <pfcp_table!(@type_any $vty $($raw)?) as crate::ie::IeType>::IE_TYPE
+                        if pfcp_table!(@large [$(* $($max)?)?] (pfcp_table!(@type $vty $($raw)?)))
+                            && ie.ie_type == <pfcp_table!(@type $vty $($raw)?) as crate::ie::IeType>::IE_TYPE
                         {
                             let content = ie.content();
                             if !content.is_empty() && crate::framing::ies(content).all(|inner| inner.is_ok()) {
@@ -1055,7 +1044,7 @@ macro_rules! pfcp_table {
             fn decodes(&self, ie_type: u16, octets: &[u8]) -> bool {
                 $(
                     if ie_type == <pfcp_table!(@type $vty $($raw)?) as crate::ie::IeType>::IE_TYPE {
-                        return <pfcp_table!(@type_any $vty $($raw)?) as crate::ie::Codec>::decode(octets).is_some();
+                        return <pfcp_table!(@type $vty $($raw)?) as crate::ie::Codec>::decode(octets).is_some();
                     }
                 )*
                 false
@@ -1128,10 +1117,6 @@ macro_rules! pfcp_table {
 
     (@type raw $raw:literal) => { crate::values::Raw<$raw> };
     (@type $vty:ident) => { $vty };
-    (@type_static raw $raw:literal) => { crate::values::Raw<$raw> };
-    (@type_static $vty:ident) => { $vty };
-    (@type_any raw $raw:literal) => { crate::values::Raw<$raw> };
-    (@type_any $vty:ident) => { $vty };
     // A row that is there once is a field of its value, in place, but a grouped IE of `Cb`
     // or `Ob`, large and rare, which is boxed.
     (@field [] Cb ($t:ty)) => { Option<alloc::boxed::Box<$t>> };
