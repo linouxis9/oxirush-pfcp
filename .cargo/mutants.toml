@@ -8,13 +8,45 @@ all_features = true
 
 # Mutants that no test can tell from the code, each with why.
 exclude_re = [
-    # The arm of a place that the paths know nothing of, which takes the plain rule. Without
-    # it, such a place that is there falls to the last arm, the plain rule too; and none that
-    # is absent is ever reached: what the paths step to below what is not there is always a
-    # place that they know (a row, a list, a field, a member of a field, an IE kept as
-    # octets), and a place that they know nothing of (a message of no table, and what it
-    # holds) is always there.
-    'src/tree\.rs:\d+:\d+: delete match arm \(_, Of::Nothing\) in <impl tree::Family for Paths>::step$',
+    # The fields of the first octet of a header, and the priority and the spare bits of its
+    # last, are of disjoint bits once a field wider than its bits is refused, as it is first:
+    # their | and their ^ write alike.
+    'src/header\.rs:\d+:\d+: replace \| with \^ in Header::octets$',
+    # The rows there once whose first IE is kept as octets: one whose first IE is a value
+    # has its next ones repeated by its field already, so that taking it in the list too,
+    # or twice, changes nothing; the condition spares the decode a look at the table for
+    # each IE.
+    'src/table\.rs:\d+:\d+: replace && with \|\| in decode_scope_sized$',
+    # The rules of a value that has none, the default of the trait: its body does nothing
+    # already.
+    'src/check\.rs:\d+:\d+: replace Rules::check with \(\)$',
+    # The deviations of a value itself are given their IE type and Cause when there are
+    # some: with none, the call does nothing but write the path, which the guard spares.
+    'src/check\.rs:\d+:\d+: replace > with >= in check_field$',
+    # The node forgets the request of a dropped Incoming only while it waits for its
+    # answer (Node::forget): once answered, the Forget that the drop sends changes
+    # nothing, which the flag spares.
+    'src/endpoint\.rs:\d+:\d+: replace \|= with &= in Incoming::respond_message$',
+    # The Debug of a command of the task, which the channel requires and prints never:
+    # tokio's channels show none of what they carry.
+    'src/endpoint\.rs:\d+:\d+: replace <impl core::fmt::Debug for Command>::fmt -> core::fmt::Result with Ok\(Default::default\(\)\)$',
+    # oxirush-utils reads a PLMN of its canonical octets alone (a filler of F, digits of
+    # 0 to 9), which it writes back the same: the guard keeps a tree byte for byte, should
+    # it read others.
+    'src/values\.rs:\d+:\d+: replace match guard plmn\.to_nas_octets\(\) == self\.0 with true in <impl Field for PlmnId>::to_tree$',
+    # The Address Type of an address after its type, two bits once checked, and its
+    # length, six bits at most, are of the two parts of their octet, which | and ^ write
+    # alike.
+    'src/values\.rs:\d+:\d+: replace \| with \^ in <impl Field for TypedAddress>::write$',
+    # No octets are no octets of any representation: an empty list of octets on the heap
+    # allocates nothing either, and reads as the same slice.
+    'src/octets\.rs:\d+:\d+: delete match arm 0 in Octets::copied$',
+    # A sequence number reserved, or of a recent request, is given again only once the
+    # 2^24 numbers wrap, as no request has finished at a number above the next before
+    # then: no_sequence_number_left, which reserves them all, runs in release alone (CI's
+    # --ignored step), and the mutants run the tests of a debug build.
+    'src/node/delivery\.rs:\d+:\d+: replace && with \|\| in Node::next_free_sequence$',
+    'src/node/delivery\.rs:\d+:\d+: replace == with != in Node::next_free_sequence$',
     # The spare bits and the value of a Narrow are of disjoint bits of its octet, which
     # their | and their ^ write alike.
     'src/values\.rs:\d+:\d+: replace \| with \^ in <impl Field for Narrow<E>>::write$',
