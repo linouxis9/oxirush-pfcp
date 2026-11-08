@@ -2380,6 +2380,28 @@ fn a_row_goes_by_its_name() {
     assert!(error.contains("are both the row Node ID"), "{error}");
 }
 
+/// A row is written as its table has it: a row of a list as a list, also of one entry, and
+/// the repetitions of a row there once by their octets.
+#[test]
+fn a_row_is_written_as_its_table_has_it() {
+    let request = |ies: tree::Value| tree!({"message": "PFCP Session Establishment Request", "SEID": 0, "Sequence Number": 1, "ies": ies});
+    let far = tree!({"FAR ID": 1, "Apply Action": {"DROP": true}});
+    let error = Message::from_tree(&request(tree!({"Create FAR": far.clone()})))
+        .unwrap_err()
+        .to_string();
+    assert!(error.contains("a list is expected"), "{error}");
+    assert!(Message::from_tree(&request(tree!({"Create FAR": [far]}))).is_ok());
+    let error = Message::from_tree(&request(tree!({"Node ID": ["10.0.0.1", "10.0.0.2"]})))
+        .unwrap_err()
+        .to_string();
+    assert!(
+        error.contains("a repetition is written by its octets"),
+        "{error}"
+    );
+    let repeated = tree!({"Node ID": ["10.0.0.1", {"octets": "000a000002"}]});
+    assert!(Message::from_tree(&request(repeated)).is_ok());
+}
+
 /// A message goes by its name: a message type of Table 7.3-1 written by its number is
 /// refused with the name to write, and the number is for a message type of no table, whose
 /// IEs are octets.
