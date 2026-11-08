@@ -154,7 +154,8 @@ impl core::fmt::Debug for RawIe {
             .field("ie_type", &self.ie_type)
             .field("enterprise_id", &self.enterprise_id)
             .field("length", &self.length);
-        match self.enterprise_id.is_none() && holds_secret(self.ie_type, 0) {
+        // Of a type of 3GPP whatever its Enterprise ID, which a tree may give it.
+        match holds_secret(self.ie_type, 0) {
             true => debug.field("octets", &format_args!("{} octets", self.octets.len())),
             false => debug.field("octets", &self.octets),
         };

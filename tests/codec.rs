@@ -2133,6 +2133,16 @@ fn keys_are_not_printed() {
         !printed.contains("115, 101, 99") && !printed.contains("736563"),
         "{printed}"
     );
+    // An Enterprise ID, which a tree or a builder gives an IE of 3GPP, hides nothing
+    let password = RawIe {
+        enterprise_id: Some(7),
+        ..RawIe::new(313, b"secret".to_vec())
+    };
+    let printed = format!("{password:?}");
+    assert!(
+        printed.contains("6 octets") && !printed.contains("736563"),
+        "{printed}"
+    );
     let mut parameters = ProtocolSpecificConfigurationParameters {
         hmac_key_stamp: Some(HmacKeyStamp(vec![1, 2, 3].into())),
         ..Default::default()
