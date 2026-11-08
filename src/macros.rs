@@ -53,7 +53,7 @@ macro_rules! pfcp_ies {
         /// What the tree of each field of a value of `ie_type` may hold below it, of those
         /// whose tree is no scalar: none for a grouped IE.
         #[cfg(feature = "tree")]
-        pub(crate) fn members_below(ie_type: u16) -> &'static [(&'static str, &'static crate::tree::Below)] {
+        pub(crate) fn members_below(ie_type: u16) -> &'static [(&'static str, &'static crate::paths::Below)] {
             match ie_type {
                 $( $num => pfcp_ies!(@below $form $($($ty),+)?), )*
                 _ => &[],
@@ -153,7 +153,7 @@ macro_rules! pfcp_layout {
             pub(crate) const MEMBERS: &'static [&'static str] = &[$($($head_name,)*)? $($($flag_name,)* pfcp_layout!(@spare $fk), $($field_name,)*)? crate::ie::UNKNOWN_OCTETS];
             /// What the tree of each field may hold below it.
             #[cfg(feature = "tree")]
-            pub(crate) const MEMBERS_BELOW: &'static [(&'static str, &'static crate::tree::Below)] = &[
+            pub(crate) const MEMBERS_BELOW: &'static [(&'static str, &'static crate::paths::Below)] = &[
                 $($( ($head_name, <$hkind as crate::values::Field>::BELOW), )*)?
                 $($( ($field_name, <$kind $(<$param>)? as crate::values::Field>::BELOW), )*)?
             ];
@@ -440,7 +440,7 @@ macro_rules! pfcp_bits {
             pub(crate) const MEMBERS: &'static [&'static str] = &[$($name,)* "Spare", "length", crate::ie::UNKNOWN_OCTETS];
             /// What the tree of each field may hold below it: nothing, of scalars alone.
             #[cfg(feature = "tree")]
-            pub(crate) const MEMBERS_BELOW: &'static [(&'static str, &'static crate::tree::Below)] = &[];
+            pub(crate) const MEMBERS_BELOW: &'static [(&'static str, &'static crate::paths::Below)] = &[];
             /// Its layout.
             #[doc(hidden)]
             #[cfg(feature = "spec")]
@@ -812,7 +812,7 @@ macro_rules! pfcp_messages {
             #[cfg(feature = "tree")]
             pub(crate) fn ies_tree(&self) -> oxirush_utils::tree::Value {
                 match self {
-                    $( Self::$ty(body) => crate::tree::scope_to_tree(&**body), )*
+                    $( Self::$ty(body) => crate::paths::scope_to_tree(&**body), )*
                     Self::Other { octets, .. } => oxirush_utils::tree::alternative("octets", oxirush_utils::tree::octets(octets)),
                 }
             }
@@ -831,7 +831,7 @@ macro_rules! pfcp_messages {
                     Err(code) => code,
                 };
                 Ok(match code {
-                    $( $code => Self::$ty(alloc::boxed::Box::new(crate::tree::scope_from_tree(value, reading)?)), )*
+                    $( $code => Self::$ty(alloc::boxed::Box::new(crate::paths::scope_from_tree(value, reading)?)), )*
                     other => {
                         let (_, octets) = reading.alternative(value, &["octets"])?;
                         let octets = reading.within("octets", octets, |value, reading| reading.octets(value))?;
@@ -1087,11 +1087,11 @@ macro_rules! pfcp_table {
         #[cfg(feature = "tree")]
         // A table without rows leaves its arguments unused.
         #[allow(unused_variables, unused_mut, unused_assignments)]
-        impl crate::tree::TreeScope for $ty {
+        impl crate::paths::TreeScope for $ty {
             fn field_tree(&self, ie_type: u16, nth: usize) -> Option<oxirush_utils::tree::Value> {
                 $(
                     if ie_type == <pfcp_table!(@type $vty $($raw)?) as crate::ie::IeType>::IE_TYPE {
-                        return crate::tree::field_tree::<pfcp_table!(@type $vty $($raw)?), _>(&self.$field, nth);
+                        return crate::paths::field_tree::<pfcp_table!(@type $vty $($raw)?), _>(&self.$field, nth);
                     }
                 )*
                 None
@@ -1105,7 +1105,7 @@ macro_rules! pfcp_table {
             ) -> Result<(), oxirush_utils::tree::Refused> {
                 $(
                     if ie_type == <pfcp_table!(@type $vty $($raw)?) as crate::ie::IeType>::IE_TYPE {
-                        return crate::tree::read_field::<pfcp_table!(@type $vty $($raw)?), _>(&mut self.$field, value, reading);
+                        return crate::paths::read_field::<pfcp_table!(@type $vty $($raw)?), _>(&mut self.$field, value, reading);
                     }
                 )*
                 Ok(())
@@ -1253,14 +1253,14 @@ macro_rules! pfcp_table {
             const NAME: &'static str = <$ty as crate::ie::IeType>::TYPE_NAME;
 
             fn to_tree(&self) -> oxirush_utils::tree::Value {
-                crate::tree::scope_to_tree(self)
+                crate::paths::scope_to_tree(self)
             }
 
             fn from_tree(
                 value: &oxirush_utils::tree::Value,
                 reading: &mut oxirush_utils::tree::Reading,
             ) -> Result<Self, oxirush_utils::tree::Refused> {
-                crate::tree::scope_from_tree(value, reading)
+                crate::paths::scope_from_tree(value, reading)
             }
         }
     };

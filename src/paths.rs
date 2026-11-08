@@ -15,10 +15,13 @@
    limitations under the License.
 */
 
-//! The tree of a message, on the engine of oxirush-utils: a scope is an object whose
-//! members are its IEs by the names of its table, in the order of the table; a row that
-//! is a list is a list, in the order of the wire. An IE that the scope keeps as octets is
-//! `{"octets": ...}` under the name of its row, of its type, or its number.
+//! The paths of the tree of a message, which [`select`] reads and [`set`] edits.
+//!
+//! The tree of a message is on the engine of oxirush-utils ([`tree`](mod@crate::tree)): a
+//! scope is an object whose members are its IEs by the names of its table, in the order of
+//! the table; a row that is a list is a list, in the order of the wire. An IE that the
+//! scope keeps as octets is `{"octets": ...}` under the name of its row, of its type, or
+//! its number.
 //!
 //! A tree is the message in the order of its tables: a message whose IEs came in another
 //! order (§8.1.2 has a receiver take them in any order) has the same tree as one in the
@@ -33,11 +36,8 @@ use oxirush_utils::tree::{
     Absent, Edit, ErrorKind, Map, Members, Next, Place, Reading, Refused, Root, Step,
 };
 
-/// The engine of the trees, oxirush-utils' `tree`, and its macro `tree!`, which writes a
-/// tree as JSON is written.
-pub use oxirush_utils::tree;
-/// A tree.
-pub use oxirush_utils::tree::Value;
+use oxirush_utils::tree;
+use oxirush_utils::tree::Value;
 
 use crate::ie::{Placed, RawIe};
 use crate::message::{MESSAGE_TYPES, MessageTypeInfo};

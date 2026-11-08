@@ -23,8 +23,8 @@
 //!   IE has its type, with the fields of its figure in clause 8.2.
 //! - [`Message::check`] lists how a message breaks TS 29.244 on an interface, with the
 //!   clause and the Cause of the answer.
-//! - With the feature `tree`, a message is a tree that prints as JSON, read and edited by
-//!   path ([`tree`]); with `serde`, it is serialized as its tree.
+//! - With the feature `tree`, a message is a tree that prints as JSON ([`tree`](mod@tree)), read and
+//!   edited by path ([`paths`]); with `serde`, it is serialized as its tree.
 //! - [`framing`] walks the IEs of a message as slices, without decoding them.
 //!
 //! The [README](https://github.com/linouxis9/oxirush-pfcp#readme) has an example of
@@ -52,11 +52,11 @@ mod message;
 #[cfg_attr(docsrs, doc(cfg(feature = "node")))]
 pub mod node;
 mod octets;
-mod registry;
-mod table;
 #[cfg(feature = "tree")]
 #[cfg_attr(docsrs, doc(cfg(feature = "tree")))]
-pub mod tree;
+pub mod paths;
+mod registry;
+mod table;
 mod values;
 mod values_clauses;
 mod values_figures;
@@ -77,6 +77,15 @@ pub use table::{Interfaces, Presence, Repeat, Role, Row, Table};
 pub use values::*;
 pub use values_clauses::*;
 pub use values_figures::*;
+
+/// The trees of oxirush-utils, of the version that this crate is built with: a message
+/// and each IE as JSON whose members keep the order of the specification,
+/// [`tree::Value`], and `tree!`, which writes one in the code as `serde_json::json!` does.
+/// A crate that reads or writes them takes them from here; [`paths`] reads and edits them
+/// by path.
+#[cfg(feature = "tree")]
+#[cfg_attr(docsrs, doc(cfg(feature = "tree")))]
+pub use oxirush_utils::tree;
 
 /// Why a message does not decode or encode.
 #[derive(Debug, Clone, PartialEq, Eq)]

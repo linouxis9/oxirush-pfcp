@@ -21,7 +21,7 @@
 
 use std::net::Ipv4Addr;
 
-use oxirush_pfcp::tree::{select, set};
+use oxirush_pfcp::paths::{select, set};
 use oxirush_pfcp::*;
 use oxirush_utils::tree;
 

@@ -309,7 +309,7 @@ pub struct SsmAddress {
 
 impl Field for SsmAddress {
     #[cfg(feature = "tree")]
-    const BELOW: &'static crate::tree::Below = &crate::tree::Below::Object(
+    const BELOW: &'static crate::paths::Below = &crate::paths::Below::Object(
         None,
         &[
             ("IP Multicast Distribution Address", TypedAddress::BELOW),
@@ -708,9 +708,9 @@ macro_rules! identity_lv8 {
     ($($ty:ident $as_text:ident $from_text:expr),*) => {$(
         impl Field for $ty {
             #[cfg(feature = "tree")]
-            const BELOW: &'static crate::tree::Below = &crate::tree::Below::Object(
+            const BELOW: &'static crate::paths::Below = &crate::paths::Below::Object(
                 None,
-                &[("octets", &crate::tree::Below::Scalar)],
+                &[("octets", &crate::paths::Below::Scalar)],
             );
             fn read(octets: &mut &[u8]) -> Option<Self> {
                 Lv8::read(octets).map(|value| Self(value.0))
@@ -803,7 +803,7 @@ macro_rules! pfcp_secret {
             pub(crate) const MEMBERS: &'static [&'static str] = &[];
             /// What the tree of each field may hold below it: nothing, of scalars alone.
             #[cfg(feature = "tree")]
-            pub(crate) const MEMBERS_BELOW: &'static [(&'static str, &'static crate::tree::Below)] = &[];
+            pub(crate) const MEMBERS_BELOW: &'static [(&'static str, &'static crate::paths::Below)] = &[];
             /// Its layout.
             #[doc(hidden)]
             #[cfg(feature = "spec")]
@@ -954,10 +954,10 @@ impl FqCsid {
     ];
     /// What the tree of each field may hold below it.
     #[cfg(feature = "tree")]
-    pub(crate) const MEMBERS_BELOW: &'static [(&'static str, &'static crate::tree::Below)] = &[
+    pub(crate) const MEMBERS_BELOW: &'static [(&'static str, &'static crate::paths::Below)] = &[
         (
             "PDN Connection Set Identifiers",
-            &crate::tree::Below::List(&crate::tree::Below::Scalar),
+            &crate::paths::Below::List(&crate::paths::Below::Scalar),
         ),
         ("Node Type", <Narrow<NodeType> as Field>::BELOW),
     ];
@@ -1185,7 +1185,7 @@ macro_rules! mac_addresses {
             pub(crate) const MEMBERS: &'static [&'static str] = &["MAC address values", "C-TAG", "S-TAG", crate::ie::UNKNOWN_OCTETS];
             /// What the tree of each field may hold below it.
             #[cfg(feature = "tree")]
-            pub(crate) const MEMBERS_BELOW: &'static [(&'static str, &'static crate::tree::Below)] = &[("MAC address values", &crate::tree::Below::List(&crate::tree::Below::Scalar))];
+            pub(crate) const MEMBERS_BELOW: &'static [(&'static str, &'static crate::paths::Below)] = &[("MAC address values", &crate::paths::Below::List(&crate::paths::Below::Scalar))];
             /// Read by hand: a list after its number, then fields after their lengths.
             #[doc(hidden)]
             #[cfg(feature = "spec")]

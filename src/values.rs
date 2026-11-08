@@ -70,7 +70,7 @@ pub(crate) trait Field: Sized {
     /// lacks it, and in either form of a tree of two: nothing for a field whose tree is a
     /// scalar.
     #[cfg(feature = "tree")]
-    const BELOW: &'static crate::tree::Below = &crate::tree::Below::Scalar;
+    const BELOW: &'static crate::paths::Below = &crate::paths::Below::Scalar;
 }
 
 /// How a value is laid out, as the crate reads it: what the test `spec` compares with the
@@ -264,11 +264,11 @@ impl<E: Narrowable> Field for Narrow<E> {
     #[cfg(feature = "spec")]
     const OCTETS: Option<usize> = Some(1);
     #[cfg(feature = "tree")]
-    const BELOW: &'static crate::tree::Below = &crate::tree::Below::Object(
+    const BELOW: &'static crate::paths::Below = &crate::paths::Below::Object(
         Some("value"),
         &[
-            ("value", &crate::tree::Below::Scalar),
-            ("Spare", &crate::tree::Below::Scalar),
+            ("value", &crate::paths::Below::Scalar),
+            ("Spare", &crate::paths::Below::Scalar),
         ],
     );
     #[cfg(feature = "spec")]
@@ -631,7 +631,7 @@ pub struct Counted<T>(pub Vec<T>);
 
 impl<T: Field> Field for Counted<T> {
     #[cfg(feature = "tree")]
-    const BELOW: &'static crate::tree::Below = &crate::tree::Below::List(T::BELOW);
+    const BELOW: &'static crate::paths::Below = &crate::paths::Below::List(T::BELOW);
     fn read(octets: &mut &[u8]) -> Option<Self> {
         let count = u8::read(octets)?;
         let mut values = Vec::with_capacity(usize::from(count).min(octets.len()));
@@ -691,7 +691,7 @@ impl<T: Field> Field for Each<T> {
     #[cfg(feature = "spec")]
     const CELLS: &'static [NarrowCell] = T::CELLS;
     #[cfg(feature = "tree")]
-    const BELOW: &'static crate::tree::Below = &crate::tree::Below::List(T::BELOW);
+    const BELOW: &'static crate::paths::Below = &crate::paths::Below::List(T::BELOW);
     fn read(octets: &mut &[u8]) -> Option<Self> {
         let mut values = Vec::new();
         while !octets.is_empty() {
@@ -861,11 +861,11 @@ impl From<core::net::IpAddr> for TypedAddress {
 
 impl Field for TypedAddress {
     #[cfg(feature = "tree")]
-    const BELOW: &'static crate::tree::Below = &crate::tree::Below::Object(
+    const BELOW: &'static crate::paths::Below = &crate::paths::Below::Object(
         Some("Address"),
         &[
-            ("Address Type", &crate::tree::Below::Scalar),
-            ("Address", &crate::tree::Below::Scalar),
+            ("Address Type", &crate::paths::Below::Scalar),
+            ("Address", &crate::paths::Below::Scalar),
         ],
     );
     #[cfg(feature = "spec")]
@@ -1078,7 +1078,7 @@ macro_rules! pfcp_number {
             pub(crate) const MEMBERS: &'static [&'static str] = &[$field, crate::ie::UNKNOWN_OCTETS];
             /// What the tree of each field may hold below it: nothing, of scalars alone.
             #[cfg(feature = "tree")]
-            pub(crate) const MEMBERS_BELOW: &'static [(&'static str, &'static crate::tree::Below)] = &[];
+            pub(crate) const MEMBERS_BELOW: &'static [(&'static str, &'static crate::paths::Below)] = &[];
             /// Its layout.
             #[doc(hidden)]
             #[cfg(feature = "spec")]
@@ -1459,8 +1459,8 @@ impl Fqdn {
 
 impl Field for Fqdn {
     #[cfg(feature = "tree")]
-    const BELOW: &'static crate::tree::Below =
-        &crate::tree::Below::Object(None, &[("octets", &crate::tree::Below::Scalar)]);
+    const BELOW: &'static crate::paths::Below =
+        &crate::paths::Below::Object(None, &[("octets", &crate::paths::Below::Scalar)]);
     fn read(octets: &mut &[u8]) -> Option<Self> {
         Some(Self(Octets::copied(core::mem::take(octets))))
     }
@@ -1512,7 +1512,7 @@ impl NodeId {
     pub(crate) const MEMBERS: &'static [&'static str] = &["FQDN", "octets"];
     /// What the tree of each field may hold below it: nothing, of scalars alone.
     #[cfg(feature = "tree")]
-    pub(crate) const MEMBERS_BELOW: &'static [(&'static str, &'static crate::tree::Below)] = &[];
+    pub(crate) const MEMBERS_BELOW: &'static [(&'static str, &'static crate::paths::Below)] = &[];
     /// Read by hand: its layout depends on its type.
     #[doc(hidden)]
     #[cfg(feature = "spec")]
@@ -1668,7 +1668,7 @@ impl NetworkInstance {
     pub(crate) const MEMBERS: &'static [&'static str] = &[];
     /// What the tree of each field may hold below it: nothing, of scalars alone.
     #[cfg(feature = "tree")]
-    pub(crate) const MEMBERS_BELOW: &'static [(&'static str, &'static crate::tree::Below)] = &[];
+    pub(crate) const MEMBERS_BELOW: &'static [(&'static str, &'static crate::paths::Below)] = &[];
     /// Its layout.
     #[doc(hidden)]
     #[cfg(feature = "spec")]
@@ -1945,7 +1945,7 @@ macro_rules! pfcp_octets {
             pub(crate) const MEMBERS: &'static [&'static str] = &[];
             /// What the tree of each field may hold below it: nothing, of scalars alone.
             #[cfg(feature = "tree")]
-            pub(crate) const MEMBERS_BELOW: &'static [(&'static str, &'static crate::tree::Below)] = &[];
+            pub(crate) const MEMBERS_BELOW: &'static [(&'static str, &'static crate::paths::Below)] = &[];
             /// Its layout.
             #[doc(hidden)]
             #[cfg(feature = "spec")]

@@ -270,7 +270,7 @@ fn block_5() {
 #[rustfmt::skip]
 fn block_6() {
     use oxirush_pfcp::Message;
-    use oxirush_pfcp::tree::tree;
+    use oxirush_pfcp::tree;
 
     fn main() -> Result<(), Box<dyn std::error::Error>> {
         let octets = hex::decode("2133002b000000000000100100000700003c0005000a00000200130001010039000d0200000000000020010a000002")?;
@@ -299,8 +299,8 @@ fn block_7() {
     fn main() -> Result<(), Box<dyn std::error::Error>> {
         let octets = hex::decode("2133002b000000000000100100000700003c0005000a00000200130001010039000d0200000000000020010a000002")?;
         let mut tree = Message::decode(&octets)?.to_tree();
-        println!("{:?}", tree::select(&tree, "/pfcp/up f-seid/ipv4 address")?);
-        tree::set(&mut tree, "/pfcp/Cause", "No resources available")?;
+        println!("{:?}", paths::select(&tree, "/pfcp/up f-seid/ipv4 address")?);
+        paths::set(&mut tree, "/pfcp/Cause", "No resources available")?;
         let edited = Message::from_tree(&tree)?;
         println!("{}", hex::encode(edited.encode()?));
         Ok(())
