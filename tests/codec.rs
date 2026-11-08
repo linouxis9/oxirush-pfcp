@@ -2117,6 +2117,44 @@ fn a_message_too_long_for_its_length() {
     );
 }
 
+/// A value of octets of bits that has fewer octets than its release, its `length`, writes
+/// those alone: a field, a spare bit or unknown octets past them, which the length would
+/// not write, are refused by its tree and by `encode()`, and told by `check()`.
+#[test]
+fn the_length_of_a_value_of_bits_is_what_it_writes() {
+    let features = |tree| tree::from_value::<UpFunctionFeatures>(&tree);
+    let short = features(tree!({"FTUP": true, "length": 1})).unwrap();
+    let mut octets = Vec::new();
+    short.encode(&mut octets).unwrap();
+    assert_eq!(octets, [0x10]);
+    assert_eq!(
+        tree::Tree::to_tree(&short),
+        tree!({"FTUP": true, "length": 1})
+    );
+    for past in [
+        tree!({"FTUP": true, "EMPU": true, "length": 1}),
+        tree!({"Spare": "000000000000000000000001", "length": 11}),
+        tree!({"FTUP": true, "length": 1, "unknown octets": "00"}),
+    ] {
+        assert!(features(past.clone()).is_err(), "{past}");
+    }
+    let past = UpFunctionFeatures {
+        empu: true,
+        present: 1,
+        ..Default::default()
+    };
+    assert_eq!(
+        past.encode(&mut Vec::new()),
+        Err(Error::Inconsistent {
+            ie: "UP Function Features",
+            field: "length",
+            clause: "8.2.25"
+        })
+    );
+    let found: Vec<_> = past.deviations().into_iter().map(|d| d.kind).collect();
+    assert_eq!(found, [DeviationKind::Inconsistent { field: "length" }]);
+}
+
 /// The octets after the fields of an IE, of a later release, are "the unknown octets" of
 /// §8.1.2 in a tree. A value of one field, without flags, is that field alone without
 /// them: a number, and the octets after their length of a Forwarding Policy.

@@ -489,16 +489,15 @@ macro_rules! pfcp_bits {
                     *octet = spare & !mask;
                 }
                 $( pfcp_bits!(@store octets, $width [$($kind)? $(+ $octet2 $low2 $width2)?] self.$field, $octet, $low); )*
-                let mut used = usize::from(self.present).clamp($min, $n);
-                if !self.extra.is_empty() {
-                    used = $n;
-                }
-                for (at, octet) in octets.iter().enumerate().skip(used) {
-                    if *octet != 0 {
-                        used = at + 1;
-                    }
-                }
-                (octets, used)
+                (octets, usize::from(self.present).clamp($min, $n))
+            }
+
+            /// Whether a field, a spare bit or unknown octets are past the octets that the
+            /// value has, which its length would not write: unknown octets follow all the
+            /// octets of the fields.
+            fn past_length(&self) -> bool {
+                let (octets, used) = self.octets();
+                octets[used..].iter().any(|octet| *octet != 0) || used < $n && !self.extra.is_empty()
             }
         }
 
@@ -522,8 +521,12 @@ macro_rules! pfcp_bits {
             }
 
             fn encode(&self, out: &mut alloc::vec::Vec<u8>) -> Result<(), crate::Error> {
+                let ie = <Self as crate::ie::IeType>::TYPE_NAME;
                 if let Some(field) = self.wide() {
-                    return Err(crate::Error::FieldLength { ie: <Self as crate::ie::IeType>::TYPE_NAME, field });
+                    return Err(crate::Error::FieldLength { ie, field });
+                }
+                if self.past_length() {
+                    return Err(crate::Error::Inconsistent { ie, field: "length", clause: $clause });
                 }
                 let (octets, used) = self.octets();
                 out.extend_from_slice(&octets[..used]);
@@ -553,6 +556,9 @@ macro_rules! pfcp_bits {
             fn check(&self, path: &crate::check::Path, found: &mut alloc::vec::Vec<crate::check::Deviation>) {
                 if self.wide().is_some() {
                     found.push(crate::check::Deviation::new(path, $clause, crate::check::DeviationKind::Rule("a value wider than its bits")));
+                }
+                if self.past_length() {
+                    found.push(crate::check::Deviation::new(path, $clause, crate::check::DeviationKind::Inconsistent { field: "length" }));
                 }
                 if self.spare.iter().any(|spare| *spare != 0) {
                     found.push(crate::check::Deviation::new(path, "8.1.2", crate::check::DeviationKind::SpareBits));
@@ -620,6 +626,12 @@ macro_rules! pfcp_bits {
                     .unwrap_or_default();
                 if bits.spare.iter().zip(Self::MASKS).any(|(spare, mask)| spare & mask != 0) {
                     return Err(reading.refuse(oxirush_utils::tree::ErrorKind::Value, "Spare has a bit that a field has"));
+                }
+                if bits.past_length() {
+                    return Err(reading.refuse(
+                        oxirush_utils::tree::ErrorKind::Value,
+                        alloc::format!("a field or a spare bit is set past the length, or unknown octets follow a length short of the fields ({})", $clause),
+                    ));
                 }
                 Ok(bits)
             }
