@@ -5297,6 +5297,42 @@ fn a_probe_answer_of_another_type_leaves_the_next_one_its_effect() {
     assert_eq!(received.seid, Some(up_seid));
 }
 
+/// §6.4, §7.6.5: the peer takes a response by its sequence number, and discards one of
+/// another. A probe that answers a setup with an acceptance of the next sequence number,
+/// then with a rejection of the request's, leaves both sides without the association: the
+/// first answer that the peer takes is the one that changes the node.
+#[test]
+fn a_probe_answer_of_another_sequence_number_changes_nothing() {
+    let mut smf = node(SMF, Function::Cp);
+    let mut upf = node(UPF, Function::Up);
+    let setup = AssociationSetupRequest::new(node_id(SMF), RecoveryTimeStamp::new(1000));
+    smf.request(at(0), UPF, Message::node(0, setup)).unwrap();
+    pass(&mut smf, &mut upf, UPF, at(0));
+    let (received, _) = request(&mut upf);
+    let answer = |sequence: u32, cause: CauseValue| {
+        Message::node(
+            sequence,
+            AssociationSetupResponse::new(
+                node_id(UPF),
+                Cause::new(cause),
+                RecoveryTimeStamp::new(2000),
+            ),
+        )
+    };
+    let wrong = answer(received.sequence + 1, CauseValue::RequestAccepted);
+    upf.respond_message(at(0), &received, wrong, Delivery::Send)
+        .unwrap();
+    assert!(upf.association(SMF).is_none());
+    pass(&mut upf, &mut smf, SMF, at(0));
+    assert_eq!(violations(&mut smf), [ViolationKind::UnknownSequence]);
+    let right = answer(received.sequence, CauseValue::RequestRejected);
+    upf.respond_message(at(0), &received, right, Delivery::Send)
+        .unwrap();
+    pass(&mut upf, &mut smf, SMF, at(0));
+    assert!(smf.association(UPF).is_none());
+    assert!(upf.association(SMF).is_none());
+}
+
 /// A UPF's report of SEID 0 that hands over the session of the Old CP F-SEID 0x1234 of
 /// 10.0.0.9 (§5.22.2, §5.22.3 bullet 6).
 fn handover_report() -> Message {
