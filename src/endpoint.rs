@@ -777,6 +777,17 @@ mod tests {
     use super::*;
     use crate::{HeartbeatRequest, RecoveryTimeStamp};
 
+    /// The task's timer sleeps until its instant, and for ever without one: one that
+    /// ended at once would make the task's loop spin.
+    #[tokio::test]
+    async fn the_timer_sleeps_until_its_instant() {
+        let start = Instant::now();
+        sleep_until(Some(start + Duration::from_millis(20))).await;
+        assert!(start.elapsed() >= Duration::from_millis(20));
+        let never = tokio::time::timeout(Duration::from_millis(20), sleep_until(None)).await;
+        assert!(never.is_err());
+    }
+
     /// What a request takes in the incoming queue: its box, the entries of its lists, the
     /// boxes of its grouped IEs and its kept IEs, and nothing of the values that it holds
     /// in place or of their octets.

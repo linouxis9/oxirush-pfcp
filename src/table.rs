@@ -648,6 +648,25 @@ pub(crate) fn encode_scope<S: Scope>(scope: &S, out: &mut Vec<u8>) -> Result<(),
 mod tests {
     use super::*;
 
+    /// A message read in another order than its table's keeps that order, and one of an IE
+    /// of a row kept as octets has it after the values of its row: each is written once.
+    #[test]
+    fn a_message_in_the_order_of_the_wire_or_of_its_rows_is_written_once() {
+        use crate::{HeartbeatRequest, Message, RawIe, RecoveryTimeStamp};
+        let header = [0x20, 1, 0, 21, 0, 0, 5, 0];
+        let stamp = [0, 96, 0, 4, 0, 0, 0, 7];
+        let source = [0, 192, 0, 5, 2, 10, 0, 0, 1];
+        let of_rows = [&header[..], &stamp, &source].concat();
+        let wire = [&header[..], &source, &stamp].concat();
+        let mut kept = HeartbeatRequest::new(RecoveryTimeStamp::new(7));
+        kept.raw.push(RawIe::new(192, alloc::vec![2, 10, 0, 0, 1]));
+        let read = Message::decode(&wire).unwrap();
+        let written = crate::ends(move || {
+            [Message::node(5, kept), read].map(|message| message.encode().unwrap())
+        });
+        assert_eq!(written, [of_rows, wire]);
+    }
+
     /// A field that rows share is, on an interface, of the weakest presence of its rows
     /// there, needs an IE for each of its mandatory rows there, and takes as many as they
     /// allow; on a set of interfaces, it is of the weakest presence on each, of none where

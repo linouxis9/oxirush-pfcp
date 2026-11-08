@@ -35,7 +35,7 @@
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
 extern crate alloc;
-#[cfg(feature = "endpoint")]
+#[cfg(any(test, feature = "endpoint"))]
 extern crate std;
 
 mod check;
@@ -241,4 +241,17 @@ pub(crate) fn tree_name(ie_type: u16, table: Option<&Table>) -> String {
             _ => known.to_string(),
         },
     }
+}
+
+/// What `f` gives, of a thread that has 10 s to end: a loop of the crate that does not end
+/// fails the test that runs it, rather than holding the tests.
+#[cfg(test)]
+pub(crate) fn ends<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static) -> T {
+    let (given, taken) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let _ = given.send(f());
+    });
+    taken
+        .recv_timeout(core::time::Duration::from_secs(10))
+        .expect("an end within 10 s")
 }

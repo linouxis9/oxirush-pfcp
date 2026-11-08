@@ -452,3 +452,26 @@ pub(super) fn reports_follow(body: &Body, pending: bool) -> bool {
         .is_some_and(|flags| flags.puru);
     more || pending && puru
 }
+
+#[cfg(test)]
+mod tests {
+    use core::net::Ipv4Addr;
+
+    use super::*;
+
+    /// The SEIDs that a node gives its sessions run on past the last number, and are not 0,
+    /// which is of no session, nor one that a session has.
+    #[test]
+    fn a_new_session_has_neither_seid_0_nor_one_in_use() {
+        let seids = crate::ends(|| {
+            let smf = NodeId::Ipv4(Ipv4Addr::new(10, 0, 0, 1));
+            let mut node = Node::new(NodeConfig::new(smf, Function::Cp, 1));
+            node.next_seid = u64::MAX;
+            let last = node.new_session();
+            let upf = SocketAddr::from(([10, 0, 0, 2], 8805));
+            node.adopt_session(2, upf, 9).unwrap();
+            [last, node.new_session(), node.new_session()]
+        });
+        assert_eq!(seids, [u64::MAX, 1, 3]);
+    }
+}
