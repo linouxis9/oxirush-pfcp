@@ -1243,10 +1243,29 @@ impl FTeid {
         }
     }
 
+    /// An F-TEID of an IPv6 address.
+    pub fn ipv6(teid: u32, address: Ipv6Addr) -> Self {
+        Self {
+            v6: true,
+            teid: Some(teid),
+            ipv6: Some(address),
+            ..Self::default()
+        }
+    }
+
     /// A request that the UP function choose an F-TEID with an IPv4 address.
     pub fn choose_ipv4() -> Self {
         Self {
             v4: true,
+            ch: true,
+            ..Self::default()
+        }
+    }
+
+    /// A request that the UP function choose an F-TEID with an IPv6 address.
+    pub fn choose_ipv6() -> Self {
+        Self {
+            v6: true,
             ch: true,
             ..Self::default()
         }

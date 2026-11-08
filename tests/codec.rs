@@ -696,8 +696,13 @@ fn an_error_of_from_tree_is_at_a_path_that_select_takes() {
     for (tree, at, why) in [
         (
             heartbeat(tree!({"Recovery Time Stamp": 7, "Cause": 1, "Load Metric": 2})),
-            "/pfcp",
+            "/pfcp/Cause",
             "\"Cause\" is an IE of no row of PFCP Heartbeat Request, which is written by its octets",
+        ),
+        (
+            heartbeat(tree!({"Recovery Time Stamp": 7, "77": 5})),
+            "/pfcp/77",
+            "\"77\" is an IE of no row of PFCP Heartbeat Request, which is written by its octets",
         ),
         (
             heartbeat(tree!({"Recovery Time Stamp": 7, "19": {"octets": "zz"}})),
@@ -742,7 +747,8 @@ fn an_error_of_from_tree_is_at_a_path_that_select_takes() {
 }
 
 /// An F-SEID of an IPv4 address and one of an IPv6 address, as their constructors build
-/// them: the flag of the family, the SEID, then the address (§8.2.37).
+/// them: the flag of the family, the SEID, then the address (§8.2.37); an F-TEID of each
+/// family likewise.
 #[test]
 fn an_f_seid_of_each_family() {
     let encoded = |f_seid: FSeid| {
@@ -757,6 +763,17 @@ fn an_f_seid_of_each_family() {
         encoded(v6),
         "01000000000000000720010db8000000000000000000000001"
     );
+    // And an F-TEID, with a TEID or chosen by the UP function (§8.2.3)
+    let encoded = |f_teid: FTeid| {
+        let mut out = Vec::new();
+        f_teid.encode(&mut out).unwrap();
+        hex::encode(out)
+    };
+    let address = "2001:db8::1".parse().unwrap();
+    let v6 = encoded(FTeid::ipv6(7, address));
+    assert_eq!(v6, "020000000720010db8000000000000000000000001");
+    assert_eq!(encoded(FTeid::choose_ipv6()), "06");
+    assert_eq!(encoded(FTeid::choose_ipv4()), "05");
 }
 
 #[test]

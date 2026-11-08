@@ -263,15 +263,15 @@ pub(crate) fn scope_from_tree<S: Scope + TreeScope>(
             Value::Array(entries) => entries.iter().all(is_octets),
             held => is_octets(held),
         };
-        if row.is_none() && !octets {
-            let why = alloc::format!(
-                "{written:?} is an IE of no row of {}, which is written by its octets: {{\"octets\": ...}}",
-                table.name
-            );
-            return Err(reading.refuse(ErrorKind::Value, why));
-        }
         let label = row.map_or_else(|| label_of(ie_type), |row| row.name);
         let read = reading.within(label, held, |held, reading| {
+            if row.is_none() && !octets {
+                let why = alloc::format!(
+                    "{written:?} is an IE of no row of {}, which is written by its octets: {{\"octets\": ...}}",
+                    table.name
+                );
+                return Err(reading.refuse(ErrorKind::Value, why));
+            }
             read_ies(&mut scope, row, ie_type, held, reading)
         })?;
         let position = at.unwrap_or(usize::MAX);
