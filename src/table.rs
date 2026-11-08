@@ -69,9 +69,9 @@ impl Interfaces {
     pub const N4MB: Self = Self(16);
     /// The combined Sxa/Sxb of a combined SGW/PGW (§5.2.6): a message may have the IEs
     /// of either, and needs those that both need.
-    pub const SXA_SXB: Self = Self(3);
+    pub const SXA_SXB: Self = Self(Self::SXA.0 | Self::SXB.0);
     /// Every interface: a message may have the IEs of any, and needs those that all need.
-    pub const ALL: Self = Self(31);
+    pub const ALL: Self = Self(Self::SXA.0 | Self::SXB.0 | Self::SXC.0 | Self::N4.0 | Self::N4MB.0);
 
     /// The set of `bits`, those of the constants: `None` for none, and for a bit of no
     /// interface.
