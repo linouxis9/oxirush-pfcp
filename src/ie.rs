@@ -43,14 +43,6 @@ pub trait Codec: Sized {
     /// them as they are.
     fn decode(octets: &[u8]) -> Option<Self>;
 
-    /// Decode into the field of a row that is there once: `false`, and the field left
-    /// empty, for octets that are no value. A grouped IE decodes in its place.
-    #[inline]
-    fn decode_into(slot: &mut Option<Self>, octets: &[u8]) -> bool {
-        *slot = Self::decode(octets);
-        slot.is_some()
-    }
-
     /// Write the value.
     ///
     /// # Errors
@@ -64,7 +56,15 @@ pub trait Codec: Sized {
 
 /// The value of a row of a table, as the scope holds and checks it: what a grouped IE
 /// does as such, and a value that is not one by default.
-pub(crate) trait Listed: Codec + crate::check::Check {
+pub(crate) trait Listed: Codec + crate::check::Rules {
+    /// Decode into the field of a row that is there once: `false`, and the field left
+    /// empty, for octets that are no value. A grouped IE decodes in its place.
+    #[inline]
+    fn decode_into(slot: &mut Option<Self>, octets: &[u8]) -> bool {
+        *slot = Self::decode(octets);
+        slot.is_some()
+    }
+
     /// Decode at the end of the field of a row that is a list.
     fn decode_push(list: &mut Vec<Self>, octets: &[u8]) -> bool;
 

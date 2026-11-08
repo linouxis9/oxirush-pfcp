@@ -64,7 +64,7 @@ mod values_figures;
 use alloc::string::{String, ToString};
 use core::fmt;
 
-pub use check::{Check, Deviation, DeviationKind, Path};
+pub use check::{Check, Deviation, DeviationKind};
 pub use enums::*;
 pub use header::Header;
 pub use ie::{Codec, IeFault, IeType, Placed, RawIe, VENDOR};
@@ -223,7 +223,7 @@ pub(crate) fn tree_name(ie_type: u16, table: Option<&Table>) -> String {
     };
     match ie_type {
         VENDOR.. => ie_type.to_string(),
-        known => match type_name(known) {
+        known => match ie_type_info(known).map(|info| info.name) {
             Some(name)
                 if !table.is_some_and(|table| {
                     table

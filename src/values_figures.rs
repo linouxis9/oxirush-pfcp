@@ -22,7 +22,7 @@ use alloc::vec::Vec;
 use core::net::{Ipv4Addr, Ipv6Addr};
 
 use crate::Error;
-use crate::check::Check;
+use crate::check::Rules;
 use crate::enums::*;
 use crate::ie::{Codec, listed_value};
 use crate::macros::{pfcp_bits, pfcp_layout};

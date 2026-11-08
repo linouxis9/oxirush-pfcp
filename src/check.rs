@@ -26,7 +26,7 @@ use core::fmt;
 
 use crate::enums::CauseValue;
 use crate::ie::VENDOR;
-use crate::registry::type_name;
+use crate::registry::ie_type_info;
 use crate::table::{Interfaces, Presence, Repeat, Row, Scope};
 
 /// One deviation: where, which clause, what, and the Cause of the answer.
@@ -214,7 +214,8 @@ impl Deviation {
 
 impl fmt::Display for Deviation {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let name = |ie_type: u16| type_name(ie_type).unwrap_or("an IE of no release");
+        let name =
+            |ie_type: u16| ie_type_info(ie_type).map_or("an IE of no release", |info| info.name);
         match &self.kind {
             DeviationKind::MandatoryMissing { ie_type } => {
                 write!(f, "the mandatory {} is missing", name(*ie_type))
@@ -303,15 +304,29 @@ impl fmt::Display for Deviation {
     }
 }
 
-/// What a value checks of itself: its flags, its fields and its values. A grouped IE
-/// checks its table, on its own on the interfaces of the table: the IEs that each of
-/// them needs are mandatory.
-pub trait Check {
+/// What a value checks of itself, at its place in a message: what [`Check`] gives. The
+/// module is private, and a caller does not name it.
+pub trait Rules {
     /// Add what is wrong with the value to `found`, at `path`.
     fn check(&self, path: &Path<'_>, found: &mut Vec<Deviation>) {
         let _ = (path, found);
     }
 }
+
+/// What a value checks of itself: its flags, its fields and its values. A grouped IE
+/// checks its table, on its own on the interfaces of the table: the IEs that each of
+/// them needs are mandatory.
+pub trait Check: Rules {
+    /// How the value breaks its clause: each deviation at its path below the value, `""`
+    /// for the value itself.
+    fn deviations(&self) -> Vec<Deviation> {
+        let mut found = Vec::new();
+        self.check(&Path::Root(""), &mut found);
+        found
+    }
+}
+
+impl<T: Rules> Check for T {}
 
 /// Where a check is: the interface, and how the receiver takes the mandatory IEs of the
 /// scope (§7.2.3.2: those of a conditional grouped IE as conditional, those of an
@@ -750,7 +765,7 @@ fn raw_deviations<S: Scope>(
                     ("8.1.1", DeviationKind::VendorId)
                 }
                 VENDOR.. => continue,
-                known if type_name(known).is_some() => {
+                known if ie_type_info(known).is_some() => {
                     ("7.6.9", DeviationKind::Unexpected { ie_type: known })
                 }
                 unknown => ("8.1.2", DeviationKind::UnknownType { ie_type: unknown }),

@@ -103,8 +103,7 @@ fn check_on_takes_the_rows_of_the_interface() {
 /// each of them needs are missing from an empty one.
 #[test]
 fn a_grouped_ie_on_its_own_needs_what_its_interfaces_need() {
-    let mut found = Vec::new();
-    Check::check(&CreateMar::default(), &Path::Root("/mar"), &mut found);
+    let found = CreateMar::default().deviations();
     let missing: Vec<DeviationKind> = found.into_iter().map(|deviation| deviation.kind).collect();
     assert_eq!(
         missing,
@@ -400,7 +399,7 @@ fn a_message_type_of_the_interface() {
         header: Header::node(3),
         body: Body::Other {
             message_type: 99,
-            octets: Octets::new(),
+            octets: Octets::default(),
         },
     };
     assert_eq!(
@@ -824,7 +823,7 @@ fn a_reserved_node_id_type_of_an_fq_csid_is_incorrect() {
             node_address: [10, 0, 0, 1].into(),
             csids: vec![1],
             node_type: None,
-            extra: Octets::new(),
+            extra: Octets::default(),
         })
     });
     let found = message.check(Interfaces::N4);
@@ -885,7 +884,7 @@ fn the_fqdn_of_an_smf_set_id_is_labels() {
         (Fqdn::new("smf.set").unwrap(), false),
         (Fqdn(b"smf.set".to_vec().into()), true),
         (Fqdn(b"\x09set".to_vec().into()), true),
-        (Fqdn(Octets::new()), true),
+        (Fqdn(Octets::default()), true),
         (Fqdn(labels(61).into()), false),
         (Fqdn(labels(62).into()), true),
     ] {
@@ -1257,9 +1256,8 @@ fn the_conditions_that_a_message_shows() {
 /// leading slash: its conditional IEs `missing` where it shows their condition, and its
 /// IEs there where it has them `excluded`.
 fn paths(value: &impl Check, of: fn(&DeviationKind) -> bool) -> Vec<String> {
-    let mut found = Vec::new();
-    Check::check(value, &Path::Root(""), &mut found);
-    found
+    value
+        .deviations()
         .into_iter()
         .filter(|deviation| of(&deviation.kind))
         .map(|deviation| deviation.path.trim_start_matches('/').to_string())
@@ -1801,7 +1799,7 @@ fn eps_cups_on_its_interfaces() {
         Multiplier {
             value_digits: 1,
             exponent: 0,
-            extra: Octets::new(),
+            extra: Octets::default(),
         },
     );
     let urr = CreateUrr::new(
@@ -1899,7 +1897,7 @@ fn messages_of_each_interface() {
         node_address: node_id_type_address.into(),
         csids: vec![csid],
         node_type: None,
-        extra: Octets::new(),
+        extra: Octets::default(),
     };
     let seid = FSeid {
         v4: true,
@@ -2312,9 +2310,8 @@ fn value_found<T: Codec + Check>(octets: &str) -> Vec<(&'static str, DeviationKi
     let mut again = Vec::new();
     value.encode(&mut again).unwrap();
     assert_eq!(again, octets);
-    let mut found = Vec::new();
-    value.check(&Path::Root("/value"), &mut found);
-    found
+    value
+        .deviations()
         .into_iter()
         .map(|deviation| (deviation.clause, deviation.kind))
         .collect()

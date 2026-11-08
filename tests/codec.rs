@@ -2319,7 +2319,7 @@ fn values_as_their_clauses_have_them() {
     let multiplier = Multiplier {
         value_digits: 5,
         exponent: -2,
-        extra: Octets::new(),
+        extra: Octets::default(),
     };
     let tree = tree::Tree::to_tree(&multiplier);
     assert_eq!(tree["Exponent"], tree!(-2), "{tree}");
@@ -2391,8 +2391,7 @@ trait CheckKinds {
 
 impl<T: Check> CheckKinds for T {
     fn check_kinds(&self) -> Vec<DeviationKind> {
-        let mut found = Vec::new();
-        self.check(&Path::Root("/value"), &mut found);
+        let found = self.deviations();
         found.into_iter().map(|deviation| deviation.kind).collect()
     }
 }

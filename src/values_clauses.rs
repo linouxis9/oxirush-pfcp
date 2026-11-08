@@ -23,7 +23,7 @@ use core::fmt;
 use core::net::{Ipv4Addr, Ipv6Addr};
 
 use crate::Error;
-use crate::check::{Check, Deviation};
+use crate::check::{Deviation, Rules};
 use crate::enums::*;
 use crate::ie::{Codec, listed_value};
 use crate::macros::{pfcp_bits, pfcp_layout};
@@ -789,7 +789,7 @@ macro_rules! pfcp_secret {
             }
         }
 
-        impl Check for $ty {}
+        impl Rules for $ty {}
 
         #[cfg(feature = "serde")]
         oxirush_utils::impl_serde!($ty);
@@ -1009,7 +1009,7 @@ impl Codec for FqCsid {
     }
 }
 
-impl Check for FqCsid {
+impl Rules for FqCsid {
     fn check(&self, path: &crate::check::Path, found: &mut Vec<Deviation>) {
         // "Other values of Node-Address Type are reserved": an incorrect value (§7.6.8).
         if Self::address_length(self.node_id_type).is_none() {
@@ -1192,7 +1192,7 @@ macro_rules! mac_addresses {
             }
         }
 
-        impl Check for $ty {
+        impl Rules for $ty {
             fn check(&self, path: &crate::check::Path, found: &mut Vec<Deviation>) {
                 check_tags(self.c_tag.as_ref(), self.s_tag.as_ref(), path, $clause, found);
             }

@@ -247,7 +247,7 @@ macro_rules! pfcp_layout {
             }
         }
 
-        impl crate::check::Check for $ty {
+        impl crate::check::Rules for $ty {
             fn check(&self, path: &crate::check::Path, found: &mut alloc::vec::Vec<crate::check::Deviation>) {
                 if let Some(field) = self.inconsistent() {
                     found.push(crate::check::Deviation::new(path, $clause, crate::check::DeviationKind::Inconsistent { field }));
@@ -534,7 +534,7 @@ macro_rules! pfcp_bits {
             }
         }
 
-        impl crate::check::Check for $ty {
+        impl crate::check::Rules for $ty {
             fn check(&self, path: &crate::check::Path, found: &mut alloc::vec::Vec<crate::check::Deviation>) {
                 if self.wide().is_some() {
                     found.push(crate::check::Deviation::new(path, $clause, crate::check::DeviationKind::Rule("a value wider than its bits")));
@@ -1148,7 +1148,7 @@ macro_rules! pfcp_table {
         pfcp_table!(@placing $f, crate::table::decode_boxed(&mut $f, $body))
     };
     (@place_once $p:ident ($t:ty) $f:expr, $body:expr) => {
-        pfcp_table!(@placing $f, crate::ie::Codec::decode_into(&mut $f, $body))
+        pfcp_table!(@placing $f, crate::ie::Listed::decode_into(&mut $f, $body))
     };
     // A row there once that has its value repeats it; one that has none takes it when it
     // decodes.
@@ -1194,16 +1194,6 @@ macro_rules! pfcp_table {
                 crate::table::decode_scope(octets).ok()
             }
 
-            // A grouped IE is large: it is decoded in its place, and not moved there.
-            fn decode_into(slot: &mut Option<Self>, octets: &[u8]) -> bool {
-                let scope = slot.insert(Self::default());
-                if crate::table::decode_scope_into(scope, octets).is_err() {
-                    *slot = None;
-                    return false;
-                }
-                true
-            }
-
             fn encode(&self, out: &mut alloc::vec::Vec<u8>) -> Result<(), crate::Error> {
                 crate::table::encode_scope(self, out)
             }
@@ -1214,6 +1204,16 @@ macro_rules! pfcp_table {
         }
 
         impl crate::ie::Listed for $ty {
+            // A grouped IE is large: it is decoded in its place, and not moved there.
+            fn decode_into(slot: &mut Option<Self>, octets: &[u8]) -> bool {
+                let scope = slot.insert(Self::default());
+                if crate::table::decode_scope_into(scope, octets).is_err() {
+                    *slot = None;
+                    return false;
+                }
+                true
+            }
+
             fn decode_push(list: &mut alloc::vec::Vec<Self>, octets: &[u8]) -> bool {
                 list.push(Self::default());
                 let last = list.len() - 1;
@@ -1234,7 +1234,7 @@ macro_rules! pfcp_table {
             }
         }
 
-        impl crate::check::Check for $ty {
+        impl crate::check::Rules for $ty {
             /// Its table on the interfaces that it has, as the receiver of a response: the
             /// IEs of any, and those that all need.
             fn check(&self, path: &crate::check::Path, found: &mut alloc::vec::Vec<crate::check::Deviation>) {

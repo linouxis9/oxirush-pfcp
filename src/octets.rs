@@ -43,11 +43,6 @@ enum Repr {
 }
 
 impl Octets {
-    /// No octets.
-    pub const fn new() -> Self {
-        Self(Repr::Empty)
-    }
-
     /// A copy of `octets`.
     pub fn copied(octets: &[u8]) -> Self {
         match octets.len() {

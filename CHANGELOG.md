@@ -9,7 +9,8 @@ The first version, of TS 29.244 V19.6.0 (2026-06):
 - Every message and IE type of N4, N4mb, Sxa, Sxb and Sxc, decoded and encoded back byte
   for byte, and built with `new()` and `with_*()`.
 - `check()`: how a message breaks the tables and clauses on an interface, each deviation
-  with its path, its clause and the Cause of the answer.
+  with its path, its clause and the Cause of the answer; `deviations()` of a value on its
+  own.
 - With `tree`, a message as a tree that prints as JSON, read and edited by path, on
   oxirush-utils 0.2; with `serde`, serialized as its tree.
 - With `node`, `Node`, a PFCP entity without I/O: delivery and retransmission (§6.4),

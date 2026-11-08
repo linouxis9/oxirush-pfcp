@@ -149,11 +149,6 @@ pub(crate) const fn one(fields: &'static [&'static str]) -> Option<&'static str>
     }
 }
 
-/// The name that Table 8.1.2-1 gives `ie_type`.
-pub fn type_name(ie_type: u16) -> Option<&'static str> {
-    ie_type_info(ie_type).map(|info| info.name)
-}
-
 pfcp_ies! {
     1 "Create PDR" grouped "7.5.2.2-1" => CreatePdr;
     2 "PDI" grouped "7.5.2.2-2" => Pdi;

@@ -1044,10 +1044,9 @@ fn flag_checked(ie_type: u16, octets: &[u8]) -> Option<Vec<(&'static str, Deviat
         if again != octets {
             return None;
         }
-        let mut found = Vec::new();
-        value.check(&Path::Root("/value"), &mut found);
         Some(
-            found
+            value
+                .deviations()
                 .into_iter()
                 .map(|deviation| (deviation.clause, deviation.kind))
                 .collect(),

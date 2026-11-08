@@ -23,7 +23,7 @@ use alloc::vec::Vec;
 use core::net::{Ipv4Addr, Ipv6Addr};
 
 use crate::Error;
-use crate::check::{Check, Deviation, DeviationKind};
+use crate::check::{Deviation, DeviationKind, Rules};
 use crate::enums::*;
 use crate::ie::{Codec, IeType, listed_value};
 use crate::macros::{pfcp_bits, pfcp_layout};
@@ -1040,7 +1040,7 @@ impl<const N: u16> Codec for Raw<N> {
     }
 }
 
-impl<const N: u16> Check for Raw<N> {}
+impl<const N: u16> Rules for Raw<N> {}
 
 #[cfg(feature = "tree")]
 impl<const N: u16> oxirush_utils::tree::Tree for Raw<N> {
@@ -1090,7 +1090,7 @@ macro_rules! pfcp_number {
 
             /// The value.
             pub fn new(value: $t) -> Self {
-                Self { value, extra: Octets::new() }
+                Self { value, extra: Octets::default() }
             }
         }
 
@@ -1109,7 +1109,7 @@ macro_rules! pfcp_number {
             }
         }
 
-        impl Check for $ty {
+        impl Rules for $ty {
             fn check(&self, path: &crate::check::Path, found: &mut Vec<crate::check::Deviation>) {
                 Field::check(&self.value, path, $clause, found);
                 $(
@@ -1327,7 +1327,7 @@ impl Codec for NodeId {
     }
 }
 
-impl Check for NodeId {
+impl Rules for NodeId {
     fn check(&self, path: &crate::check::Path, found: &mut Vec<Deviation>) {
         let rule = |rule| Deviation::new(path, "8.2.38", DeviationKind::Rule(rule));
         let (kind, value) = match self {
@@ -1697,7 +1697,7 @@ impl Codec for NetworkInstance {
     }
 }
 
-impl Check for NetworkInstance {}
+impl Rules for NetworkInstance {}
 
 #[cfg(feature = "serde")]
 oxirush_utils::impl_serde!(NetworkInstance);
@@ -1768,7 +1768,7 @@ macro_rules! pfcp_fields {
             }
         }
 
-        impl Check for $ty {
+        impl Rules for $ty {
             #[allow(unused_variables)]
             fn check(&self, path: &crate::check::Path, found: &mut Vec<crate::check::Deviation>) {
                 $( Field::check(&self.$field, path, $clause, found); )*
@@ -2056,7 +2056,7 @@ macro_rules! pfcp_octets {
             }
         }
 
-        impl Check for $ty {}
+        impl Rules for $ty {}
 
         #[cfg(feature = "serde")]
         oxirush_utils::impl_serde!($ty);
