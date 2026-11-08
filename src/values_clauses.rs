@@ -441,24 +441,36 @@ pfcp_layout! {
 
 // ── Fixed fields, a length and its octets ──────────────────────────────────
 
-pfcp_fields! {
+pfcp_layout! {
     /// Forwarding Policy (§8.2.23).
-    pub struct ForwardingPolicy "8.2.23" { forwarding_policy_identifier "Forwarding Policy Identifier": Lv8 }
+    pub struct ForwardingPolicy "8.2.23" {
+        fields { forwarding_policy_identifier "Forwarding Policy Identifier": Lv8 }
+    }
     /// UE IP address Pool Identity (§8.2.128).
-    pub struct UeIpAddressPoolIdentity "8.2.128" { ue_ip_address_pool_identity "UE IP address Pool Identity": Lv16 }
+    pub struct UeIpAddressPoolIdentity "8.2.128" {
+        fields { ue_ip_address_pool_identity "UE IP address Pool Identity": Lv16 }
+    }
     /// SMF Set ID (§8.2.131): a spare octet, then the FQDN.
-    pub struct SmfSetId "8.2.131" { spare_octet "Spare": Spare, fqdn "FQDN": Fqdn }
+    pub struct SmfSetId "8.2.131" { fields { spare_octet "Spare": Spare, fqdn "FQDN": Fqdn } }
     /// Offending IE Information (§8.2.185).
-    pub struct OffendingIeInformation "8.2.185" { type_of_the_offending_ie "Type of the offending IE": u16, value_of_the_offending_ie "Value of the offending IE": Rest }
+    pub struct OffendingIeInformation "8.2.185" {
+        fields { type_of_the_offending_ie "Type of the offending IE": u16, value_of_the_offending_ie "Value of the offending IE": Rest }
+    }
     /// DNS Query/Response Filter (§8.2.201).
-    pub struct DnsQueryResponseFilter "8.2.201" { domain_name_pattern "Domain Name Pattern": Lv16 }
+    pub struct DnsQueryResponseFilter "8.2.201" {
+        fields { domain_name_pattern "Domain Name Pattern": Lv16 }
+    }
     /// Multicast Transport Information (§8.2.207): a spare octet, the Common Tunnel
     /// Endpoint Identifier, then the IP multicast distribution address and the source
     /// address, each after its type and length, kept as their octets.
-    pub struct MulticastTransportInformation "8.2.207" { spare_octet "Spare": Spare, common_tunnel_endpoint_identifier "Common Tunnel Endpoint Identifier": u32, ip_multicast_distribution_address "IP Multicast Distribution Address (IPv4 or IPv6)": TypedAddress, ip_source_address "IP Source Address (IPv4 or IPv6)": TypedAddress }
+    pub struct MulticastTransportInformation "8.2.207" {
+        fields { spare_octet "Spare": Spare, common_tunnel_endpoint_identifier "Common Tunnel Endpoint Identifier": u32, ip_multicast_distribution_address "IP Multicast Distribution Address (IPv4 or IPv6)": TypedAddress, ip_source_address "IP Source Address (IPv4 or IPv6)": TypedAddress }
+    }
     /// Vendor-Specific Node Report Type (§8.2.217): the Enterprise ID and its octet of
     /// flags, which the vendor defines.
-    pub struct VendorSpecificNodeReportType "8.2.217" { enterprise_id "Enterprise ID": u16, flags "Flags": u8 }
+    pub struct VendorSpecificNodeReportType "8.2.217" {
+        fields { enterprise_id "Enterprise ID": u16, flags "Flags": u8 }
+    }
     check(this, path, found) {
         // Octet 7 and the octets after it are its bits.
         let none = this.flags == 0 && this.extra.iter().all(|octet| *octet == 0);
@@ -467,7 +479,9 @@ pfcp_fields! {
     /// UE Level Measurements Configuration (§8.2.245): the Job Type (Table 8.2.245-1), the
     /// Measurement Types after their number (Table 8.2.245-2), and the Time Period, in
     /// seconds.
-    pub struct UeLevelMeasurementsConfiguration "8.2.245" { job_type "Job Type": JobType, measurement_types "Measurement Type": Counted<MeasurementType>, time_period "Time Period": U24 }
+    pub struct UeLevelMeasurementsConfiguration "8.2.245" {
+        fields { job_type "Job Type": JobType, measurement_types "Measurement Type": Counted<MeasurementType>, time_period "Time Period": U24 }
+    }
 }
 
 pfcp_layout! {
@@ -476,7 +490,7 @@ pfcp_layout! {
     /// Value of its AVP (IETF RFC 2661). The response is the password of PAP in clear, or
     /// what CHAP makes of it: `Debug` does not print it.
     pub struct L2tpUserAuthentication "8.2.187" {
-        head { proxy_authen_type_value "Proxy Authen Type Value": u16 }
+        fields { proxy_authen_type_value "Proxy Authen Type Value": u16 }
         flags(u8) { pai "PAI": 4, par "PAR": 3, pac "PAC": 2, pan "PAN": 1 }
         proxy_authen_name_value "Proxy Authen Name Value": Lv8 if pan,
         proxy_authen_challenge_value "Proxy Authen Challenge Value": Lv8 if pac,
@@ -743,10 +757,12 @@ impl TextLv8 {
     }
 }
 
-pfcp_fields! {
+pfcp_layout! {
     /// Key ID and Shared Secret (OWAMP or TWAMP) (§8.2.276): the shared secret is a key,
     /// which `Debug` does not print.
-    pub struct KeyIdAndSharedSecret "8.2.276" { key_id "Key ID": Lv8, shared_secret "Shared Secret": SecretLv8 }
+    pub struct KeyIdAndSharedSecret "8.2.276" {
+        fields { key_id "Key ID": Lv8, shared_secret "Shared Secret": SecretLv8 }
+    }
 }
 
 /// Octets that are a key, which `Debug` does not print: their number only.
@@ -870,14 +886,12 @@ listed_value!(
     TunnelPassword,
 );
 
-pfcp_fields! {
+pfcp_layout! {
     /// Trace Information (§8.2.108): the PLMN of the trace, as TS 29.274 writes MCC and MNC,
     /// the Trace ID, the triggering events, the depth, the interfaces and the IP address of
     /// the Trace Collection Entity.
     pub struct TraceInformation "8.2.108" {
-        mcc_mnc "MCC and MNC": PlmnId, trace_id "Trace ID": U24, triggering_events "Triggering Events": Lv8,
-        session_trace_depth "Session Trace Depth": u8, list_of_interfaces "List of Interfaces": Lv8,
-        ip_address_of_trace_collection_entity "IP Address of Trace Collection Entity": Lv8,
+        fields { mcc_mnc "MCC and MNC": PlmnId, trace_id "Trace ID": U24, triggering_events "Triggering Events": Lv8, session_trace_depth "Session Trace Depth": u8, list_of_interfaces "List of Interfaces": Lv8, ip_address_of_trace_collection_entity "IP Address of Trace Collection Entity": Lv8, }
     }
 }
 

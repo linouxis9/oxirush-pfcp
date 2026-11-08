@@ -13,7 +13,9 @@ The first version, of TS 29.244 V19.6.0 (2026-06):
   with its path, its clause and the Cause of the answer; `deviations()` of a value on its
   own.
 - With `tree`, a message as a tree that prints as JSON, read and edited by path, on
-  oxirush-utils 0.2; with `serde`, serialized as its tree.
+  oxirush-utils 0.2; with `serde`, serialized as its tree. A tree writes each field that
+  its value always has; it leaves out a flag that is not set and a field that its flags
+  do not have.
 - With `node`, `Node`, a PFCP entity without I/O: delivery and retransmission (§6.4),
   heartbeat, associations, sessions, load and overload control, and bundles (§6.5). A
   request that names another's session or association, as another SMF of a set sends

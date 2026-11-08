@@ -163,18 +163,24 @@ pfcp_number! {
     SecurityModeValue(u32) "Mode" "8.2.275";
 }
 
-pfcp_fields! {
+pfcp_layout! {
     /// Multiplier (§8.2.84): the Value-Digits (Integer64) and the Exponent (Integer32) of the
     /// Unit-Value AVP of TS 32.299.
-    pub struct Multiplier "8.2.84" { value_digits "Value-Digits": i64, exponent "Exponent": i32 }
+    pub struct Multiplier "8.2.84" {
+        fields { value_digits "Value-Digits": i64, exponent "Exponent": i32 }
+    }
     /// S-NSSAI (§8.2.176).
-    pub struct SNssai "8.2.176" { sst "SST": u8, sd "SD": U24 }
+    pub struct SNssai "8.2.176" { fields { sst "SST": u8, sd "SD": U24 } }
     /// DL Periodicity (§8.2.221).
-    pub struct DlPeriodicity "8.2.221" { spare_field "Spare": Spare, dl_periodicity "DL Periodicity": u32 }
+    pub struct DlPeriodicity "8.2.221" {
+        fields { spare_field "Spare": Spare, dl_periodicity "DL Periodicity": u32 }
+    }
     /// UL Periodicity (§8.2.224).
-    pub struct UlPeriodicity "8.2.224" { spare_field "Spare": Spare, ul_periodicity "UL Periodicity": u32 }
+    pub struct UlPeriodicity "8.2.224" {
+        fields { spare_field "Spare": Spare, ul_periodicity "UL Periodicity": u32 }
+    }
     /// HPLMN S-NSSAI (§8.2.232).
-    pub struct HplmnSNssai "8.2.232" { sst "SST": u8, sd "SD": U24 }
+    pub struct HplmnSNssai "8.2.232" { fields { sst "SST": u8, sd "SD": U24 } }
 }
 
 pfcp_bits! {

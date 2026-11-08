@@ -1716,103 +1716,11 @@ impl oxirush_utils::tree::Tree for NetworkInstance {
     }
 }
 
-/// A value of fixed fields without flags, then the octets that a later release adds.
-macro_rules! pfcp_fields {
-    ($( $(#[$meta:meta])* pub struct $ty:ident $clause:literal { $( $field:ident $name:literal : $kind:ty ),* $(,)? } $( check($this:ident, $path:ident, $found:ident) $rules:block )? )*) => {$(
-        $(#[$meta])*
-        #[derive(Debug, Clone, Default, PartialEq, Eq)]
-        pub struct $ty {
-            $(
-                #[doc = concat!("The ", $name, " field.")]
-                pub $field: $kind,
-            )*
-            /// The octets after the fields, which a later release adds.
-            pub extra: Octets,
-        }
-
-        impl $ty {
-            /// The names of its fields.
-            pub(crate) const FIELDS: &'static [&'static str] = &[$($name),*];
-            /// The members that its tree may have: its fields and its unknown octets.
-            pub const MEMBERS: &'static [&'static str] = &[$($name,)* crate::ie::UNKNOWN_OCTETS];
-            /// What the tree of each field may hold below it.
-            #[cfg(feature = "tree")]
-            pub(crate) const MEMBERS_BELOW: &'static [(&'static str, &'static crate::tree::Below)] = &[$(($name, <$kind as Field>::BELOW)),*];
-            /// Its layout.
-            #[doc(hidden)]
-            #[cfg(feature = "spec")]
-            pub const LAYOUT: Option<&'static Layout> = Some(&Layout {
-                head: &[],
-                bits: &[],
-                fields: &[$(Member { name: $name, octets: <$kind as Field>::OCTETS, cells: <$kind as Field>::CELLS, condition: "true" }),*],
-            });
-        }
-
-        impl Codec for $ty {
-            fn decode(mut octets: &[u8]) -> Option<Self> {
-                $( let $field = <$kind as Field>::read(&mut octets)?; )*
-                Some(Self { $($field,)* extra: Octets::copied(octets) })
-            }
-            fn encode(&self, out: &mut Vec<u8>) -> Result<(), Error> {
-                $(
-                    if !Field::fits(&self.$field) {
-                        return Err(Error::FieldLength { ie: <Self as crate::ie::IeType>::TYPE_NAME, field: $name });
-                    }
-                )*
-                $( Field::write(&self.$field, out); )*
-                out.extend_from_slice(&self.extra);
-                Ok(())
-            }
-            fn encoded_len(&self) -> usize {
-                0 $( + Field::size(&self.$field) )* + self.extra.len()
-            }
-        }
-
-        impl Rules for $ty {
-            #[allow(unused_variables)]
-            fn check(&self, path: &crate::check::Path, found: &mut Vec<crate::check::Deviation>) {
-                $( Field::check(&self.$field, path, $clause, found); )*
-                $(
-                    let ($this, $path, $found) = (self, path, found);
-                    $rules
-                )?
-            }
-        }
-
-        #[cfg(feature = "serde")]
-        oxirush_utils::impl_serde!($ty);
-
-        #[cfg(feature = "tree")]
-        impl oxirush_utils::tree::Tree for $ty {
-            const NAME: &'static str = <Self as crate::ie::IeType>::TYPE_NAME;
-            fn to_tree(&self) -> oxirush_utils::tree::Value {
-                let mut members = oxirush_utils::tree::Members::new();
-                $( members.put($name, Field::to_tree(&self.$field)); )*
-                if !self.extra.is_empty() {
-                    members.put(crate::ie::UNKNOWN_OCTETS, oxirush_utils::tree::octets(&self.extra));
-                }
-                members.finish()
-            }
-            fn from_tree(
-                value: &oxirush_utils::tree::Value,
-                reading: &mut oxirush_utils::tree::Reading,
-            ) -> Result<Self, oxirush_utils::tree::Refused> {
-                let read = reading.members(value, Self::MEMBERS)?;
-                $(
-                    let $field = reading.member(&read, $name, <$kind as Field>::from_tree)?;
-                )*
-                let extra = reading.optional(&read, crate::ie::UNKNOWN_OCTETS, |value, reading| reading.octets(value))?;
-                Ok(Self { $($field,)* extra: extra.map(Octets::from).unwrap_or_default() })
-            }
-        }
-    )*};
-}
-
-pfcp_fields! {
+pfcp_layout! {
     /// MBR (§8.2.8): the maximum bitrates of the uplink and of the downlink, in kbps.
-    pub struct Mbr "8.2.8" { ul_mbr "UL MBR": U40, dl_mbr "DL MBR": U40 }
+    pub struct Mbr "8.2.8" { fields { ul_mbr "UL MBR": U40, dl_mbr "DL MBR": U40 } }
     /// GBR (§8.2.9): the guaranteed bitrates of the uplink and of the downlink, in kbps.
-    pub struct Gbr "8.2.9" { ul_gbr "UL GBR": U40, dl_gbr "DL GBR": U40 }
+    pub struct Gbr "8.2.9" { fields { ul_gbr "UL GBR": U40, dl_gbr "DL GBR": U40 } }
 }
 
 pfcp_layout! {
@@ -2079,7 +1987,7 @@ macro_rules! pfcp_octets {
     )*};
 }
 
-pub(crate) use {pfcp_fields, pfcp_number, pfcp_octets};
+pub(crate) use {pfcp_number, pfcp_octets};
 
 #[cfg(test)]
 mod tests {
