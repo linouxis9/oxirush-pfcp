@@ -800,7 +800,7 @@ macro_rules! pfcp_secret {
             /// The name of its field.
             pub(crate) const FIELDS: &'static [&'static str] = &[$name];
             /// None: its tree is its octets.
-            pub const MEMBERS: &'static [&'static str] = &[];
+            pub(crate) const MEMBERS: &'static [&'static str] = &[];
             /// What the tree of each field may hold below it: nothing, of scalars alone.
             #[cfg(feature = "tree")]
             pub(crate) const MEMBERS_BELOW: &'static [(&'static str, &'static crate::tree::Below)] = &[];
@@ -945,7 +945,7 @@ impl FqCsid {
         "Node Type",
     ];
     /// The members that its tree may have: its fields and its unknown octets.
-    pub const MEMBERS: &'static [&'static str] = &[
+    pub(crate) const MEMBERS: &'static [&'static str] = &[
         "FQ-CSID Node-ID Type",
         "Node-Address",
         "PDN Connection Set Identifiers",
@@ -1182,7 +1182,7 @@ macro_rules! mac_addresses {
             /// The names of its fields.
             pub(crate) const FIELDS: &'static [&'static str] = &["MAC address values", "C-TAG", "S-TAG"];
             /// The members that its tree may have: its fields and its unknown octets.
-            pub const MEMBERS: &'static [&'static str] = &["MAC address values", "C-TAG", "S-TAG", crate::ie::UNKNOWN_OCTETS];
+            pub(crate) const MEMBERS: &'static [&'static str] = &["MAC address values", "C-TAG", "S-TAG", crate::ie::UNKNOWN_OCTETS];
             /// What the tree of each field may hold below it.
             #[cfg(feature = "tree")]
             pub(crate) const MEMBERS_BELOW: &'static [(&'static str, &'static crate::tree::Below)] = &[("MAC address values", &crate::tree::Below::List(&crate::tree::Below::Scalar))];

@@ -150,7 +150,7 @@ macro_rules! pfcp_layout {
             pub(crate) const FIELDS: &'static [&'static str] = &[$($($head_name,)*)? $($($flag_name,)* $($field_name,)*)?];
             /// The members that its tree may have: its fields and flags, the spare bits of its
             /// flags and its unknown octets.
-            pub const MEMBERS: &'static [&'static str] = &[$($($head_name,)*)? $($($flag_name,)* pfcp_layout!(@spare $fk), $($field_name,)*)? crate::ie::UNKNOWN_OCTETS];
+            pub(crate) const MEMBERS: &'static [&'static str] = &[$($($head_name,)*)? $($($flag_name,)* pfcp_layout!(@spare $fk), $($field_name,)*)? crate::ie::UNKNOWN_OCTETS];
             /// What the tree of each field may hold below it.
             #[cfg(feature = "tree")]
             pub(crate) const MEMBERS_BELOW: &'static [(&'static str, &'static crate::tree::Below)] = &[
@@ -175,8 +175,6 @@ macro_rules! pfcp_layout {
                 }),*)?],
                 fields: &[$($(crate::values::Member { name: $field_name, octets: <$kind $(<$param>)? as crate::values::Field>::OCTETS, cells: <$kind $(<$param>)? as crate::values::Field>::CELLS, condition: stringify!($cond) }),*)?],
             });
-            /// The clause of the layout.
-            pub const CLAUSE: &'static str = $clause;
 
             /// The first field of the octet of flags whose value is wider than its bits.
             fn wide(&self) -> Option<&'static str> {
@@ -191,7 +189,7 @@ macro_rules! pfcp_layout {
             /// Whether each field is there as its flags say: the name of the first that is
             /// not.
             #[allow(unused_variables)]
-            pub fn inconsistent(&self) -> Option<&'static str> {
+            pub(crate) fn inconsistent(&self) -> Option<&'static str> {
                 $(
                     $( let $flag = self.$flag; )*
                     $(
@@ -286,7 +284,7 @@ macro_rules! pfcp_layout {
                 )?
                 $($( crate::values::Field::check(&self.$head, path, $clause, found); )*)?
                 $(
-                    $( pfcp_layout!(@bits check [$($width $(as $fkind)?)?] self.$flag, path, found); )*
+                    $( pfcp_layout!(@bits check [$($width $(as $fkind)?)?] self.$flag, path, found, $clause); )*
                     $(
                         if let Some(field) = &self.$field {
                             crate::values::Field::check(field, path, $clause, found);
@@ -449,13 +447,11 @@ macro_rules! pfcp_bits {
         pfcp_bits!(@new $ty $([$field $name $width [$($kind)? $(+ $octet2 $low2 $width2)?]])*);
 
         impl $ty {
-            /// The clause of the layout.
-            pub const CLAUSE: &'static str = $clause;
             /// The names of its flags and fields.
             pub(crate) const FIELDS: &'static [&'static str] = &[$($name),*];
             /// The members that its tree may have: its flags and fields, its spare bits, the
             /// number of the octets of its fields that it has, and its unknown octets.
-            pub const MEMBERS: &'static [&'static str] = &[$($name,)* "Spare", "length", crate::ie::UNKNOWN_OCTETS];
+            pub(crate) const MEMBERS: &'static [&'static str] = &[$($name,)* "Spare", "length", crate::ie::UNKNOWN_OCTETS];
             /// What the tree of each field may hold below it: nothing, of scalars alone.
             #[cfg(feature = "tree")]
             pub(crate) const MEMBERS_BELOW: &'static [(&'static str, &'static crate::tree::Below)] = &[];
@@ -563,7 +559,7 @@ macro_rules! pfcp_bits {
                 if self.spare.iter().any(|spare| *spare != 0) {
                     found.push(crate::check::Deviation::new(path, "8.1.2", crate::check::DeviationKind::SpareBits));
                 }
-                $( pfcp_bits!(@check $width [$($kind)? $(+ $octet2 $low2 $width2)?] self.$field, path, found); )*
+                $( pfcp_bits!(@check $width [$($kind)? $(+ $octet2 $low2 $width2)?] self.$field, path, found, $clause); )*
                 $(
                     let ($this, $path, $found) = (self, path, found);
                     $rules
@@ -677,10 +673,10 @@ macro_rules! pfcp_bits {
     (@write 1 [] $value:expr, $low:literal) => { u8::from($value) << ($low - 1) };
     (@write $width:tt [] $value:expr, $low:literal) => { ($value & (((1u16 << $width) - 1) as u8)) << ($low - 1) };
     (@write $width:tt [$kind:ident] $value:expr, $low:literal) => { pfcp_bits!(@write $width [] $value.value(), $low) };
-    (@check $width:tt [+ $($part:tt)*] $value:expr, $path:ident, $found:ident) => {};
-    (@check $width:tt [] $value:expr, $path:ident, $found:ident) => {};
-    (@check $width:tt [$kind:ident] $value:expr, $path:ident, $found:ident) => {
-        crate::values::Field::check(&$value, $path, Self::CLAUSE, $found)
+    (@check $width:tt [+ $($part:tt)*] $value:expr, $path:ident, $found:ident, $clause:literal) => {};
+    (@check $width:tt [] $value:expr, $path:ident, $found:ident, $clause:literal) => {};
+    (@check $width:tt [$kind:ident] $value:expr, $path:ident, $found:ident, $clause:literal) => {
+        crate::values::Field::check(&$value, $path, $clause, $found)
     };
     (@tree $width:tt [+ $($part:tt)*] $value:expr) => { oxirush_utils::tree::unsigned($value.into()) };
     (@tree 1 [] $value:expr) => { oxirush_utils::tree::Value::Bool($value) };

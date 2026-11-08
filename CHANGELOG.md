@@ -8,7 +8,8 @@ The first version, of TS 29.244 V19.6.0 (2026-06):
 
 - Every message and IE type of N4, N4mb, Sxa, Sxb and Sxc, decoded and encoded back byte
   for byte, and built with `new()` and `with_*()`; a message of its body with
-  `Message::node` and `Message::session`.
+  `Message::node` and `Message::session`. `IE_TYPES` and `ie_type_info()` give the clause
+  and the members of each IE type.
 - `check()`: how a message breaks the tables and clauses on an interface, each deviation
   with its path, its clause and the Cause of the answer; `deviations()` of a value on its
   own. `Row::presence_on` gives the presence of a row on an interface, or on a set of

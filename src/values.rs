@@ -1075,7 +1075,7 @@ macro_rules! pfcp_number {
             pub(crate) const FIELDS: &'static [&'static str] = &[$field];
             /// The members that its tree may have: its field and its unknown octets. Without
             /// them, its tree is the number alone.
-            pub const MEMBERS: &'static [&'static str] = &[$field, crate::ie::UNKNOWN_OCTETS];
+            pub(crate) const MEMBERS: &'static [&'static str] = &[$field, crate::ie::UNKNOWN_OCTETS];
             /// What the tree of each field may hold below it: nothing, of scalars alone.
             #[cfg(feature = "tree")]
             pub(crate) const MEMBERS_BELOW: &'static [(&'static str, &'static crate::tree::Below)] = &[];
@@ -1509,7 +1509,7 @@ impl NodeId {
     pub(crate) const FIELDS: &'static [&'static str] = &["Node ID Type", "Node ID value"];
     /// The members that its tree may have: the FQDN, or the octets of a Node ID that is no
     /// text. The tree of an address is the address alone.
-    pub const MEMBERS: &'static [&'static str] = &["FQDN", "octets"];
+    pub(crate) const MEMBERS: &'static [&'static str] = &["FQDN", "octets"];
     /// What the tree of each field may hold below it: nothing, of scalars alone.
     #[cfg(feature = "tree")]
     pub(crate) const MEMBERS_BELOW: &'static [(&'static str, &'static crate::tree::Below)] = &[];
@@ -1665,7 +1665,7 @@ impl NetworkInstance {
     /// The name of its field.
     pub(crate) const FIELDS: &'static [&'static str] = &["Network Instance"];
     /// None: its tree is its octets.
-    pub const MEMBERS: &'static [&'static str] = &[];
+    pub(crate) const MEMBERS: &'static [&'static str] = &[];
     /// What the tree of each field may hold below it: nothing, of scalars alone.
     #[cfg(feature = "tree")]
     pub(crate) const MEMBERS_BELOW: &'static [(&'static str, &'static crate::tree::Below)] = &[];
@@ -1942,7 +1942,7 @@ macro_rules! pfcp_octets {
             /// The name of its field.
             pub(crate) const FIELDS: &'static [&'static str] = &[$name];
             /// None: its tree is its octets.
-            pub const MEMBERS: &'static [&'static str] = &[];
+            pub(crate) const MEMBERS: &'static [&'static str] = &[];
             /// What the tree of each field may hold below it: nothing, of scalars alone.
             #[cfg(feature = "tree")]
             pub(crate) const MEMBERS_BELOW: &'static [(&'static str, &'static crate::tree::Below)] = &[];
