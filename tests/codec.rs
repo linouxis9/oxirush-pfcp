@@ -690,6 +690,62 @@ fn a_misspelt_name_says_what_from_tree_says() {
     assert!(Message::from_tree(&whole).is_ok());
 }
 
+/// An error of `Message::from_tree` is at a path of the tree that `select` takes, of the
+/// names as the tree writes them, a "/" of a name as "~1", and says why without saying
+/// again that the tree is no message; an IE of no row that is not written by its octets is
+/// refused by the name written.
+#[test]
+fn an_error_of_from_tree_is_at_a_path_that_select_takes() {
+    let heartbeat = |ies: tree::Value| tree!({"message": "PFCP Heartbeat Request", "Sequence Number": 1, "ies": ies});
+    let modification = |ies: tree::Value| tree!({"message": "PFCP Session Modification Response", "SEID": 1, "Sequence Number": 1, "ies": ies});
+    for (tree, at, why) in [
+        (
+            heartbeat(tree!({"Recovery Time Stamp": 7, "Cause": 1, "Load Metric": 2})),
+            "/pfcp",
+            "\"Cause\" is an IE of no row of PFCP Heartbeat Request, which is written by its octets",
+        ),
+        (
+            heartbeat(tree!({"Recovery Time Stamp": 7, "19": {"octets": "zz"}})),
+            "/pfcp/19/octets",
+            "octets in hexadecimal",
+        ),
+        (
+            heartbeat(
+                tree!({"Recovery Time Stamp": 7, "Source IP Address": {"V4": true, "IPv4 address": "10.0.0.1", "MPL": true, "mask/prefix length": "x"}}),
+            ),
+            "/pfcp/Source IP Address/mask~1prefix length",
+            "a number",
+        ),
+        (
+            modification(
+                tree!({"Cause": 1, "created/updated traffic endpoint": [{"Traffic Endpoint ID": 1}, {"Traffic Endpoint ID": "x"}]}),
+            ),
+            "/pfcp/created~1updated traffic endpoint/1/Traffic Endpoint ID",
+            "a number",
+        ),
+        (
+            tree!({"message": "PFCP Session Establishment Response", "SEID": 1, "Sequence Number": 1,
+                "ies": {"Node ID": "10.0.0.2", "Cause": 1, "UP F-SEID": {"V4": true, "SEIDD": 1}}}),
+            "/pfcp/UP F-SEID",
+            "\"SEIDD\" is not a member that its type has",
+        ),
+        (
+            tree!({"message": "PFCP Heartbeat Request", "Sequence Number": "x", "ies": {}}),
+            "/Sequence Number",
+            "a number",
+        ),
+    ] {
+        let error = Message::from_tree(&tree).unwrap_err();
+        assert_eq!(error.at(), at, "{error}");
+        assert!(error.reason().contains(why), "{error}");
+        assert!(
+            !error.reason().contains("this is not a value of"),
+            "{error}"
+        );
+        assert!(select(&tree, error.at()).is_ok(), "{error}");
+    }
+}
+
 #[test]
 fn what_the_table_does_not_have_is_kept_in_its_place() {
     let message = establishment();

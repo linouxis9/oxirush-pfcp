@@ -630,9 +630,18 @@ pub(crate) mod forms {
         ///
         /// # Errors
         ///
-        /// Where the tree is not a message, by the names on the way, and why.
+        /// Where the tree is not a message, at the path of the place that it refuses,
+        /// which [`paths::select`](crate::paths::select) takes, and why.
         pub fn from_tree(value: &Value) -> Result<Message, tree::Error> {
-            tree::from_value(value)
+            tree::from_value(value).map_err(|error| {
+                let said = alloc::format!("this is not a value of {}: ", <Self as Tree>::NAME);
+                let why = error
+                    .reason()
+                    .strip_prefix(&said[..])
+                    .unwrap_or(error.reason());
+                let error = tree::Error::new(error.kind(), error.at(), why);
+                crate::paths::located(value, error)
+            })
         }
     }
 }

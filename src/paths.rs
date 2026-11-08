@@ -162,6 +162,71 @@ fn read_raw(ie_type: u16, value: &Value, reading: &mut Reading) -> Result<RawIe,
     })
 }
 
+/// What a reading names an IE of no row by: the name of its type, or `IE` for a type of
+/// no release.
+fn label_of(ie_type: u16) -> &'static str {
+    ie_type_info(ie_type).map_or("IE", |info| info.name)
+}
+
+/// The error of `from_value` of a message in `tree`, at the path of the place that it
+/// refuses, which [`select`] takes: each name as the tree writes it, a `/` of it as `~1`,
+/// and `/pfcp` for the IEs of the message. A reading names what it reads by the names of
+/// the types, joined by `/`, which are matched with the names of the tree one by one.
+pub(crate) fn located(tree: &Value, error: tree::Error) -> tree::Error {
+    let mut path = String::new();
+    let (mut place, mut rest) = (Some(tree), error.at());
+    while !rest.is_empty() {
+        // The longest of the names that the rest starts with, that the place has.
+        let ends = rest
+            .match_indices('/')
+            .map(|(end, _)| end)
+            .chain([rest.len()]);
+        let named = |end: usize| -> Option<(String, &Value)> {
+            let label = &rest[..end];
+            match place? {
+                Value::Object(members) => members
+                    .iter()
+                    .find(|(name, _)| names(name, label))
+                    .map(|(name, held)| (name.clone(), held)),
+                Value::Array(entries) => {
+                    Some((label.into(), entries.get(label.parse::<usize>().ok()?)?))
+                }
+                _ => None,
+            }
+        };
+        let found = ends
+            .collect::<Vec<_>>()
+            .into_iter()
+            .rev()
+            .find_map(|end| Some((end, named(end)?)));
+        let Some((end, (name, held))) = found else {
+            // What the tree does not have, as a member that is missing: the names as read.
+            for name in rest.split('/') {
+                path.push('/');
+                path.push_str(&tree::escape(name));
+            }
+            break;
+        };
+        match path.is_empty() && tree::same_name(&name, "ies") {
+            true => path.push_str("/pfcp"),
+            false => {
+                path.push('/');
+                path.push_str(&tree::escape(&name));
+            }
+        }
+        place = Some(held);
+        rest = rest[end..].strip_prefix('/').unwrap_or_default();
+    }
+    tree::Error::new(error.kind(), path, error.reason())
+}
+
+/// Whether the member `name` of a tree is what a reading names `label`: the same name, or
+/// an IE of no row by its number or the name of its type.
+fn names(name: &str, label: &str) -> bool {
+    tree::same_name(name, label)
+        || type_of_name(name).is_some_and(|ie_type| label_of(ie_type) == label)
+}
+
 /// The IE type that a name is, where its scope has no row of that name: the name of an IE
 /// type of Table 8.1.2-1, or a number.
 fn type_of_name(name: &str) -> Option<u16> {
@@ -194,7 +259,18 @@ pub(crate) fn scope_from_tree<S: Scope + TreeScope>(
     for (written, held) in members {
         let (at, ie_type) = written_ie(table, &names, written, &mut rows_written, reading)?;
         let row = at.map(|at| &table.rows[at]);
-        let label: &'static str = row.map_or("IE", |row| row.name);
+        let octets = match held {
+            Value::Array(entries) => entries.iter().all(is_octets),
+            held => is_octets(held),
+        };
+        if row.is_none() && !octets {
+            let why = alloc::format!(
+                "{written:?} is an IE of no row of {}, which is written by its octets: {{\"octets\": ...}}",
+                table.name
+            );
+            return Err(reading.refuse(ErrorKind::Value, why));
+        }
+        let label = row.map_or_else(|| label_of(ie_type), |row| row.name);
         let read = reading.within(label, held, |held, reading| {
             read_ies(&mut scope, row, ie_type, held, reading)
         })?;
@@ -270,15 +346,9 @@ fn read_ies<S: TreeScope>(
     let list = row.is_some_and(|row| row.repeat != Repeat::Once);
     let mut read = Vec::new();
     let mut entry = |value: &Value, reading: &mut Reading| -> Result<(), Refused> {
-        if is_octets(value) {
+        if is_octets(value) || row.is_none() {
             read.push(Some(read_raw(ie_type, value, reading)?));
             return Ok(());
-        }
-        if row.is_none() {
-            return Err(reading.refuse(
-                ErrorKind::Value,
-                "an IE that its table does not have is written by its octets: {\"octets\": ...}",
-            ));
         }
         // A row that is there once has one value; the IEs of its type that the scope keeps
         // as octets come before or after it.
