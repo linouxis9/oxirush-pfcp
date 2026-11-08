@@ -61,7 +61,7 @@ use crate::values_figures::*;
 pub use controls::{LoadControl, OverloadControl};
 use controls::{Overloads, Scope};
 use delivery::{Change, Outstanding, Pending};
-use inbound::Effect;
+use inbound::{Effect, Part, read_datagram};
 use peers::{Heartbeats, key_of, peer_key};
 use state::{Answers, Digest, Features, Sessions, SetOf};
 pub use state::{Association, Session};

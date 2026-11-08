@@ -36,7 +36,10 @@ The first version, of TS 29.244 V19.6.0 (2026-06):
   session over is answered as one of the adopted session (`respond_as`); one that says
   its priority has it in `Received::priority`. An IPv4 peer that a socket of both
   families gives at its IPv4-mapped address is its IPv4 address. A probe's answer
-  (`respond_message`) changes the node as its peer reads the octets sent.
+  (`respond_message`) changes the node as its peer reads the datagram sent, by the one
+  reader of `handle_datagram`: of the bundling that they agreed (§6.5), a message that
+  the peer takes as the response of another of its requests answers that request, and a
+  Version Not Supported Response ends every request of the peer (§7.2.1A).
 - With `endpoint`, `Endpoint`, a node on a Tokio UDP socket, and its `Handle`.
 - A request that ends without its response says why in a `Failure`, a timeout one of
   them: `Event::Failed`, `EndpointError::Failed`.

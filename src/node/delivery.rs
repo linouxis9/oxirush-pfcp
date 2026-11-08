@@ -647,16 +647,18 @@ impl Node {
 
     /// Answer a request with a message as it is, delivered as `delivery` says: a probe,
     /// which may answer any number of times, and with anything. The node reads the octets
-    /// that it sends as its peer reads a response. The first answer that the peer takes
-    /// alone changes the node, as the peer reads it: of version 1, of the request's
-    /// sequence number and of the type of its response, and whose Message Length and IEs
-    /// decode. The peer discards one of another sequence number or type, or of a type of no
-    /// table, and takes the next (§6.4, §7.6.4, §7.6.5); one of another version or that does
-    /// not decode ends its request unread (§7.6.1-§7.6.3), and no later answer changes the
-    /// node either. It does while the node keeps the request: an answer after
-    /// [`Delivery::Forget`], which forgets it, or once the node forgot it, `keep` after it
-    /// came, is sent and changes nothing. A later answer replaces the one kept for the
-    /// retransmissions while the node keeps it.
+    /// that it sends as its peer reads a datagram ([`handle_datagram`](Self::handle_datagram)),
+    /// of what it knows of the peer: the bundling that they agreed (§6.5), and the requests
+    /// of the peer that wait for their response. A response of version 1, of a request
+    /// that waits, of its sequence number and of the type of its response, whose Message
+    /// Length and IEs decode, changes the node as the answer of that request; one of
+    /// another version, or that does not decode, ends its request unread (§7.6.1-§7.6.3),
+    /// and a Version Not Supported Response ends every request of the peer (§7.2.1A,
+    /// §7.4.4.7, §7.6.2). The peer discards the rest, and takes the next (§6.4, §7.6.4,
+    /// §7.6.5). A request ended takes no answer after: a later one changes nothing. An
+    /// answer after [`Delivery::Forget`], which forgets the request, or once the node
+    /// forgot it, `keep` after it came, is not kept. A later answer replaces the one kept
+    /// for the retransmissions while the node keeps it.
     ///
     /// # Errors
     ///
@@ -671,10 +673,8 @@ impl Node {
         self.respond_with(now, request, message.header, message.body, delivery)
     }
 
-    /// Answer a request, and keep the answer for its retransmissions. Its first answer that
-    /// the peer takes alone, as the peer reads its octets, changes the node, which knows it
-    /// by the request that it keeps: a probe may answer again, and once the node no longer
-    /// keeps the request, its answer changes nothing.
+    /// Answer a request, and keep the answer for its retransmissions. The node changes as
+    /// the peer reads the octets of the answer ([`peer_reads`](Self::peer_reads)).
     pub(super) fn respond_with(
         &mut self,
         now: Duration,
@@ -692,16 +692,33 @@ impl Node {
             return Ok(());
         }
         let expires = now.saturating_add(self.config.keep);
-        let read = peer_reads(request, &octets);
-        let ends = !matches!(read, Read::Discarded);
-        if self
-            .answers
-            .answer(key, request.id, octets.clone(), expires, ends)
-            && let Read::Taken(message) = read
-        {
-            self.answered_effects(now, request, &message);
-            self.prune_controls();
+        let reads = self.peer_reads(request.from, &octets);
+        self.answers
+            .answer(key, request.id, octets.clone(), expires);
+        for read in reads {
+            match read {
+                Read::Takes(sequence, message) => {
+                    let Some(taken) = self.answers.end(&(request.from, sequence)) else {
+                        continue;
+                    };
+                    // The caller's own, which an answer of a handover gives its session.
+                    let taken = match taken.id == request.id {
+                        true => request.clone(),
+                        false => taken,
+                    };
+                    self.answered_effects(now, &taken, &message);
+                }
+                Read::Ends(sequence) => {
+                    self.answers.end(&(request.from, sequence));
+                }
+                Read::EndsAll => {
+                    for sequence in self.answers.open_of(request.from) {
+                        self.answers.end(&(request.from, sequence));
+                    }
+                }
+            }
         }
+        self.prune_controls();
         if delivery == Delivery::Send {
             self.queue(Transmit {
                 to: request.from,
@@ -710,6 +727,56 @@ impl Node {
             });
         }
         Ok(())
+    }
+
+    /// What `peer` does with the octets of an answer, as a node reads a datagram, with the
+    /// requests of its own that wait for their response from the node: the node's
+    /// association with it says the bundling that they agreed (§6.5), and the address of
+    /// the peer's F-SEID of a session is the one that the node knows. Without an
+    /// association, the peer takes no bundle.
+    fn peer_reads(&self, peer: SocketAddr, octets: &[u8]) -> Vec<Read> {
+        let parts = read_datagram(
+            octets,
+            |_| {
+                let association = self.association_of(peer)?;
+                Some(association.own.bundl && association.set.features.bundl)
+            },
+            |seid| {
+                let local = self.local_seid_of(peer, seid)?;
+                Some(self.sessions.get(&local)?.peer.ip())
+            },
+        );
+        let mut reads = Vec::new();
+        for part in parts {
+            let (this, header, message_type) = match part {
+                Part::Message(this, header, message_type) => (this, header, message_type),
+                Part::OtherVersion(_, header, message_type) => {
+                    match message_type {
+                        11 => reads.push(Read::EndsAll),
+                        _ if is_request(message_type) => {}
+                        _ => reads.push(Read::Ends(header.sequence)),
+                    }
+                    continue;
+                }
+                Part::TooShort(_) | Part::Refused(..) => continue,
+            };
+            if message_type == 11 {
+                reads.push(Read::EndsAll);
+                continue;
+            }
+            let sequence = header.sequence;
+            let Some(open) = self.answers.open(&(peer, sequence)) else {
+                continue;
+            };
+            if message_type != open.message_type + 1 {
+                continue;
+            }
+            reads.push(match Message::decode(this) {
+                Ok(message) => Read::Takes(sequence, message),
+                Err(_) => Read::Ends(sequence),
+            });
+        }
+        reads
     }
 
     /// Forget a request that the caller does not answer, as one that it dropped: a
@@ -722,41 +789,13 @@ impl Node {
     }
 }
 
-/// What the peer that sent `request` does with the octets of an answer, as a node reads a
-/// response.
+/// What the peer of the node does with a message of an answer to one of its requests.
 enum Read {
-    /// It takes the response that they are.
-    Taken(Message),
-    /// It ends its request unread: of another version (§7.6.2), a Version Not Supported
-    /// Response, or one whose Message Length or IEs do not decode (§7.6.1, §7.6.3).
-    Ended,
-    /// It discards them, and waits for the next: too short for a header, a message type of
-    /// no table, a request, or another sequence number or response type (§6.4, §7.6.4,
-    /// §7.6.5).
-    Discarded,
-}
-
-/// What the peer of `request` does with the answer `octets`.
-fn peer_reads(request: &Received, octets: &[u8]) -> Read {
-    let Some((header, message_type, _)) = Header::decode(octets) else {
-        return Read::Discarded;
-    };
-    let ours = header.sequence == request.sequence;
-    if header.version != 1 {
-        return match message_type == 11 || ours && !is_request(message_type) {
-            true => Read::Ended,
-            false => Read::Discarded,
-        };
-    }
-    let response = message_type == request.message_type + 1;
-    if message_type == 11 {
-        return Read::Ended;
-    }
-    if !ours || !response || message_type_info(message_type).is_none() {
-        return Read::Discarded;
-    }
-    match Message::decode(octets) {
-        Ok(message) => Read::Taken(message),
-        Err(_) => Read::Ended,
-    }
+    /// It takes the response of its request of this sequence number.
+    Takes(u32, Message),
+    /// It ends the request of this sequence number unread: a response of another version
+    /// (§7.6.2), or whose Message Length or IEs do not decode (§7.6.1, §7.6.3).
+    Ends(u32),
+    /// It ends every request to the node: a Version Not Supported Response (§7.2.1A).
+    EndsAll,
 }

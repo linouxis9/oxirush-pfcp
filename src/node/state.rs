@@ -367,8 +367,9 @@ pub(crate) struct Answered {
     pub(crate) response: Option<Vec<u8>>,
     /// The request, as the node gave it to the caller: an answer of another is not its.
     id: u64,
-    /// It had an answer of the type of its response, the one that changed the node.
-    settled: bool,
+    /// The request while its peer waits for its response, `None` once the peer took an
+    /// answer of the node or ended it: what the answer that it takes changes.
+    open: Option<alloc::boxed::Box<super::Received>>,
     expires: Duration,
     /// Its response is a rejection of the node's own.
     rejection: bool,
@@ -386,7 +387,7 @@ impl core::fmt::Debug for Answered {
                 &self.response.as_ref().map(|response| response.len()),
             )
             .field("id", &self.id)
-            .field("settled", &self.settled)
+            .field("open", &self.open.is_some())
             .field("expires", &self.expires)
             .field("rejection", &self.rejection)
             .finish()
@@ -397,8 +398,8 @@ impl core::fmt::Debug for Answered {
 /// most `capacity` of them: one that waits for its answer stays until the caller answers
 /// or forgets it, or `keep` after it came, and an answer until `keep` after it was given;
 /// a rejection of the node
-/// goes first, then the oldest answer. The answer of a request that changes the node is
-/// its first of the type of its response.
+/// goes first, then the oldest answer. A request is open while its peer waits for its
+/// response: the answer that the peer takes changes the node.
 #[derive(Debug, Default)]
 pub(crate) struct Answers {
     entries: BTreeMap<(SocketAddr, u32), Answered>,
@@ -488,17 +489,17 @@ impl Answers {
         true
     }
 
-    /// Keep the request `id` until its answer or `expires`, of a `stranger` without an
-    /// association or not: `false`, and counted, when there is no room.
+    /// Keep the request `received` until its answer or `expires`, of a `stranger` without
+    /// an association or not: `false`, and counted, when there is no room.
     pub(crate) fn wait(
         &mut self,
-        key: (SocketAddr, u32),
         request: Digest,
-        id: u64,
+        received: &super::Received,
         expires: Duration,
         capacity: usize,
         stranger: bool,
     ) -> bool {
+        let key = (received.from, received.sequence);
         self.remove(&key);
         if !self.room(capacity, false) {
             self.refused += 1;
@@ -507,8 +508,8 @@ impl Answers {
         let entry = Answered {
             request,
             response: None,
-            id,
-            settled: false,
+            id: received.id,
+            open: Some(alloc::boxed::Box::new(received.clone())),
             expires,
             rejection: false,
             stranger,
@@ -517,30 +518,42 @@ impl Answers {
         true
     }
 
-    /// Keep an answer of the request `id` until `expires`, `ends` for one that ends the
-    /// peer's request, read or not: whether it is the first such, which alone may change
-    /// the node. A later answer replaces the one kept, and one of a request that the node
-    /// no longer keeps is not kept.
+    /// Keep an answer of the request `id` until `expires`: a later answer replaces the one
+    /// kept, and one of a request that the node no longer keeps is not kept.
     pub(crate) fn answer(
         &mut self,
         key: (SocketAddr, u32),
         id: u64,
         response: Vec<u8>,
         expires: Duration,
-        ends: bool,
-    ) -> bool {
+    ) {
         if !self.entries.get(&key).is_some_and(|entry| entry.id == id) {
-            return false;
+            return;
         }
-        let Some(mut entry) = self.remove(&key) else {
-            return false;
-        };
-        let first = ends && !entry.settled;
-        entry.settled |= ends;
-        entry.response = Some(response);
-        entry.expires = expires;
-        self.insert(key, entry);
-        first
+        if let Some(mut entry) = self.remove(&key) {
+            entry.response = Some(response);
+            entry.expires = expires;
+            self.insert(key, entry);
+        }
+    }
+
+    /// The request of `key` while its peer waits for its response.
+    pub(crate) fn open(&self, key: &(SocketAddr, u32)) -> Option<&super::Received> {
+        self.entries.get(key)?.open.as_deref()
+    }
+
+    /// The sequence numbers of the requests of `peer` that wait for their response.
+    pub(crate) fn open_of(&self, peer: SocketAddr) -> Vec<u32> {
+        let of_peer = self.entries.range((peer, 0)..=(peer, u32::MAX));
+        let open = of_peer.filter(|(_, entry)| entry.open.is_some());
+        open.map(|((_, sequence), _)| *sequence).collect()
+    }
+
+    /// End the request of `key` as its peer does, which takes no answer of it after: the
+    /// request, as the node gave it to the caller, while it was open.
+    pub(crate) fn end(&mut self, key: &(SocketAddr, u32)) -> Option<super::Received> {
+        let open = self.entries.get_mut(key)?.open.take()?;
+        Some(*open)
     }
 
     /// Keep a rejection of the node's own of `request`, when there is room.
@@ -558,7 +571,7 @@ impl Answers {
                 request,
                 response: Some(response),
                 id: 0,
-                settled: true,
+                open: None,
                 expires,
                 rejection: true,
                 stranger: false,

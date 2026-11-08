@@ -518,3 +518,117 @@ fn a_retransmission_alone_of_a_bundled_request() {
     );
     assert_eq!(sent(&mut upf), answers[..1]);
 }
+
+/// `answer` with the FO flag, and a Message Length that ends it `cut` octets before its
+/// end: the peer reads the octets after as another message (§7.2.1A).
+fn cut_short(mut answer: Message, cut: u16) -> Message {
+    let length = answer.encode().unwrap().len() as u16 - 4;
+    answer.header.follow_on = true;
+    answer.header.length = Some(length - cut);
+    answer
+}
+
+/// A raw IE of 4 octets that a Length of 4 says, then `after`, which its IE does not count.
+fn followed_by(after: &[u8]) -> RawIe {
+    RawIe {
+        ie_type: 3000,
+        enterprise_id: None,
+        length: Some(4),
+        octets: [&[0; 4][..], after].concat().into(),
+    }
+}
+
+/// A probe's answer changes the node as its peer reads the datagram that it is (§6.5,
+/// §7.2.1A): a peer without an association takes no bundle, and its request waits for
+/// the next answer; one that agreed on bundling takes the first message of a session
+/// answer; one that did not discards it whole.
+#[test]
+fn an_answer_changes_the_node_as_its_peer_reads_its_bundle() {
+    // A setup answered with the FO flag and a Message Length short of its last IE
+    let mut smf = node(SMF, Function::Cp);
+    let mut upf = node(UPF, Function::Up);
+    let setup = AssociationSetupRequest::new(node_id(SMF), RecoveryTimeStamp::new(1000));
+    smf.request(at(0), UPF, Message::node(0, setup)).unwrap();
+    pass(&mut smf, &mut upf, UPF, at(0));
+    let (received, _) = request(&mut upf);
+    let answer = Message::node(received.sequence, setup_answer());
+    let bundled = cut_short(answer.clone(), 8);
+    upf.respond_message(at(0), &received, bundled, Delivery::Send)
+        .unwrap();
+    assert!(upf.association(SMF).is_none());
+    pass(&mut upf, &mut smf, SMF, at(0));
+    assert_eq!(
+        violations(&mut smf),
+        [ViolationKind::BundledWithoutAssociation]
+    );
+    upf.respond_message(at(0), &received, answer, Delivery::Send)
+        .unwrap();
+    pass(&mut upf, &mut smf, SMF, at(0));
+    assert!(upf.association(SMF).is_some() && smf.association(UPF).is_some());
+    // A deletion answered so, with BUNDL on both sides or not
+    for agreed in [true, false] {
+        let (mut smf, mut upf) = match agreed {
+            true => bundling(at(0)),
+            false => associated(at(0)),
+        };
+        let (cp_seid, up_seid) = established(&mut smf, &mut upf, at(0));
+        smf.session_request(at(1), cp_seid, SessionDeletionRequest::default())
+            .unwrap();
+        pass(&mut smf, &mut upf, UPF, at(1));
+        let (received, _) = request(&mut upf);
+        let mut deletion = SessionDeletionResponse::new(accepted());
+        deletion.raw.push(followed_by(&[0x20, 0, 0, 4, 0, 0, 0, 0]));
+        let answer = Message::session(cp_seid, received.sequence, deletion);
+        upf.respond_message(at(1), &received, cut_short(answer, 8), Delivery::Send)
+            .unwrap();
+        assert_eq!(upf.session(up_seid).is_none(), agreed, "{agreed}");
+        pass(&mut upf, &mut smf, SMF, at(1));
+        assert_eq!(smf.session(cp_seid).is_none(), agreed, "{agreed}");
+        let discarded = match agreed {
+            true => ViolationKind::UnknownMessage,
+            false => ViolationKind::BundlingNotAgreed,
+        };
+        assert_eq!(violations(&mut smf), [discarded]);
+    }
+}
+
+/// The message after the first of an answer that the peer takes as the response of
+/// another of its requests answers that request: the node changes as the peer does.
+#[test]
+fn an_answer_that_bundles_the_response_of_another_request_answers_it() {
+    let (mut smf, mut upf) = bundling(at(0));
+    let cp_seids = [smf.new_session(), smf.new_session()];
+    for cp_seid in cp_seids {
+        smf.request(at(1), UPF, establishment(cp_seid)).unwrap();
+    }
+    pass(&mut smf, &mut upf, UPF, at(1));
+    let received: Vec<Received> = events(&mut upf)
+        .into_iter()
+        .filter_map(|event| match event {
+            Event::Request { request, .. } => Some(request),
+            _ => None,
+        })
+        .collect();
+    let response = |up_seid: u64| {
+        let f_seid = FSeid::ipv4(up_seid, Ipv4Addr::new(10, 0, 0, 2));
+        SessionEstablishmentResponse::new(node_id(UPF), accepted()).with_up_f_seid(f_seid)
+    };
+    let up_seids = [upf.new_session(), upf.new_session()];
+    let second = Message::session(cp_seids[1], received[1].sequence, response(up_seids[1]));
+    let second = second.encode().unwrap();
+    let mut first = response(up_seids[0]);
+    first.raw.push(followed_by(&second));
+    let first = Message::session(cp_seids[0], received[0].sequence, first);
+    let cut = second.len() as u16;
+    upf.respond_message(at(1), &received[0], cut_short(first, cut), Delivery::Send)
+        .unwrap();
+    pass(&mut upf, &mut smf, SMF, at(1));
+    for (cp_seid, up_seid) in cp_seids.into_iter().zip(up_seids) {
+        assert_eq!(upf.session(up_seid).unwrap().peer_seid, Some(cp_seid));
+        assert_eq!(smf.session(cp_seid).unwrap().peer_seid, Some(up_seid));
+    }
+    // The second's own answer, which the peer discards, changes nothing
+    let third = upf.new_session();
+    upf.respond(at(1), &received[1], response(third)).unwrap();
+    assert!(upf.session(third).is_none());
+}

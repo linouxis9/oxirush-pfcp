@@ -45,77 +45,41 @@ pub(crate) enum Effect {
 
 impl Node {
     /// Take a datagram that `from` sent: each of its messages, bundled with the FO flag,
-    /// on its own (§6.5).
+    /// on its own (§6.5): the reader of a datagram that the node also reads its own
+    /// answers by, as its peer does ([`respond_message`](Self::respond_message)).
     pub fn handle_datagram(&mut self, now: Duration, from: SocketAddr, octets: &[u8]) {
         let from = canonical(from);
         self.prune(now);
-        let Some((header, message_type, _)) = Header::decode(octets) else {
-            // Too short for a header: discarded (§7.6.3).
-            self.events.push_back(Event::Malformed {
-                from,
-                error: crate::Error::TooShort {
-                    octets: octets.len(),
-                },
-            });
-            return;
-        };
-        if header.version != 1 {
-            // Answered once, and the rest of the datagram, whose framing the node does
-            // not know, discarded (§7.6.2).
-            self.other_version(now, from, octets, header, message_type);
-            return;
-        }
-        let parts = datagram_parts(octets);
-        let bundled = parts.len() > 1;
-        if bundled {
-            let refused = match self.bundling_with(from, &parts) {
-                Some(true) => None,
-                Some(false) => Some(ViolationKind::BundlingNotAgreed),
-                None => Some(ViolationKind::BundledWithoutAssociation),
-            };
-            if let Some(kind) = refused {
-                self.violation(from, kind, octets);
-                return;
-            }
-        }
-        // The address of the node's F-SEIDs of the sessions of the bundle, of the first
-        // whose session it knows (§6.5).
-        let mut local = None;
-        for this in parts {
-            let Some((header, message_type, _)) = Header::decode(this) else {
-                let error = crate::Error::TooShort { octets: this.len() };
-                self.malformed(now, from, error);
-                continue;
-            };
-            if header.version != 1 {
-                // As the first: answered, and the rest discarded (§7.6.2).
-                self.other_version(now, from, this, header, message_type);
-                return;
-            }
-            if bundled && is_node_related(message_type) {
-                self.violation(from, ViolationKind::BundledNodeMessage, this);
-                continue;
-            }
-            if bundled
-                && let Some(address) = header
-                    .seid
-                    .and_then(|seid| self.sessions.resolve(seid))
-                    .and_then(|seid| self.sessions.get(&seid))
-                    .and_then(|session| session.local_address)
-                && *local.get_or_insert(address) != address
-            {
-                self.violation(from, ViolationKind::BundledPeers, this);
-                continue;
-            }
-            let Some(stranger) = self.screen(now, from, this, header, message_type) else {
-                continue;
-            };
-            match Message::decode(this) {
-                Ok(message) => match is_request(message_type) {
-                    true => self.handle_request(now, from, this, message, stranger),
-                    false => self.handle_response(now, from, this, message),
-                },
-                Err(error) => self.malformed(now, from, error),
+        let parts = read_datagram(
+            octets,
+            |parts| self.bundling_with(from, parts),
+            |seid| {
+                let local = self.sessions.resolve(seid)?;
+                self.sessions.get(&local)?.local_address
+            },
+        );
+        for part in parts {
+            match part {
+                Part::TooShort(this) => {
+                    let error = crate::Error::TooShort { octets: this.len() };
+                    self.malformed(now, from, error);
+                }
+                Part::OtherVersion(this, header, message_type) => {
+                    self.other_version(now, from, this, header, message_type);
+                }
+                Part::Refused(this, kind) => self.violation(from, kind, this),
+                Part::Message(this, header, message_type) => {
+                    let Some(stranger) = self.screen(now, from, this, header, message_type) else {
+                        continue;
+                    };
+                    match Message::decode(this) {
+                        Ok(message) => match is_request(message_type) {
+                            true => self.handle_request(now, from, this, message, stranger),
+                            false => self.handle_response(now, from, this, message),
+                        },
+                        Err(error) => self.malformed(now, from, error),
+                    }
+                }
             }
         }
         self.prune_controls();
@@ -540,9 +504,8 @@ impl Node {
         }
         let unassociated = self.unassociated(from, message_type, message.header.seid);
         if !self.answers.wait(
-            (from, sequence),
             Digest::of(octets),
-            received.id,
+            &received,
             now.saturating_add(self.config.keep),
             self.config.capacity,
             unassociated,
@@ -716,6 +679,78 @@ pub(super) fn names(octets: &[u8]) -> (Option<NodeId>, Option<u64>) {
     }
     let f_seid = f_seid.flatten().map(|f_seid| f_seid.seid);
     (node_id.flatten(), f_seid)
+}
+
+/// A message of a datagram, as a node reads it before it judges it by what it holds.
+pub(super) enum Part<'a> {
+    /// A message of version 1, with its header and its message type.
+    Message(&'a [u8], Header, u8),
+    /// Octets too short for a header (§7.6.3).
+    TooShort(&'a [u8]),
+    /// A message of another version (§7.6.2): the last of the datagram that the node
+    /// reads, as it does not know the framing of the rest.
+    OtherVersion(&'a [u8], Header, u8),
+    /// Octets that the rules of bundling discard (§6.5): the whole datagram, or one of its
+    /// messages.
+    Refused(&'a [u8], ViolationKind),
+}
+
+/// The messages of a datagram, as its receiver reads them: each of those that the FO flag
+/// bundles (§7.2.1A), on its own, where the receiver and the sender agreed on bundling,
+/// `bundling` says, `None` without an association. A bundle is of session messages of one
+/// address of the receiver's F-SEIDs (§6.5), which `local_address` gives of a SEID. The
+/// receiver of a response reads it so, and a node reads its own answer so as its peer
+/// does.
+pub(super) fn read_datagram<'a>(
+    octets: &'a [u8],
+    bundling: impl FnOnce(&[&[u8]]) -> Option<bool>,
+    local_address: impl Fn(u64) -> Option<IpAddr>,
+) -> Vec<Part<'a>> {
+    let Some((header, message_type, _)) = Header::decode(octets) else {
+        return alloc::vec![Part::TooShort(octets)];
+    };
+    if header.version != 1 {
+        return alloc::vec![Part::OtherVersion(octets, header, message_type)];
+    }
+    let parts = datagram_parts(octets);
+    let bundled = parts.len() > 1;
+    if bundled {
+        let refused = match bundling(&parts) {
+            Some(true) => None,
+            Some(false) => Some(ViolationKind::BundlingNotAgreed),
+            None => Some(ViolationKind::BundledWithoutAssociation),
+        };
+        if let Some(kind) = refused {
+            return alloc::vec![Part::Refused(octets, kind)];
+        }
+    }
+    // The address of the receiver's F-SEIDs of the sessions of the bundle, of the first
+    // whose session it knows.
+    let mut local = None;
+    let mut read = Vec::with_capacity(parts.len());
+    for this in parts {
+        let Some((header, message_type, _)) = Header::decode(this) else {
+            read.push(Part::TooShort(this));
+            continue;
+        };
+        if header.version != 1 {
+            read.push(Part::OtherVersion(this, header, message_type));
+            break;
+        }
+        if bundled && is_node_related(message_type) {
+            read.push(Part::Refused(this, ViolationKind::BundledNodeMessage));
+            continue;
+        }
+        if bundled
+            && let Some(address) = header.seid.and_then(&local_address)
+            && *local.get_or_insert(address) != address
+        {
+            read.push(Part::Refused(this, ViolationKind::BundledPeers));
+            continue;
+        }
+        read.push(Part::Message(this, header, message_type));
+    }
+    read
 }
 
 /// The Node ID that a node related request carries.

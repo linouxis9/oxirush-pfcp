@@ -227,7 +227,7 @@ impl Incoming {
     }
 
     /// Answer the request with a message as it is, for a probe, any number of times
-    /// ([`Node::respond_message`]): the first that the peer takes alone changes the node.
+    /// ([`Node::respond_message`]): it changes the node as the peer reads it.
     ///
     /// # Errors
     ///

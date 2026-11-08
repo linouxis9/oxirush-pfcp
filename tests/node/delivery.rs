@@ -1569,6 +1569,49 @@ fn a_probe_answer_that_the_peer_cannot_read_changes_nothing() {
     assert!(upf.association(SMF).is_some() && smf.association(UPF).is_some());
 }
 
+/// §7.2.1A, §7.6.2: a Version Not Supported Response ends every request of the peer to
+/// the node, whichever request it answers: the node's answers to them after change
+/// nothing, as the peer discards them.
+#[test]
+fn a_version_not_supported_answer_ends_every_request_of_the_peer() {
+    let (mut smf, mut upf) = associated(at(0));
+    let cp_seids = [smf.new_session(), smf.new_session()];
+    for cp_seid in cp_seids {
+        smf.request(at(1), UPF, establishment(cp_seid)).unwrap();
+    }
+    pass(&mut smf, &mut upf, UPF, at(1));
+    let received: Vec<Received> = events(&mut upf)
+        .into_iter()
+        .filter_map(|event| match event {
+            Event::Request { request, .. } => Some(request),
+            _ => None,
+        })
+        .collect();
+    let unsupported = Message::node(received[0].sequence, VersionNotSupportedResponse::default());
+    upf.respond_message(at(1), &received[0], unsupported, Delivery::Send)
+        .unwrap();
+    pass(&mut upf, &mut smf, SMF, at(1));
+    let failed = events(&mut smf).into_iter().filter(|event| {
+        matches!(
+            event,
+            Event::Failed {
+                failure: Failure::VersionNotSupported,
+                ..
+            }
+        )
+    });
+    assert_eq!(failed.count(), 2);
+    let up_seid = upf.new_session();
+    let f_seid = FSeid::ipv4(up_seid, Ipv4Addr::new(10, 0, 0, 2));
+    let response =
+        SessionEstablishmentResponse::new(node_id(UPF), accepted()).with_up_f_seid(f_seid);
+    upf.respond(at(2), &received[1], response).unwrap();
+    assert!(upf.session(up_seid).is_none());
+    pass(&mut upf, &mut smf, SMF, at(2));
+    assert_eq!(violations(&mut smf), [ViolationKind::DuplicateResponse]);
+    assert!(smf.sessions().next().is_none());
+}
+
 /// §6.4: a peer's retransmission of a request that the node holds is an event, which a
 /// probe of the peer's retransmissions sees without forgetting the request: one that waits
 /// for the caller's answer, unanswered, and one answered from the cache, the caller's
