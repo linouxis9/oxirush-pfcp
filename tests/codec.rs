@@ -2643,6 +2643,57 @@ where
     value
 }
 
+/// Fields of each kind, read and written back as their figures have them, with their
+/// lengths and their trees: a counted list of QFIs (§8.2.156), a PLMN as TS 29.274 writes
+/// it (§8.2.108), two addresses after their types (§8.2.206), a key after its length
+/// (§8.2.276), a Rule ID after its type (§8.2.80), an FQ-CSID of an IPv6 node with a node
+/// type and later octets (§8.2.46).
+#[test]
+fn fields_of_each_kind_read_back_as_their_figures_have_them() {
+    let pmf: PmfControlInformation = read_back("04 02 01 05");
+    assert_eq!(pmf.qfis.map(|qfis| qfis.0.len()), Some(2));
+    let trace: TraceInformation = read_back("02f839 000001 0101 05 0102 040a000001");
+    assert_eq!(tree::Tree::to_tree(&trace)["MCC and MNC"], tree!("208-93"));
+    assert!(trace.deviations().is_empty());
+    let mbs: MbsSessionIdentifier = read_back("03 010203040506 04e8000001 040a000001");
+    assert!(mbs.deviations().is_empty(), "{:?}", mbs.deviations());
+    read_back::<MbsSessionIdentifier>("03 010203040506 04e8000001 820102");
+    let key: KeyIdAndSharedSecret = read_back("01aa 02bbcc");
+    assert_eq!(&key.shared_secret.0[..], [0xbb, 0xcc]);
+    assert_eq!(format!("{:?}", key.shared_secret), "SecretLv8(2 octets)");
+    read_back::<FailedRuleId>("00 0001");
+    let fq_csid: FqCsid = read_back("11 20010db8000000000000000000000001 0007 01 ff");
+    assert_eq!(
+        (fq_csid.node_type.is_some(), &fq_csid.extra[..]),
+        (true, &[0xff][..])
+    );
+    let fq_csid: FqCsid = read_back("03 0a000001 0001 0002 0003");
+    assert_eq!(
+        tree::Tree::to_tree(&fq_csid)["Node-Address"],
+        tree!("10.0.0.1")
+    );
+    // A tree of fifteen CSIDs at most, and of an address of the length of its type
+    let csids = |count: usize, address: &str| {
+        let written = tree!({"FQ-CSID Node-ID Type": 0, "Node-Address": address,
+            "PDN Connection Set Identifiers": vec![1u16; count]});
+        tree::from_value::<FqCsid>(&written)
+    };
+    assert!(csids(15, "10.0.0.1").is_ok());
+    assert!(csids(16, "10.0.0.1").is_err());
+    let short = tree!({"FQ-CSID Node-ID Type": 2, "Node-Address": "0a00",
+        "PDN Connection Set Identifiers": [1]});
+    assert!(tree::from_value::<FqCsid>(&short).is_err());
+    // A user of an NAI, as text; a key of more octets than its length can say
+    let user: UserId = read_back("08 0c 75736572406578616d706c65");
+    assert_eq!(tree::Tree::to_tree(&user)["NAI"], tree!("user@example"));
+    let key = KeyIdAndSharedSecret {
+        shared_secret: SecretLv8(vec![1; 256].into()),
+        ..key
+    };
+    assert!(key.encode(&mut Vec::new()).is_err());
+    assert!(!key.deviations().is_empty());
+}
+
 /// What a field holds at most: 255 values of a counted list (§8.2.156), which its tree
 /// reads too; a number of 40 bits (§8.2.8); a value of six bits (§8.2.214); an address of
 /// one of four types and of 63 octets (§8.2.207).
@@ -2659,6 +2710,14 @@ fn a_field_holds_what_its_bits_hold() {
     assert_eq!(found, [many]);
     let refused = tree::from_value::<PmfControlInformation>(&tree::Tree::to_tree(&qfis(256)));
     assert!(refused.is_err());
+    let most = tree::from_value::<PmfControlInformation>(&tree::Tree::to_tree(&qfis(255)));
+    assert_eq!(most.unwrap(), qfis(255));
+    assert!(qfis(255).encode(&mut Vec::new()).is_ok());
+    assert!(qfis(256).encode(&mut Vec::new()).is_err());
+    let mut wide = qfis(1);
+    wide.qfis = Some(Counted(vec![SixBits::new(Number(64))]));
+    assert!(wide.encode(&mut Vec::new()).is_err());
+    read_back::<DscpToPpiMappingInformation>("03 0a 0b");
     let most = (1u64 << 40) - 1;
     let mbr = |ul: u64| tree::from_value::<Mbr>(&tree!({"UL MBR": ul, "DL MBR": 0}));
     assert_eq!(mbr(most).unwrap().ul_mbr, U40(most));
@@ -2723,5 +2782,260 @@ fn a_field_holds_what_its_bits_hold() {
             fits,
             "{value:?}"
         );
+    }
+}
+
+/// The parts of the values that a caller reads: the Node ID Type of a Node ID of other
+/// octets, and the Node ID that its receiver takes (§8.2.38); the text of a text field;
+/// whether an IE has a null length; and octets that differ.
+#[test]
+fn what_a_caller_reads_of_a_value() {
+    let other = NodeId::Other(0x22, b"\x03smf".to_vec().into());
+    assert_eq!(other.node_id_type(), NodeIdType::Fqdn);
+    assert_eq!(
+        other.effective(),
+        Some(NodeId::Fqdn(b"\x03smf".to_vec().into()))
+    );
+    assert_eq!(NodeId::Other(0x02, Octets::default()).effective(), None);
+    assert_eq!(TextLv8::from("user@example").text(), Some("user@example"));
+    assert_eq!(TextLv8(vec![0xff].into()).text(), None);
+    assert!(RawIe::new(60, vec![]).is_null());
+    assert!(!RawIe::new(60, vec![1]).is_null());
+    let vendor = RawIe {
+        ie_type: 32769,
+        enterprise_id: Some(18553),
+        length: None,
+        octets: Octets::default(),
+    };
+    assert!(!vendor.is_null());
+    assert_ne!(Octets::from(vec![1]), Octets::from(vec![2]));
+    // A Node ID of other octets of an IPv6 address, which needs sixteen
+    let address: [u8; 16] = "2001:db8::1"
+        .parse::<std::net::Ipv6Addr>()
+        .unwrap()
+        .octets();
+    let v6 = NodeId::Other(0x01, address.to_vec().into());
+    assert_eq!(
+        v6.effective(),
+        Some(NodeId::Ipv6("2001:db8::1".parse().unwrap()))
+    );
+    assert_eq!(
+        NodeId::Other(0x01, address[..15].to_vec().into()).effective(),
+        None
+    );
+    // An address of IPv6 after its type, and a PLMN of its digits
+    let typed = TypedAddress::from(std::net::IpAddr::V6("2001:db8::1".parse().unwrap()));
+    assert_eq!(
+        (typed.address_type, typed.ip()),
+        (1, Some("2001:db8::1".parse().unwrap()))
+    );
+    let plmn: oxirush_utils::identity::Plmn = "208-93".parse().unwrap();
+    assert_eq!(PlmnId::from(plmn).plmn(), Some(plmn));
+}
+
+/// A value of each of the other kinds of field, read back with its length and its tree:
+/// sixteen octets of an NF Instance ID (§8.2.175), an address of each of the four types
+/// (§8.2.207), and a spare octet that is not zero, which check() tells (§8.1.2).
+#[test]
+fn the_other_fields_read_back_as_their_figures_have_them() {
+    read_back::<NfInstanceId>("00112233445566778899aabbccddeeff");
+    let typed = |address_type: u64| {
+        let source = tree!({"Address Type": address_type, "Address": "0102"});
+        let written = tree!({"SSMI": true, "Source Specific IP Multicast Address": {
+            "IP Multicast Distribution Address": "232.0.0.1", "IP Source Address": source}});
+        tree::from_value::<MbsSessionIdentifier>(&written)
+    };
+    assert!(typed(3).is_ok());
+    assert!(typed(4).is_err());
+    let filter: SdfFilter = read_back("00 01");
+    let found: Vec<_> = filter
+        .deviations()
+        .into_iter()
+        .map(|deviation| deviation.kind)
+        .collect();
+    assert_eq!(found, [DeviationKind::SpareBits]);
+}
+
+/// The Cause of a response, of each table of a response that has one, and none of the
+/// others.
+#[test]
+fn the_cause_of_each_response() {
+    let mut with = 0;
+    for info in MESSAGE_TYPES {
+        let session = !is_node_related(info.message_type);
+        let mut written =
+            tree!({"message": info.name(), "Sequence Number": 1, "ies": {"Cause": 3}});
+        if session {
+            written["SEID"] = tree!(1);
+        }
+        let has = info.table.row_of(19).is_some() && !is_request(info.message_type);
+        let Ok(message) = Message::from_tree(&written) else {
+            assert!(info.table.row_of(19).is_none(), "{}", info.name());
+            continue;
+        };
+        let partially = Some(CauseValue::RequestPartiallyAccepted);
+        assert_eq!(
+            message.body.cause(),
+            has.then_some(partially).flatten(),
+            "{}",
+            info.name()
+        );
+        with += usize::from(has);
+    }
+    assert_eq!(with, 11);
+}
+
+/// A Message Length that runs past the octets says how many follow the first four
+/// (§7.6.3), of a message and of its IEs alone.
+#[test]
+fn a_message_length_past_the_octets_says_how_many_follow() {
+    let octets = [0x20, 1, 0, 100, 0, 0, 1, 0, 0, 0x60, 0, 4];
+    let available = |error: &Error| matches!(error, Error::MessageLength { available: 8, .. });
+    assert!(available(&Message::decode(&octets).unwrap_err()));
+    match framing::message_ies(&octets) {
+        Err(error) => assert!(available(&error), "{error}"),
+        Ok(_) => panic!(),
+    }
+}
+
+/// A value added to a message that keeps the order of the wire goes to the place of its
+/// row: before the first IE of a later row that the wire has, or last after them all.
+#[test]
+fn a_value_added_to_a_message_of_its_own_order_goes_to_its_row() {
+    let ie = |ie_type: u16, content: &[u8]| {
+        [
+            &ie_type.to_be_bytes()[..],
+            &(content.len() as u16).to_be_bytes(),
+            content,
+        ]
+        .concat()
+    };
+    // A Remove FAR, then a Remove PDR, whose row is before it
+    let ies = [ie(16, &ie(108, &[0, 0, 0, 1])), ie(15, &ie(56, &[0, 1]))].concat();
+    let mut octets = vec![0x21, 52, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0];
+    octets.extend(ies);
+    let length = (octets.len() - 4) as u16;
+    octets[2..4].copy_from_slice(&length.to_be_bytes());
+    let mut message = Message::decode(&octets).unwrap();
+    assert_eq!(message.encode().unwrap(), octets);
+    let Body::SessionModificationRequest(request) = &mut message.body else {
+        panic!()
+    };
+    request.remove_pdr.push(RemovePdr::new(PdrId::new(2)));
+    request.remove_far.push(RemoveFar::new(FarId::new(2)));
+    let again = Message::decode(&message.encode().unwrap()).unwrap();
+    let Body::SessionModificationRequest(request) = again.body else {
+        panic!()
+    };
+    let pdrs: Vec<u16> = request
+        .remove_pdr
+        .iter()
+        .map(|pdr| pdr.pdr_id.as_ref().unwrap().value)
+        .collect();
+    let fars: Vec<u32> = request
+        .remove_far
+        .iter()
+        .map(|far| far.far_id.as_ref().unwrap().value)
+        .collect();
+    // The added Remove PDR before the Remove FAR of the wire, the added Remove FAR last
+    assert_eq!((pdrs, fars), (vec![2, 1], vec![1, 2]));
+}
+
+/// Each error of the codec says what it is, apart from the others, with its numbers.
+#[test]
+fn an_error_of_the_codec_says_what_it_is() {
+    let wide = Header {
+        version: 9,
+        ..Header::node(1)
+    };
+    let heartbeat = HeartbeatRequest::new(RecoveryTimeStamp::new(7));
+    let long =
+        HeartbeatRequest::new(RecoveryTimeStamp::new(7)).with_source_ip_address(SourceIpAddress {
+            v4: true,
+            ..Default::default()
+        });
+    let mut raw = HeartbeatRequest::new(RecoveryTimeStamp::new(7));
+    raw.raw.push(RawIe::new(60, vec![0; 70_000]));
+    let errors = [
+        Message::decode(&[0x20, 1, 0]).unwrap_err(),
+        Message::decode(&[0x20, 1, 0, 100, 0, 0, 1, 0]).unwrap_err(),
+        Message::decode(&[0x20, 1, 0, 6, 0, 0, 1, 0, 0, 0x60]).unwrap_err(),
+        Message::encode(&Message {
+            header: wide,
+            body: heartbeat.into(),
+        })
+        .unwrap_err(),
+        Message::node(1, raw).encode().unwrap_err(),
+        Message::node(1, long).encode().unwrap_err(),
+    ];
+    let texts: Vec<String> = errors.iter().map(ToString::to_string).collect();
+    let distinct: std::collections::BTreeSet<&str> = texts.iter().map(String::as_str).collect();
+    assert_eq!(distinct.len(), texts.len(), "{texts:?}");
+    for (text, number) in texts
+        .iter()
+        .zip(["3", "100", "6", "9", "70000", "IPv4 address"])
+    {
+        assert!(text.contains(number), "{text}");
+    }
+    // The fault of the IEs: a header cut short, and a Length past its message
+    let fault = |octets: &[u8]| match Message::decode(octets).unwrap_err() {
+        Error::Ies { fault, .. } => fault.to_string(),
+        other => panic!("{other}"),
+    };
+    let cut = fault(&[0x20, 1, 0, 6, 0, 0, 1, 0, 0, 0x60]);
+    assert!(cut.contains("2 octets") && texts[2].contains(&cut), "{cut}");
+    let long = fault(&[0x20, 1, 0, 9, 0, 0, 1, 0, 0, 0x60, 0, 9, 1]);
+    assert!(
+        long.contains("IE type 96 has the Length 9, and 1 octets"),
+        "{long}"
+    );
+}
+
+/// The framing of an IE: of a vendor, its Enterprise ID apart from its value, which an IE
+/// of 3GPP has not (§8.1.1).
+#[test]
+fn the_framing_of_an_ie_of_a_vendor() {
+    let first = |octets: &[u8]| {
+        let ie = framing::ies(octets).next().unwrap().unwrap();
+        (
+            ie.ie_type,
+            ie.length,
+            ie.enterprise_id,
+            ie.value.to_vec(),
+            ie.content().to_vec(),
+        )
+    };
+    let vendor = first(&[0x80, 0x01, 0, 3, 0x48, 0x79, 0xaa]);
+    assert_eq!(
+        vendor,
+        (32769, 3, Some(18553), vec![0xaa], vec![0x48, 0x79, 0xaa])
+    );
+    assert_eq!(first(&[0, 60, 0, 1, 7]), (60, 1, None, vec![7], vec![7]));
+}
+
+/// The spare bits of a header that a sender set are written in their places, and read back
+/// (§7.2.2.1): bits 4 and 5 of the first octet, and the last octet or its low half.
+#[test]
+fn the_spare_bits_of_a_header_are_in_their_places() {
+    for header in [
+        Header {
+            spare: 2,
+            spare_last: 0x55,
+            ..Header::node(1)
+        },
+        Header {
+            spare: 1,
+            priority: Some(3),
+            spare_last: 0x5,
+            ..Header::session(7, 1)
+        },
+    ] {
+        let message = Message {
+            header,
+            body: HeartbeatRequest::new(RecoveryTimeStamp::new(7)).into(),
+        };
+        let octets = message.encode().unwrap();
+        assert_eq!(octets[0] >> 3 & 3, header.spare);
+        assert_eq!(Message::decode(&octets).unwrap().header, header);
     }
 }

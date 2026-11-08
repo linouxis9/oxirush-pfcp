@@ -304,3 +304,19 @@ fn a_decoded_message_takes_at_most_243_times_its_octets() {
     }
     assert!((242.0..=243.0).contains(&worst.0), "{worst:?}");
 }
+
+/// Octets of up to 22 are held in their value, and take nothing of the heap, more take
+/// their length: copied, from a list, from a slice and from an array alike.
+#[test]
+fn short_octets_take_nothing_of_the_heap() {
+    let mut kept = None;
+    assert_eq!(held(|| kept = Some(Octets::copied(&[1; 22]))), 0);
+    assert_eq!(held(|| kept = Some(Octets::copied(&[1; 23]))), 23);
+    assert_eq!(held(|| kept = Some(Octets::from(vec![1, 2, 3]))), -23);
+    assert_eq!(kept.as_deref().unwrap(), [1, 2, 3]);
+    assert_eq!(held(|| kept = Some(Octets::from(vec![7; 30]))), 30);
+    kept = None;
+    assert_eq!(&Octets::from(&[1, 2][..])[..], [1, 2]);
+    assert_eq!(&Octets::from([4, 5, 6])[..], [4, 5, 6]);
+    assert!(kept.is_none());
+}
