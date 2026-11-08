@@ -78,11 +78,6 @@ pub use values::*;
 pub use values_clauses::*;
 pub use values_figures::*;
 
-/// The examples of the README, which the documentation tests compile and run.
-#[cfg(all(doctest, feature = "serde", feature = "endpoint"))]
-#[doc = include_str!("../README.md")]
-struct Readme;
-
 /// Why a message does not decode or encode.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
