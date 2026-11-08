@@ -170,16 +170,17 @@ jobs:
           path: fuzz/artifacts
 
   # The targets beside those of the codec and the node, in a job of their own: the paths
-  # of a message, the edits of its tree and the codec against rs-pfcp, a minute each.
+  # of a message, the edits of its tree, two endpoints and the codec against rs-pfcp, a
+  # minute each.
   fuzz-more:
-    name: Fuzz the trees and against rs-pfcp (3 minutes)
+    name: Fuzz the trees, the endpoint and against rs-pfcp (4 minutes)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@nightly
       - run: cargo install cargo-fuzz@0.13.2 --locked
       - run: |
-          for target in paths edit; do
+          for target in paths edit endpoint; do
             cargo fuzz run "$target" -- -max_total_time=60
           done
           mkdir -p fuzz/corpus/differential

@@ -15,7 +15,11 @@ serde_json = "1"
 
 [dependencies.oxirush-pfcp]
 path = ".."
-features = ["tree", "node"]
+features = ["tree", "node", "endpoint"]
+
+[dependencies.tokio]
+version = "1.38"
+features = ["macros", "net", "rt", "sync", "time"]
 
 # Not part of any parent workspace.
 # A codec of PFCP written apart from this crate (Apache-2.0), which only the differential
@@ -61,6 +65,13 @@ bench = false
 [[bin]]
 name = "edit"
 path = "fuzz_targets/edit.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "endpoint"
+path = "fuzz_targets/endpoint.rs"
 test = false
 doc = false
 bench = false
