@@ -130,21 +130,16 @@ pub struct RawIe {
 pub(crate) const UNKNOWN_OCTETS: &str = "unknown octets";
 
 /// Whether an IE of `ie_type` may hold a key: one of a key, or a grouped IE that a table
-/// gives one, at any depth.
-fn holds_secret(ie_type: u16, depth: u8) -> bool {
+/// gives one, at any depth. No grouped IE holds one of its own type, at any depth.
+fn holds_secret(ie_type: u16) -> bool {
     if crate::values_clauses::SECRETS.contains(&ie_type) {
         return true;
     }
     let Some(info) = crate::registry::ie_type_info(ie_type) else {
         return false;
     };
-    depth < 8
-        && info.tables.iter().any(|table| {
-            table
-                .rows
-                .iter()
-                .any(|row| holds_secret(row.ie_type, depth + 1))
-        })
+    let mut rows = info.tables.iter().flat_map(|table| table.rows.iter());
+    rows.any(|row| holds_secret(row.ie_type))
 }
 
 impl core::fmt::Debug for RawIe {
@@ -155,7 +150,7 @@ impl core::fmt::Debug for RawIe {
             .field("enterprise_id", &self.enterprise_id)
             .field("length", &self.length);
         // Of a type of 3GPP whatever its Enterprise ID, which a tree may give it.
-        match holds_secret(self.ie_type, 0) {
+        match holds_secret(self.ie_type) {
             true => debug.field("octets", &format_args!("{} octets", self.octets.len())),
             false => debug.field("octets", &self.octets),
         };

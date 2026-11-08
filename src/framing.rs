@@ -85,8 +85,9 @@ pub fn message_ies(octets: &[u8]) -> Result<(Header, u8, Ies<'_>), Error> {
         octets: octets.len(),
     })?;
     let end = 4 + usize::from(length);
+    // A Message Length shorter than the header is a range that ends before it starts.
     match octets.get(header.encoded_len()..end) {
-        Some(content) if end >= header.encoded_len() => Ok((header, message_type, ies(content))),
+        Some(content) => Ok((header, message_type, ies(content))),
         _ => Err(Error::MessageLength {
             header,
             message_type,

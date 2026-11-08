@@ -138,7 +138,10 @@ pub(crate) trait FieldValues<T> {
     /// The values, in their order.
     fn values(&self) -> &[T];
     /// The first value: that of a field that is there once.
-    fn first(&self) -> Option<&T>;
+    #[inline(always)]
+    fn first(&self) -> Option<&T> {
+        self.values().first()
+    }
     /// Set the value, or add it to the list.
     fn add(&mut self, value: T);
 }
@@ -147,10 +150,6 @@ impl<T> FieldValues<T> for Option<T> {
     #[inline(always)]
     fn values(&self) -> &[T] {
         self.as_slice()
-    }
-    #[inline(always)]
-    fn first(&self) -> Option<&T> {
-        self.as_ref()
     }
     fn add(&mut self, value: T) {
         *self = Some(value);
@@ -165,10 +164,6 @@ impl<T> FieldValues<T> for Option<alloc::boxed::Box<T>> {
             None => &[],
         }
     }
-    #[inline(always)]
-    fn first(&self) -> Option<&T> {
-        self.as_deref()
-    }
     fn add(&mut self, value: T) {
         *self = Some(alloc::boxed::Box::new(value));
     }
@@ -178,10 +173,6 @@ impl<T> FieldValues<T> for Vec<T> {
     #[inline(always)]
     fn values(&self) -> &[T] {
         self
-    }
-    #[inline(always)]
-    fn first(&self) -> Option<&T> {
-        <[T]>::first(self)
     }
     fn add(&mut self, value: T) {
         self.push(value);

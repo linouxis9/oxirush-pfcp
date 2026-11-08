@@ -176,10 +176,8 @@ impl Message {
             octets: octets.len(),
         })?;
         let end = 4 + usize::from(length);
-        let Some(content) = octets
-            .get(header.encoded_len()..end)
-            .filter(|_| end >= header.encoded_len())
-        else {
+        // A Message Length shorter than the header is a range that ends before it starts.
+        let Some(content) = octets.get(header.encoded_len()..end) else {
             return Err(Error::MessageLength {
                 header,
                 message_type,
