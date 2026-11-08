@@ -164,12 +164,7 @@ fn established(smf: &mut Node, upf: &mut Node, now: Duration) -> (u64, u64) {
 /// A session between them, of a UP F-SEID of `address`.
 fn established_on(smf: &mut Node, upf: &mut Node, now: Duration, address: Ipv4Addr) -> (u64, u64) {
     let cp_seid = smf.new_session();
-    let f_seid = FSeid {
-        v4: true,
-        seid: cp_seid,
-        ipv4: Some(Ipv4Addr::new(10, 0, 0, 1)),
-        ..Default::default()
-    };
+    let f_seid = FSeid::ipv4(cp_seid, Ipv4Addr::new(10, 0, 0, 1));
     let pdr = CreatePdr::new_n4(
         PdrId::new(1),
         Precedence::new(1),
@@ -188,12 +183,7 @@ fn established_on(smf: &mut Node, upf: &mut Node, now: Duration, address: Ipv4Ad
     pass(smf, upf, UPF, now);
     let (received, _) = request(upf);
     let up_seid = upf.new_session();
-    let up_f_seid = FSeid {
-        v4: true,
-        seid: up_seid,
-        ipv4: Some(address),
-        ..Default::default()
-    };
+    let up_f_seid = FSeid::ipv4(up_seid, address);
     let response =
         SessionEstablishmentResponse::new(node_id(UPF), accepted()).with_up_f_seid(up_f_seid);
     upf.respond(now, &received, response).unwrap();
@@ -311,12 +301,7 @@ fn fqdn(name: &str) -> NodeId {
 
 /// An establishment of the SMF with `cp_seid` in its CP F-SEID.
 fn establishment(cp_seid: u64) -> Message {
-    let f_seid = FSeid {
-        v4: true,
-        seid: cp_seid,
-        ipv4: Some(Ipv4Addr::new(10, 0, 0, 1)),
-        ..Default::default()
-    };
+    let f_seid = FSeid::ipv4(cp_seid, Ipv4Addr::new(10, 0, 0, 1));
     let pdr = CreatePdr::new_n4(
         PdrId::new(1),
         Precedence::new(1),

@@ -23,12 +23,7 @@ use oxirush_pfcp::*;
 
 #[test]
 fn a_message_and_an_ie_are_their_trees_in_json() {
-    let seid = FSeid {
-        v4: true,
-        seid: 0x1001,
-        ipv4: Some(Ipv4Addr::new(10, 0, 0, 1)),
-        ..Default::default()
-    };
+    let seid = FSeid::ipv4(0x1001, Ipv4Addr::new(10, 0, 0, 1));
     let pdr = CreatePdr::new_n4(
         PdrId::new(1),
         Precedence::new(255),

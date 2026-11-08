@@ -46,12 +46,7 @@ fn far(id: u32) -> CreateFar {
 }
 
 fn establishment() -> Message {
-    let seid = FSeid {
-        v4: true,
-        seid: 0x1001,
-        ipv4: Some(SMF),
-        ..Default::default()
-    };
+    let seid = FSeid::ipv4(0x1001, SMF);
     let request = SessionEstablishmentRequest::new_n4(NodeId::Ipv4(SMF), seid, pdr(1), far(1));
     Message::session(0, 7, request)
 }
@@ -458,12 +453,7 @@ fn a_rejection_carries_only_what_it_may() {
     let Body::SessionEstablishmentResponse(response) = &mut message.body else {
         panic!()
     };
-    response.up_f_seid = Some(FSeid {
-        v4: true,
-        seid: 1,
-        ipv4: Some(SMF),
-        ..Default::default()
-    });
+    response.up_f_seid = Some(FSeid::ipv4(1, SMF));
     assert_eq!(
         kinds(&message, Interfaces::N4),
         [DeviationKind::WithRejection { ie_type: 57 }]
@@ -608,12 +598,7 @@ fn seid_0_only_where_the_peer_seid_is_not_known() {
 /// the previous one; one of a known SEID has none.
 #[test]
 fn a_report_of_seid_0_carries_the_old_cp_f_seid() {
-    let old = FSeid {
-        v4: true,
-        seid: 0x1234,
-        ipv4: Some(SMF),
-        ..Default::default()
-    };
+    let old = FSeid::ipv4(0x1234, SMF);
     let report = |seid, with_old| {
         let mut body = SessionReportRequest::new(ReportType {
             uisr: true,
@@ -711,12 +696,7 @@ fn check_overload_reduction_metric() {
     let response = SessionEstablishmentResponse {
         node_id: Some(NodeId::Ipv4(SMF)),
         cause: Some(Cause::new(CauseValue::RequestAccepted)),
-        up_f_seid: Some(FSeid {
-            v4: true,
-            seid: 1,
-            ipv4: Some(SMF),
-            ..Default::default()
-        }),
+        up_f_seid: Some(FSeid::ipv4(1, SMF)),
         overload_control_information: Some(Box::new(overload)),
         ..Default::default()
     };
@@ -1382,12 +1362,7 @@ fn a_conditional_ie_that_does_not_decode_is_incorrect() {
             NodeId::Ipv4(SMF),
             Cause::new(CauseValue::RequestAccepted),
         )
-        .with_up_f_seid(FSeid {
-            v4: true,
-            seid: 0x2001,
-            ipv4: Some(SMF),
-            ..Default::default()
-        })
+        .with_up_f_seid(FSeid::ipv4(0x2001, SMF))
         .with_created_pdr(created),
     );
     assert_eq!(
@@ -2108,12 +2083,7 @@ fn the_rows_whose_condition_is_checked() {
 #[test]
 fn eps_cups_on_its_interfaces() {
     let smf = NodeId::Ipv4(SMF);
-    let seid = FSeid {
-        v4: true,
-        seid: 0x1001,
-        ipv4: Some(SMF),
-        ..Default::default()
-    };
+    let seid = FSeid::ipv4(0x1001, SMF);
     let pdi = || Pdi::new(SourceInterface::new(SourceInterfaceValue::Access));
     let buffering = CreateFar::new(
         FarId::new(1),
@@ -2247,12 +2217,7 @@ fn messages_of_each_interface() {
         node_type: None,
         extra: Octets::default(),
     };
-    let seid = FSeid {
-        v4: true,
-        seid: 0x1001,
-        ipv4: Some(SMF),
-        ..Default::default()
-    };
+    let seid = FSeid::ipv4(0x1001, SMF);
     let pdi = || Pdi::new(SourceInterface::new(SourceInterfaceValue::Core));
     let urr = UsageReport::new(
         UrrId::new(1),
@@ -2857,12 +2822,7 @@ fn the_aoci_of_a_rejected_establishment() {
         let response = SessionEstablishmentResponse::new(NodeId::Ipv4(SMF), Cause::new(cause))
             .with_overload_control_information(oci(flags));
         let response = match cause {
-            CauseValue::RequestAccepted => response.with_up_f_seid(FSeid {
-                v4: true,
-                seid: 0x2001,
-                ipv4: Some(SMF),
-                ..Default::default()
-            }),
+            CauseValue::RequestAccepted => response.with_up_f_seid(FSeid::ipv4(0x2001, SMF)),
             _ => response,
         };
         Message::session(0x1001, 7, response)

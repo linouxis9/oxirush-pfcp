@@ -363,12 +363,7 @@ fn overload_of_the_address_of_the_up_f_seid() {
     // The establishment's own response: of the address of the UP F-SEID that it gives
     let (mut smf, mut upf) = associated(at(0));
     let cp_seid = smf.new_session();
-    let f_seid = FSeid {
-        v4: true,
-        seid: cp_seid,
-        ipv4: Some(Ipv4Addr::new(10, 0, 0, 1)),
-        ..Default::default()
-    };
+    let f_seid = FSeid::ipv4(cp_seid, Ipv4Addr::new(10, 0, 0, 1));
     let pdr = CreatePdr::new_n4(
         PdrId::new(1),
         Precedence::new(1),
@@ -386,12 +381,7 @@ fn overload_of_the_address_of_the_up_f_seid() {
     smf.request(at(1), UPF, message).unwrap();
     pass(&mut smf, &mut upf, UPF, at(1));
     let (received, _) = request(&mut upf);
-    let up_f_seid = FSeid {
-        v4: true,
-        seid: upf.new_session(),
-        ipv4: Some(Ipv4Addr::new(10, 0, 0, 22)),
-        ..Default::default()
-    };
+    let up_f_seid = FSeid::ipv4(upf.new_session(), Ipv4Addr::new(10, 0, 0, 22));
     let overload = *with_overload(1, 100, 30, false)
         .overload_control_information
         .unwrap();

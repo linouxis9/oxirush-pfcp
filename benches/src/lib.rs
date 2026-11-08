@@ -81,7 +81,7 @@ fn pdr(id: u16, uplink: bool) -> CreatePdr {
 /// one QER, with the SMF's Node ID as an FQDN.
 pub fn establishment(pdrs: u16) -> Vec<u8> {
     let smf = Ipv4Addr::new(10, 0, 0, 1);
-    let seid = FSeid { v4: true, seid: 0x1001, ipv4: Some(smf), ..Default::default() };
+    let seid = FSeid::ipv4(0x1001, smf);
     let mut labels = Vec::new();
     for label in "smf.5gc.mnc093.mcc208.3gppnetwork.org".split('.') {
         labels.push(label.len() as u8);

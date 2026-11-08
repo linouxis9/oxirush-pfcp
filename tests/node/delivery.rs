@@ -354,12 +354,8 @@ fn a_request_of_a_false_length_is_answered_invalid_length() {
     // An IE that runs past its message is named in the answer (§7.6.7): of a session
     // that the node has, as a session that it does not have is answered so first. The
     // answer says the priority that the request says.
-    let modification = SessionModificationRequest::default().with_cp_f_seid(FSeid {
-        v4: true,
-        seid: 1,
-        ipv4: Some(Ipv4Addr::new(10, 0, 0, 1)),
-        ..Default::default()
-    });
+    let modification = SessionModificationRequest::default()
+        .with_cp_f_seid(FSeid::ipv4(1, Ipv4Addr::new(10, 0, 0, 1)));
     let mut octets = Message {
         header: Header {
             priority: Some(3),
@@ -1182,12 +1178,7 @@ fn requests_go_to_port_8805() {
     events(&mut upf);
     upf.handle_timeout(at(10));
     assert_eq!(sent(&mut upf)[0].to, SMF, "the heartbeat");
-    let f_seid = FSeid {
-        v4: true,
-        seid: 77,
-        ipv4: Some(Ipv4Addr::new(10, 0, 0, 1)),
-        ..Default::default()
-    };
+    let f_seid = FSeid::ipv4(77, Ipv4Addr::new(10, 0, 0, 1));
     let pdr = CreatePdr::new_n4(
         PdrId::new(1),
         Precedence::new(1),
@@ -1208,12 +1199,7 @@ fn requests_go_to_port_8805() {
     upf.handle_datagram(at(11), ephemeral, &establishment.encode().unwrap());
     let (received, _) = request(&mut upf);
     let up_seid = upf.new_session();
-    let up_f_seid = FSeid {
-        v4: true,
-        seid: up_seid,
-        ipv4: Some(Ipv4Addr::new(10, 0, 0, 2)),
-        ..Default::default()
-    };
+    let up_f_seid = FSeid::ipv4(up_seid, Ipv4Addr::new(10, 0, 0, 2));
     let response =
         SessionEstablishmentResponse::new(node_id(UPF), accepted()).with_up_f_seid(up_f_seid);
     upf.respond(at(11), &received, response).unwrap();
@@ -1351,12 +1337,8 @@ fn a_probe_answer_of_another_type_leaves_the_next_one_its_effect() {
     let right = Message::session(
         cp_seid,
         received.sequence,
-        SessionEstablishmentResponse::new(node_id(UPF), accepted()).with_up_f_seid(FSeid {
-            v4: true,
-            seid: up_seid,
-            ipv4: Some(Ipv4Addr::new(10, 0, 0, 2)),
-            ..Default::default()
-        }),
+        SessionEstablishmentResponse::new(node_id(UPF), accepted())
+            .with_up_f_seid(FSeid::ipv4(up_seid, Ipv4Addr::new(10, 0, 0, 2))),
     );
     upf.respond_message(at(0), &received, right, Delivery::Send)
         .unwrap();

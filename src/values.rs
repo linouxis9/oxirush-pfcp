@@ -1249,6 +1249,28 @@ pfcp_layout! {
     }
 }
 
+impl FSeid {
+    /// An F-SEID of an IPv4 address.
+    pub fn ipv4(seid: u64, address: Ipv4Addr) -> Self {
+        Self {
+            v4: true,
+            seid,
+            ipv4: Some(address),
+            ..Self::default()
+        }
+    }
+
+    /// An F-SEID of an IPv6 address.
+    pub fn ipv6(seid: u64, address: Ipv6Addr) -> Self {
+        Self {
+            v6: true,
+            seid,
+            ipv6: Some(address),
+            ..Self::default()
+        }
+    }
+}
+
 impl FTeid {
     /// An F-TEID of an IPv4 address.
     pub fn ipv4(teid: u32, address: Ipv4Addr) -> Self {

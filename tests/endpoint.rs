@@ -65,12 +65,7 @@ async fn an_smf_and_a_upf_set_up_an_association_and_a_session() {
                 }
                 Body::SessionEstablishmentRequest(_) => {
                     let seid = upf_handle.with(|node, _| node.new_session()).await.unwrap();
-                    let f_seid = FSeid {
-                        v4: true,
-                        seid,
-                        ipv4: Some(Ipv4Addr::LOCALHOST),
-                        ..Default::default()
-                    };
+                    let f_seid = FSeid::ipv4(seid, Ipv4Addr::LOCALHOST);
                     let response = SessionEstablishmentResponse::new(
                         NodeId::Ipv4(Ipv4Addr::LOCALHOST),
                         accepted(),
@@ -94,12 +89,7 @@ async fn an_smf_and_a_upf_set_up_an_association_and_a_session() {
     assert_eq!(response.body.cause(), Some(CauseValue::RequestAccepted));
 
     let seid = smf.with(|node, _| node.new_session()).await.unwrap();
-    let f_seid = FSeid {
-        v4: true,
-        seid,
-        ipv4: Some(Ipv4Addr::LOCALHOST),
-        ..Default::default()
-    };
+    let f_seid = FSeid::ipv4(seid, Ipv4Addr::LOCALHOST);
     let pdr = CreatePdr::new_n4(
         PdrId::new(1),
         Precedence::new(1),
@@ -152,12 +142,7 @@ async fn answer(handle: &Handle, incoming: Incoming) {
         }
         Body::SessionEstablishmentRequest(_) => {
             let seid = handle.with(|node, _| node.new_session()).await.unwrap();
-            let f_seid = FSeid {
-                v4: true,
-                seid,
-                ipv4: Some(Ipv4Addr::LOCALHOST),
-                ..Default::default()
-            };
+            let f_seid = FSeid::ipv4(seid, Ipv4Addr::LOCALHOST);
             let response =
                 SessionEstablishmentResponse::new(node_id, accepted()).with_up_f_seid(f_seid);
             incoming.respond(response).await
@@ -198,12 +183,7 @@ async fn both_ways_at_once() {
     );
     let report = upf_handle.request(smf_address, Message::node(0, report));
     let seid = smf_handle.with(|node, _| node.new_session()).await.unwrap();
-    let f_seid = FSeid {
-        v4: true,
-        seid,
-        ipv4: Some(Ipv4Addr::LOCALHOST),
-        ..Default::default()
-    };
+    let f_seid = FSeid::ipv4(seid, Ipv4Addr::LOCALHOST);
     let pdr = CreatePdr::new_n4(
         PdrId::new(1),
         Precedence::new(1),
@@ -832,12 +812,7 @@ async fn an_entity_of_the_smf_takes_a_session_over() {
         report.old_cp_f_seid = old;
         Message::session(seid, sequence, report).encode().unwrap()
     };
-    let old = FSeid {
-        v4: true,
-        seid: 0x1234,
-        ipv4: Some(Ipv4Addr::new(10, 0, 0, 9)),
-        ..Default::default()
-    };
+    let old = FSeid::ipv4(0x1234, Ipv4Addr::new(10, 0, 0, 9));
     let handover = ReportType {
         uisr: true,
         ..Default::default()
@@ -860,12 +835,7 @@ async fn an_entity_of_the_smf_takes_a_session_over() {
     let adopt = move |node: &mut Node, _| node.adopt_session(local, upf_address, 0x66);
     handle.with(adopt).await.unwrap().unwrap();
     assert_eq!(handle.with(adopt).await.unwrap(), Err(NodeError::SeidInUse));
-    let cp_f_seid = FSeid {
-        v4: true,
-        seid: local,
-        ipv4: Some(Ipv4Addr::LOCALHOST),
-        ..Default::default()
-    };
+    let cp_f_seid = FSeid::ipv4(local, Ipv4Addr::LOCALHOST);
     let answer = SessionReportResponse::new(accepted()).with_cp_f_seid(cp_f_seid);
     incoming.respond_as(local, answer).await.unwrap();
     let mut buffer = vec![0; 65_535];

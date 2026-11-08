@@ -238,12 +238,7 @@ fn session_needs_association() {
         Err(NodeError::NoAssociation)
     );
     // A UPF answers a session from a peer without an association
-    let f_seid = FSeid {
-        v4: true,
-        seid: 0x55,
-        ipv4: Some(Ipv4Addr::new(10, 0, 0, 1)),
-        ..Default::default()
-    };
+    let f_seid = FSeid::ipv4(0x55, Ipv4Addr::new(10, 0, 0, 1));
     let pdr = CreatePdr::new_n4(
         PdrId::new(1),
         Precedence::new(1),
@@ -613,12 +608,7 @@ fn peers_on_one_address() {
             let answer =
                 AssociationSetupResponse::new(fqdn("upf"), accepted(), RecoveryTimeStamp::new(1));
             upf.respond(at(0), &received, answer).unwrap();
-            let f_seid = FSeid {
-                v4: true,
-                seid: 0x10,
-                ipv4: Some(Ipv4Addr::LOCALHOST),
-                ..Default::default()
-            };
+            let f_seid = FSeid::ipv4(0x10, Ipv4Addr::LOCALHOST);
             let pdr = CreatePdr::new_n4(
                 PdrId::new(1),
                 Precedence::new(1),
@@ -639,12 +629,7 @@ fn peers_on_one_address() {
             upf.handle_datagram(at(1), peer, &establishment.encode().unwrap());
             let (received, _) = request(&mut upf);
             let up_seid = upf.new_session();
-            let up_f_seid = FSeid {
-                v4: true,
-                seid: up_seid,
-                ipv4: Some(Ipv4Addr::LOCALHOST),
-                ..Default::default()
-            };
+            let up_f_seid = FSeid::ipv4(up_seid, Ipv4Addr::LOCALHOST);
             let response = SessionEstablishmentResponse::new(fqdn("upf"), accepted())
                 .with_up_f_seid(up_f_seid);
             upf.respond(at(1), &received, response).unwrap();

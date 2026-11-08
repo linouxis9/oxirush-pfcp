@@ -293,12 +293,7 @@ fn a_bundle_of_an_f_seid_address_is_taken_as_its_messages_alone() {
     let cp_address = Ipv4Addr::new(10, 0, 0, 11);
     let up_seids: Vec<u64> = (0..2)
         .map(|_| {
-            let f_seid = FSeid {
-                v4: true,
-                seid: smf.new_session(),
-                ipv4: Some(cp_address),
-                ..Default::default()
-            };
+            let f_seid = FSeid::ipv4(smf.new_session(), cp_address);
             let pdr = CreatePdr::new_n4(
                 PdrId::new(1),
                 Precedence::new(1),
@@ -317,12 +312,7 @@ fn a_bundle_of_an_f_seid_address_is_taken_as_its_messages_alone() {
             pass(&mut smf, &mut upf, UPF, at(1));
             let (received, _) = request(&mut upf);
             let up_seid = upf.new_session();
-            let up_f_seid = FSeid {
-                v4: true,
-                seid: up_seid,
-                ipv4: Some(Ipv4Addr::new(10, 0, 0, 2)),
-                ..Default::default()
-            };
+            let up_f_seid = FSeid::ipv4(up_seid, Ipv4Addr::new(10, 0, 0, 2));
             let response = SessionEstablishmentResponse::new(node_id(UPF), accepted())
                 .with_up_f_seid(up_f_seid);
             upf.respond(at(1), &received, response).unwrap();

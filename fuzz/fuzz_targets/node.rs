@@ -98,12 +98,7 @@ fn setup(from: SocketAddr, features: u8) -> Message {
 }
 
 fn establishment(from: SocketAddr, cp_seid: u64) -> Message {
-    let f_seid = FSeid {
-        v4: true,
-        seid: cp_seid,
-        ipv4: Some(ipv4(from)),
-        ..Default::default()
-    };
+    let f_seid = FSeid::ipv4(cp_seid, ipv4(from));
     let pdr = CreatePdr::new_n4(
         PdrId::new(1),
         Precedence::new(1),
@@ -216,12 +211,7 @@ fn answer(node: &mut Node, now: Duration, how: u8, kept: &mut Vec<Received>) {
             Body::SessionEstablishmentRequest(_) => {
                 let seid = node.new_session();
                 SessionEstablishmentResponse::new(own.clone(), cause.clone())
-                    .with_up_f_seid(FSeid {
-                        v4: true,
-                        seid,
-                        ipv4: Some(ipv4(UPF)),
-                        ..Default::default()
-                    })
+                    .with_up_f_seid(FSeid::ipv4(seid, ipv4(UPF)))
                     .into()
             }
             Body::SessionModificationRequest(_) => {
@@ -373,12 +363,7 @@ fuzz_target!(|octets: &[u8]| {
                         request = request.with_node_id(node_id(from));
                     }
                     if extra & 2 != 0 {
-                        request = request.with_cp_f_seid(FSeid {
-                            v4: true,
-                            seid: u64::from(extra >> 2),
-                            ipv4: Some(ipv4(from)),
-                            ..Default::default()
-                        });
+                        request = request.with_cp_f_seid(FSeid::ipv4(u64::from(extra >> 2), ipv4(from)));
                     }
                     let octets = encode(Header::session(session, u32::from(extra) + 1), request);
                     upf.handle_datagram(now, from, &octets);
@@ -413,12 +398,7 @@ fuzz_target!(|octets: &[u8]| {
                 // The UPF hands a session over to the SMF node: SEID 0, with the Old CP
                 // F-SEID of the previous SMF.
                 6 => {
-                    let old = FSeid {
-                        v4: true,
-                        seid: u64::from(extra),
-                        ipv4: Some(ipv4(SMFS[usize::from(extra) % 3])),
-                        ..Default::default()
-                    };
+                    let old = FSeid::ipv4(u64::from(extra), ipv4(SMFS[usize::from(extra) % 3]));
                     let report = SessionReportRequest::new(ReportType {
                         uisr: true,
                         ..Default::default()
@@ -445,12 +425,7 @@ fuzz_target!(|octets: &[u8]| {
                         0 => smf.new_session(),
                         _ => u64::from(extra >> 1),
                     };
-                    let f_seid = FSeid {
-                        v4: true,
-                        seid: new,
-                        ipv4: Some(ipv4(SMFS[0])),
-                        ..Default::default()
-                    };
+                    let f_seid = FSeid::ipv4(new, ipv4(SMFS[0]));
                     let request = SessionModificationRequest::default().with_cp_f_seid(f_seid);
                     sent.extend(smf.session_request(now, 1 + session % 4, request));
                 }

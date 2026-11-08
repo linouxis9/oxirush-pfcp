@@ -796,12 +796,7 @@ mod tests {
         let source = SourceInterface::new(SourceInterfaceValue::Access);
         let pdr = CreatePdr::new_n4(PdrId::new(1), Precedence::new(1), Pdi::new(source));
         let far = CreateFar::new(FarId::new(1), ApplyAction::default());
-        let f_seid = FSeid {
-            v4: true,
-            seid: 1,
-            ipv4: Some([10, 0, 0, 1].into()),
-            ..Default::default()
-        };
+        let f_seid = FSeid::ipv4(1, [10, 0, 0, 1].into());
         let mut request = SessionEstablishmentRequest::new_n4(
             NodeId::Ipv4([10, 0, 0, 1].into()),
             f_seid,

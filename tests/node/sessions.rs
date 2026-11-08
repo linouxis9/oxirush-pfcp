@@ -30,12 +30,7 @@ fn a_new_cp_f_seid_gives_its_session_its_address() {
     let (cp_seid, _) = established(&mut smf, &mut upf, at(0));
     let local = |smf: &Node, seid| smf.session(seid).and_then(|session| session.local_address);
     assert_eq!(local(&smf, cp_seid), Some(SMF.ip()));
-    let f_seid = |seid, last| FSeid {
-        v4: true,
-        seid,
-        ipv4: Some(Ipv4Addr::new(10, 0, 0, last)),
-        ..Default::default()
-    };
+    let f_seid = |seid, last| FSeid::ipv4(seid, Ipv4Addr::new(10, 0, 0, last));
     let new = smf.new_session();
     for (seid, last, now) in [(new, 11, 1), (new, 12, 2)] {
         let modification = SessionModificationRequest::default().with_cp_f_seid(f_seid(seid, last));
@@ -153,12 +148,7 @@ fn a_deletion_ends_the_session_that_it_deletes() {
 fn a_session_follows_its_f_seids() {
     let (mut smf, mut upf) = associated(at(0));
     let cp_seid = smf.new_session();
-    let f_seid = FSeid {
-        v4: true,
-        seid: cp_seid,
-        ipv4: Some(Ipv4Addr::new(10, 0, 0, 1)),
-        ..Default::default()
-    };
+    let f_seid = FSeid::ipv4(cp_seid, Ipv4Addr::new(10, 0, 0, 1));
     let pdr = CreatePdr::new_n4(
         PdrId::new(1),
         Precedence::new(1),
@@ -178,12 +168,7 @@ fn a_session_follows_its_f_seids() {
     let (received, _) = request(&mut upf);
     let up_seid = upf.new_session();
     // The UPF's F-SEID has another address than its socket
-    let up_f_seid = FSeid {
-        v4: true,
-        seid: up_seid,
-        ipv4: Some(Ipv4Addr::new(10, 0, 0, 22)),
-        ..Default::default()
-    };
+    let up_f_seid = FSeid::ipv4(up_seid, Ipv4Addr::new(10, 0, 0, 22));
     upf.respond(
         at(0),
         &received,
@@ -198,12 +183,7 @@ fn a_session_follows_its_f_seids() {
     // The SMF moves the session to a new SEID of its own
     let moved = smf.new_session();
     smf.end_session(moved);
-    let f_seid = FSeid {
-        v4: true,
-        seid: moved,
-        ipv4: Some(Ipv4Addr::new(10, 0, 0, 1)),
-        ..Default::default()
-    };
+    let f_seid = FSeid::ipv4(moved, Ipv4Addr::new(10, 0, 0, 1));
     let id = smf
         .session_request(
             at(1),
@@ -264,12 +244,7 @@ fn a_session_follows_its_f_seids() {
 fn sessions_that_end_without_a_procedure() {
     let (mut smf, mut upf) = associated(at(0));
     let pending = smf.new_session();
-    let f_seid = FSeid {
-        v4: true,
-        seid: pending,
-        ipv4: Some(Ipv4Addr::new(10, 0, 0, 1)),
-        ..Default::default()
-    };
+    let f_seid = FSeid::ipv4(pending, Ipv4Addr::new(10, 0, 0, 1));
     let pdr = CreatePdr::new_n4(
         PdrId::new(1),
         Precedence::new(1),
@@ -371,12 +346,7 @@ fn an_establishment_of_a_seid_in_use_is_refused() {
     assert!(smf.session(cp_seid).is_some());
     // Nor does a session move to the SEID of another
     let (other, _) = established(&mut smf, &mut upf, at(2));
-    let moved = FSeid {
-        v4: true,
-        seid: other,
-        ipv4: Some(Ipv4Addr::new(10, 0, 0, 1)),
-        ..Default::default()
-    };
+    let moved = FSeid::ipv4(other, Ipv4Addr::new(10, 0, 0, 1));
     let modification = SessionModificationRequest::default().with_cp_f_seid(moved);
     assert_eq!(
         smf.session_request(at(2), cp_seid, modification),
@@ -384,12 +354,7 @@ fn an_establishment_of_a_seid_in_use_is_refused() {
     );
     // But to one that new_session gave for it
     let fresh = smf.new_session();
-    let moved = FSeid {
-        v4: true,
-        seid: fresh,
-        ipv4: Some(Ipv4Addr::new(10, 0, 0, 1)),
-        ..Default::default()
-    };
+    let moved = FSeid::ipv4(fresh, Ipv4Addr::new(10, 0, 0, 1));
     let modification = SessionModificationRequest::default().with_cp_f_seid(moved);
     smf.session_request(at(2), cp_seid, modification).unwrap();
     pass(&mut smf, &mut upf, UPF, at(2));
@@ -417,12 +382,7 @@ fn a_move_holds_its_new_seid() {
     let (second, _) = established(&mut smf, &mut upf, at(0));
     let target = 0x9999;
     let to_target = || {
-        let moved = FSeid {
-            v4: true,
-            seid: target,
-            ipv4: Some(Ipv4Addr::new(10, 0, 0, 1)),
-            ..Default::default()
-        };
+        let moved = FSeid::ipv4(target, Ipv4Addr::new(10, 0, 0, 1));
         SessionModificationRequest::default().with_cp_f_seid(moved)
     };
     smf.session_request(at(1), first, to_target()).unwrap();
@@ -461,12 +421,7 @@ fn a_move_of_no_session_frees_its_new_seid() {
     let (mut smf, mut upf) = associated(at(0));
     let (cp_seid, up_seid) = established(&mut smf, &mut upf, at(0));
     let to = |seid| {
-        let moved = FSeid {
-            v4: true,
-            seid,
-            ipv4: Some(Ipv4Addr::new(10, 0, 0, 1)),
-            ..Default::default()
-        };
+        let moved = FSeid::ipv4(seid, Ipv4Addr::new(10, 0, 0, 1));
         SessionModificationRequest::default().with_cp_f_seid(moved)
     };
     let new = smf.new_session();
@@ -499,12 +454,7 @@ fn the_previous_seid_of_a_moved_session() {
     let (mut smf, mut upf) = associated(at(0));
     let (cp_seid, _) = established(&mut smf, &mut upf, at(0));
     let fresh = smf.new_session();
-    let moved = FSeid {
-        v4: true,
-        seid: fresh,
-        ipv4: Some(Ipv4Addr::new(10, 0, 0, 1)),
-        ..Default::default()
-    };
+    let moved = FSeid::ipv4(fresh, Ipv4Addr::new(10, 0, 0, 1));
     let modification = SessionModificationRequest::default().with_cp_f_seid(moved);
     smf.session_request(at(1), cp_seid, modification).unwrap();
     pass(&mut smf, &mut upf, UPF, at(1));
@@ -565,12 +515,8 @@ fn a_seid_of_zero_is_of_no_session() {
     let (mut smf, mut upf) = associated(at(0));
     let (cp_seid, _) = established(&mut smf, &mut upf, at(0));
     let to = |seid| {
-        SessionModificationRequest::default().with_cp_f_seid(FSeid {
-            v4: true,
-            seid,
-            ipv4: Some(Ipv4Addr::new(10, 0, 0, 11)),
-            ..Default::default()
-        })
+        SessionModificationRequest::default()
+            .with_cp_f_seid(FSeid::ipv4(seid, Ipv4Addr::new(10, 0, 0, 11)))
     };
     assert_eq!(
         smf.session_request(at(1), cp_seid, to(0)),
@@ -595,12 +541,7 @@ fn a_seid_of_zero_is_of_no_session() {
         .unwrap();
     pass(&mut upf, &mut smf, SMF, at(2));
     assert!(smf.session(cp_seid).is_none());
-    let f_seid = FSeid {
-        v4: true,
-        seid: cp_seid,
-        ipv4: Some(Ipv4Addr::new(10, 0, 0, 1)),
-        ..Default::default()
-    };
+    let f_seid = FSeid::ipv4(cp_seid, Ipv4Addr::new(10, 0, 0, 1));
     let pdr = CreatePdr::new_n4(
         PdrId::new(1),
         Precedence::new(1),
@@ -628,12 +569,7 @@ fn a_seid_of_zero_is_of_no_session() {
     smf.request(at(1), UPF, establishment(cp_seid)).unwrap();
     pass(&mut smf, &mut upf, UPF, at(1));
     let (received, _) = request(&mut upf);
-    let zero = FSeid {
-        v4: true,
-        seid: 0,
-        ipv4: Some(Ipv4Addr::new(10, 0, 0, 2)),
-        ..Default::default()
-    };
+    let zero = FSeid::ipv4(0, Ipv4Addr::new(10, 0, 0, 2));
     let response = SessionEstablishmentResponse::new(node_id(UPF), accepted()).with_up_f_seid(zero);
     assert_eq!(
         upf.respond(at(1), &received, response.clone()),
@@ -658,12 +594,7 @@ fn a_seid_of_zero_is_of_no_session() {
 #[test]
 fn a_peer_seid_of_zero_is_kept_by_no_session() {
     let (mut smf, mut upf) = associated(at(0));
-    let zero = FSeid {
-        v4: true,
-        seid: 0,
-        ipv4: Some(Ipv4Addr::new(10, 0, 0, 1)),
-        ..Default::default()
-    };
+    let zero = FSeid::ipv4(0, Ipv4Addr::new(10, 0, 0, 1));
     let pdr = CreatePdr::new_n4(
         PdrId::new(1),
         Precedence::new(1),
@@ -740,12 +671,7 @@ fn an_answer_of_a_seid_in_use_is_refused() {
     smf.request(at(1), UPF, establishment(other)).unwrap();
     pass(&mut smf, &mut upf, UPF, at(1));
     let (received, _) = request(&mut upf);
-    let up_f_seid = FSeid {
-        v4: true,
-        seid: up_seid,
-        ipv4: Some(Ipv4Addr::new(10, 0, 0, 2)),
-        ..Default::default()
-    };
+    let up_f_seid = FSeid::ipv4(up_seid, Ipv4Addr::new(10, 0, 0, 2));
     let response =
         SessionEstablishmentResponse::new(node_id(UPF), accepted()).with_up_f_seid(up_f_seid);
     assert_eq!(
@@ -796,12 +722,7 @@ fn upf_of_set(
         upf.respond(at(0), &received, answer).unwrap();
     }
     let (from, node_id, ..) = &smfs[0];
-    let f_seid = FSeid {
-        v4: true,
-        seid: 0x51,
-        ipv4: Some(Ipv4Addr::new(10, 0, 0, 1)),
-        ..Default::default()
-    };
+    let f_seid = FSeid::ipv4(0x51, Ipv4Addr::new(10, 0, 0, 1));
     let pdr = CreatePdr::new_n4(
         PdrId::new(1),
         Precedence::new(1),
@@ -822,12 +743,7 @@ fn upf_of_set(
     upf.handle_datagram(at(0), *from, &establishment.encode().unwrap());
     let (received, _) = request(&mut upf);
     let up_seid = upf.new_session();
-    let up_f_seid = FSeid {
-        v4: true,
-        seid: up_seid,
-        ipv4: Some(Ipv4Addr::new(10, 0, 0, 2)),
-        ..Default::default()
-    };
+    let up_f_seid = FSeid::ipv4(up_seid, Ipv4Addr::new(10, 0, 0, 2));
     let response =
         SessionEstablishmentResponse::new(node_id_of_upf(), accepted()).with_up_f_seid(up_f_seid);
     upf.respond(at(0), &received, response).unwrap();
@@ -1058,12 +974,7 @@ fn a_session_moved_to_another_smf_of_the_set() {
     let set = fqdn("set.example");
     let other: SocketAddr = Ipv4Addr::new(10, 0, 0, 7).into_socket(8805);
     let (mut upf, up_seid) = upf_of_set(false, &[(SMF, set, sset_features(), None)]);
-    let old = FSeid {
-        v4: true,
-        seid: 0x51,
-        ipv4: Some(Ipv4Addr::new(10, 0, 0, 1)),
-        ..Default::default()
-    };
+    let old = FSeid::ipv4(0x51, Ipv4Addr::new(10, 0, 0, 1));
     let report = SessionReportRequest::new(ReportType {
         uisr: true,
         ..Default::default()
@@ -1072,12 +983,7 @@ fn a_session_moved_to_another_smf_of_the_set() {
     upf.request(at(1), other, Message::session(0, 0, report))
         .unwrap();
     let sequence = decoded(&sent(&mut upf)[0]).header.sequence;
-    let new = FSeid {
-        v4: true,
-        seid: 0x99,
-        ipv4: Some(Ipv4Addr::new(10, 0, 0, 7)),
-        ..Default::default()
-    };
+    let new = FSeid::ipv4(0x99, Ipv4Addr::new(10, 0, 0, 7));
     let response = Message::session(
         up_seid,
         sequence,
@@ -1102,12 +1008,7 @@ fn an_outstanding_move_does_not_take_a_reused_seid() {
     let (mut smf, mut upf) = associated(at(0));
     let l = 0x10;
     let n = 0x20;
-    let up = |seid| FSeid {
-        v4: true,
-        seid,
-        ipv4: Some(Ipv4Addr::new(10, 0, 0, 2)),
-        ..Default::default()
-    };
+    let up = |seid| FSeid::ipv4(seid, Ipv4Addr::new(10, 0, 0, 2));
     // Establish session L, UP SEID 1.
     smf.request(at(0), UPF, establishment(l)).unwrap();
     pass(&mut smf, &mut upf, UPF, at(0));
@@ -1121,12 +1022,7 @@ fn an_outstanding_move_does_not_take_a_reused_seid() {
     pass(&mut upf, &mut smf, SMF, at(0));
     events(&mut smf);
     // A move of L to N is outstanding; keep its datagram for later.
-    let moved = FSeid {
-        v4: true,
-        seid: n,
-        ipv4: Some(Ipv4Addr::new(10, 0, 0, 1)),
-        ..Default::default()
-    };
+    let moved = FSeid::ipv4(n, Ipv4Addr::new(10, 0, 0, 1));
     smf.session_request(
         at(1),
         l,
@@ -1282,12 +1178,7 @@ fn mpas_of_associations_that_the_upf_sets_up() {
     upf.handle_datagram(at(0), SMF, &establishment(0x51).encode().unwrap());
     let (received, _) = request(&mut upf);
     let up_seid = upf.new_session();
-    let up_f_seid = FSeid {
-        v4: true,
-        seid: up_seid,
-        ipv4: Some(Ipv4Addr::new(10, 0, 0, 2)),
-        ..Default::default()
-    };
+    let up_f_seid = FSeid::ipv4(up_seid, Ipv4Addr::new(10, 0, 0, 2));
     upf.respond(
         at(0),
         &received,
@@ -1458,12 +1349,7 @@ fn a_deletion_after_a_move_ends_the_moved_session() {
     let (mut smf, mut upf) = associated(at(0));
     let (cp_seid, up_seid) = established(&mut smf, &mut upf, at(0));
     let new = 0x77;
-    let moved = FSeid {
-        v4: true,
-        seid: new,
-        ipv4: Some(Ipv4Addr::new(10, 0, 0, 1)),
-        ..Default::default()
-    };
+    let moved = FSeid::ipv4(new, Ipv4Addr::new(10, 0, 0, 1));
     smf.session_request(
         at(1),
         cp_seid,
@@ -1509,12 +1395,7 @@ fn an_answer_after_a_move_goes_to_the_moved_session() {
     let (mut smf, mut upf) = associated(at(0));
     let (cp_seid, up_seid) = established(&mut smf, &mut upf, at(0));
     let new = 0x77;
-    let moved = FSeid {
-        v4: true,
-        seid: new,
-        ipv4: Some(Ipv4Addr::new(10, 0, 0, 1)),
-        ..Default::default()
-    };
+    let moved = FSeid::ipv4(new, Ipv4Addr::new(10, 0, 0, 1));
     smf.session_request(
         at(1),
         cp_seid,
@@ -1561,12 +1442,7 @@ fn an_answer_does_not_act_on_a_reused_seid() {
     smf.request(at(1), UPF, establishment(cp_seid)).unwrap();
     pass(&mut smf, &mut upf, UPF, at(1));
     let (received, _) = request(&mut upf);
-    let up_f_seid = FSeid {
-        v4: true,
-        seid: 0x99,
-        ipv4: Some(Ipv4Addr::new(10, 0, 0, 2)),
-        ..Default::default()
-    };
+    let up_f_seid = FSeid::ipv4(0x99, Ipv4Addr::new(10, 0, 0, 2));
     upf.respond(
         at(1),
         &received,
@@ -1600,12 +1476,7 @@ fn an_outstanding_deletion_does_not_end_a_reused_seid() {
     smf.request(at(1), UPF, establishment(cp_seid)).unwrap();
     pass(&mut smf, &mut upf, UPF, at(1));
     let (received, _) = request(&mut upf);
-    let up_f_seid = FSeid {
-        v4: true,
-        seid: 0x99,
-        ipv4: Some(Ipv4Addr::new(10, 0, 0, 2)),
-        ..Default::default()
-    };
+    let up_f_seid = FSeid::ipv4(0x99, Ipv4Addr::new(10, 0, 0, 2));
     upf.respond(
         at(1),
         &received,
@@ -1649,12 +1520,7 @@ fn a_report_response_does_not_move_a_reused_seid() {
     smf.request(at(1), UPF, establishment(0x4242)).unwrap();
     pass(&mut smf, &mut upf, UPF, at(1));
     let (received, _) = request(&mut upf);
-    let up_f_seid = FSeid {
-        v4: true,
-        seid: up_seid,
-        ipv4: Some(Ipv4Addr::new(10, 0, 0, 2)),
-        ..Default::default()
-    };
+    let up_f_seid = FSeid::ipv4(up_seid, Ipv4Addr::new(10, 0, 0, 2));
     upf.respond(
         at(1),
         &received,
@@ -1668,12 +1534,7 @@ fn a_report_response_does_not_move_a_reused_seid() {
         smf.handle_datagram(at(1), UPF, &transmit.octets);
     }
     let (received, _) = request(&mut smf);
-    let other = FSeid {
-        v4: true,
-        seid: 0xbeef,
-        ipv4: Some(Ipv4Addr::new(10, 0, 0, 7)),
-        ..Default::default()
-    };
+    let other = FSeid::ipv4(0xbeef, Ipv4Addr::new(10, 0, 0, 7));
     smf.respond(
         at(1),
         &received,
@@ -1696,12 +1557,7 @@ fn handover_report() -> Message {
             uisr: true,
             ..Default::default()
         })
-        .with_old_cp_f_seid(FSeid {
-            v4: true,
-            seid: 0x1234,
-            ipv4: Some(Ipv4Addr::new(10, 0, 0, 9)),
-            ..Default::default()
-        }),
+        .with_old_cp_f_seid(FSeid::ipv4(0x1234, Ipv4Addr::new(10, 0, 0, 9))),
     )
 }
 
@@ -1803,12 +1659,7 @@ fn a_refused_establishment_leaves_no_session() {
 
 /// Move the SMF's session of `from` to the local SEID `to`, a move that the UPF accepts.
 fn move_session(smf: &mut Node, upf: &mut Node, from: u64, to: u64, now: Duration) {
-    let moved = FSeid {
-        v4: true,
-        seid: to,
-        ipv4: Some(Ipv4Addr::new(10, 0, 0, 1)),
-        ..Default::default()
-    };
+    let moved = FSeid::ipv4(to, Ipv4Addr::new(10, 0, 0, 1));
     smf.session_request(
         now,
         from,
@@ -1958,12 +1809,7 @@ fn mpas_an_entity_controls_the_session_that_it_takes_over() {
     other.handle_datagram(at(1), UPF, &handover_report().encode().unwrap());
     let (received, _) = request(&mut other);
     other.adopt_session(0x55, UPF, 0x66).unwrap();
-    let cp_f_seid = FSeid {
-        v4: true,
-        seid: 0x55,
-        ipv4: Some(Ipv4Addr::new(10, 0, 0, 3)),
-        ..Default::default()
-    };
+    let cp_f_seid = FSeid::ipv4(0x55, Ipv4Addr::new(10, 0, 0, 3));
     let answer = SessionReportResponse::new(accepted()).with_cp_f_seid(cp_f_seid);
     other.respond_as(at(1), &received, 0x55, answer).unwrap();
     sent(&mut other);
@@ -2084,12 +1930,7 @@ fn a_peer_at_its_ipv4_mapped_address_is_its_ipv4_address() {
     );
     events(&mut smf);
     let cp_seid = smf.new_session();
-    let cp_f_seid = FSeid {
-        v4: true,
-        seid: cp_seid,
-        ipv4: Some(Ipv4Addr::new(10, 0, 0, 1)),
-        ..Default::default()
-    };
+    let cp_f_seid = FSeid::ipv4(cp_seid, Ipv4Addr::new(10, 0, 0, 1));
     let pdr = CreatePdr::new_n4(
         PdrId::new(1),
         Precedence::new(1),
@@ -2103,12 +1944,7 @@ fn a_peer_at_its_ipv4_mapped_address_is_its_ipv4_address() {
     let (received, _) = request(&mut upf);
     let up_seid = upf.new_session();
     let f_seid_address = Ipv4Addr::new(10, 0, 0, 7);
-    let up_f_seid = FSeid {
-        v4: true,
-        seid: up_seid,
-        ipv4: Some(f_seid_address),
-        ..Default::default()
-    };
+    let up_f_seid = FSeid::ipv4(up_seid, f_seid_address);
     let response =
         SessionEstablishmentResponse::new(node_id(UPF), accepted()).with_up_f_seid(up_f_seid);
     upf.respond(at(0), &received, response).unwrap();
@@ -2275,12 +2111,7 @@ fn a_request_that_ends_leaves_an_establishment_its_session() {
     let transmits = sent(&mut smf);
     upf.handle_datagram(at(0), SMF, &transmits[0].octets);
     let (received, _) = request(&mut upf);
-    let up_f_seid = FSeid {
-        v4: true,
-        seid: 0x99,
-        ipv4: Some(Ipv4Addr::new(10, 0, 0, 2)),
-        ..Default::default()
-    };
+    let up_f_seid = FSeid::ipv4(0x99, Ipv4Addr::new(10, 0, 0, 2));
     upf.respond(
         at(0),
         &received,
@@ -2307,12 +2138,7 @@ fn a_request_to_the_new_seid_of_a_move_before_its_response() {
         let (mut smf, mut upf) = associated(at(0));
         let (cp_seid, up_seid) = established(&mut smf, &mut upf, at(0));
         let new = smf.new_session();
-        let moved = FSeid {
-            v4: true,
-            seid: new,
-            ipv4: Some(Ipv4Addr::new(10, 0, 0, 1)),
-            ..Default::default()
-        };
+        let moved = FSeid::ipv4(new, Ipv4Addr::new(10, 0, 0, 1));
         smf.session_request(
             at(1),
             cp_seid,

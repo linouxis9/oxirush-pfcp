@@ -10,7 +10,8 @@ The first version, of TS 29.244 V19.6.0 (2026-06):
   for byte, and built with `new()` and `with_*()`; a message of its body with
   `Message::node` and `Message::session`. `IE_TYPES` and `ie_type_info()` give the clause
   and the members of each IE type. A field that a value always has is a plain field, as
-  the SEID of an F-SEID, and one that its flags have or not an `Option`.
+  the SEID of an F-SEID, and one that its flags have or not an `Option`. `FSeid::ipv4()`
+  and `FSeid::ipv6()` build an F-SEID of one address, as `FTeid::ipv4()` an F-TEID.
 - `check()`: how a message breaks the tables and clauses on an interface, each deviation
   with its path, its clause and the Cause of the answer; `deviations()` of a value on its
   own. `Row::on` gives what a row is on an interface, or on a set of them: its presence,

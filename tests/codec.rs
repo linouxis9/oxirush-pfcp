@@ -49,12 +49,7 @@ fn establishment() -> Message {
     )
     .with_far_id(FarId::new(2));
     let smf = Ipv4Addr::new(10, 0, 0, 1);
-    let seid = FSeid {
-        v4: true,
-        seid: 0x1001,
-        ipv4: Some(smf),
-        ..Default::default()
-    };
+    let seid = FSeid::ipv4(0x1001, smf);
     let request = SessionEstablishmentRequest::new_n4(
         NodeId::Ipv4(smf),
         seid,
@@ -744,6 +739,24 @@ fn an_error_of_from_tree_is_at_a_path_that_select_takes() {
         );
         assert!(select(&tree, error.at()).is_ok(), "{error}");
     }
+}
+
+/// An F-SEID of an IPv4 address and one of an IPv6 address, as their constructors build
+/// them: the flag of the family, the SEID, then the address (§8.2.37).
+#[test]
+fn an_f_seid_of_each_family() {
+    let encoded = |f_seid: FSeid| {
+        let mut out = Vec::new();
+        f_seid.encode(&mut out).unwrap();
+        hex::encode(out)
+    };
+    let v4 = FSeid::ipv4(0x1001, Ipv4Addr::new(10, 0, 0, 1));
+    assert_eq!(encoded(v4), "0200000000000010010a000001");
+    let v6 = FSeid::ipv6(7, "2001:db8::1".parse().unwrap());
+    assert_eq!(
+        encoded(v6),
+        "01000000000000000720010db8000000000000000000000001"
+    );
 }
 
 #[test]
