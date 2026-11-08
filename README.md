@@ -22,7 +22,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let pdr = CreatePdr::new_n4(PdrId::new(1), Precedence::new(255), pdi).with_far_id(FarId::new(1));
     let core = ForwardingParameters::new(DestinationInterface::new(DestinationInterfaceValue::Core));
     let far = CreateFar::new(FarId::new(1), ApplyAction { forw: true, ..Default::default() }).with_forwarding_parameters(core);
-    let cp_f_seid = FSeid { v4: true, seid: Some(0x1001), ipv4: Some(smf), ..Default::default() };
+    let cp_f_seid = FSeid { v4: true, seid: 0x1001, ipv4: Some(smf), ..Default::default() };
     let request = SessionEstablishmentRequest::new_n4(NodeId::Ipv4(smf), cp_f_seid, pdr, far);
     let octets = Message::session(0, 7, request).encode()?;
     println!("{}", hex::encode(&octets));
@@ -190,7 +190,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let Body::SessionEstablishmentResponse(response) = &message.body else { return Err("another message".into()) };
     let cause = response.cause.as_ref().ok_or("no Cause")?.value;
     let up_f_seid = response.up_f_seid.as_ref().ok_or("no F-SEID")?;
-    println!("{message}: {cause} ({}), UP F-SEID {:#x} at {:?}", cause.value(), up_f_seid.seid.unwrap_or(0), up_f_seid.ipv4);
+    println!("{message}: {cause} ({}), UP F-SEID {:#x} at {:?}", cause.value(), up_f_seid.seid, up_f_seid.ipv4);
     println!("accepted: {}", cause == CauseValue::RequestAccepted);
     Ok(())
 }

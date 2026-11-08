@@ -295,7 +295,7 @@ fn a_bundle_of_an_f_seid_address_is_taken_as_its_messages_alone() {
         .map(|_| {
             let f_seid = FSeid {
                 v4: true,
-                seid: Some(smf.new_session()),
+                seid: smf.new_session(),
                 ipv4: Some(cp_address),
                 ..Default::default()
             };
@@ -319,7 +319,7 @@ fn a_bundle_of_an_f_seid_address_is_taken_as_its_messages_alone() {
             let up_seid = upf.new_session();
             let up_f_seid = FSeid {
                 v4: true,
-                seid: Some(up_seid),
+                seid: up_seid,
                 ipv4: Some(Ipv4Addr::new(10, 0, 0, 2)),
                 ..Default::default()
             };

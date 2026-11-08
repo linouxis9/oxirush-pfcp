@@ -514,7 +514,7 @@ impl Node {
                 .map(|session| session.mark),
             peer_seid: match &message.body {
                 Body::SessionEstablishmentRequest(request) => {
-                    request.cp_f_seid.as_ref().and_then(|f_seid| f_seid.seid)
+                    request.cp_f_seid.as_ref().map(|f_seid| f_seid.seid)
                 }
                 _ => None,
             },
@@ -584,21 +584,17 @@ impl Node {
                 }
             }
             Body::SessionEstablishmentRequest(request) => match request.cp_f_seid.as_ref() {
-                Some(f_seid) => {
-                    Effect::PeerFSeid(f_seid.seid.unwrap_or(0), fseid_peer(from, f_seid).ip())
-                }
+                Some(f_seid) => Effect::PeerFSeid(f_seid.seid, fseid_peer(from, f_seid).ip()),
                 None => Effect::Nothing,
             },
             // A new CP F-SEID of SEID 0 is of no session (§7.2.2.4.2): the session keeps
             // the peer's SEID that it has.
             Body::SessionModificationRequest(request) => match request.cp_f_seid.as_ref() {
-                Some(f_seid) if f_seid.seid == Some(0) => {
+                Some(f_seid) if f_seid.seid == 0 => {
                     self.violation(from, ViolationKind::SeidZero, octets);
                     Effect::Nothing
                 }
-                Some(f_seid) => {
-                    Effect::PeerFSeid(f_seid.seid.unwrap_or(0), fseid_peer(from, f_seid).ip())
-                }
+                Some(f_seid) => Effect::PeerFSeid(f_seid.seid, fseid_peer(from, f_seid).ip()),
                 None => Effect::Nothing,
             },
             Body::SessionReportRequest(request)
@@ -720,7 +716,7 @@ pub(super) fn names(octets: &[u8]) -> (Option<NodeId>, Option<u64>) {
             _ => {}
         }
     }
-    let f_seid = f_seid.flatten().and_then(|f_seid| f_seid.seid);
+    let f_seid = f_seid.flatten().map(|f_seid| f_seid.seid);
     (node_id.flatten(), f_seid)
 }
 

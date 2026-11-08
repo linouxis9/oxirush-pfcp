@@ -73,7 +73,7 @@ pub struct Queues {
     pub incoming: usize,
     /// The octets that the requests of the incoming queue take decoded, at most, beyond
     /// those of their values: their boxes, lists and grouped IEs, which a few octets of
-    /// the wire make, up to 243.3 times as many (SECURITY.md). A request that does not fit in
+    /// the wire make, up to 242.6 times as many (SECURITY.md). A request that does not fit in
     /// a queue that holds others is dropped, as for a full queue.
     pub incoming_octets: usize,
     /// The other events to the caller.
@@ -798,7 +798,7 @@ mod tests {
         let far = CreateFar::new(FarId::new(1), ApplyAction::default());
         let f_seid = FSeid {
             v4: true,
-            seid: Some(1),
+            seid: 1,
             ipv4: Some([10, 0, 0, 1].into()),
             ..Default::default()
         };

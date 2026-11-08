@@ -48,7 +48,7 @@ fn far(id: u32) -> CreateFar {
 fn establishment() -> Message {
     let seid = FSeid {
         v4: true,
-        seid: Some(0x1001),
+        seid: 0x1001,
         ipv4: Some(SMF),
         ..Default::default()
     };
@@ -460,7 +460,7 @@ fn a_rejection_carries_only_what_it_may() {
     };
     response.up_f_seid = Some(FSeid {
         v4: true,
-        seid: Some(1),
+        seid: 1,
         ipv4: Some(SMF),
         ..Default::default()
     });
@@ -610,7 +610,7 @@ fn seid_0_only_where_the_peer_seid_is_not_known() {
 fn a_report_of_seid_0_carries_the_old_cp_f_seid() {
     let old = FSeid {
         v4: true,
-        seid: Some(0x1234),
+        seid: 0x1234,
         ipv4: Some(SMF),
         ..Default::default()
     };
@@ -713,7 +713,7 @@ fn check_overload_reduction_metric() {
         cause: Some(Cause::new(CauseValue::RequestAccepted)),
         up_f_seid: Some(FSeid {
             v4: true,
-            seid: Some(1),
+            seid: 1,
             ipv4: Some(SMF),
             ..Default::default()
         }),
@@ -810,10 +810,10 @@ fn the_lengths_of_clause_8_2() {
         assert_eq!(failed(short), rule(), "{short:?}");
     }
     let later = FailedRuleId::decode(&[0, 0, 0, 0, 1]).unwrap();
-    assert_eq!(later.rule_id_value, Some(Rest(vec![0, 0].into())));
+    assert_eq!(later.rule_id_value, Rest(vec![0, 0].into()));
     assert_eq!(&later.extra[..], [0, 1]);
     let built = FailedRuleId {
-        rule_id_value: Some(Rest(vec![0, 0, 0, 1].into())),
+        rule_id_value: Rest(vec![0, 0, 0, 1].into()),
         ..Default::default()
     };
     assert_eq!(built.deviations()[0].kind, rule()[0].1);
@@ -1384,7 +1384,7 @@ fn a_conditional_ie_that_does_not_decode_is_incorrect() {
         )
         .with_up_f_seid(FSeid {
             v4: true,
-            seid: Some(0x2001),
+            seid: 0x2001,
             ipv4: Some(SMF),
             ..Default::default()
         })
@@ -2110,7 +2110,7 @@ fn eps_cups_on_its_interfaces() {
     let smf = NodeId::Ipv4(SMF);
     let seid = FSeid {
         v4: true,
-        seid: Some(0x1001),
+        seid: 0x1001,
         ipv4: Some(SMF),
         ..Default::default()
     };
@@ -2249,7 +2249,7 @@ fn messages_of_each_interface() {
     };
     let seid = FSeid {
         v4: true,
-        seid: Some(0x1001),
+        seid: 0x1001,
         ipv4: Some(SMF),
         ..Default::default()
     };
@@ -2266,7 +2266,7 @@ fn messages_of_each_interface() {
     .with_end_time(EndTime::new(2));
     let pfd = PfdContents {
         fd: true,
-        spare_octet: Some(Spare(0)),
+        spare_octet: Spare(0),
         flow_description: Some(Lv16(b"permit out ip from any to any".into())),
         ..Default::default()
     };
@@ -2859,7 +2859,7 @@ fn the_aoci_of_a_rejected_establishment() {
         let response = match cause {
             CauseValue::RequestAccepted => response.with_up_f_seid(FSeid {
                 v4: true,
-                seid: Some(0x2001),
+                seid: 0x2001,
                 ipv4: Some(SMF),
                 ..Default::default()
             }),

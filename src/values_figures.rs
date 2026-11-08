@@ -1189,7 +1189,7 @@ pfcp_layout! {
     /// N6 Delay Measurement Information (§8.2.247).
     pub struct N6DelayMeasurementInformation "8.2.247" {
         flags(u8) { maxd "MAXD": 2, mind "MIND": 1 }
-        average_packet_delay "Average Packet Delay": u32 if true,
+        average_packet_delay "Average Packet Delay": u32,
         minimum_packet_delay "Minimum Packet Delay": u32 if mind,
         maximum_packet_delay "Maximum Packet Delay": u32 if maxd,
     }

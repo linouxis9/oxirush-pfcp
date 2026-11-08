@@ -100,7 +100,7 @@ fn setup(from: SocketAddr, features: u8) -> Message {
 fn establishment(from: SocketAddr, cp_seid: u64) -> Message {
     let f_seid = FSeid {
         v4: true,
-        seid: Some(cp_seid),
+        seid: cp_seid,
         ipv4: Some(ipv4(from)),
         ..Default::default()
     };
@@ -218,7 +218,7 @@ fn answer(node: &mut Node, now: Duration, how: u8, kept: &mut Vec<Received>) {
                 SessionEstablishmentResponse::new(own.clone(), cause.clone())
                     .with_up_f_seid(FSeid {
                         v4: true,
-                        seid: Some(seid),
+                        seid,
                         ipv4: Some(ipv4(UPF)),
                         ..Default::default()
                     })
@@ -375,7 +375,7 @@ fuzz_target!(|octets: &[u8]| {
                     if extra & 2 != 0 {
                         request = request.with_cp_f_seid(FSeid {
                             v4: true,
-                            seid: Some(u64::from(extra >> 2)),
+                            seid: u64::from(extra >> 2),
                             ipv4: Some(ipv4(from)),
                             ..Default::default()
                         });
@@ -415,7 +415,7 @@ fuzz_target!(|octets: &[u8]| {
                 6 => {
                     let old = FSeid {
                         v4: true,
-                        seid: Some(u64::from(extra)),
+                        seid: u64::from(extra),
                         ipv4: Some(ipv4(SMFS[usize::from(extra) % 3])),
                         ..Default::default()
                     };
@@ -447,7 +447,7 @@ fuzz_target!(|octets: &[u8]| {
                     };
                     let f_seid = FSeid {
                         v4: true,
-                        seid: Some(new),
+                        seid: new,
                         ipv4: Some(ipv4(SMFS[0])),
                         ..Default::default()
                     };

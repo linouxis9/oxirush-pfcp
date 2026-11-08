@@ -240,7 +240,7 @@ fn session_needs_association() {
     // A UPF answers a session from a peer without an association
     let f_seid = FSeid {
         v4: true,
-        seid: Some(0x55),
+        seid: 0x55,
         ipv4: Some(Ipv4Addr::new(10, 0, 0, 1)),
         ..Default::default()
     };
@@ -615,7 +615,7 @@ fn peers_on_one_address() {
             upf.respond(at(0), &received, answer).unwrap();
             let f_seid = FSeid {
                 v4: true,
-                seid: Some(0x10),
+                seid: 0x10,
                 ipv4: Some(Ipv4Addr::LOCALHOST),
                 ..Default::default()
             };
@@ -641,7 +641,7 @@ fn peers_on_one_address() {
             let up_seid = upf.new_session();
             let up_f_seid = FSeid {
                 v4: true,
-                seid: Some(up_seid),
+                seid: up_seid,
                 ipv4: Some(Ipv4Addr::LOCALHOST),
                 ..Default::default()
             };

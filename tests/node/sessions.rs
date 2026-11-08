@@ -32,7 +32,7 @@ fn a_new_cp_f_seid_gives_its_session_its_address() {
     assert_eq!(local(&smf, cp_seid), Some(SMF.ip()));
     let f_seid = |seid, last| FSeid {
         v4: true,
-        seid: Some(seid),
+        seid,
         ipv4: Some(Ipv4Addr::new(10, 0, 0, last)),
         ..Default::default()
     };
@@ -155,7 +155,7 @@ fn a_session_follows_its_f_seids() {
     let cp_seid = smf.new_session();
     let f_seid = FSeid {
         v4: true,
-        seid: Some(cp_seid),
+        seid: cp_seid,
         ipv4: Some(Ipv4Addr::new(10, 0, 0, 1)),
         ..Default::default()
     };
@@ -180,7 +180,7 @@ fn a_session_follows_its_f_seids() {
     // The UPF's F-SEID has another address than its socket
     let up_f_seid = FSeid {
         v4: true,
-        seid: Some(up_seid),
+        seid: up_seid,
         ipv4: Some(Ipv4Addr::new(10, 0, 0, 22)),
         ..Default::default()
     };
@@ -200,7 +200,7 @@ fn a_session_follows_its_f_seids() {
     smf.end_session(moved);
     let f_seid = FSeid {
         v4: true,
-        seid: Some(moved),
+        seid: moved,
         ipv4: Some(Ipv4Addr::new(10, 0, 0, 1)),
         ..Default::default()
     };
@@ -266,7 +266,7 @@ fn sessions_that_end_without_a_procedure() {
     let pending = smf.new_session();
     let f_seid = FSeid {
         v4: true,
-        seid: Some(pending),
+        seid: pending,
         ipv4: Some(Ipv4Addr::new(10, 0, 0, 1)),
         ..Default::default()
     };
@@ -373,7 +373,7 @@ fn an_establishment_of_a_seid_in_use_is_refused() {
     let (other, _) = established(&mut smf, &mut upf, at(2));
     let moved = FSeid {
         v4: true,
-        seid: Some(other),
+        seid: other,
         ipv4: Some(Ipv4Addr::new(10, 0, 0, 1)),
         ..Default::default()
     };
@@ -386,7 +386,7 @@ fn an_establishment_of_a_seid_in_use_is_refused() {
     let fresh = smf.new_session();
     let moved = FSeid {
         v4: true,
-        seid: Some(fresh),
+        seid: fresh,
         ipv4: Some(Ipv4Addr::new(10, 0, 0, 1)),
         ..Default::default()
     };
@@ -419,7 +419,7 @@ fn a_move_holds_its_new_seid() {
     let to_target = || {
         let moved = FSeid {
             v4: true,
-            seid: Some(target),
+            seid: target,
             ipv4: Some(Ipv4Addr::new(10, 0, 0, 1)),
             ..Default::default()
         };
@@ -463,7 +463,7 @@ fn a_move_of_no_session_frees_its_new_seid() {
     let to = |seid| {
         let moved = FSeid {
             v4: true,
-            seid: Some(seid),
+            seid,
             ipv4: Some(Ipv4Addr::new(10, 0, 0, 1)),
             ..Default::default()
         };
@@ -501,7 +501,7 @@ fn the_previous_seid_of_a_moved_session() {
     let fresh = smf.new_session();
     let moved = FSeid {
         v4: true,
-        seid: Some(fresh),
+        seid: fresh,
         ipv4: Some(Ipv4Addr::new(10, 0, 0, 1)),
         ..Default::default()
     };
@@ -567,7 +567,7 @@ fn a_seid_of_zero_is_of_no_session() {
     let to = |seid| {
         SessionModificationRequest::default().with_cp_f_seid(FSeid {
             v4: true,
-            seid: Some(seid),
+            seid,
             ipv4: Some(Ipv4Addr::new(10, 0, 0, 11)),
             ..Default::default()
         })
@@ -597,7 +597,7 @@ fn a_seid_of_zero_is_of_no_session() {
     assert!(smf.session(cp_seid).is_none());
     let f_seid = FSeid {
         v4: true,
-        seid: Some(cp_seid),
+        seid: cp_seid,
         ipv4: Some(Ipv4Addr::new(10, 0, 0, 1)),
         ..Default::default()
     };
@@ -630,7 +630,7 @@ fn a_seid_of_zero_is_of_no_session() {
     let (received, _) = request(&mut upf);
     let zero = FSeid {
         v4: true,
-        seid: Some(0),
+        seid: 0,
         ipv4: Some(Ipv4Addr::new(10, 0, 0, 2)),
         ..Default::default()
     };
@@ -660,7 +660,7 @@ fn a_peer_seid_of_zero_is_kept_by_no_session() {
     let (mut smf, mut upf) = associated(at(0));
     let zero = FSeid {
         v4: true,
-        seid: Some(0),
+        seid: 0,
         ipv4: Some(Ipv4Addr::new(10, 0, 0, 1)),
         ..Default::default()
     };
@@ -742,7 +742,7 @@ fn an_answer_of_a_seid_in_use_is_refused() {
     let (received, _) = request(&mut upf);
     let up_f_seid = FSeid {
         v4: true,
-        seid: Some(up_seid),
+        seid: up_seid,
         ipv4: Some(Ipv4Addr::new(10, 0, 0, 2)),
         ..Default::default()
     };
@@ -798,7 +798,7 @@ fn upf_of_set(
     let (from, node_id, ..) = &smfs[0];
     let f_seid = FSeid {
         v4: true,
-        seid: Some(0x51),
+        seid: 0x51,
         ipv4: Some(Ipv4Addr::new(10, 0, 0, 1)),
         ..Default::default()
     };
@@ -824,7 +824,7 @@ fn upf_of_set(
     let up_seid = upf.new_session();
     let up_f_seid = FSeid {
         v4: true,
-        seid: Some(up_seid),
+        seid: up_seid,
         ipv4: Some(Ipv4Addr::new(10, 0, 0, 2)),
         ..Default::default()
     };
@@ -1060,7 +1060,7 @@ fn a_session_moved_to_another_smf_of_the_set() {
     let (mut upf, up_seid) = upf_of_set(false, &[(SMF, set, sset_features(), None)]);
     let old = FSeid {
         v4: true,
-        seid: Some(0x51),
+        seid: 0x51,
         ipv4: Some(Ipv4Addr::new(10, 0, 0, 1)),
         ..Default::default()
     };
@@ -1074,7 +1074,7 @@ fn a_session_moved_to_another_smf_of_the_set() {
     let sequence = decoded(&sent(&mut upf)[0]).header.sequence;
     let new = FSeid {
         v4: true,
-        seid: Some(0x99),
+        seid: 0x99,
         ipv4: Some(Ipv4Addr::new(10, 0, 0, 7)),
         ..Default::default()
     };
@@ -1104,7 +1104,7 @@ fn an_outstanding_move_does_not_take_a_reused_seid() {
     let n = 0x20;
     let up = |seid| FSeid {
         v4: true,
-        seid: Some(seid),
+        seid,
         ipv4: Some(Ipv4Addr::new(10, 0, 0, 2)),
         ..Default::default()
     };
@@ -1123,7 +1123,7 @@ fn an_outstanding_move_does_not_take_a_reused_seid() {
     // A move of L to N is outstanding; keep its datagram for later.
     let moved = FSeid {
         v4: true,
-        seid: Some(n),
+        seid: n,
         ipv4: Some(Ipv4Addr::new(10, 0, 0, 1)),
         ..Default::default()
     };
@@ -1284,7 +1284,7 @@ fn mpas_of_associations_that_the_upf_sets_up() {
     let up_seid = upf.new_session();
     let up_f_seid = FSeid {
         v4: true,
-        seid: Some(up_seid),
+        seid: up_seid,
         ipv4: Some(Ipv4Addr::new(10, 0, 0, 2)),
         ..Default::default()
     };
@@ -1460,7 +1460,7 @@ fn a_deletion_after_a_move_ends_the_moved_session() {
     let new = 0x77;
     let moved = FSeid {
         v4: true,
-        seid: Some(new),
+        seid: new,
         ipv4: Some(Ipv4Addr::new(10, 0, 0, 1)),
         ..Default::default()
     };
@@ -1511,7 +1511,7 @@ fn an_answer_after_a_move_goes_to_the_moved_session() {
     let new = 0x77;
     let moved = FSeid {
         v4: true,
-        seid: Some(new),
+        seid: new,
         ipv4: Some(Ipv4Addr::new(10, 0, 0, 1)),
         ..Default::default()
     };
@@ -1563,7 +1563,7 @@ fn an_answer_does_not_act_on_a_reused_seid() {
     let (received, _) = request(&mut upf);
     let up_f_seid = FSeid {
         v4: true,
-        seid: Some(0x99),
+        seid: 0x99,
         ipv4: Some(Ipv4Addr::new(10, 0, 0, 2)),
         ..Default::default()
     };
@@ -1602,7 +1602,7 @@ fn an_outstanding_deletion_does_not_end_a_reused_seid() {
     let (received, _) = request(&mut upf);
     let up_f_seid = FSeid {
         v4: true,
-        seid: Some(0x99),
+        seid: 0x99,
         ipv4: Some(Ipv4Addr::new(10, 0, 0, 2)),
         ..Default::default()
     };
@@ -1651,7 +1651,7 @@ fn a_report_response_does_not_move_a_reused_seid() {
     let (received, _) = request(&mut upf);
     let up_f_seid = FSeid {
         v4: true,
-        seid: Some(up_seid),
+        seid: up_seid,
         ipv4: Some(Ipv4Addr::new(10, 0, 0, 2)),
         ..Default::default()
     };
@@ -1670,7 +1670,7 @@ fn a_report_response_does_not_move_a_reused_seid() {
     let (received, _) = request(&mut smf);
     let other = FSeid {
         v4: true,
-        seid: Some(0xbeef),
+        seid: 0xbeef,
         ipv4: Some(Ipv4Addr::new(10, 0, 0, 7)),
         ..Default::default()
     };
@@ -1698,7 +1698,7 @@ fn handover_report() -> Message {
         })
         .with_old_cp_f_seid(FSeid {
             v4: true,
-            seid: Some(0x1234),
+            seid: 0x1234,
             ipv4: Some(Ipv4Addr::new(10, 0, 0, 9)),
             ..Default::default()
         }),
@@ -1805,7 +1805,7 @@ fn a_refused_establishment_leaves_no_session() {
 fn move_session(smf: &mut Node, upf: &mut Node, from: u64, to: u64, now: Duration) {
     let moved = FSeid {
         v4: true,
-        seid: Some(to),
+        seid: to,
         ipv4: Some(Ipv4Addr::new(10, 0, 0, 1)),
         ..Default::default()
     };
@@ -1960,7 +1960,7 @@ fn mpas_an_entity_controls_the_session_that_it_takes_over() {
     other.adopt_session(0x55, UPF, 0x66).unwrap();
     let cp_f_seid = FSeid {
         v4: true,
-        seid: Some(0x55),
+        seid: 0x55,
         ipv4: Some(Ipv4Addr::new(10, 0, 0, 3)),
         ..Default::default()
     };
@@ -2086,7 +2086,7 @@ fn a_peer_at_its_ipv4_mapped_address_is_its_ipv4_address() {
     let cp_seid = smf.new_session();
     let cp_f_seid = FSeid {
         v4: true,
-        seid: Some(cp_seid),
+        seid: cp_seid,
         ipv4: Some(Ipv4Addr::new(10, 0, 0, 1)),
         ..Default::default()
     };
@@ -2105,7 +2105,7 @@ fn a_peer_at_its_ipv4_mapped_address_is_its_ipv4_address() {
     let f_seid_address = Ipv4Addr::new(10, 0, 0, 7);
     let up_f_seid = FSeid {
         v4: true,
-        seid: Some(up_seid),
+        seid: up_seid,
         ipv4: Some(f_seid_address),
         ..Default::default()
     };
@@ -2277,7 +2277,7 @@ fn a_request_that_ends_leaves_an_establishment_its_session() {
     let (received, _) = request(&mut upf);
     let up_f_seid = FSeid {
         v4: true,
-        seid: Some(0x99),
+        seid: 0x99,
         ipv4: Some(Ipv4Addr::new(10, 0, 0, 2)),
         ..Default::default()
     };
@@ -2309,7 +2309,7 @@ fn a_request_to_the_new_seid_of_a_move_before_its_response() {
         let new = smf.new_session();
         let moved = FSeid {
             v4: true,
-            seid: Some(new),
+            seid: new,
             ipv4: Some(Ipv4Addr::new(10, 0, 0, 1)),
             ..Default::default()
         };

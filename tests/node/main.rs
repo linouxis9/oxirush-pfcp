@@ -166,7 +166,7 @@ fn established_on(smf: &mut Node, upf: &mut Node, now: Duration, address: Ipv4Ad
     let cp_seid = smf.new_session();
     let f_seid = FSeid {
         v4: true,
-        seid: Some(cp_seid),
+        seid: cp_seid,
         ipv4: Some(Ipv4Addr::new(10, 0, 0, 1)),
         ..Default::default()
     };
@@ -190,7 +190,7 @@ fn established_on(smf: &mut Node, upf: &mut Node, now: Duration, address: Ipv4Ad
     let up_seid = upf.new_session();
     let up_f_seid = FSeid {
         v4: true,
-        seid: Some(up_seid),
+        seid: up_seid,
         ipv4: Some(address),
         ..Default::default()
     };
@@ -313,7 +313,7 @@ fn fqdn(name: &str) -> NodeId {
 fn establishment(cp_seid: u64) -> Message {
     let f_seid = FSeid {
         v4: true,
-        seid: Some(cp_seid),
+        seid: cp_seid,
         ipv4: Some(Ipv4Addr::new(10, 0, 0, 1)),
         ..Default::default()
     };

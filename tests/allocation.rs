@@ -239,7 +239,7 @@ fn filled(message_type: u8, outer: &[u16], unit: &[u8]) -> Vec<u8> {
 /// The worst is an entry of 12 octets: a Create URR with an Additional Monitoring Time
 /// that holds an IE of a null length.
 #[test]
-fn a_decoded_message_takes_at_most_244_times_its_octets() {
+fn a_decoded_message_takes_at_most_243_times_its_octets() {
     let mut worst = (0.0, String::new());
     let mut measured = std::collections::BTreeSet::new();
     for info in MESSAGE_TYPES {
@@ -302,5 +302,5 @@ fn a_decoded_message_takes_at_most_244_times_its_octets() {
             }
         }
     }
-    assert!((243.0..=244.0).contains(&worst.0), "{worst:?}");
+    assert!((242.0..=243.0).contains(&worst.0), "{worst:?}");
 }

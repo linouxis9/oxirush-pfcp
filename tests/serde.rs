@@ -25,7 +25,7 @@ use oxirush_pfcp::*;
 fn a_message_and_an_ie_are_their_trees_in_json() {
     let seid = FSeid {
         v4: true,
-        seid: Some(0x1001),
+        seid: 0x1001,
         ipv4: Some(Ipv4Addr::new(10, 0, 0, 1)),
         ..Default::default()
     };

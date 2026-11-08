@@ -103,7 +103,7 @@ impl Node {
         let to = canonical(to);
         let local_seid = match &message.body {
             Body::SessionEstablishmentRequest(request) => {
-                request.cp_f_seid.as_ref().and_then(|f_seid| f_seid.seid)
+                request.cp_f_seid.as_ref().map(|f_seid| f_seid.seid)
             }
             // A request of SEID 0 to another SMF of a set, with the CP F-SEID of the
             // previous one, is of the session of that F-SEID (§5.22.2, bullet 4).
@@ -112,7 +112,7 @@ impl Node {
             {
                 request.old_cp_f_seid.as_ref().and_then(|old| {
                     let address = [old.ipv4.map(IpAddr::V4), old.ipv6.map(IpAddr::V6)];
-                    self.sessions.of_peer_seid(old.seid?).find(|local| {
+                    self.sessions.of_peer_seid(old.seid).find(|local| {
                         self.sessions
                             .get(local)
                             .is_some_and(|session| address.contains(&Some(session.peer.ip())))
@@ -267,7 +267,7 @@ impl Node {
                 Change::Ends
             }
             Body::SessionModificationRequest(request) => {
-                match request.cp_f_seid.as_ref().and_then(|f_seid| f_seid.seid) {
+                match request.cp_f_seid.as_ref().map(|f_seid| f_seid.seid) {
                     Some(0) => return Err(NodeError::SeidZero),
                     // Not to the SEID of another session; to one of new_session, yes.
                     Some(seid) if self.in_use(seid) && Some(seid) != local_seid => {
@@ -590,7 +590,7 @@ impl Node {
             return Err(NodeError::Forgotten);
         }
         if let Body::SessionEstablishmentResponse(response) = &body
-            && let Some(seid) = response.up_f_seid.as_ref().and_then(|f_seid| f_seid.seid)
+            && let Some(seid) = response.up_f_seid.as_ref().map(|f_seid| f_seid.seid)
         {
             if seid == 0 {
                 return Err(NodeError::SeidZero);

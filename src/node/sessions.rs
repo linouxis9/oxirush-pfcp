@@ -183,7 +183,7 @@ impl Node {
             return;
         };
         match (accepted, response.up_f_seid.as_ref()) {
-            (true, Some(f_seid)) if f_seid.seid == Some(0) => {
+            (true, Some(f_seid)) if f_seid.seid == 0 => {
                 self.violation(from, ViolationKind::SeidZero, octets);
                 self.abandon(request);
             }
@@ -195,7 +195,7 @@ impl Node {
                     .unwrap_or_default();
                 let session = Session {
                     peer: fseid_peer(from, f_seid),
-                    peer_seid: f_seid.seid,
+                    peer_seid: Some(f_seid.seid),
                     local_address: request.local_address,
                     node,
                     reserved: false,
@@ -254,8 +254,10 @@ impl Node {
         let Some(session) = self.sessions.get(&local) else {
             return;
         };
-        let peer_seid = f_seid.seid.filter(|seid| *seid != 0).or(session.peer_seid);
-        if f_seid.seid == Some(0) {
+        let peer_seid = Some(f_seid.seid)
+            .filter(|seid| *seid != 0)
+            .or(session.peer_seid);
+        if f_seid.seid == 0 {
             self.violation(from, ViolationKind::SeidZero, octets);
         }
         self.sessions
@@ -382,7 +384,7 @@ impl Node {
         response: &SessionEstablishmentResponse,
         effect: Effect,
     ) {
-        let Some(local) = response.up_f_seid.as_ref().and_then(|f_seid| f_seid.seid) else {
+        let Some(local) = response.up_f_seid.as_ref().map(|f_seid| f_seid.seid) else {
             return;
         };
         if local == 0 || self.in_use(local) {

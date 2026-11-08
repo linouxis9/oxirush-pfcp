@@ -12,7 +12,7 @@ datagram that makes a decoder or a node panic, loop or allocate without bound
 is a vulnerability, and so is a node that a peer can make answer for another
 peer.
 
-A decoded message takes up to 243.3 times its octets, in its lists of grouped
+A decoded message takes up to 242.6 times its octets, in its lists of grouped
 IEs: a datagram of 64 KiB, some 15.9 MB. The worst is a Session Establishment
 or Modification Request full of Create URRs of 12 octets, each with an
 Additional Monitoring Time that holds an IE of a null length; the test

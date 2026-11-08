@@ -67,7 +67,7 @@ async fn an_smf_and_a_upf_set_up_an_association_and_a_session() {
                     let seid = upf_handle.with(|node, _| node.new_session()).await.unwrap();
                     let f_seid = FSeid {
                         v4: true,
-                        seid: Some(seid),
+                        seid,
                         ipv4: Some(Ipv4Addr::LOCALHOST),
                         ..Default::default()
                     };
@@ -96,7 +96,7 @@ async fn an_smf_and_a_upf_set_up_an_association_and_a_session() {
     let seid = smf.with(|node, _| node.new_session()).await.unwrap();
     let f_seid = FSeid {
         v4: true,
-        seid: Some(seid),
+        seid,
         ipv4: Some(Ipv4Addr::LOCALHOST),
         ..Default::default()
     };
@@ -154,7 +154,7 @@ async fn answer(handle: &Handle, incoming: Incoming) {
             let seid = handle.with(|node, _| node.new_session()).await.unwrap();
             let f_seid = FSeid {
                 v4: true,
-                seid: Some(seid),
+                seid,
                 ipv4: Some(Ipv4Addr::LOCALHOST),
                 ..Default::default()
             };
@@ -200,7 +200,7 @@ async fn both_ways_at_once() {
     let seid = smf_handle.with(|node, _| node.new_session()).await.unwrap();
     let f_seid = FSeid {
         v4: true,
-        seid: Some(seid),
+        seid,
         ipv4: Some(Ipv4Addr::LOCALHOST),
         ..Default::default()
     };
@@ -834,7 +834,7 @@ async fn an_entity_of_the_smf_takes_a_session_over() {
     };
     let old = FSeid {
         v4: true,
-        seid: Some(0x1234),
+        seid: 0x1234,
         ipv4: Some(Ipv4Addr::new(10, 0, 0, 9)),
         ..Default::default()
     };
@@ -862,7 +862,7 @@ async fn an_entity_of_the_smf_takes_a_session_over() {
     assert_eq!(handle.with(adopt).await.unwrap(), Err(NodeError::SeidInUse));
     let cp_f_seid = FSeid {
         v4: true,
-        seid: Some(local),
+        seid: local,
         ipv4: Some(Ipv4Addr::LOCALHOST),
         ..Default::default()
     };

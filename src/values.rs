@@ -1205,7 +1205,7 @@ pfcp_layout! {
     /// F-SEID (§8.2.37): a SEID with the addresses of its node.
     pub struct FSeid "8.2.37" {
         flags(u8) { v4 "V4": 2, v6 "V6": 1 }
-        seid "SEID": u64 if true,
+        seid "SEID": u64,
         ipv4 "IPv4 address": Ipv4Addr if v4,
         ipv6 "IPv6 address": Ipv6Addr if v6,
     }

@@ -356,7 +356,7 @@ fn a_request_of_a_false_length_is_answered_invalid_length() {
     // answer says the priority that the request says.
     let modification = SessionModificationRequest::default().with_cp_f_seid(FSeid {
         v4: true,
-        seid: Some(1),
+        seid: 1,
         ipv4: Some(Ipv4Addr::new(10, 0, 0, 1)),
         ..Default::default()
     });
@@ -1184,7 +1184,7 @@ fn requests_go_to_port_8805() {
     assert_eq!(sent(&mut upf)[0].to, SMF, "the heartbeat");
     let f_seid = FSeid {
         v4: true,
-        seid: Some(77),
+        seid: 77,
         ipv4: Some(Ipv4Addr::new(10, 0, 0, 1)),
         ..Default::default()
     };
@@ -1210,7 +1210,7 @@ fn requests_go_to_port_8805() {
     let up_seid = upf.new_session();
     let up_f_seid = FSeid {
         v4: true,
-        seid: Some(up_seid),
+        seid: up_seid,
         ipv4: Some(Ipv4Addr::new(10, 0, 0, 2)),
         ..Default::default()
     };
@@ -1353,7 +1353,7 @@ fn a_probe_answer_of_another_type_leaves_the_next_one_its_effect() {
         received.sequence,
         SessionEstablishmentResponse::new(node_id(UPF), accepted()).with_up_f_seid(FSeid {
             v4: true,
-            seid: Some(up_seid),
+            seid: up_seid,
             ipv4: Some(Ipv4Addr::new(10, 0, 0, 2)),
             ..Default::default()
         }),

@@ -365,7 +365,7 @@ fn overload_of_the_address_of_the_up_f_seid() {
     let cp_seid = smf.new_session();
     let f_seid = FSeid {
         v4: true,
-        seid: Some(cp_seid),
+        seid: cp_seid,
         ipv4: Some(Ipv4Addr::new(10, 0, 0, 1)),
         ..Default::default()
     };
@@ -388,7 +388,7 @@ fn overload_of_the_address_of_the_up_f_seid() {
     let (received, _) = request(&mut upf);
     let up_f_seid = FSeid {
         v4: true,
-        seid: Some(upf.new_session()),
+        seid: upf.new_session(),
         ipv4: Some(Ipv4Addr::new(10, 0, 0, 22)),
         ..Default::default()
     };

@@ -112,7 +112,7 @@ macro_rules! pfcp_layout {
             $( fields { $( $head:ident $head_name:literal : $hkind:ty ),* $(,)? } )?
             $(
                 flags($fk:ty) { $( $flag:ident $flag_name:literal : $bit:literal $(/ $width:literal $(as $fkind:ident)?)? ),* $(,)? }
-                $( $field:ident $field_name:literal : $kind:ident $(<$param:ident>)? $([$length:expr])? if $cond:expr ),* $(,)?
+                $( $field:ident $field_name:literal : $kind:ident $(<$param:ident>)? $([$length:expr])? $(if $cond:expr)? ),* $(,)?
             )?
         }
         $( check($this:ident, $path:ident, $found:ident) $rules:block )?
@@ -133,7 +133,7 @@ macro_rules! pfcp_layout {
                 pub spare: $fk,
                 $(
                     #[doc = concat!("The ", $field_name, " field.")]
-                    pub $field: Option<$kind $(<$param>)?>,
+                    pub $field: pfcp_layout!(@type [$($cond)?] $kind $(<$param>)?),
                 )*
             )?
             /// The octets after the fields, which a later release adds: the unknown octets
@@ -173,7 +173,7 @@ macro_rules! pfcp_layout {
                     bit: ($bit - 1) % 8 + 1,
                     width: pfcp_layout!(@bits width [$($width $(as $fkind)?)?]),
                 }),*)?],
-                fields: &[$($(crate::values::Member { name: $field_name, octets: <$kind $(<$param>)? as crate::values::Field>::OCTETS, cells: <$kind $(<$param>)? as crate::values::Field>::CELLS, condition: stringify!($cond) }),*)?],
+                fields: &[$($(crate::values::Member { name: $field_name, octets: <$kind $(<$param>)? as crate::values::Field>::OCTETS, cells: <$kind $(<$param>)? as crate::values::Field>::CELLS, condition: pfcp_layout!(@condition [$($cond)?]) }),*)?],
             });
 
             /// The first field of the octet of flags whose value is wider than its bits.
@@ -192,11 +192,11 @@ macro_rules! pfcp_layout {
             pub(crate) fn inconsistent(&self) -> Option<&'static str> {
                 $(
                     $( let $flag = self.$flag; )*
-                    $(
+                    $($(
                         if self.$field.is_some() != ($cond) {
                             return Some($field_name);
                         }
-                    )*
+                    )?)*
                 )?
                 None
             }
@@ -211,10 +211,7 @@ macro_rules! pfcp_layout {
                     let first = <$fk as crate::values::Field>::read(&mut rest)?;
                     $( let $flag = pfcp_layout!(@bits read [$($width $(as $fkind)?)?] first, $bit); )*
                     $(
-                        let $field = match $cond {
-                            true => Some(pfcp_layout!(@read rest, [$kind $(<$param>)?] $(, $length)?)?),
-                            false => None,
-                        };
+                        let $field = pfcp_layout!(@decode [$($cond)?] pfcp_layout!(@read rest, [$kind $(<$param>)?] $(, $length)?));
                     )*
                 )?
                 Some(Self {
@@ -242,7 +239,7 @@ macro_rules! pfcp_layout {
                     }
                 )*)?
                 $($(
-                    if let Some(field) = &self.$field
+                    if let Some(field) = pfcp_layout!(@get [$($cond)?] self.$field)
                         && !crate::values::Field::fits(field)
                     {
                         return Err(crate::Error::FieldLength { ie, field: $field_name });
@@ -252,7 +249,7 @@ macro_rules! pfcp_layout {
                 $(
                     crate::values::Field::write(&(self.spare & !Self::FLAGS $( | pfcp_layout!(@bits write [$($width $(as $fkind)?)?] $fk, self.$flag, $bit) )*), out);
                     $(
-                        if let Some(field) = &self.$field {
+                        if let Some(field) = pfcp_layout!(@get [$($cond)?] self.$field) {
                             crate::values::Field::write(field, out);
                         }
                     )*
@@ -263,7 +260,7 @@ macro_rules! pfcp_layout {
 
             fn encoded_len(&self) -> usize {
                 0 $($( + crate::values::Field::size(&self.$head) )*)?
-                    $( + core::mem::size_of::<$fk>() $( + self.$field.as_ref().map_or(0, crate::values::Field::size) )* )?
+                    $( + core::mem::size_of::<$fk>() $( + pfcp_layout!(@get [$($cond)?] self.$field).map_or(0, crate::values::Field::size) )* )?
                     + self.extra.len()
             }
         }
@@ -286,7 +283,7 @@ macro_rules! pfcp_layout {
                 $(
                     $( pfcp_layout!(@bits check [$($width $(as $fkind)?)?] self.$flag, path, found, $clause); )*
                     $(
-                        if let Some(field) = &self.$field {
+                        if let Some(field) = pfcp_layout!(@get [$($cond)?] self.$field) {
                             crate::values::Field::check(field, path, $clause, found);
                         }
                     )*
@@ -314,7 +311,7 @@ macro_rules! pfcp_layout {
                         members.put("Spare", oxirush_utils::tree::unsigned(self.spare.into()));
                     }
                     $(
-                        if let Some(field) = &self.$field {
+                        if let Some(field) = pfcp_layout!(@get [$($cond)?] self.$field) {
                             members.put($field_name, crate::values::Field::to_tree(field));
                         }
                     )*
@@ -349,7 +346,7 @@ macro_rules! pfcp_layout {
                         ));
                     }
                     $(
-                        let $field = reading.optional(&read, $field_name, <$kind $(<$param>)? as crate::values::Field>::from_tree)?;
+                        let $field = pfcp_layout!(@from_tree [$($cond)?] reading, &read, $field_name, <$kind $(<$param>)? as crate::values::Field>::from_tree)?;
                     )*
                 )?
                 let extra = reading.optional(&read, crate::ie::UNKNOWN_OCTETS, |value, reading| reading.octets(value))?;
@@ -372,6 +369,17 @@ macro_rules! pfcp_layout {
         }
     )*};
     (@spare $fk:ty) => { "Spare" };
+    // A field after the flags: always there, or there where its condition holds.
+    (@type [] $($kind:tt)+) => { $($kind)+ };
+    (@type [$cond:expr] $($kind:tt)+) => { Option<$($kind)+> };
+    (@condition []) => { "true" };
+    (@condition [$cond:expr]) => { stringify!($cond) };
+    (@get [] $field:expr) => { Some(&$field) };
+    (@get [$cond:expr] $field:expr) => { $field.as_ref() };
+    (@decode [] $read:expr) => { $read? };
+    (@decode [$cond:expr] $read:expr) => { match $cond { true => Some($read?), false => None } };
+    (@from_tree [] $reading:ident, $read:expr, $name:expr, $from:expr) => { $reading.member($read, $name, $from) };
+    (@from_tree [$cond:expr] $reading:ident, $read:expr, $name:expr, $from:expr) => { $reading.optional($read, $name, $from) };
     // A field read from the octets left, or from the first `length` of them, the others
     // being the next field's or the unknown octets.
     (@read $rest:ident, [$($kind:tt)+]) => { <$($kind)+ as crate::values::Field>::read(&mut $rest) };

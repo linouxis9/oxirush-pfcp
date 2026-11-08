@@ -37,7 +37,7 @@ pfcp_layout! {
     /// which SMMII announces, is kept as its octets.
     pub struct SdfFilter "8.2.5" {
         flags(u8) { smmii "SMMII": 6, bid "BID": 5, fl "FL": 4, spi "SPI": 3, ttc "TTC": 2, fd "FD": 1 }
-        spare_octet "Spare octet": Spare if true,
+        spare_octet "Spare octet": Spare,
         flow_description "Flow Description": Lv16 if fd,
         tos_traffic_class "ToS Traffic Class": u16 if ttc,
         security_parameter_index "Security Parameter Index": u32 if spi,
@@ -71,7 +71,7 @@ pfcp_layout! {
     /// Port, 8 IPv4 and IPv6 and Port), the addresses and the port.
     pub struct RedirectInformation "8.2.20" {
         flags(u8) { redirect_address_type "Redirect Address Type": 1 / 4 as RedirectAddressType }
-        redirect_server_address "Redirect Server Address": Lv16 if true,
+        redirect_server_address "Redirect Server Address": Lv16,
         other_redirect_server_address "Other Redirect Server Address": Lv16 if matches!(redirect_address_type.value(), 4 | 8),
         redirect_port "Redirect Port": u16 if (5..=8).contains(&redirect_address_type.value()),
     }
@@ -93,7 +93,7 @@ pfcp_layout! {
     /// kept as the octets of their lists.
     pub struct PfdContents "8.2.39" {
         flags(u8) { adnp "ADNP": 8, aurl "AURL": 7, afd "AFD": 6, dnp "DNP": 5, cp "CP": 4, dn "DN": 3, url "URL": 2, fd "FD": 1 }
-        spare_octet "Spare octet": Spare if true,
+        spare_octet "Spare octet": Spare,
         flow_description "Flow Description": Lv16 if fd,
         url_field "URL field": Lv16 if url,
         domain_name "Domain Name": Lv16 if dn,
@@ -109,7 +109,7 @@ pfcp_layout! {
     /// Flow Information (§8.2.61): the Flow Direction of Table 8.2.61-1 and the flow.
     pub struct FlowInformation "8.2.61" {
         flags(u8) { flow_direction "Flow Direction": 1 / 3 as FlowDirection }
-        flow_description "Flow Description": Lv16 if true,
+        flow_description "Flow Description": Lv16,
     }
 }
 
@@ -137,8 +137,8 @@ pfcp_layout! {
     /// value of the header field.
     pub struct HeaderEnrichment "8.2.67" {
         flags(u8) { header_type "Header Type": 1 / 5 as HeaderType }
-        header_field_name "Header Field Name": Lv8 if true,
-        header_field_value "Header Field Value": Lv8 if true,
+        header_field_name "Header Field Name": Lv8,
+        header_field_value "Header Field Value": Lv8,
     }
 }
 
@@ -147,11 +147,11 @@ pfcp_layout! {
     /// length of the ID of its type; the octets after it are a later release's.
     pub struct FailedRuleId "8.2.80" {
         flags(u8) { rule_id_type "Rule ID Type": 1 / 5 as RuleIdType }
-        rule_id_value "Rule ID value": Rest [rule_id_length(rule_id_type)] if true,
+        rule_id_value "Rule ID value": Rest [rule_id_length(rule_id_type)],
     }
     check(this, path, found) {
         let length = rule_id_length(this.rule_id_type);
-        let other = this.rule_id_value.as_ref().is_some_and(|value| value.0.len() != length);
+        let other = this.rule_id_value.0.len() != length;
         flag_rule(other, path, "8.2.80", "a Rule ID value of another length than the ID of its type", found);
     }
 }
@@ -171,7 +171,7 @@ pfcp_layout! {
     /// interval, in seconds.
     pub struct TimeQuotaMechanism "8.2.81" {
         flags(u8) { btit "BTIT": 1 / 2 as BaseTimeIntervalType }
-        base_time_interval "Base Time Interval": u32 if true,
+        base_time_interval "Base Time Interval": u32,
     }
 }
 
@@ -230,8 +230,8 @@ pfcp_layout! {
     /// MPTCP Address Information (§8.2.157).
     pub struct MptcpAddressInformation "8.2.157" {
         flags(u8) { v6 "V6": 2, v4 "V4": 1 }
-        mptcp_proxy_type "MPTCP Proxy Type": u8 if true,
-        mptcp_proxy_port "MPTCP Proxy Port": u16 if true,
+        mptcp_proxy_type "MPTCP Proxy Type": u8,
+        mptcp_proxy_port "MPTCP Proxy Port": u16,
         mptcp_proxy_ipv4_address "MPTCP Proxy IPv4 Address": Ipv4Addr if v4,
         mptcp_proxy_ipv6_address "MPTCP Proxy IPv6 Address": Ipv6Addr if v6,
     }
@@ -381,11 +381,11 @@ pfcp_layout! {
     /// each in the six low bits of an octet with two spare bits, at most 63 of them.
     pub struct DscpToPpiMappingInformation "8.2.214" {
         flags(u8) { ppi_value "PPI Value": 1 / 3 }
-        dscp_values "DSCP Value": Each<SixBits> if true,
+        dscp_values "DSCP Value": Each<SixBits>,
     }
     check(this, path, found) {
         // "X shall not be larger than 63".
-        if this.dscp_values.as_ref().is_some_and(|values| values.0.len() > 63) {
+        if this.dscp_values.0.len() > 63 {
             found.push(Deviation::new(path, "8.2.214", crate::check::DeviationKind::Rule("more than 63 DSCP values")));
         }
     }
@@ -413,8 +413,8 @@ pfcp_layout! {
     /// MPQUIC Address Information (§8.2.226).
     pub struct MpquicAddressInformation "8.2.226" {
         flags(u8) { v6 "V6": 2, v4 "V4": 1 }
-        mpquic_proxy_type "MPQUIC Proxy Type": u8 if true,
-        mpquic_proxy_port "MPQUIC Proxy Port": u16 if true,
+        mpquic_proxy_type "MPQUIC Proxy Type": u8,
+        mpquic_proxy_port "MPQUIC Proxy Port": u16,
         mpquic_proxy_ipv4_address "MPQUIC Proxy IPv4 Address": Ipv4Addr if v4,
         mpquic_proxy_ipv6_address "MPQUIC Proxy IPv6 Address": Ipv6Addr if v6,
     }
@@ -425,7 +425,7 @@ pfcp_layout! {
     /// the time.
     pub struct ReportingSuggestionInfo "8.2.229" {
         flags(u8) { reporting_urgency "Reporting Urgency value": 1 / 4 as ReportingUrgencyValue }
-        reporting_time_info "Reporting Time Info": u32 if true,
+        reporting_time_info "Reporting Time Info": u32,
     }
 }
 

@@ -51,7 +51,7 @@ fn establishment() -> Message {
     let smf = Ipv4Addr::new(10, 0, 0, 1);
     let seid = FSeid {
         v4: true,
-        seid: Some(0x1001),
+        seid: 0x1001,
         ipv4: Some(smf),
         ..Default::default()
     };
