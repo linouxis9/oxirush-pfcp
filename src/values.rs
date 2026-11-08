@@ -319,7 +319,8 @@ impl<E: Narrowable> Field for Narrow<E> {
         })
     }
     fn write(&self, out: &mut Vec<u8>) {
-        out.push(self.spare & !mask::<E>() | self.value.value() & mask::<E>());
+        let (spare, value) = (self.spare & !mask::<E>(), self.value.value() & mask::<E>());
+        out.push(crate::octets::together(spare, value));
     }
     fn size(&self) -> usize {
         1
@@ -956,7 +957,8 @@ impl Field for TypedAddress {
     }
     fn write(&self, out: &mut Vec<u8>) {
         // encode() refuses a type or an address longer than their bits can say.
-        out.push((self.address_type & 0x03) << 6 | (self.address.len().min(0x3f) as u8));
+        let (address_type, length) = (self.address_type & 0x03, self.address.len().min(0x3f));
+        out.push(crate::octets::together(address_type << 6, length as u8));
         out.extend_from_slice(&self.address[..self.address.len().min(0x3f)]);
     }
     fn size(&self) -> usize {

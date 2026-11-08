@@ -799,3 +799,44 @@ enum Read {
     /// It ends every request to the node: a Version Not Supported Response (§7.2.1A).
     EndsAll,
 }
+
+#[cfg(test)]
+mod tests {
+    use core::net::Ipv4Addr;
+
+    use super::*;
+
+    /// Once the 2^24 sequence numbers wrap, the node gives none of a request that it has
+    /// outstanding, that it reserved or that finished lately (§6.4, §7.2.2.2).
+    #[test]
+    fn a_sequence_number_in_use_is_not_given_again_once_the_numbers_wrap() {
+        let at = Duration::from_secs(1);
+        let smf = NodeId::Ipv4(Ipv4Addr::new(10, 0, 0, 1));
+        let config = NodeConfig {
+            heartbeat: None,
+            ..NodeConfig::new(smf, Function::Cp, 1)
+        };
+        let mut node = Node::new(config);
+        let upf = SocketAddr::from(([10, 0, 0, 2], 8805));
+        node.next_sequence = 0x00ff_fffd;
+        let heartbeat = || Message::node(0, HeartbeatRequest::new(RecoveryTimeStamp::new(1)));
+        let reserved = node.reserve_sequence().unwrap();
+        let outstanding = [0, 1].map(|_| node.request(at, upf, heartbeat()).unwrap());
+        node.finish(at, 1, upf, false);
+        assert_eq!(reserved, 0x00ff_fffd);
+        assert_eq!(
+            outstanding.map(|id| node.ids[&id]),
+            [0x00ff_fffe, 0x00ff_ffff]
+        );
+        // The numbers wrap at 2^24: 0 is free, then each number in use is passed over
+        assert_eq!(node.next_free_sequence(), Ok(0));
+        node.next_sequence = 0x00ff_fffd;
+        assert_eq!(node.next_free_sequence(), Ok(0));
+        // A number that finished lately, and one beyond it
+        node.next_sequence = 1;
+        assert_eq!(node.next_free_sequence(), Ok(2));
+        node.next_sequence = 0;
+        node.finish(at, 5, upf, false);
+        assert_eq!(node.next_free_sequence(), Ok(0));
+    }
+}

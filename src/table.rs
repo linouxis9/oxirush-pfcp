@@ -448,7 +448,7 @@ pub(crate) fn decode_scope_sized<S: Scope>(
     octets: &[u8],
     presize: bool,
 ) -> Result<(), IeFault> {
-    if presize && S::PRESIZE {
+    if presizes::<S>(presize) {
         scope.presize(octets);
     }
     // No order is kept while the IEs come in the order of the table, which encoding the
@@ -467,10 +467,7 @@ pub(crate) fn decode_scope_sized<S: Scope>(
             false => scope.place(ie_type, body),
         };
         // No row is of a vendor's type, which a null length leaves out.
-        if (placing == Placing::Malformed || body.is_empty())
-            && !kept_first.contains(&ie_type)
-            && S::table().row_of(ie_type).is_some_and(|row| !row.is_list())
-        {
+        if unread(placing, body) && once::<S>(ie_type) && !kept_first.contains(&ie_type) {
             kept_first.push(ie_type);
         }
         let placed = match placing {
@@ -502,6 +499,22 @@ pub(crate) fn decode_scope_sized<S: Scope>(
     }
     *scope.order_mut() = order.unwrap_or_default();
     Ok(())
+}
+
+/// Whether a scope sizes its lists first: a message whose lists are of large values.
+fn presizes<S: Scope>(presize: bool) -> bool {
+    presize && S::PRESIZE
+}
+
+/// Whether an IE of `body` that a scope placed so is kept as octets unread: of a null
+/// length, or that does not decode as its row's value.
+fn unread(placing: Placing, body: &[u8]) -> bool {
+    placing == Placing::Malformed || body.is_empty()
+}
+
+/// Whether the row of `ie_type` in a scope is there once.
+fn once<S: Scope>(ie_type: u16) -> bool {
+    S::table().row_of(ie_type).is_some_and(|row| !row.is_list())
 }
 
 /// Where an IE goes in the order of a table: at the position of its row, an IE that the

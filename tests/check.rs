@@ -543,6 +543,45 @@ fn a_mandatory_ie_that_does_not_decode_is_of_7_6_8() {
         incorrect(&session_message(50, 0, &ies)),
         [(DeviationKind::MandatoryIncorrect { ie_type: 29 }, "7.6.8")]
     );
+    // One that does not decode, then one that does, which is a repetition of it
+    let pdr = ie(
+        1,
+        &[
+            ie(56, &[0, 1]),
+            ie(29, &[0, 0, 1]),
+            ie(29, &[0, 0, 0, 1]),
+            ie(2, &ie(20, &[0])),
+            ie(108, &[0, 0, 0, 1]),
+        ]
+        .concat(),
+    );
+    let [_, far] = rules();
+    let ies = [ie(60, &[0, 10, 0, 0, 1]), ie(57, &f_seid), pdr, far.clone()];
+    let message = Message::decode(&session_message(50, 0, &ies)).unwrap();
+    let Body::SessionEstablishmentRequest(request) = &message.body else {
+        panic!()
+    };
+    assert!(request.create_pdr[0].precedence.is_none());
+    assert_eq!(request.create_pdr[0].raw.len(), 2);
+    assert_eq!(
+        incorrect(&session_message(50, 0, &ies)),
+        [(DeviationKind::MandatoryIncorrect { ie_type: 29 }, "7.6.8")]
+    );
+    // Of a list, an IE of a null length is no first that the others repeat: the next is a
+    // value of the list
+    let [pdr, far] = rules();
+    let ies = [
+        ie(60, &[0, 10, 0, 0, 1]),
+        ie(57, &f_seid),
+        ie(1, &[]),
+        pdr,
+        far.clone(),
+    ];
+    let message = Message::decode(&session_message(50, 0, &ies)).unwrap();
+    let Body::SessionEstablishmentRequest(request) = &message.body else {
+        panic!()
+    };
+    assert_eq!((request.create_pdr.len(), request.raw.len()), (1, 1));
     // Of a list, the one Create PDR, whose IEs run past it
     let ies = [
         ie(60, &[0, 10, 0, 0, 1]),

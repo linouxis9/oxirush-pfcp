@@ -948,7 +948,10 @@ impl Codec for FqCsid {
                 clause: "8.2.43",
             });
         }
-        out.push(self.node_id_type << 4 | self.csids.len() as u8);
+        out.push(crate::octets::together(
+            self.node_id_type << 4,
+            self.csids.len() as u8,
+        ));
         out.extend_from_slice(&self.node_address);
         for csid in &self.csids {
             out.extend_from_slice(&csid.to_be_bytes());

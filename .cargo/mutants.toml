@@ -8,15 +8,11 @@ all_features = true
 
 # Mutants that no test can tell from the code, each with why.
 exclude_re = [
-    # The fields of the first octet of a header, and the priority and the spare bits of its
-    # last, are of disjoint bits once a field wider than its bits is refused, as it is first:
-    # their | and their ^ write alike.
-    'src/header\.rs:\d+:\d+: replace \| with \^ in Header::octets$',
-    # The rows there once whose first IE is kept as octets: one whose first IE is a value
-    # has its next ones repeated by its field already, so that taking it in the list too,
-    # or twice, changes nothing; the condition spares the decode a look at the table for
-    # each IE.
-    'src/table\.rs:\d+:\d+: replace && with \|\| in decode_scope_sized$',
+    # The two values of disjoint bits of an octet that together joins: the fields of a
+    # header, refused first when wider than their bits, a Narrow value and its spare bits,
+    # an Address Type and its length, the Node-ID Type and the CSIDs of an FQ-CSID, whose
+    # | and ^ write alike.
+    'src/octets\.rs:\d+:\d+: replace \| with \^ in together$',
     # The rules of a value that has none, the default of the trait: its body does nothing
     # already.
     'src/check\.rs:\d+:\d+: replace Rules::check with \(\)$',
@@ -34,29 +30,13 @@ exclude_re = [
     # 0 to 9), which it writes back the same: the guard keeps a tree byte for byte, should
     # it read others.
     'src/values\.rs:\d+:\d+: replace match guard plmn\.to_nas_octets\(\) == self\.0 with true in <impl Field for PlmnId>::to_tree$',
-    # The Address Type of an address after its type, two bits once checked, and its
-    # length, six bits at most, are of the two parts of their octet, which | and ^ write
-    # alike.
-    'src/values\.rs:\d+:\d+: replace \| with \^ in <impl Field for TypedAddress>::write$',
     # No octets are no octets of any representation: an empty list of octets on the heap
     # allocates nothing either, and reads as the same slice.
     'src/octets\.rs:\d+:\d+: delete match arm 0 in Octets::copied$',
-    # A sequence number reserved, or of a recent request, is given again only once the
-    # 2^24 numbers wrap, as no request has finished at a number above the next before
-    # then: no_sequence_number_left, which reserves them all, runs in release alone (CI's
-    # --ignored step), and the mutants run the tests of a debug build.
-    'src/node/delivery\.rs:\d+:\d+: replace && with \|\| in Node::next_free_sequence$',
-    'src/node/delivery\.rs:\d+:\d+: replace == with != in Node::next_free_sequence$',
-    # The spare bits and the value of a Narrow are of disjoint bits of its octet, which
-    # their | and their ^ write alike.
-    'src/values\.rs:\d+:\d+: replace \| with \^ in <impl Field for Narrow<E>>::write$',
     # An Endpoint on a socket of IPv6 sends to an IPv4 peer at its IPv4-mapped address, which
     # macOS and the BSDs need; Linux, where the mutants run, takes the IPv4 address on such a
     # socket as well. The test an_endpoint_of_both_families_reaches_an_ipv4_peer fails
     # without the guard on macOS, and on Linux under a shim that refuses an IPv4 address on
     # a socket of IPv6 as macOS does.
     'src/endpoint\.rs:\d+:\d+: replace match guard self\.ipv6 with false in Task::flush$',
-    # The Node-ID Type of an FQ-CSID, of four bits once checked, and the number of its CSIDs,
-    # fifteen at most, are of the two halves of their octet, which | and ^ write alike.
-    'src/values_clauses\.rs:\d+:\d+: replace \| with \^ in <impl Codec for FqCsid>::encode$',
 ]

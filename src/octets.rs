@@ -128,3 +128,9 @@ impl<const N: usize> From<&[u8; N]> for Octets {
         Self::copied(octets)
     }
 }
+
+/// The bits of an octet of two values of disjoint bits, each in its place: those of the
+/// fields of a header, of a value and its spare bits, of a type and a length.
+pub(crate) const fn together(high: u8, low: u8) -> u8 {
+    high | low
+}

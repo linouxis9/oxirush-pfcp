@@ -122,11 +122,14 @@ impl Header {
         if let Some((field, value)) = self.overflow() {
             return Err(crate::Error::HeaderField { field, value });
         }
-        let flags = (self.version & 7) << 5
-            | (self.spare & 3) << 3
-            | u8::from(self.follow_on) << 2
-            | u8::from(self.priority.is_some()) << 1
-            | u8::from(self.seid.is_some());
+        let flags = [
+            (self.version & 7) << 5,
+            (self.spare & 3) << 3,
+            u8::from(self.follow_on) << 2,
+            u8::from(self.priority.is_some()) << 1,
+            u8::from(self.seid.is_some()),
+        ];
+        let flags = flags.into_iter().fold(0, crate::octets::together);
         let length = match self.length {
             Some(length) => length,
             None => u16::try_from(self.encoded_len() - 4 + body).map_err(|_| {
@@ -147,7 +150,7 @@ impl Header {
         }
         octets[at..at + 3].copy_from_slice(&self.sequence.to_be_bytes()[1..]);
         octets[at + 3] = match self.priority {
-            Some(priority) => priority << 4 | self.spare_last & 0x0f,
+            Some(priority) => crate::octets::together(priority << 4, self.spare_last & 0x0f),
             None => self.spare_last,
         };
         Ok((octets, at + 4))
