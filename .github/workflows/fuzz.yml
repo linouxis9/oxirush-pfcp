@@ -138,6 +138,7 @@ jobs:
           - { target: paths }
           - { target: edit }
           - { target: endpoint }
+          - { target: check, seeds: fuzz/seeds/messages }
           - { target: differential, seeds: fuzz/seeds/messages, features: differential }
     steps:
       - uses: actions/checkout@v4

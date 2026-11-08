@@ -170,10 +170,10 @@ jobs:
           path: fuzz/artifacts
 
   # The targets beside those of the codec and the node, in a job of their own: the paths
-  # of a message, the edits of its tree, two endpoints and the codec against rs-pfcp, a
-  # minute each.
+  # of a message, the edits of its tree, two endpoints, what check says and the codec
+  # against rs-pfcp, a minute each.
   fuzz-more:
-    name: Fuzz the trees, the endpoint and against rs-pfcp (4 minutes)
+    name: Fuzz the trees, the endpoint, check and against rs-pfcp (5 minutes)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -183,8 +183,11 @@ jobs:
           for target in paths edit endpoint; do
             cargo fuzz run "$target" -- -max_total_time=60
           done
-          mkdir -p fuzz/corpus/differential
-          cp fuzz/seeds/messages/* fuzz/corpus/differential/
+          for target in check differential; do
+            mkdir -p "fuzz/corpus/$target"
+            cp fuzz/seeds/messages/* "fuzz/corpus/$target/"
+          done
+          cargo fuzz run check -- -max_total_time=60
           cargo fuzz run --features differential differential -- -max_total_time=60
       - uses: actions/upload-artifact@v4
         if: failure()

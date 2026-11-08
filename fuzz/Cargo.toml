@@ -77,6 +77,13 @@ doc = false
 bench = false
 
 [[bin]]
+name = "check"
+path = "fuzz_targets/check.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
 name = "differential"
 path = "fuzz_targets/differential.rs"
 required-features = ["differential"]
