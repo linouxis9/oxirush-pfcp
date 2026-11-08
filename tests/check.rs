@@ -295,6 +295,25 @@ fn an_ie_of_a_row_not_on_the_interface_is_told_once() {
         checked(&[], &short, Interfaces::SXA),
         [(DeviationKind::NotOnInterface { ie_type: 29 }, None)]
     );
+    // A value of the row, and an IE of it kept as octets after it, are told once
+    let pdr = [ie(56, &[0, 1]), ie(29, &[0, 0, 0, 1]), ie(29, &short)];
+    let pdr = ie(
+        1,
+        &[
+            &pdr.concat()[..],
+            &ie(2, &ie(20, &[0])),
+            &ie(108, &[0, 0, 0, 1]),
+        ]
+        .concat(),
+    );
+    let [_, far] = rules();
+    let f_seid = [2, 0, 0, 0, 0, 0, 0, 0x10, 0x01, 10, 0, 0, 1];
+    let ies = [ie(60, &[0, 10, 0, 0, 1]), ie(57, &f_seid), pdr, far];
+    let message = Message::decode(&session_message(50, 0, &ies)).unwrap();
+    assert_eq!(
+        kinds(&message, Interfaces::SXA),
+        [DeviationKind::NotOnInterface { ie_type: 29 }]
+    );
     assert_eq!(
         checked(&[], &short, Interfaces::SXA_SXB),
         [(DeviationKind::Incorrect { ie_type: 29 }, None)]
@@ -366,6 +385,36 @@ fn a_mandatory_ie_that_does_not_decode_is_of_7_6_8() {
         incorrect(&rejection),
         [(DeviationKind::MandatoryIncorrect { ie_type: 96 }, "7.6.8")]
     );
+    // Of a row there once, the first IE is the one handled (§7.6.10): one that does not
+    // decode, then one of a null length, is incorrect
+    let pdr = ie(
+        1,
+        &[
+            ie(56, &[0, 1]),
+            ie(29, &[0, 0, 1]),
+            ie(29, &[]),
+            ie(2, &ie(20, &[0])),
+            ie(108, &[0, 0, 0, 1]),
+        ]
+        .concat(),
+    );
+    let [_, far] = rules();
+    let ies = [ie(60, &[0, 10, 0, 0, 1]), ie(57, &f_seid), pdr, far.clone()];
+    assert_eq!(
+        incorrect(&session_message(50, 0, &ies)),
+        [(DeviationKind::MandatoryIncorrect { ie_type: 29 }, "7.6.8")]
+    );
+    // Of a list, the one Create PDR, whose IEs run past it
+    let ies = [
+        ie(60, &[0, 10, 0, 0, 1]),
+        ie(57, &f_seid),
+        ie(1, &[0, 56, 0, 9]),
+        far,
+    ];
+    assert_eq!(
+        incorrect(&session_message(50, 0, &ies)),
+        [(DeviationKind::MandatoryIncorrect { ie_type: 1 }, "7.6.8")]
+    );
 }
 
 /// A set of interfaces is of the bits of the constants, and not empty.
@@ -379,6 +428,7 @@ fn interfaces_of_their_bits() {
     assert_eq!(Interfaces::from_bits(0), None);
     assert_eq!(Interfaces::from_bits(32), None);
     assert_eq!(Interfaces::ALL.bits(), 31);
+    assert_eq!(Interfaces::SXA_SXB | Interfaces::SXB, Interfaces::SXA_SXB);
 }
 
 fn request_with(message: &mut Message, change: impl FnOnce(&mut SessionEstablishmentRequest)) {
@@ -683,6 +733,16 @@ fn check_one_change_per_rule() {
             "5.2.1"
         )]
     );
+    // More rules than the IDs that the check keeps on the stack
+    let mut modification = SessionModificationRequest::default();
+    for id in [5].into_iter().chain(0..40) {
+        modification = modification.with_remove_pdr(RemovePdr::new(PdrId::new(id)));
+    }
+    let message = Message::session(0x2002, 9, modification);
+    assert_eq!(
+        kinds(&message, Interfaces::N4),
+        [DeviationKind::RuleChangedTwice { rule: "PDR", id: 5 }]
+    );
 }
 
 /// §8.2.34: a Metric is a percentage, and a receiver takes another value as 0.
@@ -712,6 +772,9 @@ fn check_overload_reduction_metric() {
             read: 0
         }]
     );
+    // 100 is the most that a percentage is
+    assert!(Metric::new(Percent(100)).deviations().is_empty());
+    assert!(!Metric::new(Percent(101)).deviations().is_empty());
 }
 
 /// §7.6.8: a reserved value is an incorrect IE, a spare one is ignored; Table 8.1.2-1: an
@@ -963,12 +1026,50 @@ fn an_ie_of_no_row_is_unexpected_and_one_of_no_type_unknown() {
             ),
         ]
     );
+    // A vendor IE of a vendor's Enterprise ID is no deviation; one of 3GPP's, or without
+    // one, is (§8.1.1)
+    let vendor = |content: &[u8]| {
+        let octets = node_message(1, &[ie(96, &RTS), ie(32769, content)]);
+        let found = Message::decode(&octets).unwrap().check(Interfaces::N4);
+        found
+            .into_iter()
+            .map(|deviation| deviation.kind)
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(vendor(&[0x48, 0x79, 1]), []);
+    assert_eq!(vendor(&[0x28, 0xaf, 1]), [DeviationKind::VendorId]);
+    assert_eq!(vendor(&[1]), [DeviationKind::VendorId]);
+}
+
+/// §7.6.10: an IE of a list beyond the most that its row allows, which decodes, is a
+/// repetition, and is told at its position: the seventh FQ-CSID of a Session Set Deletion
+/// Request on Sxb, whose six rows have one each (Table 7.4.6.1-1).
+#[test]
+fn an_ie_beyond_its_list_is_repeated() {
+    let node = ie(60, &[0, 10, 0, 0, 1]);
+    let fq_csids = (0..7u8).map(|csid| ie(65, &[0x01, 10, 0, 0, 1, 0, csid]));
+    let ies: Vec<Vec<u8>> = [node].into_iter().chain(fq_csids).collect();
+    let message = Message::decode(&node_message(14, &ies)).unwrap();
+    let found: Vec<(String, DeviationKind)> = message
+        .check(Interfaces::SXB)
+        .into_iter()
+        .map(|deviation| (deviation.path, deviation.kind))
+        .collect();
+    let repeated = DeviationKind::Repeated { ie_type: 65 };
+    assert_eq!(found, [("/pfcp/FQ-CSID/6".to_string(), repeated)]);
 }
 
 /// §7.6.10: of an IE that its table has once, the first is handled and the others are
 /// ignored; when the first does not decode, the second is not taken in its place.
 #[test]
 fn the_first_of_a_repeated_ie_is_the_one_handled() {
+    // A Node ID of a null length, then one of a value: the first is handled, and the
+    // second is not taken in its place
+    let octets = node_message(5, &[ie(60, &[]), ie(60, &[0, 10, 0, 0, 9]), ie(96, &RTS)]);
+    let Body::AssociationSetupRequest(request) = Message::decode(&octets).unwrap().body else {
+        panic!()
+    };
+    assert_eq!((request.node_id, request.raw.len()), (None, 2));
     // A Node ID shorter than its type, then one that is not
     let octets = node_message(
         5,
@@ -1387,6 +1488,11 @@ fn a_conditional_ie_that_does_not_decode_is_incorrect() {
 #[test]
 fn a_needed_ie_of_a_null_length_is_the_senders_deviation() {
     let null = |ie_type| (DeviationKind::NullLength { ie_type }, None, None);
+    // The one Create PDR that an establishment needs, of a null length
+    let f_seid = ie(57, &[2, 0, 0, 0, 0, 0, 0, 0x10, 0x01, 10, 0, 0, 1]);
+    let [_, far] = rules();
+    let ies = [ie(60, &[0, 10, 0, 0, 1]), f_seid, ie(1, &[]), far];
+    assert_eq!(found(&session_message(50, 0, &ies)), [null(1)]);
     assert_eq!(
         found(&node_message(5, &[ie(60, &[]), ie(96, &RTS)])),
         [null(60)]
@@ -1553,8 +1659,20 @@ fn the_conditions_that_a_message_shows() {
         },
     );
     let mut message = establishment();
-    request_with(&mut message, |request| request.create_urr.push(urr));
+    request_with(&mut message, |request| request.create_urr.push(urr.clone()));
     missing(message, 31, Some(CauseValue::ConditionalIeMissing));
+    // and one that measures no volume has none to report
+    let mut message = establishment();
+    let duration = MeasurementMethod {
+        durat: true,
+        ..Default::default()
+    };
+    let urr = CreateUrr {
+        measurement_method: Some(duration),
+        ..urr
+    };
+    request_with(&mut message, |request| request.create_urr.push(urr));
+    assert!(message.check(Interfaces::N4).is_empty());
 }
 
 /// The paths of the deviations of a kind that a value has on its own, without the
@@ -2381,7 +2499,8 @@ fn node_messages_of_each_interface() {
 }
 
 /// The FQ-CSIDs of a Session Set Deletion Request: one of each of its roles on the
-/// interface, which Sxa has four of and N4 two (Table 7.4.6.1-1): three are too many on N4.
+/// interface, which Sxa has four of and N4 two (Table 7.4.6.1-1): three are too many on N4,
+/// two are not.
 #[test]
 fn a_session_set_deletion_has_an_fq_csid_of_each_role() {
     let mut deletion = SessionSetDeletionRequest::new(NodeId::Ipv4(SMF));
@@ -2398,6 +2517,11 @@ fn a_session_set_deletion_has_an_fq_csid_of_each_role() {
             .collect::<Vec<_>>(),
         [DeviationKind::Repeated { ie_type: 65 }]
     );
+    // As many as the rows of N4 are no more than they allow
+    let two = SessionSetDeletionRequest::new(NodeId::Ipv4(SMF))
+        .with_fq_csid(fq_csid([10, 0, 0, 1], 1))
+        .with_fq_csid(fq_csid([10, 0, 0, 1], 2));
+    assert!(Message::node(9, two).check(Interfaces::N4).is_empty());
 }
 
 /// What the flags of a UE IP Address (§8.2.62) and an F-TEID (§8.2.3), and the SEID of an
