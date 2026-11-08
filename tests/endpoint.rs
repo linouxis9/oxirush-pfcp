@@ -431,25 +431,30 @@ fn setup_of_pools(sequence: u32, pools: usize) -> Vec<u8> {
 /// The incoming queue holds requests up to the octets that they take decoded, as well as
 /// up to their number: a datagram that decodes into far more than its octets is dropped
 /// while the queue holds as much, and comes in again when the caller has taken the others.
+/// Each datagram goes once the endpoint has read the one before, so that no system's
+/// receive buffer drops one first.
 #[tokio::test]
 async fn the_incoming_queue_is_bounded_by_what_its_requests_take() {
     let queues = Queues {
-        incoming_octets: 1 << 20,
+        incoming_octets: 64 << 10,
         ..Queues::default()
     };
     let mut upf = Endpoint::bind_with(ANY, config(Function::Up), queues)
         .await
         .unwrap();
-    let address = upf.handle().local_addr();
+    let handle = upf.handle();
+    let address = handle.local_addr();
     let peer = tokio::net::UdpSocket::bind(ANY).await.unwrap();
-    // 7,000 grouped IEs of 8 octets: 56 kB, and more than a mebibyte decoded
-    let large = |sequence| setup_of_pools(sequence, 7_000);
-    for sequence in 1..=3 {
-        peer.send_to(&large(sequence), address).await.unwrap();
+    // 1,000 grouped IEs of 8 octets: 8 kB, a datagram that macOS sends too (9,216 octets
+    // at most), and some 300 kB decoded
+    let large = |sequence| setup_of_pools(sequence, 1_000);
+    for (received, datagram) in (1..).zip([large(1), large(2), large(3), setup(4)]) {
+        peer.send_to(&datagram, address).await.unwrap();
+        let read = statistics_once(&handle, |statistics| statistics.received == received).await;
+        assert_eq!(read.received, received);
     }
-    peer.send_to(&setup(4), address).await.unwrap();
-    tokio::time::sleep(Duration::from_millis(300)).await;
-    assert_eq!(upf.handle().statistics().incoming_dropped, 3);
+    let dropped = statistics_once(&handle, |statistics| statistics.incoming_dropped == 3).await;
+    assert_eq!(dropped.incoming_dropped, 3);
     assert_eq!(upf.incoming().await.unwrap().request.sequence, 1);
     peer.send_to(&large(2), address).await.unwrap();
     let again = within(upf.incoming()).await.unwrap();
@@ -806,6 +811,18 @@ async fn within<F: std::future::Future>(future: F) -> F::Output {
     tokio::time::timeout(Duration::from_secs(5), future)
         .await
         .expect("within 5 seconds")
+}
+
+/// The statistics of an endpoint once `condition` holds of them, or after five seconds.
+async fn statistics_once(handle: &Handle, condition: impl Fn(&Statistics) -> bool) -> Statistics {
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
+    loop {
+        let statistics = handle.statistics();
+        if condition(&statistics) || tokio::time::Instant::now() >= deadline {
+            return statistics;
+        }
+        tokio::time::sleep(Duration::from_millis(5)).await;
+    }
 }
 
 /// §5.22.3 bullets 5 and 6: an entity of an SMF of MPAS takes over a session that a UP
