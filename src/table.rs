@@ -488,17 +488,51 @@ pub(crate) fn each_entry<S: Scope>(scope: &S, ie_type: u16, mut each: impl FnMut
     }
 }
 
-/// The position of an entry of `row` in the tree of the scope, in the list of the row:
+/// The position in the tree of the scope of each value of `row`, in the list of the row:
 /// `None` for the one entry of a row there once, which the tree has alone.
-pub(crate) fn position<S: Scope>(scope: &S, row: &Row, entry: Entry) -> Option<usize> {
-    let (mut at, mut entries) = (None, 0);
-    each_entry(scope, row.ie_type, |each| {
-        if each == entry {
-            at = Some(entries);
+pub(crate) fn value_positions<S: Scope>(scope: &S, row: &Row) -> Vec<Option<usize>> {
+    let mut positions = Vec::new();
+    let entries = positions_of(scope, row, |entry, position| {
+        if let Entry::Value(_) = entry {
+            positions.push(position);
         }
+    });
+    let listed = row.repeat != Repeat::Once || entries > 1;
+    positions
+        .into_iter()
+        .map(|at| listed.then_some(at))
+        .collect()
+}
+
+/// The same of each IE that the scope keeps as octets, by its position in `raw`: `None`
+/// for one of no row too.
+pub(crate) fn kept_positions<S: Scope>(scope: &S) -> Vec<Option<usize>> {
+    let raws = scope.raw();
+    let mut positions = alloc::vec![None; raws.len()];
+    let kept = |row: &&Row| raws.iter().any(|ie| ie.ie_type == row.ie_type);
+    for row in S::table().rows.iter().filter(kept) {
+        let mut of_row = Vec::new();
+        let entries = positions_of(scope, row, |entry, position| {
+            if let Entry::Kept(at) = entry {
+                of_row.push((at, position));
+            }
+        });
+        let listed = row.repeat != Repeat::Once || entries > 1;
+        for (at, position) in of_row {
+            positions[at] = listed.then_some(position);
+        }
+    }
+    positions
+}
+
+/// Each entry of `row` with its position in the tree, and how many there are.
+fn positions_of<S: Scope>(scope: &S, row: &Row, mut each: impl FnMut(Entry, usize)) -> usize {
+    let mut entries = 0;
+    each_entry(scope, row.ie_type, |entry| {
+        each(entry, entries);
         entries += 1;
     });
-    at.filter(|_| row.repeat != Repeat::Once || entries > 1)
+    entries
 }
 
 /// More than the rows of a table, which the table macro asserts: the counts of each row

@@ -27,7 +27,7 @@ use core::fmt;
 use crate::enums::CauseValue;
 use crate::ie::VENDOR;
 use crate::registry::type_name;
-use crate::table::{Entry, Interfaces, Presence, Repeat, Row, Scope};
+use crate::table::{Interfaces, Presence, Repeat, Row, Scope};
 
 /// One deviation: where, which clause, what, and the Cause of the answer.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -493,11 +493,16 @@ pub(crate) fn check_field_values<
     let table = S::table();
     let row = &table.rows[at];
     check_row(table.id, row, values.len(), path, context, found);
+    // Of the values alone, their positions; with kept IEs of the row, theirs in the tree.
     let kept = scope.raw().iter().any(|ie| ie.ie_type == row.ie_type);
+    let positions = match kept {
+        false => Vec::new(),
+        true => crate::table::value_positions(scope, row),
+    };
     for (nth, value) in values.iter().enumerate() {
         let nth = match kept {
             false => (row.repeat != Repeat::Once).then_some(nth),
-            true => crate::table::position(scope, row, Entry::Value(nth)),
+            true => positions[nth],
         };
         let here = Path::Row {
             parent: path,
@@ -727,6 +732,7 @@ fn raw_deviations<S: Scope>(
 ) {
     let table = S::table();
     let raws = scope.raw();
+    let positions = crate::table::kept_positions(scope);
     let mut handled: Vec<u16> = Vec::new();
     for (at, ie) in raws.iter().enumerate() {
         let Some(row) = table.row_of(ie.ie_type) else {
@@ -760,7 +766,7 @@ fn raw_deviations<S: Scope>(
         let here = || Path::Row {
             parent: path,
             row: row.name,
-            nth: crate::table::position(scope, row, Entry::Kept(at)),
+            nth: positions[at],
         };
         let deviation = match (first, ie.octets.is_empty()) {
             // A null length says what its row allows it to (§5.6.3).
