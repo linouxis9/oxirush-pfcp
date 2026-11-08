@@ -5825,6 +5825,34 @@ fn an_answer_after_two_moves_goes_to_its_session() {
     );
 }
 
+/// A request answered as one of a session goes to the peer's SEID of the session that
+/// `respond_as` names, also a request that came of another session.
+#[test]
+fn respond_as_answers_as_the_session_that_it_names() {
+    let (mut smf, mut upf) = associated(at(0));
+    let (first, _) = established(&mut smf, &mut upf, at(0));
+    let (second, up_second) = established(&mut smf, &mut upf, at(0));
+    let report = Message {
+        header: Header::session(first, 10),
+        body: SessionReportRequest::new(ReportType {
+            upir: true,
+            ..Default::default()
+        })
+        .into(),
+    };
+    smf.handle_datagram(at(1), UPF, &report.encode().unwrap());
+    let (inbound, _) = request(&mut smf);
+    assert_eq!(inbound.seid, Some(first));
+    smf.respond_as(
+        at(1),
+        &inbound,
+        second,
+        SessionReportResponse::new(accepted()),
+    )
+    .unwrap();
+    assert_eq!(decoded(&sent(&mut smf)[0]).header.seid, Some(up_second));
+}
+
 /// §6.3.3: the accepted response to a request of the node acts on its session through any
 /// number of moves: a deletion outstanding while the session moves twice ends it where it
 /// went.
