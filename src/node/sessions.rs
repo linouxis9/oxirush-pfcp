@@ -43,9 +43,8 @@ impl Node {
     /// a set takes over (§5.22), with the UP function at `peer` and its SEID. The node
     /// then takes its requests and sends the caller's, to port 8805 of `peer` (§4.2.2), as
     /// [`NodeConfig::request_port`] has it, whatever port the request that handed the
-    /// session over came from. To answer the request that handed the session over to the
-    /// session's SEID, the caller sets that request's [`Inbound::seid`] to the local SEID
-    /// before [`respond`](Self::respond).
+    /// session over came from, which [`respond_as`](Self::respond_as) answers to the
+    /// session's SEID.
     ///
     /// A `peer` without an association with the node is one whose association another
     /// SMF of the set holds, as the caller knows (§5.22): the node routes the session, as

@@ -4715,7 +4715,7 @@ fn a_session_handed_over_to_an_smf_of_the_set() {
             false => node(SMF, Function::Cp),
         };
         smf.handle_datagram(at(1), UPF, &handover_report().encode().unwrap());
-        let (mut inbound, _) = request(&mut smf);
+        let (inbound, _) = request(&mut smf);
         assert!(inbound.stranger);
         // The caller takes the session over, of the UPF's SEID that the set knows
         let local = smf.new_session();
@@ -4724,9 +4724,13 @@ fn a_session_handed_over_to_an_smf_of_the_set() {
             smf.adopt_session(local, UPF, 0x77),
             Err(NodeError::SeidInUse)
         );
-        inbound.seid = Some(local);
-        smf.respond(at(1), &inbound, SessionReportResponse::new(accepted()))
-            .unwrap();
+        smf.respond_as(
+            at(1),
+            &inbound,
+            local,
+            SessionReportResponse::new(accepted()),
+        )
+        .unwrap();
         assert_eq!(decoded(&sent(&mut smf)[0]).header.seid, Some(0x77));
         // A report of the session that it took over is of its own
         let report = Message {
@@ -5863,22 +5867,16 @@ fn mpas_an_entity_controls_the_session_that_it_takes_over() {
         ..config(OTHER, Function::Cp)
     });
     other.handle_datagram(at(1), UPF, &handover_report().encode().unwrap());
-    let (mut inbound, _) = request(&mut other);
+    let (inbound, _) = request(&mut other);
     other.adopt_session(0x55, UPF, 0x66).unwrap();
-    inbound.seid = Some(0x55);
     let cp_f_seid = FSeid {
         v4: true,
         seid: Some(0x55),
         ipv4: Some(Ipv4Addr::new(10, 0, 0, 3)),
         ..Default::default()
     };
-    other
-        .respond(
-            at(1),
-            &inbound,
-            SessionReportResponse::new(accepted()).with_cp_f_seid(cp_f_seid),
-        )
-        .unwrap();
+    let answer = SessionReportResponse::new(accepted()).with_cp_f_seid(cp_f_seid);
+    other.respond_as(at(1), &inbound, 0x55, answer).unwrap();
     sent(&mut other);
     // Its modifications go to the UPF's SEID
     other
@@ -6093,12 +6091,16 @@ fn an_adopted_session_takes_the_port_of_the_requests() {
         let from = SocketAddr::new(UPF.ip(), 40000);
         let to = SocketAddr::new(UPF.ip(), request_port.unwrap_or(40000));
         other.handle_datagram(at(1), from, &handover_report().encode().unwrap());
-        let (mut inbound, _) = request(&mut other);
+        let (inbound, _) = request(&mut other);
         other.adopt_session(0x55, inbound.from, 0x66).unwrap();
         assert_eq!(other.session(0x55).map(|session| session.peer), Some(to));
-        inbound.seid = Some(0x55);
         other
-            .respond(at(1), &inbound, SessionReportResponse::new(accepted()))
+            .respond_as(
+                at(1),
+                &inbound,
+                0x55,
+                SessionReportResponse::new(accepted()),
+            )
             .unwrap();
         assert_eq!(
             sent(&mut other)[0].to,

@@ -819,7 +819,7 @@ async fn an_entity_of_the_smf_takes_a_session_over() {
     )
     .await
     .unwrap();
-    let mut incoming = within(smf.incoming()).await.unwrap();
+    let incoming = within(smf.incoming()).await.unwrap();
     assert!(incoming.request.stranger);
     // The caller takes the session over, with the UP function's SEID that the SMF knows, at
     // a local SEID that no other call gave
@@ -831,17 +831,14 @@ async fn an_entity_of_the_smf_takes_a_session_over() {
     let adopt = move |node: &mut Node, _| node.adopt_session(local, upf_address, 0x66);
     handle.with(adopt).await.unwrap().unwrap();
     assert_eq!(handle.with(adopt).await.unwrap(), Err(NodeError::SeidInUse));
-    incoming.request.seid = Some(local);
     let cp_f_seid = FSeid {
         v4: true,
         seid: Some(local),
         ipv4: Some(Ipv4Addr::LOCALHOST),
         ..Default::default()
     };
-    incoming
-        .respond(SessionReportResponse::new(accepted()).with_cp_f_seid(cp_f_seid))
-        .await
-        .unwrap();
+    let answer = SessionReportResponse::new(accepted()).with_cp_f_seid(cp_f_seid);
+    incoming.respond_as(local, answer).await.unwrap();
     let mut buffer = vec![0; 65_535];
     let (length, _) = within(upf.recv_from(&mut buffer)).await.unwrap();
     let answer = Message::decode(&buffer[..length]).unwrap();

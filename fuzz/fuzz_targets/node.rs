@@ -193,12 +193,13 @@ fn answer(node: &mut Node, now: Duration, how: u8, kept: &mut Vec<Inbound>) {
         };
         kept.push(request.clone());
         kept.truncate(16);
-        let mut request = request;
+        // A stranger's session that the caller takes over, which its answer goes to
+        let mut adopted = None;
         if request.stranger && how & 8 != 0 {
             let local = node.new_session();
             node.end_session(local);
             if node.adopt_session(local, request.from, 0x77).is_ok() {
-                request.seid = Some(local);
+                adopted = Some(local);
             }
         }
         let body: Body = match message.body {
@@ -251,7 +252,10 @@ fn answer(node: &mut Node, now: Duration, how: u8, kept: &mut Vec<Inbound>) {
             _ => continue,
         };
         if how & 0x10 == 0 {
-            let _ = node.respond(now, &request, body);
+            let _ = match adopted {
+                Some(local) => node.respond_as(now, &request, local, body),
+                None => node.respond(now, &request, body),
+            };
             continue;
         }
         let other: Body = match how >> 5 & 3 {

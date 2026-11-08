@@ -623,7 +623,7 @@ impl Node {
     /// The local SEID of the session that a request of a peer is of, by its mark, while it
     /// lasts: wherever it moved since the request came, and not a session that took its SEID
     /// after it ended. A request that came of no session is of the one of its `seid`, which
-    /// the caller sets to answer a handover ([`adopt_session`](Self::adopt_session)).
+    /// [`respond_as`](Self::respond_as) gives it.
     pub(super) fn answered_session(&self, request: &Inbound) -> Option<u64> {
         match request.mark {
             Some(mark) => self.sessions.of_mark(mark),

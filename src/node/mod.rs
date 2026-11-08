@@ -228,6 +228,17 @@ pub struct Inbound {
     pub(crate) id: u64,
 }
 
+impl Inbound {
+    /// The request as one of the session of `local_seid`, which its answer goes to.
+    pub(crate) fn of_session(&self, local_seid: u64) -> Self {
+        Self {
+            seid: Some(local_seid),
+            mark: None,
+            ..self.clone()
+        }
+    }
+}
+
 /// How a response goes, for a probe that breaks §6.4 on purpose.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Delivery {

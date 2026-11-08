@@ -610,6 +610,23 @@ impl Node {
         )
     }
 
+    /// [`respond`](Self::respond) to a request as one of the session of `local_seid`, to
+    /// the peer's SEID of that session: the request of SEID 0 that hands a session over
+    /// (§5.22.2), whose session the caller adopted ([`adopt_session`](Self::adopt_session)).
+    ///
+    /// # Errors
+    ///
+    /// Those of [`respond`](Self::respond).
+    pub fn respond_as(
+        &mut self,
+        now: Duration,
+        request: &Inbound,
+        local_seid: u64,
+        body: impl Into<Body>,
+    ) -> Result<(), NodeError> {
+        self.respond(now, &request.of_session(local_seid), body)
+    }
+
     /// The header of the response to `request`: its sequence number, the peer's SEID of
     /// its session, and its priority.
     pub(super) fn response_header(&self, request: &Inbound) -> Header {

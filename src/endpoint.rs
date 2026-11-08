@@ -210,6 +210,22 @@ impl Incoming {
         answered
     }
 
+    /// Answer the request as one of the session of `local_seid`, once
+    /// ([`Node::respond_as`]): the request that hands a session over, whose session the
+    /// caller adopted.
+    ///
+    /// # Errors
+    ///
+    /// Those of [`respond`](Self::respond).
+    pub async fn respond_as(
+        mut self,
+        local_seid: u64,
+        body: impl Into<Body>,
+    ) -> Result<(), EndpointError> {
+        self.request = self.request.of_session(local_seid);
+        self.respond(body).await
+    }
+
     /// Answer the request with a message as it is, for a probe, any number of times
     /// ([`Node::respond_message`]): the first alone changes the node.
     ///
