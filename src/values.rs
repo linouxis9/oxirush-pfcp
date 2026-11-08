@@ -61,6 +61,22 @@ pub(crate) trait Field: Sized {
     /// Its tree.
     #[cfg(feature = "tree")]
     fn to_tree(&self) -> oxirush_utils::tree::Value;
+    /// Put its tree in the tree of its value, as the member `name`: a spare field only
+    /// where it is set.
+    #[cfg(feature = "tree")]
+    fn put_member(&self, members: &mut oxirush_utils::tree::Members, name: &'static str) {
+        members.put(name, self.to_tree());
+    }
+    /// Read it from the member `name` of the tree of its value: a spare field is 0 where
+    /// the tree leaves it out.
+    #[cfg(feature = "tree")]
+    fn read_member(
+        read: &oxirush_utils::tree::Read<'_>,
+        name: &'static str,
+        reading: &mut oxirush_utils::tree::Reading,
+    ) -> Result<Self, oxirush_utils::tree::Refused> {
+        reading.member(read, name, Self::from_tree)
+    }
     /// Read it from its tree.
     #[cfg(feature = "tree")]
     fn from_tree(
@@ -621,7 +637,8 @@ impl Field for Percent {
     }
 }
 
-/// An octet that is spare: zero from a sender, kept as it is.
+/// An octet that is spare: zero from a sender, kept as it is. A tree has it where it is
+/// set, as `"Spare": 8`, and is 0 without it.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Spare(pub u8);
 
@@ -652,6 +669,21 @@ impl Field for Spare {
         reading: &mut oxirush_utils::tree::Reading,
     ) -> Result<Self, oxirush_utils::tree::Refused> {
         u8::from_tree(value, reading).map(Self)
+    }
+    #[cfg(feature = "tree")]
+    fn put_member(&self, members: &mut oxirush_utils::tree::Members, name: &'static str) {
+        if self.0 != 0 {
+            members.put(name, self.to_tree());
+        }
+    }
+    #[cfg(feature = "tree")]
+    fn read_member(
+        read: &oxirush_utils::tree::Read<'_>,
+        name: &'static str,
+        reading: &mut oxirush_utils::tree::Reading,
+    ) -> Result<Self, oxirush_utils::tree::Refused> {
+        let spare = reading.optional(read, name, Self::from_tree)?;
+        Ok(spare.unwrap_or_default())
     }
 }
 

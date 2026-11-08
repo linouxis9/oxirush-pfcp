@@ -2117,6 +2117,44 @@ fn a_message_too_long_for_its_length() {
     );
 }
 
+/// A spare octet of a value is 0 where its tree leaves it out, and its tree has it only
+/// where it is set, as the spare bits of the header and of a narrow value: an SDF Filter,
+/// PFD Contents, an SMF Set ID, a Multicast Transport Information and the DL and UL
+/// Periodicity.
+#[test]
+fn a_spare_octet_is_in_the_tree_where_it_is_set() {
+    fn spare<T: tree::Tree + Codec + PartialEq + core::fmt::Debug>(
+        octets: &str,
+        tree: tree::Value,
+    ) {
+        let octets = hex::decode(octets).unwrap();
+        let value = T::decode(&octets).unwrap();
+        assert_eq!(tree::Tree::to_tree(&value), tree, "{value:?}");
+        assert_eq!(tree::from_value::<T>(&tree).unwrap(), value);
+    }
+    spare::<SdfFilter>(
+        "010000026161",
+        tree!({"FD": true, "Flow Description": "6161"}),
+    );
+    spare::<SdfFilter>(
+        "010700026161",
+        tree!({"FD": true, "Spare octet": 7, "Flow Description": "6161"}),
+    );
+    spare::<PfdContents>("0100000161", tree!({"FD": true, "Flow Description": "61"}));
+    spare::<SmfSetId>("0003736d66", tree!({"FQDN": "smf"}));
+    spare::<SmfSetId>("0103736d66", tree!({"Spare": 1, "FQDN": "smf"}));
+    spare::<DlPeriodicity>("0000000014", tree!({"DL Periodicity": 20}));
+    spare::<UlPeriodicity>("0200000014", tree!({"Spare": 2, "UL Periodicity": 20}));
+    spare::<MulticastTransportInformation>(
+        "00000000010400000001040a000001",
+        tree!({
+            "Common Tunnel Endpoint Identifier": 1,
+            "IP Multicast Distribution Address (IPv4 or IPv6)": "0.0.0.1",
+            "IP Source Address (IPv4 or IPv6)": "10.0.0.1"
+        }),
+    );
+}
+
 /// A value of octets of bits that has fewer octets than its release, its `length`, writes
 /// those alone: a field, a spare bit or unknown octets past them, which the length would
 /// not write, are refused by its tree and by `encode()`, and told by `check()`.

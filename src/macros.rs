@@ -302,7 +302,7 @@ macro_rules! pfcp_layout {
                     }
                 )*)?
                 let mut members = oxirush_utils::tree::Members::new();
-                $($( members.put($head_name, crate::values::Field::to_tree(&self.$head)); )*)?
+                $($( crate::values::Field::put_member(&self.$head, &mut members, $head_name); )*)?
                 $(
                     $( pfcp_layout!(@bits put [$($width $(as $fkind)?)?] members, $flag_name, self.$flag); )*
                     if self.spare != <$fk>::default() {
@@ -310,7 +310,7 @@ macro_rules! pfcp_layout {
                     }
                     $(
                         if let Some(field) = pfcp_layout!(@get [$($cond)?] self.$field) {
-                            members.put($field_name, crate::values::Field::to_tree(field));
+                            crate::values::Field::put_member(field, &mut members, $field_name);
                         }
                     )*
                 )?
@@ -332,7 +332,7 @@ macro_rules! pfcp_layout {
                 )*)?
                 let read = reading.members(value, Self::MEMBERS)?;
                 $($(
-                    let $head = reading.member(&read, $head_name, <$hkind as crate::values::Field>::from_tree)?;
+                    let $head = <$hkind as crate::values::Field>::read_member(&read, $head_name, reading)?;
                 )*)?
                 $(
                     $(
@@ -350,7 +350,7 @@ macro_rules! pfcp_layout {
                         ));
                     }
                     $(
-                        let $field = pfcp_layout!(@from_tree [$($cond)?] reading, &read, $field_name, <$kind $(<$param>)? as crate::values::Field>::from_tree)?;
+                        let $field = pfcp_layout!(@from_tree [$($cond)?] reading, &read, $field_name, $kind $(<$param>)?)?;
                     )*
                 )?
                 let extra = reading.optional(&read, crate::ie::UNKNOWN_OCTETS, |value, reading| reading.octets(value))?;
@@ -382,8 +382,8 @@ macro_rules! pfcp_layout {
     (@get [$cond:expr] $field:expr) => { $field.as_ref() };
     (@decode [] $read:expr) => { $read? };
     (@decode [$cond:expr] $read:expr) => { match $cond { true => Some($read?), false => None } };
-    (@from_tree [] $reading:ident, $read:expr, $name:expr, $from:expr) => { $reading.member($read, $name, $from) };
-    (@from_tree [$cond:expr] $reading:ident, $read:expr, $name:expr, $from:expr) => { $reading.optional($read, $name, $from) };
+    (@from_tree [] $reading:ident, $read:expr, $name:expr, $kind:ty) => { <$kind as crate::values::Field>::read_member($read, $name, $reading) };
+    (@from_tree [$cond:expr] $reading:ident, $read:expr, $name:expr, $kind:ty) => { $reading.optional($read, $name, <$kind as crate::values::Field>::from_tree) };
     // A field read from the octets left, or from the first `length` of them, the others
     // being the next field's or the unknown octets.
     (@read $rest:ident, [$($kind:tt)+]) => { <$($kind)+ as crate::values::Field>::read(&mut $rest) };
