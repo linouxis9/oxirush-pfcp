@@ -456,6 +456,32 @@ async fn the_incoming_queue_is_bounded_by_what_its_requests_take() {
     assert_eq!(again.request.sequence, 2);
 }
 
+/// Requests that take little fill the queue by what each takes: sixteen Association Setup
+/// Requests, each under a kibibyte decoded with its place in the queue, fit in 64 KiB.
+#[tokio::test]
+async fn small_requests_fill_the_queue_by_what_each_takes() {
+    let queues = Queues {
+        incoming_octets: 64 << 10,
+        ..Queues::default()
+    };
+    let mut upf = Endpoint::bind_with(ANY, config(Function::Up), queues)
+        .await
+        .unwrap();
+    let address = upf.handle().local_addr();
+    let peer = tokio::net::UdpSocket::bind(ANY).await.unwrap();
+    for sequence in 1..=16 {
+        peer.send_to(&setup(sequence), address).await.unwrap();
+    }
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    assert_eq!(upf.handle().statistics().incoming_dropped, 0);
+    let mut queued = Vec::new();
+    for sequence in 1..=16 {
+        let incoming = within(upf.incoming()).await.unwrap();
+        assert_eq!(incoming.request.sequence, sequence);
+        queued.push(incoming);
+    }
+}
+
 /// A request that the endpoint drops for a full queue comes in again with its
 /// retransmission, and is answered then.
 #[tokio::test]
