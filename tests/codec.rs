@@ -733,6 +733,25 @@ fn a_misspelt_name_says_what_from_tree_says() {
         );
     }
     assert!(refused("/pfcp/Create QER/0/Gate Status/UL Gat").contains("DL Gate, UL Gate"));
+    // A value whose tree is its octets has no member
+    let octets = refused("/pfcp/Create PDR/0/Activate Predefined Rules/0/Bogus");
+    assert!(
+        octets.ends_with("it has none, at /pfcp/Create PDR/0/Activate Predefined Rules/0/Bogus"),
+        "{octets}"
+    );
+    // The header, and an IE kept as its octets, have their members
+    let header = refused("/Sequence Numbr");
+    assert!(
+        header.contains("it has message, Version, Spare"),
+        "{header}"
+    );
+    let mut kept = tree.clone();
+    kept["ies"]["Cause"] = tree!({"octets": "01"});
+    let error = select(&kept, "/pfcp/Cause/Bogus").unwrap_err().to_string();
+    assert!(
+        error.contains("it has octets, length, Enterprise ID"),
+        "{error}"
+    );
     // `set` refuses a misspelt name, the last of its path too, and leaves the tree
     let mut edited = tree.clone();
     let misspelt = set(&mut edited, "/pfcp/Create QER/0/Gate Statsu", 1u64);

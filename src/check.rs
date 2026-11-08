@@ -901,3 +901,48 @@ pub(crate) fn condition_absent<S: Scope>(
     };
     found.push(Deviation::new(at, table.id, kind));
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::table::Role;
+
+    /// A field that rows share needs an IE for each of its mandatory rows that each
+    /// interface of the set has: not for an optional one, nor for a mandatory one that an
+    /// interface of the set lacks. Of the tables, one shared field has a mandatory row, and
+    /// its optional row is on another interface (Table 7.5.2.2-4).
+    #[test]
+    fn a_shared_field_needs_an_ie_for_each_mandatory_row_of_the_interface() {
+        static ROLES: [Role; 3] = [
+            Role {
+                name: "on N4",
+                presence: Presence::Mandatory,
+                interfaces: Interfaces::N4,
+            },
+            Role {
+                name: "optional on N4",
+                presence: Presence::Optional,
+                interfaces: Interfaces::N4,
+            },
+            Role {
+                name: "on N4mb",
+                presence: Presence::Mandatory,
+                interfaces: Interfaces::N4MB,
+            },
+        ];
+        let both = Interfaces(Interfaces::N4.0 | Interfaces::N4MB.0);
+        let row = Row {
+            name: "shared",
+            ie_type: 1,
+            presence: Presence::Mandatory,
+            repeat: Repeat::AtMost(3),
+            interfaces: both,
+            mandatory: both,
+            roles: &ROLES,
+            checked: false,
+        };
+        assert_eq!(mandatory(&row, Context::on(Interfaces::N4)), 1);
+        assert_eq!(mandatory(&row, Context::on(Interfaces::N4MB)), 1);
+        assert_eq!(mandatory(&row, Context::on(both)), 0);
+    }
+}
