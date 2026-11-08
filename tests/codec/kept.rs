@@ -363,3 +363,25 @@ fn a_value_added_to_a_message_of_its_own_order_goes_to_its_row() {
     // The added Remove PDR before the Remove FAR of the wire, the added Remove FAR last
     assert_eq!((pdrs, fars), (vec![2, 1], vec![1, 2]));
 }
+
+/// A Length that a tree writes of an IE kept as octets, which is the length of its content,
+/// is no false Length: the IE has none, and reads back as the value that its octets are.
+#[test]
+fn the_length_of_its_own_content_is_no_false_length() {
+    let tree = tree!({"message": "PFCP Association Setup Request", "Sequence Number": 1,
+        "ies": {"Node ID": "127.0.0.4", "Recovery Time Stamp": 7, "CP Function Features": {"octets": "b9", "length": 1}}});
+    let message = Message::from_tree(&tree).unwrap();
+    let Body::AssociationSetupRequest(request) = &message.body else {
+        panic!()
+    };
+    assert_eq!(request.raw[0].length, None);
+    let read = Message::decode(&message.encode().unwrap()).unwrap();
+    let read = read.to_tree();
+    let features = select(&read, "/pfcp/CP Function Features/LOAD").unwrap();
+    assert_eq!(features, [&tree!(true)]);
+    let written = message.to_tree();
+    assert_eq!(
+        select(&written, "/pfcp/CP Function Features").unwrap(),
+        [&tree!({"octets": "b9"})]
+    );
+}

@@ -163,12 +163,17 @@ fn read_raw(ie_type: u16, value: &Value, reading: &mut Reading) -> Result<RawIe,
     let enterprise = reading.optional(&read, "Enterprise ID", |value, reading| {
         reading.unsigned(value, 0, 65535)
     })?;
-    Ok(RawIe {
+    let mut ie = RawIe {
         ie_type,
         enterprise_id: enterprise.map(|id| id as u16),
         length: length.map(|length| length as u16),
         octets: octets.into(),
-    })
+    };
+    // A Length that is the IE's own is no false one: it is not kept, as a decode keeps none.
+    if ie.frames() {
+        ie.length = None;
+    }
+    Ok(ie)
 }
 
 /// What a reading names an IE of no row by: the name of its type, or `IE` for a type of
