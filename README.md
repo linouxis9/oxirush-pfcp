@@ -353,20 +353,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ## Performance
 
-On one core of an AMD Ryzen 7 5700G, at 8a26de2 (2026-11-01), for a Session
-Establishment Request of 16 PDRs (2,824 octets), in instructions:
-
-| Operation | Instructions | Allocations |
-|-----------|--------------|-------------|
-| `decode` | 97,864 | 15 |
-| `encode` | 59,520 | 1 |
-| `check` | 37,433 | 0 |
-| `to_tree` | 580,030 | 899 |
-| `from_tree` | 421,180 | 587 |
-
-go-pfcp v0.0.24 takes 3 to 9 times as many instructions.
 [`benches/`](https://github.com/linouxis9/oxirush-pfcp/blob/main/benches/README.md)
-has every workload and how to run them.
+measures each workload, in instructions and allocations, against go-pfcp v0.0.24,
+with the revision that its figures are of and how to run them.
 
 ## Tests
 
