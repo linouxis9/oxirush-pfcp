@@ -682,6 +682,10 @@ fn what_the_table_does_not_have_is_kept_in_its_place() {
         panic!()
     };
     assert_eq!(request.raw.len(), 4);
+    // A vendor IE is its Enterprise ID and the octets after it (§8.1.1)
+    let vendor = &request.raw[0];
+    assert_eq!((vendor.ie_type, vendor.enterprise_id), (32769, Some(18553)));
+    assert_eq!(*vendor.octets, [0xca, 0xfe]);
     assert_eq!(
         request.node_id,
         Some(NodeId::Ipv4(Ipv4Addr::new(10, 0, 0, 9)))
