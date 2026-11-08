@@ -18,4 +18,6 @@ The first version, of TS 29.244 V19.6.0 (2026-06):
   (§5.22), goes to the caller as `Inbound::stranger`. An IPv4 peer that a socket of both
   families gives at its IPv4-mapped address is its IPv4 address.
 - With `endpoint`, `Endpoint`, a node on a Tokio UDP socket, and its `Handle`.
+- A request that ends without its response says why in a `Failure`, a timeout one of
+  them: `Event::Failed`, `EndpointError::Failed`.
 - `no_std` with an allocator, but for `endpoint`; Rust 1.88.

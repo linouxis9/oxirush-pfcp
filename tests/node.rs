@@ -294,9 +294,10 @@ fn timeout_after_n1() {
     assert!(sent(&mut smf).is_empty());
     assert_eq!(
         events(&mut smf),
-        [Event::Timeout {
+        [Event::Failed {
             request: id,
-            to: UPF
+            to: UPF,
+            failure: Failure::Timeout
         }]
     );
 }

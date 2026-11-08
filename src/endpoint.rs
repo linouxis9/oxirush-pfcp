@@ -140,9 +140,8 @@ impl Counts {
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum EndpointError {
-    /// No response after N1 retransmissions (§6.4).
-    Timeout,
-    /// The request ended without its response.
+    /// The request ended without its response: after N1 retransmissions
+    /// ([`Failure::Timeout`]), or as its [`Failure`] says.
     Failed(Failure),
     /// The node did not send it.
     Node(NodeError),
@@ -153,7 +152,6 @@ pub enum EndpointError {
 impl core::fmt::Display for EndpointError {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         match self {
-            Self::Timeout => write!(f, "no response after N1 retransmissions"),
             Self::Failed(failure) => write!(f, "{failure}"),
             Self::Node(error) => write!(f, "not sent: {error}"),
             Self::Closed => write!(f, "the endpoint has ended"),
@@ -529,7 +527,7 @@ impl Handle {
     /// SEID ([`Node::new_session`]), an adopted session, the end of one, a probe's
     /// sequence number or octets. `with` takes the node and its time, which the methods
     /// of the node that take a `now` take. A request that `with` sends ends with an
-    /// [`Event::Response`], [`Event::Timeout`] or [`Event::Failed`] from
+    /// [`Event::Response`] or an [`Event::Failed`] from
     /// [`Endpoint::event`]; [`request`](Self::request) waits for its own.
     ///
     /// ```no_run
@@ -715,17 +713,14 @@ impl Task {
             // The end of a request of a Handle goes to its future; that of a request that
             // `with` sent is an event.
             let ended = match &event {
-                Event::Response { request, .. }
-                | Event::Timeout { request, .. }
-                | Event::Failed { request, .. } => self.reply(*request),
+                Event::Response { request, .. } | Event::Failed { request, .. } => {
+                    self.reply(*request)
+                }
                 _ => None,
             };
             match (event, ended) {
                 (Event::Response { message, .. }, Some(reply)) => {
                     let _ = reply.send(Ok(message));
-                }
-                (Event::Timeout { .. }, Some(reply)) => {
-                    let _ = reply.send(Err(EndpointError::Timeout));
                 }
                 (Event::Failed { failure, .. }, Some(reply)) => {
                     let _ = reply.send(Err(EndpointError::Failed(failure)));

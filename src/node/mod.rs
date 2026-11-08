@@ -259,6 +259,8 @@ pub enum Delivery {
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum Failure {
+    /// No response after N1 retransmissions (§6.4).
+    Timeout,
     /// The peer answered with a Version Not Supported Response (§7.6.2), whose sequence
     /// number says nothing (§7.2.2.2): every request to the peer fails with it.
     VersionNotSupported,
@@ -270,6 +272,7 @@ pub enum Failure {
 impl core::fmt::Display for Failure {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         match self {
+            Self::Timeout => write!(f, "no response after N1 retransmissions (TS 29.244 6.4)"),
             Self::VersionNotSupported => write!(
                 f,
                 "the peer does not support version 1 of PFCP (TS 29.244 7.6.2)"
@@ -362,15 +365,8 @@ pub enum Event {
         /// The response.
         message: Message,
     },
-    /// A request of the caller without a response after N1 retransmissions (§6.4). An
-    /// establishment that times out, fails or is cancelled takes its local SEID with it.
-    Timeout {
-        /// The request.
-        request: RequestId,
-        /// To whom it went.
-        to: SocketAddr,
-    },
-    /// A request of the caller that ends without its response.
+    /// A request of the caller that ends without its response. An establishment that
+    /// fails or is cancelled takes its local SEID with it.
     Failed {
         /// The request.
         request: RequestId,
@@ -737,9 +733,10 @@ impl Node {
                 true => self.events.push_back(Event::PeerDown { peer: request.to }),
                 false => {
                     self.abandon(&request);
-                    self.events.push_back(Event::Timeout {
+                    self.events.push_back(Event::Failed {
                         request: request.id,
                         to: request.to,
+                        failure: Failure::Timeout,
                     });
                 }
             }

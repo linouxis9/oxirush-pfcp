@@ -353,7 +353,7 @@ async fn a_request_without_an_answer_times_out_after_n1() {
     };
     // Within its bound: a node whose timer does not run fails the test, and does not hang it.
     let result = within(smf.request(silent.local_addr().unwrap(), heartbeat)).await;
-    assert_eq!(result, Err(EndpointError::Timeout));
+    assert_eq!(result, Err(EndpointError::Failed(Failure::Timeout)));
     // The first and the N1 = 2 retransmissions, the same octets
     let mut buffer = [0; 64];
     let mut datagrams = Vec::new();
@@ -441,7 +441,11 @@ async fn the_events_of_a_request_sent_with_the_node() {
                     assert!(matches!(message.body, Body::HeartbeatResponse(_)));
                     break (request, true);
                 }
-                Event::Timeout { request, .. } => break (request, false),
+                Event::Failed {
+                    request,
+                    failure: Failure::Timeout,
+                    ..
+                } => break (request, false),
                 _ => {}
             }
         };
