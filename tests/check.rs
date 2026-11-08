@@ -1197,27 +1197,25 @@ fn the_conditions_that_a_message_shows() {
     missing(message, 31, Some(CauseValue::ConditionalIeMissing));
 }
 
-/// The rows of a grouped IE, checked on its own, that are missing where their condition
-/// holds.
-fn missing_where_shown(value: &impl Check) -> Vec<String> {
+/// The paths of the deviations of a kind that a value has on its own, without the
+/// leading slash: its conditional IEs `missing` where it shows their condition, and its
+/// IEs there where it has them `excluded`.
+fn paths(value: &impl Check, of: fn(&DeviationKind) -> bool) -> Vec<String> {
     let mut found = Vec::new();
     Check::check(value, &Path::Root(""), &mut found);
     found
         .into_iter()
-        .filter(|deviation| matches!(deviation.kind, DeviationKind::ConditionalMissing { .. }))
+        .filter(|deviation| of(&deviation.kind))
         .map(|deviation| deviation.path.trim_start_matches('/').to_string())
         .collect()
 }
 
-/// The rows that a value has where the conditions of its table have them absent.
-fn excluded(value: &impl Check) -> Vec<String> {
-    let mut found = Vec::new();
-    Check::check(value, &Path::Root(""), &mut found);
-    found
-        .into_iter()
-        .filter(|deviation| matches!(deviation.kind, DeviationKind::Excluded { .. }))
-        .map(|deviation| deviation.path.trim_start_matches('/').to_string())
-        .collect()
+fn missing(kind: &DeviationKind) -> bool {
+    matches!(kind, DeviationKind::ConditionalMissing { .. })
+}
+
+fn excluded(kind: &DeviationKind) -> bool {
+    matches!(kind, DeviationKind::Excluded { .. })
 }
 
 /// The absence rules that the IEs beside a row show: "shall not be present if", "shall
@@ -1253,21 +1251,22 @@ fn the_absence_rules_that_their_scope_shows() {
     let cases: Vec<(Vec<String>, &[&str])> = vec![
             // Table 7.5.2.2-2: of a Traffic Endpoint ID, none of the four
             (
-                excluded(&pdi().with_traffic_endpoint_id(endpoint.clone())),
+                paths(&pdi().with_traffic_endpoint_id(endpoint.clone()), excluded),
                 &[],
             ),
             (
-                excluded(&pdi().with_local_f_teid(FTeid::choose_ipv4())),
+                paths(&pdi().with_local_f_teid(FTeid::choose_ipv4()), excluded),
                 &[],
             ),
             (
-                excluded(
+                paths(
                     &pdi()
                         .with_local_f_teid(FTeid::choose_ipv4())
                         .with_local_ingress_tunnel(LocalIngressTunnel::default())
                         .with_network_instance(instance.clone())
                         .with_ue_ip_address(ue.clone())
                         .with_traffic_endpoint_id(endpoint.clone()),
+                    excluded,
                 ),
                 &[
                     "Local F-TEID",
@@ -1277,44 +1276,56 @@ fn the_absence_rules_that_their_scope_shows() {
                 ],
             ),
             // NOTE 3: no SDF Filter beside an Ethernet Packet Filter
-            (excluded(&pdi().with_sdf_filter(filter.clone())), &[]),
+            (paths(&pdi().with_sdf_filter(filter.clone()), excluded), &[]),
             (
-                excluded(
+                paths(
                     &pdi()
                         .with_sdf_filter(filter)
                         .with_ethernet_packet_filter(ethernet),
+                    excluded,
                 ),
                 &["SDF Filter"],
             ),
             // Table 7.5.2.3-2: no Transport Level Marking beside an Extended one
             (
-                excluded(&forwarding().with_transport_level_marking(marking())),
+                paths(
+                    &forwarding().with_transport_level_marking(marking()),
+                    excluded,
+                ),
                 &[],
             ),
             (
-                excluded(
+                paths(
                     &forwarding()
                         .with_transport_level_marking(marking())
                         .with_extended_transport_level_marking(
                             ExtendedTransportLevelMarking::default(),
                         ),
+                    excluded,
                 ),
                 &["Transport Level Marking"],
             ),
             // Table 7.5.2.8-1: a Transport Mode of MPQUIC alone, and NOTE 2
             (
-                excluded(&mar(SteeringFunctionalityValue::MpquicUdp).with_transport_mode(mode())),
+                paths(
+                    &mar(SteeringFunctionalityValue::MpquicUdp).with_transport_mode(mode()),
+                    excluded,
+                ),
                 &[],
             ),
             (
-                excluded(&mar(SteeringFunctionalityValue::AtsssLl).with_transport_mode(mode())),
+                paths(
+                    &mar(SteeringFunctionalityValue::AtsssLl).with_transport_mode(mode()),
+                    excluded,
+                ),
                 &["Transport Mode"],
             ),
             (
-                excluded(
+                paths(
                     &mar(SteeringFunctionalityValue::AtsssLl)
                         .with_threshold_values(Thresholds::default())
                         .with_steering_mode_indicator(SteeringModeIndicator::default()),
+                    excluded,
                 ),
                 &["Steering Mode Indicator"],
             ),
@@ -1327,13 +1338,13 @@ fn the_absence_rules_that_their_scope_shows() {
     let mut kept = forwarding()
         .with_extended_transport_level_marking(ExtendedTransportLevelMarking::default());
     kept.raw.push(RawIe::new(116, vec![1]));
-    assert_eq!(excluded(&kept), Vec::<String>::new());
+    assert_eq!(paths(&kept, excluded), Vec::<String>::new());
     kept.raw.push(RawIe::new(30, vec![0xfc]));
-    assert_eq!(excluded(&kept), ["Transport Level Marking"]);
+    assert_eq!(paths(&kept, excluded), ["Transport Level Marking"]);
     // The Network Instance of a UE IP address that the UP function allocates, without a
     // Traffic Endpoint ID
     assert_eq!(
-        missing_where_shown(&pdi().with_ue_ip_address(chosen.clone())),
+        paths(&pdi().with_ue_ip_address(chosen.clone()), missing),
         ["Network Instance"]
     );
     for present in [
@@ -1345,7 +1356,7 @@ fn the_absence_rules_that_their_scope_shows() {
             .with_ue_ip_address(chosen)
             .with_traffic_endpoint_id(endpoint),
     ] {
-        assert!(missing_where_shown(&present).is_empty(), "{present:?}");
+        assert!(paths(&present, missing).is_empty(), "{present:?}");
     }
     // Table 7.5.4.1-1 NOTE 3: QAURR and the Query URR, exclusive, without a Cause
     let modification = SessionModificationRequest::default()
@@ -1383,7 +1394,7 @@ fn the_absence_rules_that_their_scope_shows() {
 
 /// That the rows of `value` missing where their conditions show are `expected`.
 fn shown(value: &impl Check, expected: &[&str]) {
-    assert_eq!(missing_where_shown(value), expected);
+    assert_eq!(paths(value, missing), expected);
 }
 
 /// §7.6.6: the conditions of the C rows that the IEs beside them show, each where it
@@ -1580,11 +1591,11 @@ fn the_conditions_that_their_scope_shows() {
         ..Default::default()
     };
     assert_eq!(
-        missing_where_shown(&monitoring(periodic, delay.clone())),
+        paths(&monitoring(periodic, delay.clone()), missing),
         ["Measurement Period"]
     );
     assert_eq!(
-        missing_where_shown(&monitoring(event.clone(), delay)),
+        paths(&monitoring(event.clone(), delay), missing),
         ["Minimum Wait Time"]
     );
     for requested in [
@@ -1598,7 +1609,7 @@ fn the_conditions_that_their_scope_shows() {
         },
     ] {
         assert_eq!(
-            missing_where_shown(&monitoring(event.clone(), requested)),
+            paths(&monitoring(event.clone(), requested), missing),
             ["Minimum Wait Time", "Reporting Thresholds"]
         );
     }
@@ -1619,11 +1630,8 @@ fn the_conditions_that_their_scope_shows() {
     };
     let times = ["Start Time", "End Time"];
     let report = |trigger| UsageReport::new(UrrId::new(1), UrSeqn::new(0), trigger);
-    assert_eq!(missing_where_shown(&report(periodic.clone())), times);
-    assert_eq!(
-        missing_where_shown(&report(start.clone())),
-        Vec::<String>::new()
-    );
+    assert_eq!(paths(&report(periodic.clone()), missing), times);
+    assert_eq!(paths(&report(start.clone()), missing), Vec::<String>::new());
     for trigger in [
         UsageReportTrigger {
             stopt: true,
@@ -1640,12 +1648,12 @@ fn the_conditions_that_their_scope_shows() {
         usage_report_trigger: Some(periodic.clone()),
         ..Default::default()
     };
-    assert_eq!(missing_where_shown(&modification), times);
+    assert_eq!(paths(&modification, missing), times);
     let deletion = UsageReportDeletion {
         usage_report_trigger: Some(periodic),
         ..Default::default()
     };
-    assert_eq!(missing_where_shown(&deletion), times);
+    assert_eq!(paths(&deletion, missing), times);
     let deletion = UsageReportDeletion {
         usage_report_trigger: Some(start),
         ..Default::default()
