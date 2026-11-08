@@ -73,8 +73,8 @@ pub struct Queues {
     pub incoming: usize,
     /// The octets that the requests of the incoming queue take decoded, at most, beyond
     /// those of their values: their boxes, lists and grouped IEs, which a few octets of
-    /// the wire make, up to some 170 times as many. A request that does not fit in a queue
-    /// that holds others is dropped, as for a full queue.
+    /// the wire make, up to 191 times as many (SECURITY.md). A request that does not fit in
+    /// a queue that holds others is dropped, as for a full queue.
     pub incoming_octets: usize,
     /// The other events to the caller.
     pub events: usize,

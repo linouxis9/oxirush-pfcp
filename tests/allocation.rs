@@ -183,3 +183,39 @@ fn what_is_kept_of_a_rejection_is_small() {
     ));
     assert!(upf.poll_event().is_none());
 }
+
+/// What a decoded message takes, per octet of its datagram, at most: the figure of
+/// SECURITY.md and of `Queues::incoming_octets`. The worst is a datagram of 64 KiB full of
+/// entries of a list of grouped IEs, each of the fewest octets that hold an IE: each
+/// entry is a struct of every row of its table, with its kept IE.
+#[test]
+fn a_decoded_message_takes_at_most_191_times_its_octets() {
+    let mut worst = (0.0, "");
+    for info in MESSAGE_TYPES {
+        for row in info.table.rows {
+            let grouped = ie_type_info(row.ie_type).is_some_and(|ie| ie.form == Form::Grouped);
+            if !grouped || row.repeat == Repeat::Once {
+                continue;
+            }
+            let [high, low] = row.ie_type.to_be_bytes();
+            let mut octets = vec![0x20, info.message_type, 0, 0];
+            if !is_node_related(info.message_type) {
+                octets[0] |= 1;
+                octets.extend(1u64.to_be_bytes());
+            }
+            octets.extend([0, 0, 1, 0]);
+            while octets.len() + 8 <= 65_535 {
+                octets.extend([high, low, 0, 4, 0, 0, 0, 0]);
+            }
+            let length = (octets.len() - 4) as u16;
+            octets[2..4].copy_from_slice(&length.to_be_bytes());
+            let mut message = None;
+            let taken = held(|| message = Some(Message::decode(&octets).unwrap()));
+            let ratio = taken as f64 / octets.len() as f64;
+            if ratio > worst.0 {
+                worst = (ratio, row.name);
+            }
+        }
+    }
+    assert!((190.0..=191.0).contains(&worst.0), "{worst:?}");
+}
