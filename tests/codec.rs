@@ -1128,7 +1128,7 @@ fn values_hold(
                 .filter(|member| !printed.iter().any(|name| tree::same_name(member, name)));
             for member in lacked {
                 let path = format!("{at}/{}", tree::escape(member));
-                let scalar_field = !entry.is_object() && info.fields == [*member];
+                let scalar_field = !entry.is_object() && info.scalar == Some(*member);
                 let wanted = if scalar_field { vec![entry] } else { vec![] };
                 let selected = select(message, &path).map_err(|error| error.kind());
                 assert_eq!(selected, Ok(wanted), "{path}");

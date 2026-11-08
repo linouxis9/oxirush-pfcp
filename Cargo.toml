@@ -37,6 +37,9 @@ serde = ["tree", "oxirush-utils/serde"]
 node = []
 # A node on a Tokio UDP socket, run by a task of its own.
 endpoint = ["node", "dep:tokio"]
+# The layout of each value as the crate reads it, which the test `spec` compares with the
+# figures of the document: for that test alone.
+spec = []
 
 [dependencies]
 pastey = "0.2"
@@ -58,6 +61,7 @@ required-features = ["tree"]
 
 [[test]]
 name = "spec"
+required-features = ["spec"]
 
 [[test]]
 name = "serde"

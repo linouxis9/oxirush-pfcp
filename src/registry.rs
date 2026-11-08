@@ -113,6 +113,7 @@ pub struct IeTypeInfo {
     pub clause: &'static str,
     /// The names of the flags and fields of its figure that the crate lays out, which the
     /// test `spec` compares with it.
+    #[cfg(feature = "spec")]
     #[doc(hidden)]
     pub fields: &'static [&'static str],
     /// The members that the tree of a value may have, as an object: its flags and fields,
@@ -120,7 +121,11 @@ pub struct IeTypeInfo {
     /// those of them that the value has, and a path that names another of them selects
     /// nothing. None for a grouped IE, and for a value whose tree is its octets.
     pub members: &'static [&'static str],
+    /// The member that the tree of a value is when it is written as a scalar: its one
+    /// field, `None` for a value of more, or of none.
+    pub scalar: Option<&'static str>,
     /// How the crate lays it out, which the test `spec` compares with its figure.
+    #[cfg(feature = "spec")]
     #[doc(hidden)]
     pub layout: Option<&'static crate::values::Layout>,
     /// The tables of its content, for a grouped IE: one, or one per place for an IE that
@@ -134,6 +139,14 @@ pub fn ie_type_info(ie_type: u16) -> Option<&'static IeTypeInfo> {
         .binary_search_by_key(&ie_type, |info| info.ie_type)
         .ok()
         .map(|at| &IE_TYPES[at])
+}
+
+/// The one field of `fields`, which the tree of a value is when it is written as a scalar.
+pub(crate) const fn one(fields: &'static [&'static str]) -> Option<&'static str> {
+    match fields {
+        [field] => Some(field),
+        _ => None,
+    }
 }
 
 /// The name that Table 8.1.2-1 gives `ie_type`.

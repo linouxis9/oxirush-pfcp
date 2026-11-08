@@ -411,15 +411,6 @@ fn of_value(info: &'static IeTypeInfo, value: Option<&Value>) -> Of {
     }
 }
 
-/// The field that the tree of a value of `info` is, where it is a scalar: the one field of
-/// its figure.
-fn scalar_field(info: &IeTypeInfo) -> Option<&'static str> {
-    match info.fields {
-        [field] => Some(field),
-        _ => None,
-    }
-}
-
 impl Paths {
     /// At a value or a field that its tree writes as a scalar: the member that the scalar
     /// is selects it, another member of its object selects nothing, or, for an edit, has
@@ -439,7 +430,7 @@ impl Paths {
                     .iter()
                     .any(|member| tree::same_name(member, segment));
                 let member = known.then(|| Shape(Of::Below(below_member(info, segment))));
-                (scalar_field(info), member)
+                (info.scalar, member)
             }
             Of::Below(below @ Below::Object(is, _)) => (
                 *is,

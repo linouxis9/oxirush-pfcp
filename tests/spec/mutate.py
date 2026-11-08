@@ -45,7 +45,7 @@ def main():
         if text.count(old) != 1:
             sys.exit(f'{name}: the text is in {path} {text.count(old)} times, and must be once')
         open(target, 'w', encoding='utf-8').write(text.replace(old, new))
-        run = subprocess.run(['cargo', 'test', '--test', 'spec', '--', '--test-threads', '1'], cwd=COPY, capture_output=True, text=True,
+        run = subprocess.run(['cargo', 'test', '--features', 'spec', '--test', 'spec', '--', '--test-threads', '1'], cwd=COPY, capture_output=True, text=True,
                              env=dict(os.environ, CARGO_TARGET_DIR=TARGET))
         output = run.stdout + run.stderr
         failed = run.returncode != 0 and f'test {test} ... FAILED' in output

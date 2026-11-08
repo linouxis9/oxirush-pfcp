@@ -32,9 +32,11 @@ use crate::octets::Octets;
 /// A field of a layout: its octets, read in network order.
 pub(crate) trait Field: Sized {
     /// How many octets it has, when they are fixed.
+    #[cfg(feature = "spec")]
     const OCTETS: Option<usize> = None;
     /// The cells narrower than an octet that it lays out, which the test `spec` compares
     /// with the figure: none for a field of whole octets.
+    #[cfg(feature = "spec")]
     const CELLS: &'static [NarrowCell] = &[];
     /// Read the field, and step over it.
     fn read(octets: &mut &[u8]) -> Option<Self>;
@@ -73,6 +75,7 @@ pub(crate) trait Field: Sized {
 
 /// How a value is laid out, as the crate reads it: what the test `spec` compares with the
 /// figure of its clause.
+#[cfg(feature = "spec")]
 #[doc(hidden)]
 #[derive(Debug)]
 pub struct Layout {
@@ -85,6 +88,7 @@ pub struct Layout {
 }
 
 /// A field of bits: where it is.
+#[cfg(feature = "spec")]
 #[doc(hidden)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Bits {
@@ -102,6 +106,7 @@ pub struct Bits {
 
 /// A field of octets: its octets when they are fixed, its cells narrower than an octet,
 /// and when it is there.
+#[cfg(feature = "spec")]
 #[doc(hidden)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Member {
@@ -117,6 +122,7 @@ pub struct Member {
 
 /// A cell of a figure narrower than an octet that a field lays out: a value of the low
 /// bits of its octet, whose others are spare, or a part of a field of its own layout.
+#[cfg(feature = "spec")]
 #[doc(hidden)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct NarrowCell {
@@ -146,6 +152,7 @@ pub(crate) fn flag_rule(
 }
 
 /// The octets of a field whose octets are fixed, or 0.
+#[cfg(feature = "spec")]
 pub(crate) const fn octets_of(octets: Option<usize>) -> usize {
     match octets {
         Some(octets) => octets,
@@ -162,6 +169,7 @@ fn take<const N: usize>(octets: &mut &[u8]) -> Option<[u8; N]> {
 macro_rules! number_field {
     ($($t:ty),*) => {$(
         impl Field for $t {
+            #[cfg(feature = "spec")]
             const OCTETS: Option<usize> = Some(core::mem::size_of::<$t>());
             fn read(octets: &mut &[u8]) -> Option<Self> {
                 take(octets).map(<$t>::from_be_bytes)
@@ -192,6 +200,7 @@ number_field!(u8, u16, u32, u64);
 macro_rules! signed_field {
     ($($t:ty),*) => {$(
         impl Field for $t {
+            #[cfg(feature = "spec")]
             const OCTETS: Option<usize> = Some(core::mem::size_of::<$t>());
             fn read(octets: &mut &[u8]) -> Option<Self> {
                 take(octets).map(<$t>::from_be_bytes)
@@ -252,6 +261,7 @@ const fn mask<E: Narrowable>() -> u8 {
 }
 
 impl<E: Narrowable> Field for Narrow<E> {
+    #[cfg(feature = "spec")]
     const OCTETS: Option<usize> = Some(1);
     #[cfg(feature = "tree")]
     const BELOW: &'static crate::tree::Below = &crate::tree::Below::Object(
@@ -261,6 +271,7 @@ impl<E: Narrowable> Field for Narrow<E> {
             ("Spare", &crate::tree::Below::Scalar),
         ],
     );
+    #[cfg(feature = "spec")]
     const CELLS: &'static [NarrowCell] = &[NarrowCell {
         name: None,
         octet: 0,
@@ -354,6 +365,7 @@ impl<const BITS: u32> Narrowable for Number<BITS> {
 
 /// A whole octet; [`Narrow`] keeps its spare bits apart.
 impl<const BITS: u32> Field for Number<BITS> {
+    #[cfg(feature = "spec")]
     const OCTETS: Option<usize> = Some(1);
     fn read(octets: &mut &[u8]) -> Option<Self> {
         u8::read(octets).map(Self)
@@ -382,6 +394,7 @@ impl<const BITS: u32> Field for Number<BITS> {
 pub struct U40(pub u64);
 
 impl Field for U40 {
+    #[cfg(feature = "spec")]
     const OCTETS: Option<usize> = Some(5);
     fn read(octets: &mut &[u8]) -> Option<Self> {
         let [a, b, c, d, e] = take::<5>(octets)?;
@@ -414,6 +427,7 @@ pub type OctetArray16 = [u8; 16];
 
 /// Octets of a fixed number, as they are.
 impl<const N: usize> Field for [u8; N] {
+    #[cfg(feature = "spec")]
     const OCTETS: Option<usize> = Some(N);
     fn read(octets: &mut &[u8]) -> Option<Self> {
         take::<N>(octets)
@@ -539,6 +553,7 @@ impl Percent {
 }
 
 impl Field for Percent {
+    #[cfg(feature = "spec")]
     const OCTETS: Option<usize> = Some(1);
     fn read(octets: &mut &[u8]) -> Option<Self> {
         u8::read(octets).map(Self)
@@ -579,6 +594,7 @@ impl Field for Percent {
 pub struct Spare(pub u8);
 
 impl Field for Spare {
+    #[cfg(feature = "spec")]
     const OCTETS: Option<usize> = Some(1);
     fn read(octets: &mut &[u8]) -> Option<Self> {
         u8::read(octets).map(Self)
@@ -670,6 +686,7 @@ impl<T: Field> Field for Counted<T> {
 pub struct Each<T>(pub Vec<T>);
 
 impl<T: Field> Field for Each<T> {
+    #[cfg(feature = "spec")]
     const CELLS: &'static [NarrowCell] = T::CELLS;
     #[cfg(feature = "tree")]
     const BELOW: &'static crate::tree::Below = &crate::tree::Below::List(T::BELOW);
@@ -728,8 +745,10 @@ impl From<oxirush_utils::identity::Plmn> for PlmnId {
 }
 
 impl Field for PlmnId {
+    #[cfg(feature = "spec")]
     const OCTETS: Option<usize> = Some(3);
     /// Its digits, by two in an octet (TS 24.008 clause 10.5.1.3).
+    #[cfg(feature = "spec")]
     const CELLS: &'static [NarrowCell] = &[
         NarrowCell {
             name: Some("MCC digit 2"),
@@ -847,6 +866,7 @@ impl Field for TypedAddress {
             ("Address", &crate::tree::Below::Scalar),
         ],
     );
+    #[cfg(feature = "spec")]
     const CELLS: &'static [NarrowCell] = &[
         NarrowCell {
             name: Some("Address Type"),
@@ -939,6 +959,7 @@ impl Field for TypedAddress {
 pub struct U24(pub u32);
 
 impl Field for U24 {
+    #[cfg(feature = "spec")]
     const OCTETS: Option<usize> = Some(3);
     fn read(octets: &mut &[u8]) -> Option<Self> {
         let [a, b, c] = take::<3>(octets)?;
@@ -966,6 +987,7 @@ impl Field for U24 {
 macro_rules! address_field {
     ($($t:ty, $n:literal);*) => {$(
         impl Field for $t {
+            #[cfg(feature = "spec")]
             const OCTETS: Option<usize> = Some($n);
             fn read(octets: &mut &[u8]) -> Option<Self> {
                 take::<$n>(octets).map(<$t>::from)
@@ -1047,8 +1069,7 @@ macro_rules! pfcp_number {
 
         impl $ty {
             /// The name of its field.
-            #[doc(hidden)]
-            pub const FIELDS: &'static [&'static str] = &[$field];
+            pub(crate) const FIELDS: &'static [&'static str] = &[$field];
             /// The members that its tree may have: its field and its unknown octets. Without
             /// them, its tree is the number alone.
             pub const MEMBERS: &'static [&'static str] = &[$field, crate::ie::UNKNOWN_OCTETS];
@@ -1057,6 +1078,7 @@ macro_rules! pfcp_number {
             pub(crate) const MEMBERS_BELOW: &'static [(&'static str, &'static crate::tree::Below)] = &[];
             /// Its layout.
             #[doc(hidden)]
+            #[cfg(feature = "spec")]
             pub const LAYOUT: Option<&'static Layout> = Some(&Layout {
                 head: &[],
                 bits: &[],
@@ -1481,8 +1503,7 @@ impl Field for Fqdn {
 
 impl NodeId {
     /// The names of its fields.
-    #[doc(hidden)]
-    pub const FIELDS: &'static [&'static str] = &["Node ID Type", "Node ID value"];
+    pub(crate) const FIELDS: &'static [&'static str] = &["Node ID Type", "Node ID value"];
     /// The members that its tree may have: the FQDN, or the octets of a Node ID that is no
     /// text. The tree of an address is the address alone.
     pub const MEMBERS: &'static [&'static str] = &["FQDN", "octets"];
@@ -1491,6 +1512,7 @@ impl NodeId {
     pub(crate) const MEMBERS_BELOW: &'static [(&'static str, &'static crate::tree::Below)] = &[];
     /// Read by hand: its layout depends on its type.
     #[doc(hidden)]
+    #[cfg(feature = "spec")]
     pub const LAYOUT: Option<&'static Layout> = None;
 
     /// The Node ID Type (Table 8.2.38-2).
@@ -1638,8 +1660,7 @@ pub struct NetworkInstance(pub Octets);
 
 impl NetworkInstance {
     /// The name of its field.
-    #[doc(hidden)]
-    pub const FIELDS: &'static [&'static str] = &["Network Instance"];
+    pub(crate) const FIELDS: &'static [&'static str] = &["Network Instance"];
     /// None: its tree is its octets.
     pub const MEMBERS: &'static [&'static str] = &[];
     /// What the tree of each field may hold below it: nothing, of scalars alone.
@@ -1647,6 +1668,7 @@ impl NetworkInstance {
     pub(crate) const MEMBERS_BELOW: &'static [(&'static str, &'static crate::tree::Below)] = &[];
     /// Its layout.
     #[doc(hidden)]
+    #[cfg(feature = "spec")]
     pub const LAYOUT: Option<&'static Layout> = Some(&Layout {
         head: &[],
         bits: &[],
@@ -1707,8 +1729,7 @@ macro_rules! pfcp_fields {
 
         impl $ty {
             /// The names of its fields.
-            #[doc(hidden)]
-            pub const FIELDS: &'static [&'static str] = &[$($name),*];
+            pub(crate) const FIELDS: &'static [&'static str] = &[$($name),*];
             /// The members that its tree may have: its fields and its unknown octets.
             pub const MEMBERS: &'static [&'static str] = &[$($name,)* crate::ie::UNKNOWN_OCTETS];
             /// What the tree of each field may hold below it.
@@ -1716,6 +1737,7 @@ macro_rules! pfcp_fields {
             pub(crate) const MEMBERS_BELOW: &'static [(&'static str, &'static crate::tree::Below)] = &[$(($name, <$kind as Field>::BELOW)),*];
             /// Its layout.
             #[doc(hidden)]
+            #[cfg(feature = "spec")]
             pub const LAYOUT: Option<&'static Layout> = Some(&Layout {
                 head: &[],
                 bits: &[],
@@ -2013,8 +2035,7 @@ macro_rules! pfcp_octets {
 
         impl $ty {
             /// The name of its field.
-            #[doc(hidden)]
-            pub const FIELDS: &'static [&'static str] = &[$name];
+            pub(crate) const FIELDS: &'static [&'static str] = &[$name];
             /// None: its tree is its octets.
             pub const MEMBERS: &'static [&'static str] = &[];
             /// What the tree of each field may hold below it: nothing, of scalars alone.
@@ -2022,6 +2043,7 @@ macro_rules! pfcp_octets {
             pub(crate) const MEMBERS_BELOW: &'static [(&'static str, &'static crate::tree::Below)] = &[];
             /// Its layout.
             #[doc(hidden)]
+            #[cfg(feature = "spec")]
             pub const LAYOUT: Option<&'static Layout> = Some(&Layout { head: &[], bits: &[], fields: &[Member { name: $name, octets: None, cells: &[], condition: "true" }] });
         }
 
