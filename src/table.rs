@@ -355,6 +355,10 @@ pub(crate) trait Scope: Default {
     fn count(&self, ie_type: u16) -> usize;
     /// Whether `octets` decode as the value of the field of `ie_type`.
     fn decodes(&self, ie_type: u16, octets: &[u8]) -> bool;
+    /// Whether a decode of the octets of the scope reads as a value an IE that it keeps as
+    /// octets, here or in a grouped IE that it holds: one of a row, which decodes as its
+    /// value. A scope that a decode gave is as it reads, but for the repetitions of a row.
+    fn reads_otherwise(&self) -> bool;
     /// The IEs that the scope keeps as octets.
     fn raw(&self) -> &[RawIe];
     /// The same, to change.
@@ -363,6 +367,29 @@ pub(crate) trait Scope: Default {
     fn order(&self) -> &[Placed];
     /// The same, to change.
     fn order_mut(&mut self) -> &mut Vec<Placed>;
+}
+
+/// Whether a decode of its scope reads `ie`, which the scope keeps as octets, as a value of
+/// its row: an IE of 3GPP of a row, of its own length, that decodes as its value, or that
+/// an Enterprise ID makes other octets.
+pub(crate) fn read_as_value<S: Scope>(scope: &S, ie: &RawIe) -> bool {
+    ie.ie_type < VENDOR
+        && ie.length.is_none()
+        && S::position(ie.ie_type).is_some()
+        && (ie.enterprise_id.is_some()
+            || !ie.octets.is_empty() && scope.decodes(ie.ie_type, &ie.octets))
+}
+
+/// The scope as its receiver reads its octets, where it keeps as octets an IE that the
+/// receiver reads as a value ([`Scope::reads_otherwise`]): `None` for a scope that is
+/// as it reads, and for one that does not encode, or whose octets do not decode back.
+pub(crate) fn as_read<S: Scope>(scope: &S) -> Option<S> {
+    if !scope.reads_otherwise() {
+        return None;
+    }
+    let mut octets = Vec::new();
+    encode_scope(scope, &mut octets).ok()?;
+    decode_scope(&octets).ok()
 }
 
 /// Decode a grouped IE in a box that `slot`, which is empty, takes: `false`, and the slot

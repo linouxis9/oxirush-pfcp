@@ -907,7 +907,7 @@ fn the_path_of_a_deviation_is_one_of_the_tree() {
     );
     // The Cause first on the wire, of a reserved value, and two more: each at its position
     // in the list of the row; then without the value of the first, the IEs kept as octets
-    // are the entries of its row
+    // are the entries of its row, the first of which its receiver reads as the Cause
     let octets = [
         [0x20, 10, 0, 28, 0, 0, 2, 0].as_slice(),
         &[0, 19, 0, 1, 0],
@@ -932,13 +932,7 @@ fn the_path_of_a_deviation_is_one_of_the_tree() {
     released.cause = None;
     assert_eq!(
         paths(&response),
-        [
-            (
-                "/pfcp/Cause".into(),
-                vec![tree!([{"octets": "02"}, {"octets": "03"}])]
-            ),
-            ("/pfcp/Cause/1".into(), vec![tree!({"octets": "03"})]),
-        ]
+        [("/pfcp/Cause/1".into(), vec![tree!({"octets": "03"})])]
     );
 }
 

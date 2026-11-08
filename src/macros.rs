@@ -807,6 +807,15 @@ macro_rules! pfcp_messages {
                 }
             }
 
+            /// Whether its receiver reads as a value an IE that it keeps as octets
+            /// ([`Scope::reads_otherwise`](crate::table::Scope::reads_otherwise)).
+            pub(crate) fn reads_otherwise(&self) -> bool {
+                match self {
+                    $( Self::$ty(body) => crate::table::Scope::reads_otherwise(&**body), )*
+                    Self::Other { .. } => false,
+                }
+            }
+
             pub(crate) fn check(&self, path: &crate::check::Path, context: crate::check::Context, found: &mut alloc::vec::Vec<crate::check::Deviation>) {
                 match self {
                     $( Self::$ty(body) => crate::check::check_scope(&**body, path, context, found), )*
@@ -1054,6 +1063,11 @@ macro_rules! pfcp_table {
                 false
             }
 
+            fn reads_otherwise(&self) -> bool {
+                self.raw.iter().any(|ie| crate::table::read_as_value(self, ie))
+                    $( || crate::table::FieldValues::<$vty>::values(&self.$field).iter().any(crate::ie::Listed::reads_otherwise) )*
+            }
+
             fn raw(&self) -> &[crate::ie::RawIe] { &self.raw }
             fn raw_mut(&mut self) -> &mut alloc::vec::Vec<crate::ie::RawIe> { &mut self.raw }
             fn order(&self) -> &[crate::ie::Placed] { &self.order }
@@ -1236,14 +1250,23 @@ macro_rules! pfcp_table {
             fn check_in(&self, path: &crate::check::Path, context: crate::check::Context, found: &mut alloc::vec::Vec<crate::check::Deviation>) {
                 crate::check::check_scope(self, path, context, found);
             }
+
+            fn reads_otherwise(&self) -> bool {
+                crate::table::Scope::reads_otherwise(self)
+            }
         }
 
         impl crate::check::Rules for $ty {
             /// Its table on the interfaces that it has, as the receiver of a response: the
             /// IEs of any, and those that all need.
+            /// As its receiver reads it ([`crate::table::as_read`]).
             fn check(&self, path: &crate::check::Path, found: &mut alloc::vec::Vec<crate::check::Deviation>) {
                 let interfaces = <Self as crate::table::Scope>::table().interfaces();
-                crate::check::check_scope(self, path, crate::check::Context::on(interfaces), found);
+                let context = crate::check::Context::on(interfaces);
+                match crate::table::as_read(self) {
+                    Some(read) => crate::check::check_scope(&read, path, context, found),
+                    None => crate::check::check_scope(self, path, context, found),
+                }
             }
         }
 

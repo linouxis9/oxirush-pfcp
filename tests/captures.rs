@@ -20,6 +20,7 @@
 //! checked on its interface, where only the deviations of `EXPECTED` are found.
 
 use oxirush_pfcp::*;
+use oxirush_pfcp::{framing, paths, tree};
 
 /// What the check finds in the captures, each a finding of the peer that sent it: the
 /// run, the number of the message, and the path, the clause, the kind and the Cause of the
@@ -242,4 +243,151 @@ fn each_deviation_is_at_a_path_that_select_takes() {
     );
     assert_eq!(at(apn), ["/pfcp/APN~1DNN"]);
     assert_eq!(at(hmac), Vec::<String>::new());
+}
+
+/// The captures, each with the interface that it was sent on.
+fn captures() -> Vec<(Vec<u8>, Interfaces)> {
+    let lines = include_str!("captures/messages.tsv").lines();
+    let lines = lines.filter(|line| !line.starts_with('#'));
+    lines
+        .map(|line| {
+            let cells: Vec<&str> = line.split('\t').collect();
+            let interface = match cells[4] {
+                "Sxa" => Interfaces::SXA,
+                "Sxb" => Interfaces::SXB,
+                _ => Interfaces::N4,
+            };
+            (hex::decode(cells[5]).unwrap(), interface)
+        })
+        .collect()
+}
+
+/// The path in `tree` of each IE of `ies`, a scope of `table` at `scope`, and of each IE of
+/// its grouped IEs, with its content: the IEs of a row whose entry is a value.
+fn entries(
+    tree: &tree::Value,
+    scope: &str,
+    table: &Table,
+    ies: framing::Ies,
+    out: &mut Vec<(String, Vec<u8>)>,
+) {
+    let mut before: Vec<u16> = Vec::new();
+    for ie in ies.map_while(Result::ok) {
+        let nth = before.iter().filter(|seen| **seen == ie.ie_type).count();
+        before.push(ie.ie_type);
+        let Some(row) = table.row_of(ie.ie_type) else {
+            continue;
+        };
+        let mut path = format!("{scope}/{}", tree::escape(row.name));
+        let Ok([held]) = <[_; 1]>::try_from(paths::select(tree, &path).unwrap()) else {
+            continue;
+        };
+        let entry = match held {
+            tree::Value::Array(entries) => {
+                path = format!("{path}/{nth}");
+                &entries[nth]
+            }
+            single => single,
+        };
+        if entry.get("octets").is_some() {
+            continue;
+        }
+        out.push((path.clone(), ie.value.to_vec()));
+        let inner = ie_type_info(ie.ie_type)
+            .into_iter()
+            .flat_map(|info| info.tables.iter())
+            .find(|inner| {
+                ie.ies()
+                    .all(|ie| ie.is_ok_and(|ie| inner.row_of(ie.ie_type).is_some()))
+            });
+        if let Some(inner) = inner
+            && entry.is_object()
+        {
+            entries(tree, &path, inner, ie.ies(), out);
+        }
+    }
+}
+
+/// Each message of `octets` with each IE written as its octets: as its receiver reads it,
+/// `check()` finds in it what it finds in the message, and what it finds in it decoded
+/// from its octets. How many there are.
+fn written_as_octets(octets: &[u8], interfaces: &[Interfaces]) -> usize {
+    let Ok(message) = Message::decode(octets) else {
+        return 0;
+    };
+    let Some(table) = message.body.table() else {
+        return 0;
+    };
+    let tree = message.to_tree();
+    // A message whose tree writes it in the order of its tables, which a message of
+    // another order does not: what check() finds is the same of both
+    let same =
+        Message::from_tree(&tree).is_ok_and(|read| read.encode().ok().as_deref() == Some(octets));
+    let (_, _, ies) = framing::message_ies(octets).unwrap();
+    let mut found = Vec::new();
+    entries(&tree, "/pfcp", table, ies, &mut found);
+    let mut count = 0;
+    for (path, content) in found {
+        let mut written = tree.clone();
+        paths::set(
+            &mut written,
+            &path,
+            oxirush_utils::tree!({"octets": hex::encode(&content)}),
+        )
+        .unwrap();
+        let Ok(read) = Message::from_tree(&written) else {
+            continue;
+        };
+        let decoded = read
+            .encode()
+            .ok()
+            .and_then(|octets| Message::decode(&octets).ok());
+        for interface in interfaces {
+            let deviations = read.check(*interface);
+            if same {
+                assert_eq!(deviations, message.check(*interface), "{path}");
+            }
+            if let Some(decoded) = &decoded {
+                assert_eq!(deviations, decoded.check(*interface), "{path}");
+            }
+        }
+        count += 1;
+    }
+    count
+}
+
+/// An IE written as its octets is checked as its value, as its receiver reads it: each IE
+/// of each capture, at every level of its grouped IEs, written so, changes nothing of what
+/// `check()` finds, and `check(m)` is `check(Message::decode(m.encode()))`.
+#[test]
+fn an_ie_written_as_its_octets_is_checked_as_its_value() {
+    let mut count = 0;
+    for (octets, interface) in captures() {
+        count += written_as_octets(&octets, &[interface]);
+    }
+    assert!(count > 1_900, "{count}");
+}
+
+/// The same of the messages of a corpus of the fuzz targets, the files of the directory
+/// `PFCP_CORPUS`, on each interface.
+#[test]
+#[ignore = "of a corpus: PFCP_CORPUS=fuzz/corpus/decode cargo test --test captures -- --ignored"]
+fn an_ie_written_as_its_octets_is_checked_as_its_value_in_a_corpus() {
+    let directory = std::env::var("PFCP_CORPUS").expect("PFCP_CORPUS names a directory");
+    let interfaces = [
+        Interfaces::SXA,
+        Interfaces::SXB,
+        Interfaces::SXC,
+        Interfaces::N4,
+        Interfaces::N4MB,
+        Interfaces::SXA_SXB,
+    ];
+    let (mut files, mut count) = (0, 0);
+    for entry in std::fs::read_dir(directory).unwrap() {
+        let octets = std::fs::read(entry.unwrap().path()).unwrap();
+        count += written_as_octets(&octets, &interfaces);
+        files += 1;
+    }
+    println!("{files} files, {count} messages with an IE written as its octets");
+    assert!(count > 0);
 }

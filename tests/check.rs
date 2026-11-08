@@ -349,6 +349,58 @@ fn an_ie_of_a_row_not_on_the_interface_is_told_once() {
     );
 }
 
+/// An IE that a scope keeps as octets, which its receiver reads as the value of its row,
+/// is checked as that value: `check(m)` is `check(Message::decode(m.encode()))`. A
+/// mandatory Recovery Time Stamp, an optional Source IP Address, and a Create MAR of a
+/// list, whose MAR ID the message then changes twice (§6.3.3.2).
+#[test]
+fn an_ie_kept_as_octets_that_decode_is_checked_as_its_value() {
+    let read = |message: &Message| Message::decode(&message.encode().unwrap()).unwrap();
+    let mut setup = AssociationSetupRequest {
+        node_id: Some(NodeId::Ipv4(SMF)),
+        ..Default::default()
+    };
+    setup.raw.push(RawIe::new(96, vec![0, 0, 0, 7]));
+    let setup = Message::node(1, setup);
+    assert_eq!(setup.check(Interfaces::N4), []);
+    assert_eq!(read(&setup).check(Interfaces::N4), []);
+    let mut heartbeat = HeartbeatRequest::new(RecoveryTimeStamp::new(7));
+    heartbeat.raw.push(RawIe::new(192, vec![2, 10, 0, 0, 1]));
+    assert_eq!(Message::node(1, heartbeat).check(Interfaces::N4), []);
+    let mar = CreateMar {
+        mar_id: Some(MarId::new(1)),
+        ..Default::default()
+    };
+    let mut content = Vec::new();
+    mar.encode(&mut content).unwrap();
+    let mut modification = SessionModificationRequest {
+        create_mar: vec![mar],
+        ..Default::default()
+    };
+    modification.raw.push(RawIe::new(165, content));
+    let modification = Message::session(1, 1, modification);
+    let found = modification.check(Interfaces::N4);
+    assert_eq!(found, read(&modification).check(Interfaces::N4));
+    let twice = DeviationKind::RuleChangedTwice { rule: "MAR", id: 1 };
+    assert!(
+        found.iter().any(|deviation| deviation.kind == twice),
+        "{found:?}"
+    );
+    // A Node ID of a spare Node ID Type, decoded or kept as its octets
+    let ies = [ie(60, &[8, 127, 0, 0, 1]), ie(96, &[0, 0, 0, 7])];
+    let decoded = Message::decode(&node_message(5, &ies)).unwrap();
+    let Body::AssociationSetupRequest(setup) = &decoded.body else {
+        panic!()
+    };
+    let mut kept = (**setup).clone();
+    kept.node_id = None;
+    kept.raw.push(RawIe::new(60, vec![8, 127, 0, 0, 1]));
+    let kept = Message::node(decoded.header.sequence, kept);
+    let found = decoded.check(Interfaces::N4);
+    assert!(!found.is_empty());
+    assert_eq!(kept.check(Interfaces::N4), found);
+}
+
 /// §7.6.8: a mandatory IE that does not decode is of the clause of an incorrect IE,
 /// whether the scope needs it, or has it beyond what it needs: a Precedence of three
 /// octets, and the Recovery Time Stamp of a rejection.

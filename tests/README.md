@@ -6,7 +6,7 @@ gives it the layout of each value as the crate reads it.
 | Test | What it checks |
 |---|---|
 | `spec` | The crate against TS 29.244 V19.6.0: every message type and IE type; every row of a table, with its presence, interfaces, IE type and repetition, and its bound; every flag and field of a figure, with its octet, bits, order and width, and the conditions that the sentences of its clause give, but for the four values read by hand, which `codec` compares; the sentences of clause 8.2 on which flags are set, together, with the value of another field or the Cause of the message, or always, each with the rule that checks it (`spec/flag-rules.tsv`); every table of values, and the values that a receiver reads as another; the constructors by interface; and the requirements of clause 6 (`spec/`) |
-| `captures` | The 213 messages of the lab runs (`captures/`): each decodes, encodes back byte for byte, has a tree that reads back, and is checked on its interface |
+| `captures` | The 213 messages of the lab runs (`captures/`): each decodes, encodes back byte for byte, has a tree that reads back, and is checked on its interface; and each of their IEs, at every level, written as its octets, changes nothing of what `check()` finds, as in the messages of a fuzz corpus (`PFCP_CORPUS`, below) |
 | `check` | What `check()` finds on each interface, with the clause and the Cause of each |
 | `node` | The procedures of clause 6 on a `Node`, a module of `node/` for each clause: `delivery` (§6.4, §7.6), `associations` (§6.2), `controls` (§6.2.3, §6.2.4), `sessions` (§6.3, §5.22) and `bundles` (§6.5); one test for each requirement of `spec/requirements.tsv` that names it |
 | `endpoint` | Two endpoints on the loopback: a setup and a session, both ways at once through a `Handle`, a request sent through `Handle::with`, a probe that answers twice, a request that times out, a queue full of entries or of octets and a full node, an `Incoming` dropped or answered in vain, an answer that does not encode, a heartbeat of never, a request dropped before and after the task takes it, `close()` |
@@ -57,6 +57,16 @@ its addresses and its interface:
 | 5GS lifecycle, handover, UPF restart | Open5GS 157f611a (SMF and UPF) | N4 |
 | EPS lifecycle, handover | Open5GS 157f611a (SGW-C and SGW-U; SMF and UPF as PGW-C and PGW-U) | Sxa, Sxb |
 | 5GS lifecycle, handover | free5GC 3b34a08e (SMF and go-upf) | N4 |
+
+## A corpus of the fuzz targets
+
+`PFCP_CORPUS` names a directory of messages, a corpus of the fuzz targets `decode` or
+`tree`: each IE of each of them, at every level, written as its octets, is checked on
+every interface as `check()` checks its value.
+
+```sh
+PFCP_CORPUS=fuzz/corpus/decode cargo test --release --all-features --test captures -- --ignored
+```
 
 ## go-pfcp's vectors
 

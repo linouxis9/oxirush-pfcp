@@ -222,7 +222,23 @@ impl Message {
     /// and the IEs that it may have, are those of the Appl. column of the interface. On a set of interfaces, as [`Interfaces::SXA_SXB`]
     /// of a combined SGW/PGW (§5.2.6), a message may have the IEs of any of them, and
     /// needs those that each of them needs.
+    ///
+    /// A message is checked as its receiver reads it: an IE that it keeps as octets, which
+    /// the receiver reads as the value of its row, is checked as that value, and
+    /// `check(m)` is `check(Message::decode(m.encode()))`.
     pub fn check(&self, interface: Interfaces) -> Vec<Deviation> {
+        let read = match self.body.reads_otherwise() {
+            true => self
+                .encode()
+                .ok()
+                .and_then(|octets| Self::decode(&octets).ok()),
+            false => None,
+        };
+        read.as_ref().unwrap_or(self).check_read(interface)
+    }
+
+    /// The check of a message as it is.
+    fn check_read(&self, interface: Interfaces) -> Vec<Deviation> {
         let mut found = self.header_deviations(interface);
         let message_type = self.body.message_type();
         let rejection = self.body.cause().filter(|cause| cause.rejects());

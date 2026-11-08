@@ -87,6 +87,12 @@ pub(crate) trait Listed: Codec + crate::check::Rules {
         let _ = context;
         self.check(path, found);
     }
+
+    /// Whether its receiver reads as a value an IE that the value keeps as octets: none
+    /// but in a grouped IE.
+    fn reads_otherwise(&self) -> bool {
+        false
+    }
 }
 
 /// What a value that is not a grouped IE writes as its [`Listed`].
