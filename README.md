@@ -311,9 +311,10 @@ the wire.
 
 `tree::select` and `tree::set` take the same paths on the tree of a message:
 `/pfcp` stands for its IEs, a list has the positions of its entries, `*` stands
-for each, and names go in any case. What a message lacks selects nothing, and
-`set` adds it, as an entry at the position of a list's length; a misspelt name
-is an error.
+for each, and names go in any case. An IE of no row of its table, a vendor's or
+one of a later release, goes by its number or the name of its type. What a
+message lacks selects nothing, and `set` adds it, as an entry at the position of
+a list's length; a misspelt name is an error.
 
 ```rust
 use oxirush_pfcp::*;

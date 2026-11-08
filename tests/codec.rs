@@ -198,6 +198,24 @@ fn what_a_message_lacks_selects_nothing() {
     // What is there is selected
     let selected = select(&establishment, "/pfcp/Create PDR/*/PDR ID").unwrap();
     assert_eq!(selected, [&tree!(1), &tree!(2)]);
+    // A response that lacks its UP F-SEID, and fields that a Created PDR lacks
+    let response = tree!({
+        "message": "PFCP Session Establishment Response", "SEID": 1, "Sequence Number": 1,
+        "ies": {
+            "Node ID": "10.0.0.1",
+            "Cause": "Request accepted (success)",
+            "Created PDR": [{"PDR ID": 1, "F-TEID": [{"V4": true, "TEID": 7, "IPv4 address": "10.0.0.2"}]}]
+        }
+    });
+    let response = Message::from_tree(&response).unwrap().to_tree();
+    nothing(&response, "/pfcp/UP F-SEID");
+    nothing(&response, "/pfcp/UP F-SEID/SEID");
+    nothing(&response, "/pfcp/Created PDR/0/F-TEID/0/IPv6 address");
+    nothing(&response, "/pfcp/Created PDR/0/UE IP address");
+    let teid = select(&response, "/pfcp/Created PDR/0/F-TEID/0/TEID").unwrap();
+    assert_eq!(teid, [&tree!(7)]);
+    misspelt(&response, "/pfcp/Created PDR/0/F-TID");
+    assert!(select(&response, "/pfcp/Created PDR/0/F-TEID/0/TEID/deeper").is_err());
     // A grouped IE that the scope keeps as its octets has no rows
     let mut kept = establishment.clone();
     kept["ies"]["Create PDR"][0] = tree!({"octets": "003800020001"});
@@ -211,6 +229,41 @@ fn what_a_message_lacks_selects_nothing() {
     };
     let source = request.source_ip_address.unwrap().ipv4_address;
     assert_eq!(source, Some(Ipv4Addr::new(10, 0, 0, 9)));
+    // An IE of no row of the table, a vendor's or one of another table, by its number or
+    // its type's name, as a tree writes it: what is not there selects nothing, and set
+    // adds it under the name that the tree prints
+    nothing(&heartbeat, "/pfcp/32769");
+    nothing(&heartbeat, "/pfcp/32769/octets");
+    nothing(&heartbeat, "/pfcp/Node ID");
+    nothing(&heartbeat, "/pfcp/60/Enterprise ID");
+    misspelt(&heartbeat, "/pfcp/32769/octet");
+    misspelt(&heartbeat, "/pfcp/Node ID/IPv4 address");
+    // An IE type of a row goes by the name of its row
+    misspelt(&heartbeat, "/pfcp/96");
+    misspelt(&establishment, "/pfcp/Create PDR/0/PDI/F-TEID");
+    let mut edited = heartbeat.clone();
+    let vendor = tree!({"octets": "01", "Enterprise ID": 9});
+    set(&mut edited, "/pfcp/32769", vendor.clone()).unwrap();
+    set(&mut edited, "/pfcp/60", tree!({"octets": "000a000001"})).unwrap();
+    set(&mut edited, "/pfcp/Node ID/length", tree!(4)).unwrap();
+    assert_eq!(select(&edited, "/pfcp/32769").unwrap(), [&vendor]);
+    let node_id = tree!({"octets": "000a000001", "length": 4});
+    assert_eq!(select(&edited, "/pfcp/60").unwrap(), [&node_id]);
+    assert_eq!(edited["ies"]["Node ID"], node_id);
+    let Body::HeartbeatRequest(request) = Message::from_tree(&edited).unwrap().body else {
+        panic!()
+    };
+    let kept: Vec<u16> = request.raw.iter().map(|ie| ie.ie_type).collect();
+    assert_eq!(kept, [32769, 60]);
+    // A tree that writes it by its number is read by its name too
+    let written = tree!({"message": "PFCP Heartbeat Request", "Sequence Number": 1,
+        "ies": {"Recovery Time Stamp": 7, "60": {"octets": "000a000001"}}});
+    let node_id = tree!({"octets": "000a000001"});
+    assert_eq!(select(&written, "/pfcp/Node ID").unwrap(), [&node_id]);
+    assert_eq!(
+        select(&written, "/pfcp/60/octets").unwrap(),
+        [&tree!("000a000001")]
+    );
 }
 
 /// The members that a tree prints only where a value has them select nothing where it

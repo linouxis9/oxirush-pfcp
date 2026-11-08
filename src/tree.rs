@@ -346,6 +346,17 @@ pub(crate) enum Below {
     List(&'static Below),
 }
 
+/// What an IE that a scope keeps as its octets may hold below it, and a list of them.
+const KEPT: Below = Below::Object(
+    None,
+    &[
+        ("octets", &Below::Scalar),
+        ("length", &Below::Scalar),
+        ("Enterprise ID", &Below::Scalar),
+    ],
+);
+const KEPT_LIST: Below = Below::List(&KEPT);
+
 impl Below {
     /// What the member `name` of the object may hold below it.
     fn member(&self, name: &str) -> Option<&'static Below> {
@@ -370,8 +381,9 @@ fn below_member(info: &IeTypeInfo, name: &str) -> &'static Below {
 /// The rules of the paths of PFCP, which `select` and `set` share: `/pfcp` is short for
 /// the IEs of the message, and each segment is checked against the tables and the members
 /// of the trees of the values ([`IeTypeInfo::members`]), then the tree is walked by the
-/// plain rule. A row that a scope lacks, and a member that a value lacks, select nothing,
-/// where another name is an error, also below what is not there. A value or a field that
+/// plain rule. A row that a scope lacks, an IE of no row by its number or the name of its
+/// type, and a member that a value lacks, select nothing, where another name is an error,
+/// also below what is not there. A value or a field that
 /// its tree writes as a scalar has the member that the scalar is, and the others of its
 /// object, which select nothing; `set` writes the object to give one of them a value.
 #[derive(Debug, Clone, Copy, Default)]
@@ -443,10 +455,26 @@ fn of_row(row: &Row, value: Option<&Value>) -> Of {
 /// fields of its figure. An IE that the scope keeps as its octets has none of them.
 fn of_value(info: &'static IeTypeInfo, value: Option<&Value>) -> Of {
     match info.form {
-        _ if value.is_some_and(is_octets) => Of::Nothing,
+        _ if value.is_some_and(is_octets) => Of::Below(&KEPT),
         Form::Grouped => Of::Ies(info.tables),
         _ => Of::Value(info),
     }
+}
+
+/// What a member of IEs that is of no row is: an IE kept as its octets, or a list of them.
+fn of_kept(value: Option<&Value>) -> Of {
+    match value.is_some_and(Value::is_array) {
+        true => Of::Below(&KEPT_LIST),
+        false => Of::Below(&KEPT),
+    }
+}
+
+/// The IE type of no row of `tables` that `name` writes, as [`scope_from_tree`] reads it:
+/// its number, or the name of its type.
+fn of_no_row(tables: &[&'static Table], name: &str) -> Option<u16> {
+    let ie_type = type_of_name(name)?;
+    let row = tables.iter().any(|table| table.row_of(ie_type).is_some());
+    (!row).then_some(ie_type)
 }
 
 impl Paths {
@@ -523,6 +551,32 @@ impl tree::Family for Paths {
             next.open(place, opened);
             return Ok(Step::Taken);
         }
+        // An IE of no row, by its number or the name of its type: each member that names
+        // it so, or the name that the tree prints, where `set` adds it.
+        if let Of::Ies(tables) = shape.0
+            && row_named(tables, segment).is_none()
+            && let Some(ie_type) = of_no_row(tables, segment)
+        {
+            let members = place
+                .value()
+                .and_then(Value::as_object)
+                .into_iter()
+                .flatten();
+            let mut found = false;
+            for (written, value) in members {
+                if row_named(tables, written).is_none()
+                    && of_no_row(tables, written) == Some(ie_type)
+                {
+                    next.member(written, value, Shape(of_kept(Some(value))));
+                    found = true;
+                }
+            }
+            if !found {
+                let name = crate::tree_name(ie_type, tables.first().copied());
+                next.absent(&name, Shape(of_kept(None)));
+            }
+            return Ok(Step::Taken);
+        }
         // What is null is not there.
         match (place.value().filter(|value| !value.is_null()), shape.0) {
             (_, Of::Nothing) => Ok(Step::Plain),
@@ -588,7 +642,7 @@ impl tree::Family for Paths {
             // The other members of the header are scalars.
             Of::Message(_) => Of::Below(&Below::Scalar),
             Of::Ies(tables) => {
-                row_named(tables, name).map_or(Of::Nothing, |row| of_row(row, value))
+                row_named(tables, name).map_or(of_kept(value), |row| of_row(row, value))
             }
             Of::Value(info)
                 if info
@@ -669,10 +723,12 @@ fn room(value: Option<&Value>, of: Of, list: bool, segment: &str) -> Option<Valu
 }
 
 /// The values at `path` in the tree of a message. A row of a table that a message or a
-/// grouped IE lacks, and a member that a value or the header lacks of those that its tree
-/// may have, select nothing; a name that is none of them is an error, also below what is
-/// not there, and an entry past the end of a list selects nothing. A value or a field
-/// whose tree is a scalar or an object takes the same names in either form.
+/// grouped IE lacks, an IE of no row by its number or the name of its type, as
+/// [`Message::from_tree`](crate::Message::from_tree) reads it, and a member that a value
+/// or the header lacks of those that its tree may have, select nothing; a name that is
+/// none of them is an error, also below what is not there, and an entry past the end of a
+/// list selects nothing. A value or a field whose tree is a scalar or an object takes the
+/// same names in either form.
 ///
 /// # Errors
 ///
