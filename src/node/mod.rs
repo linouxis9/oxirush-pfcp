@@ -27,9 +27,9 @@
 //!   **message priority (§6.2.4.5)**.
 //! - **Bundling (§6.5),** when both peers announced BUNDL.
 //!
-//! The node answers itself only what the clauses leave no choice in: a heartbeat, a
-//! request that does not decode, one of a peer without an association or of a session
-//! that the node does not have. What a peer does wrong is an [`Event::Violation`]. Every
+//! The node answers itself only what the clauses decide alone: a heartbeat, a request
+//! that does not decode, one of a peer without an association or of a session that the
+//! node does not have. What a peer does wrong is an [`Event::Violation`]. Every
 //! other request is the caller's to answer with [`Node::respond`]: one that names a
 //! session or an association that is not its sender's, as another SMF of a set sends
 //! (§5.22), comes [`Inbound::stranger`].

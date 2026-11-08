@@ -79,9 +79,9 @@ The crate is `no_std` with an allocator, but for `endpoint`. Rust 1.88 or later.
 A `Node` is a PFCP entity without I/O: datagrams and time go in; datagrams,
 events and the next timer come out. It numbers and retransmits requests, matches
 responses, answers heartbeats and retransmitted requests, takes bundles (§6.5),
-and keeps associations, sessions and the load of each peer. It answers itself
-only what the clauses leave no choice in; every other request is an event that
-you answer with `respond()`.
+and keeps associations, sessions and the load of each peer. It rejects the
+requests that the clauses tell it to reject, as a session request without an
+association; every other request is an event that you answer with `respond()`.
 
 ```rust
 use std::net::{Ipv4Addr, SocketAddr};
@@ -201,15 +201,15 @@ PFCP Session Establishment Response (SEID 0x1001, sequence 7): Request accepted 
 accepted: true
 ```
 
-What the crate cannot read it keeps as octets, in its place: decoding then
+An IE that the crate cannot read stays as octets, in its place: decoding then
 encoding gives the octets back, byte for byte.
 
 ## Check a message, and answer a faulty one
 
-`check()` says how a message is not as TS 29.244 has a sender construct it, on
-an interface or a set of them, as a combined SGW/PGW has (`Interfaces::SXA_SXB`):
-its missing, conditional, absent, repeated and incorrect IEs, its values, its
-flags and its header, each with its path, its clause and the Cause of the
+`check()` lists how a message breaks TS 29.244 on an interface, or on a set of
+them, as a combined SGW/PGW's (`Interfaces::SXA_SXB`). It finds IEs that are
+missing, excluded, repeated or incorrect, and wrong values, flags and header
+fields. Each deviation has its path in the tree, its clause and the Cause of the
 answer. `Row::checked` says which conditions of the tables it checks. A table
 whose mandatory IEs differ between interfaces has a constructor for each, as
 `CreatePdr::new_sxa()` and `new_n4()`.
@@ -304,7 +304,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 PFCP Heartbeat Request (sequence 9): 2001000c0000090000600004e8754700
 ```
 
-A tree is in the order of the tables, the octets in that of the wire.
+A tree lists the IEs in the order of the tables; the octets keep the order of
+the wire.
 
 ## Read and edit by path
 
@@ -335,14 +336,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ## Limits
 
-- `check()` checks one message: the conditions that need the state of a node,
-  or another scope, are not its own.
+- `check()` checks one message: not the conditions that depend on the state of
+  a node, or on another scope.
 - `encode()` writes spare bits, reserved values, a false Length
   (`RawIe::length`) and IEs that a table does not have, for a test tool. It
-  refuses a field that disagrees with the flags of its IE
-  (`Error::Inconsistent`), a field or a header field too long for its bits or
-  its length (`FieldLength`, `HeaderField`), and an IE or a message too long
-  for its Length (`TooLong`, `MessageTooLong`).
+  refuses, each an `Error`:
+  - a field that disagrees with the flags of its IE (`Inconsistent`);
+  - a field or a header field too long for its bits or its length
+    (`FieldLength`, `HeaderField`);
+  - an IE or a message too long for its Length (`TooLong`, `MessageTooLong`).
 - TS 29.244 V19.6.0: an IE of a later release stays octets.
 - A `Node` is one PFCP entity. A request that names another's session or
   association, as another SMF of a set sends (§5.22), comes to the caller as

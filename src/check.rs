@@ -15,9 +15,9 @@
    limitations under the License.
 */
 
-//! What `check()` finds: each way in which a message is not as TS 29.244 has a sender
-//! construct it, with the path of the IE, the clause that it breaks and the Cause with
-//! which a receiver answers a request for it.
+//! What `check()` finds: each way in which a message breaks TS 29.244, with its path in
+//! the tree of the message, the clause that it breaks and the Cause with which a receiver
+//! answers a request for it.
 
 use alloc::format;
 use alloc::string::String;
