@@ -75,6 +75,19 @@ pub trait Listed: Codec {
 
     /// Decode into a slot that is empty.
     fn decode_slot(slot: &mut Self::Slot, octets: &[u8]) -> bool;
+
+    /// The octets that a value takes beyond its own size: those of the boxes, the lists
+    /// and the kept IEs of a grouped IE, which a few octets of the wire make, and not the
+    /// octets of its values, which are those of the wire.
+    fn held(&self) -> usize {
+        0
+    }
+
+    /// The same of a slot, with its box.
+    fn slot_held(slot: &Self::Slot) -> usize {
+        let _ = slot;
+        0
+    }
 }
 
 /// What a value that is not a grouped IE writes as its [`Listed`].

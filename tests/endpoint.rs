@@ -412,6 +412,50 @@ fn setup(sequence: u32) -> Vec<u8> {
     .unwrap()
 }
 
+/// An Association Setup Request of `pools` UE IP address Pool Informations, each of one
+/// IE of a null length: a few octets each, which decode into a grouped IE each.
+fn setup_of_pools(sequence: u32, pools: usize) -> Vec<u8> {
+    let mut request =
+        AssociationSetupRequest::new(NodeId::Ipv4(Ipv4Addr::LOCALHOST), RecoveryTimeStamp::new(1));
+    request
+        .raw
+        .extend((0..pools).map(|_| RawIe::new(233, [0, 177, 0, 0])));
+    Message {
+        header: Header::node(sequence),
+        body: request.into(),
+    }
+    .encode()
+    .unwrap()
+}
+
+/// The incoming queue holds requests up to the octets that they take decoded, as well as
+/// up to their number: a datagram that decodes into far more than its octets is dropped
+/// while the queue holds as much, and comes in again when the caller has taken the others.
+#[tokio::test]
+async fn the_incoming_queue_is_bounded_by_what_its_requests_take() {
+    let queues = Queues {
+        incoming_octets: 1 << 20,
+        ..Queues::default()
+    };
+    let mut upf = Endpoint::bind_with(ANY, config(Function::Up), queues)
+        .await
+        .unwrap();
+    let address = upf.handle().local_addr();
+    let peer = tokio::net::UdpSocket::bind(ANY).await.unwrap();
+    // 7,000 grouped IEs of 8 octets: 56 kB, and more than a mebibyte decoded
+    let large = |sequence| setup_of_pools(sequence, 7_000);
+    for sequence in 1..=3 {
+        peer.send_to(&large(sequence), address).await.unwrap();
+    }
+    peer.send_to(&setup(4), address).await.unwrap();
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    assert_eq!(upf.handle().statistics().incoming_dropped, 3);
+    assert_eq!(upf.incoming().await.unwrap().request.sequence, 1);
+    peer.send_to(&large(2), address).await.unwrap();
+    let again = within(upf.incoming()).await.unwrap();
+    assert_eq!(again.request.sequence, 2);
+}
+
 /// A request that the endpoint drops for a full queue comes in again with its
 /// retransmission, and is answered then.
 #[tokio::test]
@@ -420,6 +464,7 @@ async fn a_request_dropped_for_a_full_queue_comes_again() {
         commands: 16,
         incoming: 1,
         events: 16,
+        ..Queues::default()
     };
     let mut upf = Endpoint::bind_with(ANY, config(Function::Up), queues)
         .await
@@ -512,6 +557,7 @@ async fn an_answer_in_vain_leaves_its_request_unanswered() {
         commands: 1,
         incoming: 16,
         events: 16,
+        ..Queues::default()
     };
     let mut upf = Endpoint::bind_with(ANY, config(Function::Up), queues)
         .await
@@ -845,6 +891,7 @@ async fn queues_of_no_entry_hold_one() {
     let queues = Queues {
         commands: 0,
         incoming: 0,
+        incoming_octets: 0,
         events: 0,
     };
     let mut upf = Endpoint::bind_with(ANY, config(Function::Up), queues)

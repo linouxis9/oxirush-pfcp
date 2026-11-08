@@ -49,7 +49,7 @@ use std::collections::BTreeMap;
 use std::io;
 use std::net::SocketAddr;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 use std::vec;
 
@@ -71,15 +71,22 @@ pub struct Queues {
     pub commands: usize,
     /// The requests of the peers to the caller.
     pub incoming: usize,
+    /// The octets that the requests of the incoming queue take decoded, at most, beyond
+    /// those of their values: their boxes, lists and grouped IEs, which a few octets of
+    /// the wire make, up to some 170 times as many. A request that does not fit in a queue
+    /// that holds others is dropped, as for a full queue.
+    pub incoming_octets: usize,
     /// The other events to the caller.
     pub events: usize,
 }
 
 impl Default for Queues {
+    /// 1,024 entries each, and 64 MiB of requests.
     fn default() -> Self {
         Self {
             commands: 1024,
             incoming: 1024,
+            incoming_octets: 64 << 20,
             events: 1024,
         }
     }
@@ -90,7 +97,7 @@ impl Default for Queues {
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct Statistics {
-    /// Requests of peers dropped for a full incoming queue.
+    /// Requests of peers dropped for a full incoming queue, of entries or of octets.
     pub incoming_dropped: u64,
     /// Events dropped for a full event queue.
     pub events_dropped: u64,
@@ -167,6 +174,8 @@ pub struct Incoming {
     commands: mpsc::WeakSender<Command>,
     forgets: mpsc::UnboundedSender<Inbound>,
     answered: bool,
+    /// The octets that it takes in the incoming queue ([`Queues::incoming_octets`]).
+    held: usize,
 }
 
 impl Drop for Incoming {
@@ -287,6 +296,8 @@ impl core::fmt::Debug for Command {
 pub struct Endpoint {
     handle: Handle,
     incoming: mpsc::Receiver<Incoming>,
+    /// The octets that the requests of the incoming queue take.
+    queued: Arc<AtomicUsize>,
     events: mpsc::Receiver<Event>,
     /// Dropped, it ends the task.
     stop: oneshot::Sender<()>,
@@ -336,6 +347,7 @@ impl Endpoint {
         let (cancels, cancelled) = mpsc::unbounded_channel();
         let (stop, stopped) = oneshot::channel();
         let statistics = Arc::new(Counts::default());
+        let queued = Arc::new(AtomicUsize::new(0));
         let task = Task {
             socket,
             node: Node::new(config),
@@ -346,6 +358,8 @@ impl Endpoint {
             forgetting,
             cancelled,
             incoming: incoming_tx,
+            queued: queued.clone(),
+            incoming_octets: queues.incoming_octets,
             events: events_tx,
             pending: BTreeMap::new(),
             tokens: BTreeMap::new(),
@@ -362,6 +376,7 @@ impl Endpoint {
         Ok(Self {
             handle,
             incoming,
+            queued,
             events,
             stop,
             task,
@@ -385,7 +400,9 @@ impl Endpoint {
 
     /// The next request of a peer: `None` once the endpoint has ended.
     pub async fn incoming(&mut self) -> Option<Incoming> {
-        self.incoming.recv().await
+        let incoming = self.incoming.recv().await?;
+        self.queued.fetch_sub(incoming.held, Ordering::Relaxed);
+        Some(incoming)
     }
 
     /// The next other event: associations, restarts, retransmissions, violations. A
@@ -539,6 +556,9 @@ struct Task {
     /// The tokens of the requests whose futures the caller dropped.
     cancelled: mpsc::UnboundedReceiver<u64>,
     incoming: mpsc::Sender<Incoming>,
+    /// The octets that the requests of the incoming queue take, and how many they may.
+    queued: Arc<AtomicUsize>,
+    incoming_octets: usize,
     events: mpsc::Sender<Event>,
     /// The requests that wait for their responses, with their tokens, and the requests of
     /// the tokens.
@@ -686,16 +706,22 @@ impl Task {
                     let _ = reply.send(Err(EndpointError::Failed(failure)));
                 }
                 (Event::Request { request, message }, _) => {
+                    let held = size_of::<Incoming>() + message.body.held();
                     let incoming = Incoming {
                         message,
                         request,
                         commands: self.responder.clone(),
                         forgets: self.forgetting.clone(),
                         answered: false,
+                        held,
                     };
-                    if let Err(dropped) = self.incoming.try_send(incoming) {
-                        // Its retransmission comes in again: the Incoming forgets it.
-                        let _ = dropped;
+                    // A request that the queue does not hold, of entries or of octets, is
+                    // dropped: its retransmission comes in again, as the Incoming forgets it.
+                    // Its octets are counted before the caller can take it.
+                    let queued = self.queued.fetch_add(held, Ordering::Relaxed);
+                    let fits = queued == 0 || queued.saturating_add(held) <= self.incoming_octets;
+                    if !fits || self.incoming.try_send(incoming).is_err() {
+                        self.queued.fetch_sub(held, Ordering::Relaxed);
                         self.statistics
                             .incoming_dropped
                             .fetch_add(1, Ordering::Relaxed);
@@ -728,6 +754,48 @@ mod tests {
 
     use super::*;
     use crate::{HeartbeatRequest, RecoveryTimeStamp};
+
+    /// What a request takes in the incoming queue: its box, the entries of its lists, the
+    /// boxes of its grouped IEs and its kept IEs, and nothing of the values that it holds
+    /// in place or of their octets.
+    #[test]
+    fn what_a_request_holds() {
+        use crate::*;
+        use core::mem::size_of;
+        let address = SourceIpAddress {
+            v4: true,
+            ipv4_address: Some([10, 0, 0, 1].into()),
+            ..Default::default()
+        };
+        let heartbeat =
+            HeartbeatRequest::new(RecoveryTimeStamp::new(7)).with_source_ip_address(address);
+        let body: Body = heartbeat.into();
+        assert_eq!(body.held(), size_of::<HeartbeatRequest>());
+        let source = SourceInterface::new(SourceInterfaceValue::Access);
+        let pdr = CreatePdr::new_n4(PdrId::new(1), Precedence::new(1), Pdi::new(source));
+        let far = CreateFar::new(FarId::new(1), ApplyAction::default());
+        let f_seid = FSeid {
+            v4: true,
+            seid: Some(1),
+            ipv4: Some([10, 0, 0, 1].into()),
+            ..Default::default()
+        };
+        let mut request = SessionEstablishmentRequest::new_n4(
+            NodeId::Ipv4([10, 0, 0, 1].into()),
+            f_seid,
+            pdr.clone(),
+            far,
+        )
+        .with_create_pdr(pdr)
+        .with_create_bar(CreateBar::new(BarId::new(1)));
+        request.raw.push(RawIe::new(96, [0; 4]));
+        let held = size_of::<SessionEstablishmentRequest>()
+            + request.create_pdr.capacity() * size_of::<CreatePdr>()
+            + request.create_far.capacity() * size_of::<CreateFar>()
+            + size_of::<CreateBar>()
+            + request.raw.capacity() * size_of::<RawIe>();
+        assert_eq!(Body::from(request).held(), held);
+    }
 
     /// What the receiver of the cancels sees when a cancel comes: whether the reply of the
     /// request is closed then. Its waker runs in the send of the cancel.

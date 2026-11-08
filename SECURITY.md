@@ -12,6 +12,11 @@ datagram that makes a decoder or a node panic, loop or allocate without bound
 is a vulnerability, and so is a node that a peer can make answer for another
 peer.
 
+A decoded message takes up to some 170 times its octets, in its lists of
+grouped IEs: a datagram of 64 KiB, some 11 MiB. An `Endpoint` bounds its queue
+of requests by what they take (`Queues::incoming_octets`); a caller that keeps
+decoded messages itself bounds them so.
+
 ## Supported versions
 
 The crate is not on crates.io yet: the `main` branch receives the fixes.

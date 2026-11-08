@@ -782,6 +782,16 @@ macro_rules! pfcp_messages {
                 }
             }
 
+            /// The octets that the body takes beyond its own size: its box, and what its
+            /// IEs hold ([`Listed::held`](crate::ie::Listed::held)).
+            #[cfg(feature = "endpoint")]
+            pub(crate) fn held(&self) -> usize {
+                match self {
+                    $( Self::$ty(body) => core::mem::size_of::<crate::registry::$ty>() + crate::table::Scope::held(&**body), )*
+                    Self::Other { .. } => 0,
+                }
+            }
+
             pub(crate) fn check(&self, path: &crate::check::Path, context: crate::check::Context, found: &mut alloc::vec::Vec<crate::check::Deviation>) {
                 match self {
                     $( Self::$ty(body) => crate::check::check_scope(&**body, path, context, found), )*
@@ -1010,6 +1020,13 @@ macro_rules! pfcp_table {
                 Ok(())
             }
 
+            fn held(&self) -> usize {
+                let mut held = self.raw.capacity() * core::mem::size_of::<crate::ie::RawIe>()
+                    + self.order.capacity() * core::mem::size_of::<crate::ie::Placed>();
+                $( held += pfcp_table!(@held [$(* $($max)?)?] $p (pfcp_table!(@type $vty $($raw)?)) self.$field); )*
+                held
+            }
+
             fn count(&self, ie_type: u16) -> usize {
                 $(
                     if ie_type == <pfcp_table!(@type $vty $($raw)?) as crate::ie::IeType>::IE_TYPE {
@@ -1157,6 +1174,14 @@ macro_rules! pfcp_table {
     (@large [* $($max:literal)?] ($t:ty)) => { core::mem::size_of::<$t>() > 64 };
     (@reserve [] $f:expr, $n:expr) => { let _ = $n; };
     (@reserve [* $($max:literal)?] $f:expr, $n:expr) => { $f.reserve_exact($n) };
+    // What a field takes beyond its own size: a list its entries, a box its value.
+    (@held [* $($max:literal)?] $p:ident ($t:ty) $f:expr) => {
+        $f.capacity() * core::mem::size_of::<$t>() + $f.iter().map(crate::ie::Listed::held).sum::<usize>()
+    };
+    (@held [] M ($t:ty) $f:expr) => { $f.as_ref().map_or(0, crate::ie::Listed::held) };
+    (@held [] Ci ($t:ty) $f:expr) => { $f.as_ref().map_or(0, crate::ie::Listed::held) };
+    (@held [] Oi ($t:ty) $f:expr) => { $f.as_ref().map_or(0, crate::ie::Listed::held) };
+    (@held [] $p:ident ($t:ty) $f:expr) => { <$t as crate::ie::Listed>::slot_held(&$f) };
     (@full [] $f:expr) => { false };
     (@full [$max:literal] $f:expr) => { $f.len() >= $max };
 
@@ -1207,6 +1232,14 @@ macro_rules! pfcp_table {
                     return false;
                 }
                 true
+            }
+
+            fn held(&self) -> usize {
+                crate::table::Scope::held(self)
+            }
+
+            fn slot_held(slot: &Self::Slot) -> usize {
+                slot.as_ref().map_or(0, |value| core::mem::size_of::<Self>() + value.held())
             }
         }
 

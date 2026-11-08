@@ -312,6 +312,9 @@ pub(crate) trait Scope: Default {
     fn encoded_len(&self) -> usize;
     /// Write every field, in the order of the table.
     fn encode_fields(&self, out: &mut Vec<u8>) -> Result<(), Error>;
+    /// The octets that the scope takes beyond its own size: its lists and boxes, and the
+    /// IEs that it keeps as octets ([`Listed::held`](crate::ie::Listed::held)).
+    fn held(&self) -> usize;
     /// How many values the field of `ie_type` has.
     fn count(&self, ie_type: u16) -> usize;
     /// Whether `octets` decode as the value of the field of `ie_type`.
