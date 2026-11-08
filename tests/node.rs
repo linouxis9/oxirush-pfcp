@@ -1241,7 +1241,14 @@ fn message_priority_default() {
     };
     upf.handle_datagram(at(1), SMF, &without.encode().unwrap());
     let (inbound, _) = request(&mut upf);
-    assert_eq!((inbound.priority, inbound.prioritized), (8, false));
+    assert_eq!(inbound.priority, None);
+    let answer = AssociationUpdateResponse::new(node_id(UPF), accepted());
+    upf.respond(at(1), &inbound, answer).unwrap();
+    let answer = sent(&mut upf).remove(0);
+    assert_eq!(
+        (answer.priority, decoded(&answer).header.priority),
+        (8, None)
+    );
     // The highest priority goes out first
     upf.send_raw(OTHER, 9, vec![9]);
     upf.send_raw(OTHER, 0, vec![0]);
@@ -1280,7 +1287,7 @@ fn response_copies_priority() {
     .unwrap();
     pass(&mut smf, &mut upf, UPF, at(1));
     let (inbound, _) = request(&mut upf);
-    assert_eq!((inbound.priority, inbound.prioritized), (2, true));
+    assert_eq!(inbound.priority, Some(2));
     upf.respond(
         at(1),
         &inbound,

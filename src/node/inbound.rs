@@ -172,8 +172,7 @@ impl Node {
             from,
             message_type,
             sequence: header.sequence,
-            priority,
-            prioritized: header.priority.is_some(),
+            priority: header.priority,
             seid: header.seid,
             peer_seid,
             node_id,
@@ -366,7 +365,7 @@ impl Node {
                 .reject(key, Digest::of(octets), response.clone(), expires, capacity);
             self.queue(Transmit {
                 to: inbound.from,
-                priority: inbound.priority,
+                priority: self.priority_of(inbound),
                 octets: response.into(),
             });
         }
@@ -511,11 +510,7 @@ impl Node {
             from,
             message_type,
             sequence,
-            priority: message
-                .header
-                .priority
-                .unwrap_or(self.config.default_priority),
-            prioritized: message.header.priority.is_some(),
+            priority: message.header.priority,
             seid,
             mark: seid
                 .and_then(|seid| self.sessions.get(&seid))
@@ -542,7 +537,7 @@ impl Node {
             if let Ok(octets) = message.encode() {
                 self.queue(Transmit {
                     to: from,
-                    priority: inbound.priority,
+                    priority: self.priority_of(&inbound),
                     octets: octets.into(),
                 });
             }

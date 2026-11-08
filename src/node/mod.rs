@@ -207,10 +207,9 @@ pub struct Inbound {
     pub message_type: u8,
     /// Its sequence number, which the response copies.
     pub sequence: u32,
-    /// Its priority, or the default one (§6.2.4.5.2).
-    pub priority: u8,
-    /// Whether it said its priority, which the response then says too.
-    pub prioritized: bool,
+    /// The priority that it says (§6.2.4.5.2), which the response then says too: the
+    /// answer of one that says none goes at the node's default priority.
+    pub priority: Option<u8>,
     /// The SEID of its header: the local SEID of its session when it came. Its answer goes
     /// to that session, wherever it moved since, while it lasts.
     pub seid: Option<u64>,
@@ -664,6 +663,11 @@ impl Node {
     /// What the node is.
     pub fn config(&self) -> &NodeConfig {
         &self.config
+    }
+
+    /// The priority of the answer to `request`: its own, or the default (§6.2.4.5.2).
+    fn priority_of(&self, request: &Inbound) -> u8 {
+        request.priority.unwrap_or(self.config.default_priority)
     }
 
     /// A fresh mark for a session the node creates.

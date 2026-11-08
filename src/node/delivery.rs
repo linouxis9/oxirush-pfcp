@@ -641,11 +641,10 @@ impl Node {
                 .and_then(|local| self.sessions.get(&local))
                 .and_then(|session| session.peer_seid),
         };
-        let mut header = Header::session(seid.unwrap_or(0), request.sequence);
-        if request.prioritized {
-            header.priority = Some(request.priority);
+        Header {
+            priority: request.priority,
+            ..Header::session(seid.unwrap_or(0), request.sequence)
         }
-        header
     }
 
     /// Answer a request with a message as it is, delivered as `delivery` says: a probe,
@@ -702,7 +701,7 @@ impl Node {
         if delivery == Delivery::Send {
             self.queue(Transmit {
                 to: request.from,
-                priority: request.priority,
+                priority: self.priority_of(request),
                 octets: octets.into(),
             });
         }
