@@ -98,7 +98,18 @@ pub enum Form {
     Grouped,
 }
 
-/// An IE type as Table 8.1.2-1 has it.
+/// An IE type as Table 8.1.2-1 has it, of the same fields with every feature.
+///
+/// ```
+/// use oxirush_pfcp::{Form, IeTypeInfo, ie_type_info};
+///
+/// let IeTypeInfo { ie_type, name, form, fixed, clause, members, scalar, tables } =
+///     *ie_type_info(19).unwrap();
+/// assert_eq!((ie_type, name, form, fixed), (19, "Cause", Form::Fixed, Some(1)));
+/// assert_eq!((clause, scalar), ("8.2.1", Some("Cause value")));
+/// assert_eq!(members, ["Cause value", "unknown octets"]);
+/// assert!(tables.is_empty());
+/// ```
 #[derive(Debug, Clone, Copy)]
 pub struct IeTypeInfo {
     /// The IE type.
@@ -111,11 +122,6 @@ pub struct IeTypeInfo {
     pub fixed: Option<u16>,
     /// The clause of its layout, or the table of its content.
     pub clause: &'static str,
-    /// The names of the flags and fields of its figure that the crate lays out, which the
-    /// test `spec` compares with it.
-    #[cfg(feature = "spec")]
-    #[doc(hidden)]
-    pub fields: &'static [&'static str],
     /// The members that the tree of a value may have, as an object: its flags and fields,
     /// and, as the value may have them, `Spare`, `length` and `unknown octets`. A tree has
     /// those of them that the value has, and a path that names another of them selects
@@ -124,10 +130,6 @@ pub struct IeTypeInfo {
     /// The member that the tree of a value is when it is written as a scalar: its one
     /// field, `None` for a value of more, or of none.
     pub scalar: Option<&'static str>,
-    /// How the crate lays it out, which the test `spec` compares with its figure.
-    #[cfg(feature = "spec")]
-    #[doc(hidden)]
-    pub layout: Option<&'static crate::values::Layout>,
     /// The tables of its content, for a grouped IE: one, or one per place for an IE that
     /// has different content in different places.
     pub tables: &'static [&'static crate::table::Table],

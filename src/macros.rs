@@ -31,15 +31,23 @@ macro_rules! pfcp_ies {
                 form: pfcp_ies!(@form $form),
                 fixed: pfcp_ies!(@fixed $($fixed)?),
                 clause: $clause,
-                #[cfg(feature = "spec")]
-                fields: pfcp_ies!(@fields $form $($($ty),+)?),
                 members: pfcp_ies!(@members $form $($($ty),+)?),
                 scalar: crate::registry::one(pfcp_ies!(@fields $form $($($ty),+)?)),
-                #[cfg(feature = "spec")]
-                layout: pfcp_ies!(@layout $form $($($ty),+)?),
                 tables: pfcp_ies!(@tables $form $($($ty),+)?),
             }, )*
         ];
+
+        /// The names of the flags and fields of the figure of `ie_type` that the crate lays
+        /// out, and how it lays them out, which the test `spec` compares with the figure:
+        /// for that test alone.
+        #[cfg(feature = "spec")]
+        #[doc(hidden)]
+        pub fn ie_type_layout(ie_type: u16) -> (&'static [&'static str], Option<&'static crate::values::Layout>) {
+            match ie_type {
+                $( $num => (pfcp_ies!(@fields $form $($($ty),+)?), pfcp_ies!(@layout $form $($($ty),+)?)), )*
+                _ => (&[], None),
+            }
+        }
         $( pfcp_ies!(@impls $num $name [pfcp_ies!(@length $form $(($fixed))?)] $($($ty),+)?); )*
 
         /// What the tree of each field of a value of `ie_type` may hold below it, of those

@@ -677,7 +677,11 @@ fn value_tables() {
             continue;
         }
         for (bit, name) in rows {
-            if !info.fields.iter().any(|field| key(field) == key(name)) {
+            if !ie_type_layout(info.ie_type)
+                .0
+                .iter()
+                .any(|field| key(field) == key(name))
+            {
                 problems.push(format!(
                     "Table {table}, bit {bit} {name:?}: no flag of {} in the crate",
                     info.name
@@ -848,8 +852,8 @@ fn layouts() {
             None => false,
         };
         let table_bits = bits.get(info.clause).map(Vec::as_slice).unwrap_or_default();
-        let fields = info
-            .fields
+        let fields = ie_type_layout(info.ie_type)
+            .0
             .iter()
             .filter(|field| {
                 !field.starts_with("Spare") && !table_bits.iter().any(|bit| key(bit) == key(field))
@@ -1294,8 +1298,9 @@ fn figure_places() {
         // describe its reader without being it: the test codec compares its octets with
         // its figure (`the_values_read_by_hand_have_the_places_of_their_figures`). A grouped
         // IE and an IE kept as octets have no fields.
-        let Some(layout) = info.layout else {
-            if info.form != Form::Grouped && !info.fields.is_empty() {
+        let (fields, layout) = ie_type_layout(info.ie_type);
+        let Some(layout) = layout else {
+            if info.form != Form::Grouped && !fields.is_empty() {
                 by_hand.push(info.clause);
             }
             continue;
@@ -1463,7 +1468,9 @@ fn figure_conditions() {
     let mut problems = Vec::new();
     let mut checked = 0;
     for info in IE_TYPES {
-        let Some(layout) = info.layout else { continue };
+        let Some(layout) = ie_type_layout(info.ie_type).1 else {
+            continue;
+        };
         for (flag, set, field, there) in sentences.get(info.clause).into_iter().flatten() {
             let Some(bits) = layout.bits.iter().find(|bits| key(bits.name) == key(flag)) else {
                 continue;
