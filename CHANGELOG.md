@@ -11,7 +11,8 @@ The first version, of TS 29.244 V19.6.0 (2026-06):
   `Message::node` and `Message::session`.
 - `check()`: how a message breaks the tables and clauses on an interface, each deviation
   with its path, its clause and the Cause of the answer; `deviations()` of a value on its
-  own.
+  own. `Row::presence_on` gives the presence of a row on an interface, or on a set of
+  them, and `None` where it is not: its IEs have no Cause there (§7.6.9).
 - With `tree`, a message as a tree that prints as JSON, read and edited by path, on
   oxirush-utils 0.2; with `serde`, serialized as its tree. A tree writes each field that
   its value always has; it leaves out a flag that is not set and a field that its flags

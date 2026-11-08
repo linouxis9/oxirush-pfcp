@@ -75,7 +75,7 @@ session-deletion-response_test.go	Multiple IEs	/pfcp/Usage Report/0/Usage Report
 session-deletion-response_test.go	Multiple IEs	/pfcp/Usage Report/1/Usage Report Trigger	8.1.2	SpareBits	-
 session-deletion-response_test.go	Single IE	/pfcp/Usage Report/0/Usage Report Trigger	8.1.2	SpareBits	-
 session-establishment-request_test.go	Multiple IEs	/SEID	7.2.2.4.2	Rule("a Session Establishment Request of a SEID other than 0")	-
-session-establishment-request_test.go	Multiple IEs	/pfcp/Create FAR/0/Duplicating Parameters/0/Transport Level marking	8.2.12	Rule("a ToS/Traffic Class mask other than 0xFC")	MandatoryIeIncorrect
+session-establishment-request_test.go	Multiple IEs	/pfcp/Create FAR/0/Duplicating Parameters/0/Transport Level marking	8.2.12	Rule("a ToS/Traffic Class mask other than 0xFC")	-
 session-establishment-request_test.go	Multiple IEs	/pfcp/Create FAR/0/Forwarding Parameters/Transport Level Marking	8.2.12	Rule("a ToS/Traffic Class mask other than 0xFC")	MandatoryIeIncorrect
 session-establishment-request_test.go	Multiple IEs	/pfcp/Create FAR/0/Redundant Transmission Parameters	7.6.9	Unexpected { ie_type: 255 }	-
 session-establishment-request_test.go	Multiple IEs	/pfcp/Create PDR/0/Outer Header Removal	8.1.2	SpareBits	-
@@ -93,7 +93,7 @@ session-establishment-request_test.go	Multiple IEs	/pfcp/Create PDR/1/UE IP addr
 session-establishment-request_test.go	Multiple IEs	/pfcp/Create QER/0/QER Control Indications	8.1.2	SpareBits	-
 session-establishment-request_test.go	Multiple IEs	/pfcp/Create SRR/0/QoS Monitoring per QoS flow Control Information/0/Reporting Frequency	8.2.168	SpareBits	-
 session-establishment-request_test.go	Single IE	/SEID	7.2.2.4.2	Rule("a Session Establishment Request of a SEID other than 0")	-
-session-establishment-request_test.go	Single IE	/pfcp/Create FAR/0/Duplicating Parameters/0/Transport Level marking	8.2.12	Rule("a ToS/Traffic Class mask other than 0xFC")	MandatoryIeIncorrect
+session-establishment-request_test.go	Single IE	/pfcp/Create FAR/0/Duplicating Parameters/0/Transport Level marking	8.2.12	Rule("a ToS/Traffic Class mask other than 0xFC")	-
 session-establishment-request_test.go	Single IE	/pfcp/Create FAR/0/Forwarding Parameters/Transport Level Marking	8.2.12	Rule("a ToS/Traffic Class mask other than 0xFC")	MandatoryIeIncorrect
 session-establishment-request_test.go	Single IE	/pfcp/Create FAR/0/Redundant Transmission Parameters	7.6.9	Unexpected { ie_type: 255 }	-
 session-establishment-request_test.go	Single IE	/pfcp/Create PDR/0/Outer Header Removal	8.1.2	SpareBits	-
@@ -118,7 +118,7 @@ session-modification-request_test.go	Multiple IEs	/pfcp	6.3.3.2	RuleChangedTwice
 session-modification-request_test.go	Multiple IEs	/pfcp	6.3.3.2	RuleChangedTwice { rule: "URR", id: 4294967295 }	-
 session-modification-request_test.go	Multiple IEs	/pfcp/Access Availability Information/0	8.2.153	SpareValue { value: 3 }	-
 session-modification-request_test.go	Multiple IEs	/pfcp/Access Availability Information/0	8.2.153	SpareValue { value: 3 }	-
-session-modification-request_test.go	Multiple IEs	/pfcp/Create FAR/0/Duplicating Parameters/0/Transport Level marking	8.2.12	Rule("a ToS/Traffic Class mask other than 0xFC")	MandatoryIeIncorrect
+session-modification-request_test.go	Multiple IEs	/pfcp/Create FAR/0/Duplicating Parameters/0/Transport Level marking	8.2.12	Rule("a ToS/Traffic Class mask other than 0xFC")	-
 session-modification-request_test.go	Multiple IEs	/pfcp/Create FAR/0/Forwarding Parameters/Transport Level Marking	8.2.12	Rule("a ToS/Traffic Class mask other than 0xFC")	MandatoryIeIncorrect
 session-modification-request_test.go	Multiple IEs	/pfcp/Create FAR/0/Redundant Transmission Parameters	7.6.9	Unexpected { ie_type: 255 }	-
 session-modification-request_test.go	Multiple IEs	/pfcp/Create PDR/0/Outer Header Removal	8.1.2	SpareBits	-
@@ -136,7 +136,7 @@ session-modification-request_test.go	Multiple IEs	/pfcp/Create PDR/1/UE IP addre
 session-modification-request_test.go	Multiple IEs	/pfcp/Create QER/0/QER Control Indications	8.1.2	SpareBits	-
 session-modification-request_test.go	Multiple IEs	/pfcp/Create SRR/0/QoS Monitoring per QoS flow Control Information/0/Reporting Frequency	8.2.168	SpareBits	-
 session-modification-request_test.go	Multiple IEs	/pfcp/Update FAR/0/Redundant Transmission Parameters	7.6.9	Unexpected { ie_type: 255 }	-
-session-modification-request_test.go	Multiple IEs	/pfcp/Update FAR/0/Update Duplicating Parameters/0/Transport Level Marking	8.2.12	Rule("a ToS/Traffic Class mask other than 0xFC")	MandatoryIeIncorrect
+session-modification-request_test.go	Multiple IEs	/pfcp/Update FAR/0/Update Duplicating Parameters/0/Transport Level Marking	8.2.12	Rule("a ToS/Traffic Class mask other than 0xFC")	-
 session-modification-request_test.go	Multiple IEs	/pfcp/Update FAR/0/Update Forwarding parameters/Transport Level Marking	8.2.12	Rule("a ToS/Traffic Class mask other than 0xFC")	MandatoryIeIncorrect
 session-modification-request_test.go	Multiple IEs	/pfcp/Update PDR/0/Outer Header Removal	8.1.2	SpareBits	-
 session-modification-request_test.go	Multiple IEs	/pfcp/Update PDR/0/PDI/Local F-TEID	7.5.2.2-2	Excluded { ie_type: 21 }	-
@@ -155,7 +155,7 @@ session-modification-request_test.go	Single IE	/pfcp	6.3.3.2	RuleChangedTwice { 
 session-modification-request_test.go	Single IE	/pfcp	6.3.3.2	RuleChangedTwice { rule: "URR", id: 4294967295 }	-
 session-modification-request_test.go	Single IE	/pfcp/Access Availability Information/0	8.2.153	SpareValue { value: 3 }	-
 session-modification-request_test.go	Single IE	/pfcp/Access Availability Information/0	8.2.153	SpareValue { value: 3 }	-
-session-modification-request_test.go	Single IE	/pfcp/Create FAR/0/Duplicating Parameters/0/Transport Level marking	8.2.12	Rule("a ToS/Traffic Class mask other than 0xFC")	MandatoryIeIncorrect
+session-modification-request_test.go	Single IE	/pfcp/Create FAR/0/Duplicating Parameters/0/Transport Level marking	8.2.12	Rule("a ToS/Traffic Class mask other than 0xFC")	-
 session-modification-request_test.go	Single IE	/pfcp/Create FAR/0/Forwarding Parameters/Transport Level Marking	8.2.12	Rule("a ToS/Traffic Class mask other than 0xFC")	MandatoryIeIncorrect
 session-modification-request_test.go	Single IE	/pfcp/Create FAR/0/Redundant Transmission Parameters	7.6.9	Unexpected { ie_type: 255 }	-
 session-modification-request_test.go	Single IE	/pfcp/Create PDR/0/Outer Header Removal	8.1.2	SpareBits	-
@@ -167,7 +167,7 @@ session-modification-request_test.go	Single IE	/pfcp/Create PDR/0/UE IP address 
 session-modification-request_test.go	Single IE	/pfcp/Create QER/0/QER Control Indications	8.1.2	SpareBits	-
 session-modification-request_test.go	Single IE	/pfcp/Create SRR/0/QoS Monitoring per QoS flow Control Information/0/Reporting Frequency	8.2.168	SpareBits	-
 session-modification-request_test.go	Single IE	/pfcp/Update FAR/0/Redundant Transmission Parameters	7.6.9	Unexpected { ie_type: 255 }	-
-session-modification-request_test.go	Single IE	/pfcp/Update FAR/0/Update Duplicating Parameters/0/Transport Level Marking	8.2.12	Rule("a ToS/Traffic Class mask other than 0xFC")	MandatoryIeIncorrect
+session-modification-request_test.go	Single IE	/pfcp/Update FAR/0/Update Duplicating Parameters/0/Transport Level Marking	8.2.12	Rule("a ToS/Traffic Class mask other than 0xFC")	-
 session-modification-request_test.go	Single IE	/pfcp/Update FAR/0/Update Forwarding parameters/Transport Level Marking	8.2.12	Rule("a ToS/Traffic Class mask other than 0xFC")	MandatoryIeIncorrect
 session-modification-request_test.go	Single IE	/pfcp/Update PDR/0/Outer Header Removal	8.1.2	SpareBits	-
 session-modification-request_test.go	Single IE	/pfcp/Update PDR/0/PDI/Local F-TEID	7.5.2.2-2	Excluded { ie_type: 21 }	-

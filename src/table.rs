@@ -258,20 +258,36 @@ pub struct Table {
 }
 
 impl Row {
-    /// Its presence on `interface`: of a shared field, that of its rows there, the
-    /// weakest on a set of interfaces, as mandatory is on each.
-    pub fn presence_on(&self, interface: Interfaces) -> Presence {
+    /// Its presence on `interface`, `None` where the interface does not have it: of a
+    /// shared field, the weakest of its rows there. On a set of interfaces, the weakest on
+    /// each of them, as mandatory is on each, and optional where one of them lacks it: a
+    /// message on the set may have it, and needs it on none.
+    pub fn presence_on(&self, interface: Interfaces) -> Option<Presence> {
         let rank = |presence: &Presence| match presence {
             Presence::Mandatory => 0,
             Presence::Conditional => 1,
             Presence::Optional => 2,
         };
-        self.roles
-            .iter()
-            .filter(|role| role.interfaces.has(interface))
-            .map(|role| role.presence)
+        let on = |one: Interfaces| match self.roles {
+            [] => self.interfaces.has(one).then_some(self.presence),
+            roles => roles
+                .iter()
+                .filter(|role| role.interfaces.has(one))
+                .map(|role| role.presence)
+                .max_by_key(rank),
+        };
+        let each = || {
+            (0..5)
+                .map(|bit| Interfaces(1 << bit))
+                .filter(|one| interface.has(*one))
+                .map(on)
+        };
+        if each().all(|presence| presence.is_none()) {
+            return None;
+        }
+        each()
+            .map(|presence| presence.unwrap_or(Presence::Optional))
             .max_by_key(rank)
-            .unwrap_or(self.presence)
     }
 }
 

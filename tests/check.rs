@@ -114,19 +114,114 @@ fn a_grouped_ie_on_its_own_needs_what_its_interfaces_need() {
 
 /// A field that rows of several presences share is of the strongest, and on an
 /// interface of the presence of its row there: the Source IP Address of an IP Multicast
-/// Addressing Info is O on N4 and M on N4mb (Table 7.5.2.2-4), the weakest on both.
+/// Addressing Info is O on N4 and M on N4mb (Table 7.5.2.2-4), the weakest on both. A row
+/// is on no interface that lacks it, and on a set of interfaces that one of them lacks,
+/// optional, as no IE is needed there: Precedence is M in Create PDR on Sxb, and not on
+/// Sxa (Table 7.5.2.2-1).
 #[test]
 fn a_shared_field_has_the_presence_of_its_row_on_the_interface() {
     let row = IpMulticastAddressingInfo::table().row_of(192).unwrap();
     assert_eq!(row.presence, Presence::Mandatory);
-    assert_eq!(row.presence_on(Interfaces::N4), Presence::Optional);
-    assert_eq!(row.presence_on(Interfaces::N4MB), Presence::Mandatory);
+    assert_eq!(row.presence_on(Interfaces::N4), Some(Presence::Optional));
+    assert_eq!(row.presence_on(Interfaces::N4MB), Some(Presence::Mandatory));
     assert_eq!(
         row.presence_on(Interfaces::N4 | Interfaces::N4MB),
-        Presence::Optional
+        Some(Presence::Optional)
     );
+    assert_eq!(row.presence_on(Interfaces::SXA), None);
     let pdr_id = CreatePdr::table().row_of(56).unwrap();
-    assert_eq!(pdr_id.presence_on(Interfaces::N4), pdr_id.presence);
+    assert_eq!(pdr_id.presence_on(Interfaces::N4), Some(pdr_id.presence));
+    let precedence = CreatePdr::table().row_of(29).unwrap();
+    assert_eq!(precedence.presence_on(Interfaces::SXA), None);
+    assert_eq!(
+        precedence.presence_on(Interfaces::SXB | Interfaces::N4),
+        Some(Presence::Mandatory)
+    );
+    assert_eq!(
+        precedence.presence_on(Interfaces::SXA_SXB),
+        Some(Presence::Optional)
+    );
+    // A shared field of no row on N4mb
+    let fq_csid = SessionEstablishmentRequest::table().row_of(65).unwrap();
+    assert_eq!(fq_csid.presence_on(Interfaces::N4MB), None);
+    assert_eq!(
+        fq_csid.presence_on(Interfaces::SXA_SXB),
+        Some(Presence::Conditional)
+    );
+    assert_eq!(
+        fq_csid.presence_on(Interfaces::SXA | Interfaces::N4MB),
+        Some(Presence::Optional)
+    );
+}
+
+/// §7.6.9: an IE of a row that is not on the interface is discarded, and the message
+/// processed: what its value breaks, and a value that does not decode, have no Cause. A
+/// Precedence of three octets on Sxa, which has no Precedence in Create PDR, and on the
+/// combined Sxa/Sxb, which does not need it; on Sxc, a Transport Level Marking of a mask
+/// other than 0xFC and an Outer Header Creation of no description, which Forwarding
+/// Parameters has on Sxa, Sxb and N4 (Table 7.5.2.3-2).
+#[test]
+fn an_ie_of_a_row_not_on_the_interface_has_no_cause() {
+    let checked = |forwarding: &[Vec<u8>], precedence: &[u8], interface: Interfaces| {
+        let pdr = ie(
+            1,
+            &[
+                ie(56, &[0, 1]),
+                ie(29, precedence),
+                ie(2, &ie(20, &[0])),
+                ie(108, &[0, 0, 0, 1]),
+            ]
+            .concat(),
+        );
+        let far = ie(
+            3,
+            &[
+                ie(108, &[0, 0, 0, 1]),
+                ie(44, &[2, 0]),
+                ie(4, &[&ie(42, &[1])[..], &forwarding.concat()].concat()),
+            ]
+            .concat(),
+        );
+        let f_seid = [2, 0, 0, 0, 0, 0, 0, 0x10, 0x01, 10, 0, 0, 1];
+        let ies = [ie(60, &[0, 10, 0, 0, 1]), ie(57, &f_seid), pdr, far];
+        let message = Message::decode(&session_message(50, 0, &ies)).unwrap();
+        message
+            .check(interface)
+            .into_iter()
+            .map(|deviation| (deviation.kind, deviation.cause))
+            .collect::<Vec<_>>()
+    };
+    let short = [0, 0, 1];
+    assert_eq!(
+        checked(&[], &short, Interfaces::SXA),
+        [
+            (DeviationKind::NotOnInterface { ie_type: 29 }, None),
+            (DeviationKind::Incorrect { ie_type: 29 }, None),
+        ]
+    );
+    assert_eq!(
+        checked(&[], &short, Interfaces::SXA_SXB),
+        [(DeviationKind::Incorrect { ie_type: 29 }, None)]
+    );
+    let precedence = [0, 0, 0, 1];
+    let marking = ie(30, &[0x11, 0x11]);
+    assert_eq!(
+        checked(std::slice::from_ref(&marking), &precedence, Interfaces::SXC),
+        [
+            (DeviationKind::NotOnInterface { ie_type: 30 }, None),
+            (
+                DeviationKind::Rule("a ToS/Traffic Class mask other than 0xFC"),
+                None
+            ),
+        ]
+    );
+    let found = checked(&[marking], &precedence, Interfaces::N4);
+    assert_eq!(found.len(), 1, "{found:?}");
+    assert_eq!(found[0].1, Some(CauseValue::MandatoryIeIncorrect));
+    let creation = ie(84, &[0, 0]);
+    let found = checked(&[creation], &precedence, Interfaces::SXC);
+    assert_eq!(found.len(), 2, "{found:?}");
+    assert!(found.iter().all(|(_, cause)| cause.is_none()), "{found:?}");
 }
 
 /// A set of interfaces is of the bits of the constants, and not empty.

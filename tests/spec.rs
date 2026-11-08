@@ -442,6 +442,17 @@ fn tables() {
                     row.name, row.presence
                 ));
             }
+            // and on the interfaces of its rows.
+            let of_roles = row
+                .roles
+                .iter()
+                .fold(0, |bits, role| bits | role.interfaces.bits());
+            if !row.roles.is_empty() && of_roles != row.interfaces.bits() {
+                problems.push(format!(
+                    "Table {id}, field {:?}: interfaces {:?} in the crate, and its rows are on {of_roles:#b}",
+                    row.name, row.interfaces
+                ));
+            }
             if row.roles.is_empty() {
                 entries.push((
                     field,
