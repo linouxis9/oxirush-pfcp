@@ -313,8 +313,10 @@ the wire.
 `/pfcp` stands for its IEs, a list has the positions of its entries, `*` stands
 for each, and names go in any case. An IE of no row of its table, a vendor's or
 one of a later release, goes by its number or the name of its type. What a
-message lacks selects nothing, and `set` adds it, as an entry at the position of
-a list's length; a misspelt name is an error.
+message lacks selects nothing, whatever the path names below it: a misspelt name
+is an error where the value is there, and is not told below what is not. `set`
+adds the grouped IEs and the lists on its way, an entry at the position of a
+list's length, and writes a value that a message lacks whole.
 
 ```rust
 use oxirush_pfcp::*;

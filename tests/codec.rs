@@ -227,8 +227,7 @@ fn what_a_message_lacks_selects_nothing() {
     nothing(&heartbeat, "/pfcp/32769/octets");
     nothing(&heartbeat, "/pfcp/Node ID");
     nothing(&heartbeat, "/pfcp/60/Enterprise ID");
-    misspelt(&heartbeat, "/pfcp/32769/octet");
-    misspelt(&heartbeat, "/pfcp/Node ID/IPv4 address");
+    nothing(&heartbeat, "/pfcp/32769/octet");
     // An IE type of a row goes by the name of its row
     misspelt(&heartbeat, "/pfcp/96");
     misspelt(&establishment, "/pfcp/Create PDR/0/PDI/F-TEID");
@@ -337,7 +336,7 @@ fn what_a_value_lacks_selects_nothing() {
 /// same kind: the one field of a value written as a scalar (the Cause value), the member
 /// that a field of two forms is (the `value` of a Time Unit), the members of its object,
 /// which write the object (the `Spare` of a Time Unit, the `FQDN` of a Node ID that is an
-/// address), and what a message lacks, which `set` adds.
+/// address), and a member that a value lacks, which `set` adds.
 #[test]
 fn set_takes_the_paths_that_select_takes() {
     let response = "2133002b000000000000100100000700003c0005000a00000200130001010039000d0200000000000020010a000002";
@@ -357,7 +356,14 @@ fn set_takes_the_paths_that_select_takes() {
         SessionModificationRequest::default().with_create_qer(qer),
     )
     .to_tree();
-    let heartbeat = Message::node(1, HeartbeatRequest::new(RecoveryTimeStamp::new(7))).to_tree();
+    let address = SourceIpAddress {
+        v4: true,
+        ipv4_address: Some(Ipv4Addr::new(10, 0, 0, 9)),
+        ..Default::default()
+    };
+    let heartbeat =
+        HeartbeatRequest::new(RecoveryTimeStamp::new(7)).with_source_ip_address(address);
+    let heartbeat = Message::node(1, heartbeat).to_tree();
     let unit = "/pfcp/Create QER/0/Packet Rate/Uplink Time Unit";
     for (tree, path, value, written) in [
         (
@@ -386,9 +392,9 @@ fn set_takes_the_paths_that_select_takes() {
         ),
         (
             &heartbeat,
-            "/pfcp/Source IP Address/V4",
+            "/pfcp/Source IP Address/V6",
             tree!(true),
-            tree!({"V4": true}),
+            tree!({"V4": true, "IPv4 address": "10.0.0.9", "V6": true}),
         ),
     ] {
         assert!(select(tree, path).is_ok(), "{path}");
@@ -522,181 +528,88 @@ fn set_adds_an_entry_at_the_end_of_a_list() {
     }
 }
 
-/// oxirush-utils' `select_in`: "a misspelt name is not a member that is absent", also
-/// below what a message lacks. Below a row that it lacks, a name is judged as where the row
-/// is there: a member that it could have selects nothing, and another is `NoSuchMember`;
-/// below a list that it lacks, an entry has the members of one, and a name that is no
-/// position is `NotAList`.
+/// What is not there selects nothing, whatever the path names below it: a row that a
+/// message or a grouped IE lacks, a list that it lacks, an entry past the end of a list, a
+/// field or a flag that a value or the header lacks, and a member of the object of a field
+/// written as a scalar. A misspelt name below them is not told; one where the value is
+/// there is `NoSuchMember`. `set` writes a value that a message lacks whole, and refuses a
+/// path below it with `NothingSelected`, leaving the tree as it was.
 #[test]
-fn a_misspelt_name_below_what_a_message_lacks_is_an_error() {
-    let nothing = |tree: &tree::Value, path: &str| {
-        assert_eq!(
-            select(tree, path).map_err(|error| error.kind()),
-            Ok(vec![]),
-            "{path}"
-        );
-    };
-    let failing = |tree: &tree::Value, path: &str, kind: tree::ErrorKind| {
-        let found = select(tree, path).map_err(|error| error.kind());
-        assert_eq!(found, Err(kind), "{path}");
-    };
-    let misspelt = |tree: &tree::Value, path: &str| {
-        failing(tree, path, tree::ErrorKind::NoSuchMember);
-    };
+fn what_is_not_there_selects_nothing_whatever_the_path_names_below_it() {
     let response = "2133002b000000000000100100000700003c0005000a00000200130001010039000d0200000000000020010a000002";
-    let response = Message::decode(&hex::decode(response).unwrap())
-        .unwrap()
-        .to_tree();
-    let heartbeat = Message::node(1, HeartbeatRequest::new(RecoveryTimeStamp::new(7)));
-    let heartbeat = heartbeat.to_tree();
-    misspelt(&heartbeat, "/pfcp/Source IP Address/Bogus");
-    nothing(&heartbeat, "/pfcp/Source IP Address/V4");
-    // Below a flag, which has nothing below it
-    failing(
-        &heartbeat,
-        "/pfcp/Source IP Address/V4/Bogus",
-        tree::ErrorKind::Scalar,
-    );
-    misspelt(&response, "/pfcp/Load Control Information/Bogus");
-    nothing(&response, "/pfcp/Load Control Information/Load Metric");
-    nothing(&response, "/pfcp/Load Control Information/*");
-    misspelt(&response, "/pfcp/Created PDR/0/Bogus");
-    misspelt(&response, "/pfcp/Created PDR/*/Bogus");
-    nothing(&response, "/pfcp/Created PDR/*/PDR ID");
-    failing(
-        &response,
-        "/pfcp/Created PDR/Bogus",
-        tree::ErrorKind::NotAList,
-    );
-    nothing(&response, "/pfcp/Created PDR/*/F-TEID/0/CHID");
-    misspelt(&response, "/pfcp/Created PDR/0/F-TEID/1/Bogus");
-    // A role that the wire does not tell from the others of its row is no member
-    misspelt(&response, "/pfcp/Created PDR/0/Local F-TEID/CHID");
-}
-
-/// oxirush-utils' `select_in`: "a misspelt name is not a member that is absent", also
-/// below a flag or a field that a value or the header lacks, and below an entry past the
-/// end of a list. Below such a field, a name is judged by what the tree of the field may
-/// hold (`tree::Below`): nothing below a scalar, the members of a value with spare bits
-/// or of an address, the entries of a list.
-#[test]
-fn a_misspelt_name_below_a_field_that_a_value_lacks_is_an_error() {
-    let nothing = |tree: &tree::Value, path: &str| {
-        assert_eq!(
-            select(tree, path).map_err(|error| error.kind()),
-            Ok(vec![]),
-            "{path}"
-        );
-    };
-    let failing = |tree: &tree::Value, path: &str, kind: tree::ErrorKind| {
-        let found = select(tree, path).map_err(|error| error.kind());
-        assert_eq!(found, Err(kind), "{path}");
-    };
-    let response = "2133002b000000000000100100000700003c0005000a00000200130001010039000d0200000000000020010a000002";
-    let mut response = Message::decode(&hex::decode(response).unwrap()).unwrap();
-    let Body::SessionEstablishmentResponse(body) = &mut response.body else {
+    let response = Message::decode(&hex::decode(response).unwrap()).unwrap();
+    let mut with_pdr = response.clone();
+    let Body::SessionEstablishmentResponse(body) = &mut with_pdr.body else {
         panic!()
     };
     body.created_pdr.push(CreatedPdr::new(PdrId::new(1)));
-    let response = response.to_tree();
-    // Below a field or a flag that a value lacks, of a scalar
-    for path in [
-        "/pfcp/UP F-SEID/IPv6 address/Bogus",
-        "/pfcp/UP F-SEID/V6/Bogus",
-        "/pfcp/UP F-SEID/IPv6 address/*",
-        "/pfcp/Node ID/FQDN/Bogus",
-        "/Message Priority/Bogus",
+    let (response, with_pdr) = (response.to_tree(), with_pdr.to_tree());
+    let heartbeat = Message::node(1, HeartbeatRequest::new(RecoveryTimeStamp::new(7)));
+    let heartbeat = heartbeat.to_tree();
+    let misspelt = Err(tree::ErrorKind::NoSuchMember);
+    for (tree, path, found) in [
+        // Below a value, a grouped IE and a list that the message lacks
+        (&heartbeat, "/pfcp/Source IP Address/Bogus", Ok(0)),
+        (&heartbeat, "/pfcp/Source IP Address/V4/Bogus", Ok(0)),
+        (&response, "/pfcp/Load Control Information/Bogus", Ok(0)),
+        (&response, "/pfcp/Created PDR/0/Bogus", Ok(0)),
+        (&response, "/pfcp/Created PDR/*/F-TEID/0/Bogus", Ok(0)),
+        (&response, "/pfcp/Created PDR/Bogus", Ok(0)),
+        // Below an entry past the end of a list
+        (&with_pdr, "/pfcp/Created PDR/5/Bogus", Ok(0)),
+        // Below a field or a flag that a value or the header lacks
+        (&response, "/pfcp/UP F-SEID/IPv6 address/Bogus", Ok(0)),
+        (&response, "/pfcp/UP F-SEID/V6/*", Ok(0)),
+        (&response, "/Message Priority/Bogus", Ok(0)),
+        // Below a member of the object of a value written as a scalar, an address
+        (&response, "/pfcp/Node ID/FQDN/Bogus", Ok(0)),
+        // Where the value is there, a misspelt name is an error, and a role that the wire
+        // does not tell from the others of its row is no member
+        (&with_pdr, "/pfcp/Created PDR/0/Bogus", misspelt),
+        (&with_pdr, "/pfcp/Created PDR/*/Bogus", misspelt),
+        (&with_pdr, "/pfcp/Created PDR/0/Local F-TEID/CHID", misspelt),
+        (&response, "/pfcp/UP F-SEID/Bogus", misspelt),
+        (&response, "/pfcp/Bogus/PDR ID", misspelt),
+        (&heartbeat, "/pfcp/Recovery Time Stamp/Bogus", misspelt),
+        (
+            &with_pdr,
+            "/pfcp/Created PDR/Bogus",
+            Err(tree::ErrorKind::NotAList),
+        ),
     ] {
-        failing(&response, path, tree::ErrorKind::Scalar);
+        let selected = select(tree, path).map(|values| values.len());
+        assert_eq!(selected.map_err(|error| error.kind()), found, "{path}");
     }
-    // Below an entry past the end of a list, as below an entry
-    nothing(&response, "/pfcp/Created PDR/5/PDR ID");
-    failing(
-        &response,
-        "/pfcp/Created PDR/5/Bogus",
-        tree::ErrorKind::NoSuchMember,
-    );
-    // Below a field of a value with spare bits, of an address of another type, and of a
-    // list, that a value lacks
-    let rate = PacketRate {
-        ulpr: true,
-        uplink_time_unit: Some(Narrow::new(TimeUnit::Minute)),
-        maximum_uplink_packet_rate: Some(10),
-        ..Default::default()
-    };
-    let qer = CreateQer::new(QerId::new(1), GateStatus::default()).with_packet_rate(rate);
-    let atsss = ProvideAtsssControlInformation {
-        pmf_control_information: Some(PmfControlInformation {
-            pmfi: true,
-            ..Default::default()
-        }),
-        ..Default::default()
-    };
-    let mbs = MbsSessionN4ControlInformation::new(MbsSessionIdentifier {
-        tmgi: true,
-        tmgi_field: Some([1, 2, 3, 4, 5, 6]),
-        ..Default::default()
-    });
-    let Body::SessionEstablishmentRequest(request) = establishment().body else {
-        panic!()
-    };
-    let request = Message::session(
-        0,
-        1,
-        request
-            .with_create_qer(qer)
-            .with_provide_atsss_control_information(atsss)
-            .with_mbs_session_n4_control_information(mbs),
-    )
-    .to_tree();
-    let rate = "/pfcp/Create QER/0/Packet Rate/Downlink Time Unit";
-    nothing(&request, &format!("{rate}/Spare"));
-    nothing(&request, &format!("{rate}/value"));
-    failing(
-        &request,
-        &format!("{rate}/Bogus"),
-        tree::ErrorKind::NoSuchMember,
-    );
-    failing(
-        &request,
-        &format!("{rate}/value/Bogus"),
-        tree::ErrorKind::Scalar,
-    );
-    let qfis = "/pfcp/Provide ATSSS Control Information/PMF Control Information/value of QFI";
-    nothing(&request, &format!("{qfis}/0"));
-    nothing(&request, &format!("{qfis}/*"));
-    failing(
-        &request,
-        &format!("{qfis}/Bogus"),
-        tree::ErrorKind::NotAList,
-    );
-    failing(
-        &request,
-        &format!("{qfis}/0/Bogus"),
-        tree::ErrorKind::Scalar,
-    );
-    let ssm = "/pfcp/MBS Session N4 Control Information/0/MBS Session Identifier/Source Specific IP Multicast Address";
-    nothing(&request, &format!("{ssm}/IP Source Address/Address Type"));
-    failing(
-        &request,
-        &format!("{ssm}/IP Source Address/Bogus"),
-        tree::ErrorKind::NoSuchMember,
-    );
-    failing(
-        &request,
-        &format!("{ssm}/Bogus"),
-        tree::ErrorKind::NoSuchMember,
-    );
+    // set refuses a path below a value that the message lacks, and writes the value whole
+    let mut edited = heartbeat.clone();
+    for path in [
+        "/pfcp/Source IP Address/V4",
+        "/pfcp/Source IP Address/Bogus/V4",
+    ] {
+        let below = set(&mut edited, path, true).map_err(|error| error.kind());
+        assert_eq!(below, Err(tree::ErrorKind::NothingSelected), "{path}");
+        assert_eq!(edited, heartbeat, "{path}");
+    }
+    let address = tree!({"V4": true, "IPv4 address": "10.0.0.9"});
+    set(&mut edited, "/pfcp/Source IP Address", address).unwrap();
+    set(&mut edited, "/pfcp/Source IP Address/V6", true).unwrap();
+    let written = select(&edited, "/pfcp/Source IP Address/*").unwrap();
+    assert_eq!(written, [&tree!(true), &tree!("10.0.0.9"), &tree!(true)]);
 }
 
 /// A misspelt name of a path says what `Message::from_tree` says of it: the IE type of a
 /// row goes by the name of the row, and a name that is no IE of a table, or no member of
-/// a value, has the nearest names of the table, or the members of the value, whether the
-/// place is there or not.
+/// a value that is there, has the nearest names of the table, or the members of the
+/// value.
 #[test]
 fn a_misspelt_name_says_what_from_tree_says() {
     let qer = CreateQer::new(QerId::new(1), GateStatus::default());
-    let modification = SessionModificationRequest::default().with_create_qer(qer);
+    let pdi = Pdi::new(SourceInterface::new(SourceInterfaceValue::Core));
+    let pdr = CreatePdr::new_n4(PdrId::new(1), Precedence::new(1), pdi)
+        .with_activate_predefined_rules(ActivatePredefinedRules(b"rule".to_vec().into()));
+    let modification = SessionModificationRequest::default()
+        .with_create_qer(qer)
+        .with_create_pdr(pdr);
     let tree = Message::session(1, 1, modification).to_tree();
     let refused = |path: &str| {
         let error = select(&tree, path).unwrap_err();
@@ -724,7 +637,7 @@ fn a_misspelt_name_says_what_from_tree_says() {
     }
     for path in [
         "/pfcp/Create QER/0/Gate Status/UL Gat",
-        "/pfcp/Create QER/0/Maximum Bitrate/UL MBRR",
+        "/pfcp/Create QER/0/QER ID/Rule IDD",
     ] {
         let members = refused(path);
         assert!(
@@ -760,15 +673,17 @@ fn a_misspelt_name_says_what_from_tree_says() {
         Err(tree::ErrorKind::NoSuchMember)
     );
     assert_eq!(edited, tree);
-    // A value whose fields are always there is written whole: one of its fields alone is
-    // no value that from_tree reads.
-    set(
+    // A value that the message lacks is written whole
+    let below = set(
         &mut edited,
         "/pfcp/Create QER/0/Maximum Bitrate/UL MBR",
         5u64,
-    )
-    .unwrap();
-    assert!(read(edited).contains("the member is missing"));
+    );
+    assert_eq!(
+        below.map_err(|error| error.kind()),
+        Err(tree::ErrorKind::NothingSelected)
+    );
+    assert_eq!(edited, tree);
     let mut whole = tree.clone();
     let bitrate = tree!({"UL MBR": 5, "DL MBR": 6});
     set(&mut whole, "/pfcp/Create QER/0/Maximum Bitrate", bitrate).unwrap();
@@ -1050,10 +965,10 @@ fn a_flag_that_disagrees_is_refused_where_it_is_written() {
 }
 
 /// A field whose tree is a scalar or an object, as its value is, has one rule for each
-/// form and for its absence: a value without or with spare bits, an IPv4 or IPv6 address
-/// or another, an identity of digits or text or of other octets. The member that the
-/// scalar is selects it, as the object's; another member of the object selects nothing at
-/// the scalar and where the field is absent; another name is no member, whatever the form.
+/// form: a value without or with spare bits, an IPv4 or IPv6 address or another, an
+/// identity of digits or text or of other octets. The member that the scalar is selects
+/// it, as the object's; another member of the object selects nothing at the scalar; another
+/// name is no member, whatever the form. Where the field is absent, nothing is selected.
 #[test]
 fn a_field_of_either_form_has_one_rule() {
     let found = |tree: &tree::Value, path: &str| {
@@ -1093,29 +1008,39 @@ fn a_field_of_either_form_has_one_rule() {
         request.create_qer.push(qer.with_packet_rate(rate(None)));
     });
     let minute = tree!("minute");
-    for (unit, value, spare) in [
+    for (unit, value, spare, there) in [
         (
             "0/Packet Rate/Uplink Time Unit",
             Ok(vec![minute.clone()]),
             none.clone(),
+            true,
         ),
         (
             "0/Packet Rate/Downlink Time Unit",
             Ok(vec![minute.clone()]),
             Ok(vec![tree!(64)]),
+            true,
         ),
         (
             "1/Packet Rate/Downlink Time Unit",
             none.clone(),
             none.clone(),
+            false,
         ),
     ] {
         let unit = format!("/pfcp/Create QER/{unit}");
         assert_eq!(found(&tree, &format!("{unit}/value")), value, "{unit}");
         assert_eq!(found(&tree, &format!("{unit}/Spare")), spare, "{unit}");
-        assert_eq!(found(&tree, &format!("{unit}/Bogus")), misspelt, "{unit}");
-        let below = found(&tree, &format!("{unit}/value/Bogus"));
-        assert_eq!(below, Err(tree::ErrorKind::Scalar), "{unit}");
+        let (bogus, below) = match there {
+            true => (misspelt.clone(), Err(tree::ErrorKind::Scalar)),
+            false => (none.clone(), none.clone()),
+        };
+        assert_eq!(found(&tree, &format!("{unit}/Bogus")), bogus, "{unit}");
+        assert_eq!(
+            found(&tree, &format!("{unit}/value/Bogus")),
+            below,
+            "{unit}"
+        );
     }
     // An address of IPv4, of another type, and none
     let ssm = SsmAddress {
@@ -1175,6 +1100,10 @@ fn a_field_of_either_form_has_one_rule() {
         ),
         (&without, "IP Source Address", none.clone(), none.clone()),
     ] {
+        let bogus = match tree == &without {
+            true => none.clone(),
+            false => misspelt.clone(),
+        };
         let address = format!("{ssm}/{address}");
         assert_eq!(
             found(tree, &format!("{address}/Address")),
@@ -1186,11 +1115,7 @@ fn a_field_of_either_form_has_one_rule() {
             kind,
             "{address}"
         );
-        assert_eq!(
-            found(tree, &format!("{address}/Bogus")),
-            misspelt,
-            "{address}"
-        );
+        assert_eq!(found(tree, &format!("{address}/Bogus")), bogus, "{address}");
     }
     // An identity of digits, of text, of other octets, and none
     let user = |imsi: Option<DigitsLv8>| UserId {
@@ -1209,9 +1134,13 @@ fn a_field_of_either_form_has_one_rule() {
         (None, none.clone()),
     ] {
         let tree = request(&|request| request.user_id = Some(user(imsi.clone())));
+        let bogus = match imsi.is_some() {
+            true => misspelt.clone(),
+            false => none.clone(),
+        };
         let imsi = "/pfcp/User ID/IMSI";
         assert_eq!(found(&tree, &format!("{imsi}/octets")), octets, "{imsi:?}");
-        assert_eq!(found(&tree, &format!("{imsi}/Bogus")), misspelt, "{imsi:?}");
+        assert_eq!(found(&tree, &format!("{imsi}/Bogus")), bogus, "{imsi:?}");
         assert_eq!(found(&tree, "/pfcp/User ID/NAI/octets"), none);
         assert_eq!(found(&tree, "/pfcp/User ID/NAI/Bogus"), misspelt);
     }

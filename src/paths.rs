@@ -327,8 +327,8 @@ fn no_such_ie(table: &Table, names: &[&str], written: &str) -> String {
 }
 
 /// What the tree of a field of a value may hold below it ([`Field::BELOW`](crate::Field)),
-/// which a path is checked against at a field that a value lacks, below an entry past the
-/// end of a list, and at a field written as a scalar.
+/// which a path is checked against at a field that is there: the members that its object
+/// may have, also where its tree writes it as a scalar.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Below {
     /// Nothing: a flag, or a field whose tree is a scalar.
@@ -382,10 +382,11 @@ fn below_member(info: &IeTypeInfo, name: &str) -> &'static Below {
 /// the IEs of the message, and each segment is checked against the tables and the members
 /// of the trees of the values ([`IeTypeInfo::members`]), then the tree is walked by the
 /// plain rule. A row that a scope lacks, an IE of no row by its number or the name of its
-/// type, and a member that a value lacks, select nothing, where another name is an error,
-/// also below what is not there. A value or a field that
-/// its tree writes as a scalar has the member that the scalar is, and the others of its
-/// object, which select nothing; `set` writes the object to give one of them a value.
+/// type, and a member that a value lacks, select nothing, where another name is an error;
+/// below what is not there, nothing is selected, whatever the path names. A value or a
+/// field that its tree writes as a scalar has the member that the scalar is, and the
+/// others of its object, which select nothing; `set` writes the object to give one of them
+/// a value.
 #[derive(Debug, Clone, Copy, Default)]
 pub(crate) struct Paths;
 
@@ -481,7 +482,7 @@ impl Paths {
     /// At a value or a field that its tree writes as a scalar: the member that the scalar
     /// is selects it, another member of its object selects nothing, or, for an edit, has
     /// the scalar opened into its object, with the scalar as its member, and another name
-    /// is none.
+    /// is none, in the words of [`Message::from_tree`](crate::Message::from_tree).
     fn at_scalar<'v>(
         &self,
         place: &Place<'v, Shape>,
@@ -489,38 +490,30 @@ impl Paths {
         segment: &str,
         next: &mut Next<'v, Shape>,
     ) -> Result<Step<Shape>, tree::Error> {
-        let (is, member) = match place.shape().0 {
+        let of = place.shape().0;
+        let (is, member) = match of {
             Of::Value(info) => {
                 let known = info
                     .members
                     .iter()
                     .any(|member| tree::same_name(member, segment));
-                let member = known.then(|| Shape(Of::Below(below_member(info, segment))));
-                (info.scalar, member)
+                (info.scalar, known.then(|| below_member(info, segment)))
             }
-            Of::Below(below @ Below::Object(is, _)) => (
-                *is,
-                below.member(segment).map(|inside| Shape(Of::Below(inside))),
-            ),
+            Of::Below(below @ Below::Object(is, _)) => (*is, below.member(segment)),
             _ => return Ok(Step::Plain),
         };
-        if is.is_some_and(|is| tree::same_name(is, segment)) {
-            next.stay(place, member.unwrap_or(Shape(Of::Below(&Below::Scalar))));
-            return Ok(Step::Taken);
-        }
-        let Some(inside) = member else {
-            let reason = alloc::format!("{segment:?} is no member of this value, of either form");
+        let Some(member) = member else {
+            let reason = no_such_member(of, segment).unwrap_or_default();
             return Err(tree::Error::new(ErrorKind::NoSuchMember, "", reason));
         };
-        match next.edit() {
-            Some(Edit::Open) => {
-                let mut members = Map::new();
-                if let Some(is) = is {
-                    members.insert(is.into(), scalar.clone());
-                }
-                next.open(place, Value::Object(members));
+        if is.is_some_and(|is| tree::same_name(is, segment)) {
+            next.stay(place, Shape(Of::Below(member)));
+        } else if next.edit() == Some(Edit::Open) {
+            let mut members = Map::new();
+            if let Some(is) = is {
+                members.insert(is.into(), scalar.clone());
             }
-            _ => next.absent(segment, inside),
+            next.open(place, Value::Object(members));
         }
         Ok(Step::Taken)
     }
@@ -533,10 +526,11 @@ impl tree::Family for Paths {
         Root::new("pfcp", &["ies"], false)
     }
 
-    /// Below what is not there, a name is judged as where the value is there: a member
-    /// that it could have selects nothing, and another is refused; so is an entry past
-    /// the end of a list, and a field that a value lacks, by what its tree may hold
-    /// ([`Below`]). At a scalar, as [`Paths::at_scalar`] has it.
+    /// What is not there selects nothing, whatever the path names below it: a row or a
+    /// member that a value lacks, `null`, an entry past the end of a list. An edit has
+    /// nothing to edit there: it opens the rows and the entries on its way ([`room`]), and
+    /// writes a value that a message lacks whole. At a scalar, as [`Paths::at_scalar`] has
+    /// it.
     fn step<'v>(
         &self,
         place: &Place<'v, Shape>,
@@ -551,69 +545,37 @@ impl tree::Family for Paths {
             next.open(place, opened);
             return Ok(Step::Taken);
         }
-        // An IE of no row, by its number or the name of its type: each member that names
-        // it so, or the name that the tree prints, where `set` adds it.
-        if let Of::Ies(tables) = shape.0
-            && row_named(tables, segment).is_none()
-            && let Some(ie_type) = of_no_row(tables, segment)
-        {
-            let members = place
-                .value()
-                .and_then(Value::as_object)
-                .into_iter()
-                .flatten();
-            let mut found = false;
-            for (written, value) in members {
-                if row_named(tables, written).is_none()
-                    && of_no_row(tables, written) == Some(ie_type)
-                {
-                    next.member(written, value, Shape(of_kept(Some(value))));
-                    found = true;
+        let Some(value) = place.value().filter(|value| !value.is_null()) else {
+            if next.edit() != Some(Edit::Set) {
+                return Ok(Step::Taken);
+            }
+            let reason = "the path goes on below what the tree does not have: a value that a \
+                          message lacks is written whole";
+            return Err(tree::Error::new(ErrorKind::NothingSelected, "", reason));
+        };
+        match shape.0 {
+            // An IE of no row, by its number or the name of its type: each member that
+            // names it so, or the name that the tree prints, where `set` adds it.
+            Of::Ies(tables) if row_named(tables, segment).is_none() => {
+                let Some(ie_type) = of_no_row(tables, segment) else {
+                    return Ok(Step::Plain);
+                };
+                let mut found = false;
+                for (written, value) in value.as_object().into_iter().flatten() {
+                    if row_named(tables, written).is_none()
+                        && of_no_row(tables, written) == Some(ie_type)
+                    {
+                        next.member(written, value, Shape(of_kept(Some(value))));
+                        found = true;
+                    }
                 }
-            }
-            if !found {
-                let name = crate::tree_name(ie_type, tables.first().copied());
-                next.absent(&name, Shape(of_kept(None)));
-            }
-            return Ok(Step::Taken);
-        }
-        // What is null is not there.
-        match (place.value().filter(|value| !value.is_null()), shape.0) {
-            (_, Of::Nothing) => Ok(Step::Plain),
-            // An entry of a list that is not there, or past the end of one, which has the
-            // members of one.
-            (None, _) if list && (segment == "*" || tree::position(segment).is_some()) => {
-                next.absent(segment, self.entry(shape, None));
+                if !found {
+                    let name = crate::tree_name(ie_type, tables.first().copied());
+                    next.absent(&name, Shape(Of::Nothing));
+                }
                 Ok(Step::Taken)
             }
-            (Some(Value::Array(entries)), _)
-                if list && tree::position(segment).is_some_and(|at| at >= entries.len()) =>
-            {
-                next.absent(segment, self.entry(shape, None));
-                Ok(Step::Taken)
-            }
-            (None, _) if list => {
-                let reason = alloc::format!("{segment:?} is no position in a list");
-                Err(tree::Error::new(ErrorKind::NotAList, "", reason))
-            }
-            // A field that is not there, whose tree is a scalar, has nothing below it.
-            (None, Of::Below(Below::Scalar)) => {
-                let reason = alloc::format!("{segment:?} is no member of a field, which has none");
-                Err(tree::Error::new(ErrorKind::Scalar, "", reason))
-            }
-            (None, _) if segment == "*" => Ok(Step::Plain),
-            (None, _) => match self.absent(shape, segment) {
-                Absent::Optional(inside) => {
-                    next.absent(segment, inside);
-                    Ok(Step::Taken)
-                }
-                Absent::Refused(error) => Err(error),
-                _ => {
-                    let reason = alloc::format!("{segment:?} is no member of what is not there");
-                    Err(tree::Error::new(ErrorKind::NoSuchMember, "", reason))
-                }
-            },
-            (Some(value), _) if !value.is_object() && !value.is_array() => {
+            _ if !value.is_object() && !value.is_array() => {
                 self.at_scalar(place, value, segment, next)
             }
             _ => Ok(Step::Plain),
@@ -725,36 +687,43 @@ fn no_such_member(of: Of, name: &str) -> Option<String> {
 }
 
 /// What an edit opens at a place so that `segment` goes into it: a list with one more
-/// entry, `null`, for the position of its length, and a message without IEs, or an object
-/// of IEs without the list or the grouped IE of the row, with them empty. `None` where the
-/// place has what the segment names, or is not there to open, as its holder is opened
-/// first.
+/// entry for the position of its length, empty, and a message without IEs, or an object
+/// of IEs without the list or the grouped IE of the row, or with it `null`, with them
+/// empty. `None` where the place has what the segment names, or is not there to open, as
+/// its holder is opened first.
 fn room(value: Option<&Value>, of: Of, list: bool, segment: &str) -> Option<Value> {
+    let lacks = |members: &Map, name: &str| {
+        tree::member(members, name).is_none_or(|(_, held)| held.is_null())
+    };
     match (value?, of) {
         (Value::Array(entries), _) if list && tree::position(segment) == Some(entries.len()) => {
+            // An IE is an object that the edit fills; a field, a value that it writes.
+            let entry = match of {
+                Of::List(_) => Value::Object(Map::new()),
+                _ => Value::Null,
+            };
             let mut grown = entries.clone();
-            grown.push(Value::Null);
+            grown.push(entry);
             Some(Value::Array(grown))
         }
         (Value::Object(members), Of::Message(_))
-            if tree::same_name(segment, "ies") && tree::member(members, "ies").is_none() =>
+            if tree::same_name(segment, "ies") && lacks(members, "ies") =>
         {
+            let name = tree::member(members, "ies").map_or("ies", |(name, _)| name);
             let mut members = members.clone();
-            members.insert("ies".into(), Value::Object(Map::new()));
+            members.insert(name.into(), Value::Object(Map::new()));
             Some(Value::Object(members))
         }
-        (Value::Null | Value::Object(_), Of::Ies(tables)) => {
+        (Value::Object(members), Of::Ies(tables)) if lacks(members, segment) => {
             let row = row_named(tables, segment)?;
             let empty = match (row.repeat, ie_type_info(row.ie_type)?.form) {
                 (Repeat::Once, Form::Grouped) => Value::Object(Map::new()),
                 (Repeat::Once, _) => return None,
                 _ => Value::Array(Vec::new()),
             };
-            let mut members = value?.as_object().cloned().unwrap_or_default();
-            if tree::member(&members, segment).is_some() {
-                return None;
-            }
-            members.insert(row.name.into(), empty);
+            let name = tree::member(members, segment).map_or(row.name, |(name, _)| name);
+            let mut members = members.clone();
+            members.insert(name.into(), empty);
             Some(Value::Object(members))
         }
         _ => None,
@@ -765,9 +734,10 @@ fn room(value: Option<&Value>, of: Of, list: bool, segment: &str) -> Option<Valu
 /// grouped IE lacks, an IE of no row by its number or the name of its type, as
 /// [`Message::from_tree`](crate::Message::from_tree) reads it, and a member that a value
 /// or the header lacks of those that its tree may have, select nothing; a name that is
-/// none of them is an error, also below what is not there, and an entry past the end of a
-/// list selects nothing. A value or a field whose tree is a scalar or an object takes the
-/// same names in either form.
+/// none of them is an error. Below what is not there, and below an entry past the end of
+/// a list, nothing is selected, whatever the path names: a misspelt name there is not
+/// told. A value or a field whose tree is a scalar or an object takes the same names in
+/// either form.
 ///
 /// # Errors
 ///
@@ -778,21 +748,23 @@ pub fn select<'v>(tree: &'v Value, path: &str) -> Result<Vec<&'v Value>, tree::E
     tree::select_in(&Paths, tree, path)
 }
 
-/// Give the place at `path` the value `value`: a path that [`select`] takes, with what it
-/// lacks added, an entry of a list at the position of its length too. A member of the
-/// object of a value or a field that the tree writes as a scalar writes the object, with
-/// the scalar as its member if it is one: `{"value": "minute", "Spare": 8}` from
-/// `"minute"`. The tree is left as it was when the edit fails.
+/// Give the place at `path` the value `value`: a path that [`select`] takes, with the rows
+/// of grouped IEs and the lists that it lacks on the way added, an entry of a list at the
+/// position of its length too. A member of the object of a value or a field that the tree
+/// writes as a scalar writes the object, with the scalar as its member if it is one:
+/// `{"value": "minute", "Spare": 8}` from `"minute"`. The tree is left as it was when the
+/// edit fails.
 ///
-/// `set` checks the names of the path, and not the value, which
-/// [`Message::from_tree`](crate::Message::from_tree) reads: a value that a message lacks,
-/// whose fields are always there, is written whole, as one of its fields alone is no
-/// value (`set(&mut tree, ".../Maximum Bitrate", tree!({"UL MBR": 5, "DL MBR": 6}))`).
+/// A value that a message lacks is written whole: a path below it is refused
+/// (`set(&mut tree, ".../Maximum Bitrate", tree!({"UL MBR": 5, "DL MBR": 6}))`). `set`
+/// checks the names of the path, and not the value, which
+/// [`Message::from_tree`](crate::Message::from_tree) reads.
 ///
 /// # Errors
 ///
 /// Those of `oxirush_utils::tree::set_in`: `NoSuchMember` for a name that [`select`]
-/// refuses, the last of the path too.
+/// refuses, the last of the path too, and `NothingSelected` for a path below what the tree
+/// does not have.
 pub fn set(tree: &mut Value, path: &str, value: impl Into<Value>) -> Result<(), tree::Error> {
     let mut edited = tree.clone();
     tree::open_in(&Paths, &mut edited, path)?;

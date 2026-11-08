@@ -16,7 +16,9 @@ The first version, of TS 29.244 V19.6.0 (2026-06):
   them, and `None` where it is not: its IEs have no Cause there (§7.6.9).
 - With `tree`, a message as a tree that prints as JSON, on oxirush-utils 0.2, whose
   `tree` the crate exports at its root, and read and edited by path (`paths::select`,
-  `paths::set`); with `serde`, serialized as its tree. A tree writes each field that
+  `paths::set`); with `serde`, serialized as its tree. What a message lacks selects
+  nothing, whatever the path names below it: a misspelt name below a value or a field
+  that is not there is not told, and `set` writes a value that a message lacks whole. A tree writes each field that
   its value always has; it leaves out a flag that is not set and a field that its flags
   do not have.
 - With `node`, `Node`, a PFCP entity without I/O: delivery and retransmission (§6.4),
