@@ -430,12 +430,11 @@ pub(super) fn timer(timer: &Timer) -> Option<Duration> {
     let value = u64::from(timer.timer_value);
     let unit = match timer.timer_unit.effective() {
         TimerUnit::TwoSeconds => 2,
-        TimerUnit::OneMinute => 60,
         TimerUnit::TenMinutes => 600,
         TimerUnit::OneHour => 3600,
         TimerUnit::TenHours => 36_000,
         TimerUnit::Infinite => return None,
-        // effective() reads the others as minutes (Table 8.2.35.1).
+        // One minute, as effective() reads the others too (Table 8.2.35.1).
         _ => 60,
     };
     Some(Duration::from_secs(value * unit))

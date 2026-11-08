@@ -239,6 +239,68 @@ fn overload_control_reset_on_peer_restart() {
     );
 }
 
+/// §6.2.4.3.2: the overload of a peer that restarted starts again, and that of another
+/// peer stays.
+#[test]
+fn a_restart_ends_the_overload_of_its_peer_alone() {
+    let (mut smf, mut upf) = associated(at(0));
+    let (cp_seid, _) = established(&mut smf, &mut upf, at(0));
+    modified(
+        &mut smf,
+        &mut upf,
+        cp_seid,
+        at(1),
+        with_overload(500, 20, 10, false),
+    );
+    // Another UPF, associated, which answers an establishment with its overload
+    let mut other = node(OTHER, Function::Up);
+    let to_other = |smf: &mut Node, other: &mut Node, now| {
+        for transmit in sent(smf) {
+            other.handle_datagram(now, SMF, &transmit.octets);
+        }
+    };
+    let setup = AssociationSetupRequest::new(node_id(SMF), RecoveryTimeStamp::new(1000));
+    smf.request(at(1), OTHER, Message::node(0, setup)).unwrap();
+    to_other(&mut smf, &mut other, at(1));
+    let (received, _) = request(&mut other);
+    let answer =
+        AssociationSetupResponse::new(node_id(OTHER), accepted(), RecoveryTimeStamp::new(4000));
+    other.respond(at(1), &received, answer).unwrap();
+    for transmit in sent(&mut other) {
+        smf.handle_datagram(at(1), OTHER, &transmit.octets);
+    }
+    let cp_seid = smf.new_session();
+    smf.request(at(1), OTHER, establishment(cp_seid)).unwrap();
+    to_other(&mut smf, &mut other, at(1));
+    let (received, _) = request(&mut other);
+    let overload = OverloadControlInformation::new(
+        SequenceNumber::new(1),
+        Metric::new(Percent(30)),
+        Timer {
+            timer_unit: TimerUnit::OneMinute,
+            timer_value: 10,
+            ..Default::default()
+        },
+    );
+    let f_seid = FSeid::ipv4(other.new_session(), Ipv4Addr::new(10, 0, 0, 3));
+    let answer = SessionEstablishmentResponse::new(node_id(OTHER), accepted())
+        .with_up_f_seid(f_seid)
+        .with_overload_control_information(overload);
+    other.respond(at(1), &received, answer).unwrap();
+    for transmit in sent(&mut other) {
+        smf.handle_datagram(at(1), OTHER, &transmit.octets);
+    }
+    assert!(smf.overload_control(OTHER).is_some() && smf.overload_control(UPF).is_some());
+    // The UPF restarts
+    let restarted = Message::node(9, HeartbeatRequest::new(RecoveryTimeStamp::new(3000)));
+    smf.handle_datagram(at(2), UPF, &restarted.encode().unwrap());
+    assert_eq!(smf.overload_control(UPF), None);
+    assert_eq!(
+        smf.overload_control(OTHER).map(|overload| overload.metric),
+        Some(30)
+    );
+}
+
 #[test]
 fn overload_control_sequence_violation() {
     let (mut smf, mut upf) = associated(at(0));

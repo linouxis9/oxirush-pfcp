@@ -449,6 +449,20 @@ fn a_move_of_no_session_frees_its_new_seid() {
 /// Table 7.5.4.1-1 NOTE 2: after a change of its CP F-SEID, the CP function takes the
 /// session messages of the UP function to the previous SEID for longer than twice N1 x
 /// T1, as of the session.
+/// The previous SEID of a moved session is in use while the node keeps it, and no session
+/// is adopted at it (§5.22.2).
+#[test]
+fn no_session_is_adopted_at_the_previous_seid_of_a_move() {
+    let (mut smf, mut upf) = associated(at(0));
+    let (cp_seid, up_seid) = established(&mut smf, &mut upf, at(0));
+    move_session(&mut smf, &mut upf, cp_seid, 0x77, at(1));
+    assert!(smf.session(cp_seid).is_none());
+    assert_eq!(
+        smf.adopt_session(cp_seid, UPF, up_seid + 1),
+        Err(NodeError::SeidInUse)
+    );
+}
+
 #[test]
 fn the_previous_seid_of_a_moved_session() {
     let (mut smf, mut upf) = associated(at(0));

@@ -971,10 +971,11 @@ mod tests {
     use super::*;
 
     /// A name is written in a path as oxirush-utils' paths read it: `~0` for `~`, `~1` for
-    /// `/`, the name of each row and of each IE type among them.
+    /// `/`, the name of each row and of each IE type among them; within 10 s, as the writing
+    /// steps over each `~` and `/`.
     #[test]
     fn a_name_is_a_segment_of_a_path() {
-        let segment = |name: &str| format!("{}", Segment(name));
+        let segment = |name: &'static str| crate::ends(move || format!("{}", Segment(name)));
         assert_eq!(segment("APN/DNN"), "APN~1DNN");
         assert_eq!(segment("a~/b/"), "a~0~1b~1");
         #[cfg(feature = "tree")]

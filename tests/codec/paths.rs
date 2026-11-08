@@ -638,6 +638,13 @@ fn an_error_of_from_tree_is_at_a_path_that_select_takes() {
             "a number",
         ),
         (
+            modification(
+                tree!({"Cause": 1, "Created/Updated Traffic Endpoint": [{"Traffic Endpoint ID": 1}, {"traffic endpoint id": "x"}]}),
+            ),
+            "/pfcp/Created~1Updated Traffic Endpoint/1/traffic endpoint id",
+            "a number",
+        ),
+        (
             tree!({"message": "PFCP Session Establishment Response", "SEID": 1, "Sequence Number": 1,
                 "ies": {"Node ID": "10.0.0.2", "Cause": 1, "UP F-SEID": {"V4": true, "SEIDD": 1}}}),
             "/pfcp/UP F-SEID",
@@ -1164,4 +1171,20 @@ fn a_path_is_at_the_row_of_its_ie() {
     assert_eq!(at("/pfcp/Load Control Information/Sequence Number"), None);
     assert_eq!(at("/pfcp/Create PDR/7/PDI"), None);
     assert!(oxirush_pfcp::paths::row_at(&tree, "/pfcp/Bogus").is_err());
+}
+
+/// A row whose name is also that of another IE type, as the Packet Rate Status Report of
+/// a Session Modification Response, of type 264 where type 252 has the name (Table
+/// 8.1.2-1), is the row in a path; the IE of type 252, of no row there, goes by its
+/// number.
+#[test]
+fn a_row_of_the_name_of_another_ie_type_is_the_row() {
+    let tree = tree!({"message": "PFCP Session Modification Response", "SEID": 1, "Sequence Number": 1,
+        "ies": {"Cause": 1, "Packet Rate Status Report": [{"QER ID": 1, "Packet Rate Status": {}}], "252": {"octets": "01"}}});
+    let reports = select(&tree, "/pfcp/Packet Rate Status Report/0/QER ID").unwrap();
+    assert_eq!(reports, [&tree!(1)]);
+    assert_eq!(
+        select(&tree, "/pfcp/252").unwrap(),
+        [&tree!({"octets": "01"})]
+    );
 }

@@ -709,7 +709,8 @@ mod tests {
     use super::*;
 
     /// A message read in another order than its table's keeps that order, and one of an IE
-    /// of a row kept as octets has it after the values of its row: each is written once.
+    /// of a row kept as octets has it after the values of its row: each is written once,
+    /// and a value added after those of its row.
     #[test]
     fn a_message_in_the_order_of_the_wire_or_of_its_rows_is_written_once() {
         use crate::{HeartbeatRequest, Message, RawIe, RecoveryTimeStamp};
@@ -724,7 +725,22 @@ mod tests {
         let written = crate::ends(move || {
             [Message::node(5, kept), read].map(|message| message.encode().unwrap())
         });
-        assert_eq!(written, [of_rows, wire]);
+        assert_eq!(written, [of_rows, wire.clone()]);
+        // A value added to a message of its own order goes after the IEs of that order
+        let unknown = [11, 184, 0, 1, 7];
+        let header = [0x20, 1, 0, 17, 0, 0, 5, 0];
+        let mut added = Message::decode(&[&header[..], &unknown, &stamp].concat()).unwrap();
+        let crate::Body::HeartbeatRequest(request) = &mut added.body else {
+            panic!()
+        };
+        request.source_ip_address = Some(crate::SourceIpAddress {
+            v4: true,
+            ipv4_address: Some(core::net::Ipv4Addr::new(10, 0, 0, 1)),
+            ..Default::default()
+        });
+        let written = crate::ends(move || added.encode().unwrap());
+        let header = [0x20, 1, 0, 26, 0, 0, 5, 0];
+        assert_eq!(written, [&header[..], &unknown, &stamp, &source].concat());
     }
 
     /// A field that rows share is, on an interface, of the weakest presence of its rows
