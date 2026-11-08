@@ -759,17 +759,14 @@ pub fn set(tree: &mut Value, path: &str, value: impl Into<Value>) -> Result<(), 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Header, HeartbeatRequest, Message, RecoveryTimeStamp};
+    use crate::{HeartbeatRequest, Message, RecoveryTimeStamp};
     use oxirush_utils::tree::Family;
 
     /// What the paths know of a place prints the names of the message, of the tables and
     /// of the IE types, not their rows.
     #[test]
     fn a_shape_prints_its_names() {
-        let heartbeat = Message {
-            header: Header::node(1),
-            body: HeartbeatRequest::new(RecoveryTimeStamp::new(7)).into(),
-        };
+        let heartbeat = Message::node(1, HeartbeatRequest::new(RecoveryTimeStamp::new(7)));
         let heartbeat = heartbeat.to_tree();
         let message = Paths.start(&heartbeat, true);
         assert_eq!(

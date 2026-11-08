@@ -110,7 +110,7 @@ fn block_1() {
         let far = CreateFar::new(FarId::new(1), ApplyAction { forw: true, ..Default::default() }).with_forwarding_parameters(core);
         let cp_f_seid = FSeid { v4: true, seid: Some(0x1001), ipv4: Some(smf), ..Default::default() };
         let request = SessionEstablishmentRequest::new_n4(NodeId::Ipv4(smf), cp_f_seid, pdr, far);
-        let octets = Message { header: Header::session(0, 7), body: request.into() }.encode()?;
+        let octets = Message::session(0, 7, request).encode()?;
         println!("{}", hex::encode(&octets));
 
         // The UPF decodes it, and reads its IEs as typed fields
@@ -151,7 +151,7 @@ fn block_2() {
 
         // The SMF sets up an association: the node numbers the request, and arms T1
         let setup = AssociationSetupRequest::new(smf_id, RecoveryTimeStamp::new(3_900_000_000));
-        smf.request(now, upf_address, Message { header: Header::node(0), body: setup.into() })?;
+        smf.request(now, upf_address, Message::node(0, setup))?;
         let datagram = smf.poll_transmit().ok_or("nothing to send")?;
         println!("to {}: {} octets, again at {:?}", datagram.to, datagram.octets.len(), smf.poll_timeout());
 
@@ -200,7 +200,7 @@ fn block_3() {
 
             // The UPF's node answers a heartbeat itself
             let heartbeat = HeartbeatRequest::new(RecoveryTimeStamp::new(3_900_000_000));
-            let message = Message { header: Header::node(0), body: heartbeat.into() };
+            let message = Message::node(0, heartbeat);
             let response = smf.handle().request(upf.handle().local_addr(), message).await?;
             println!("{response}");
             Ok(())
@@ -245,7 +245,7 @@ fn block_5() {
             .with_create_pdr(pdr.clone())
             .with_remove_pdr(RemovePdr::new(PdrId::new(3)));
         pdr.pdr_id = None;
-        let request = Message { header: Header::session(0x2001, 8), body: modification.with_create_pdr(pdr).into() };
+        let request = Message::session(0x2001, 8, modification.with_create_pdr(pdr));
         for deviation in request.check(Interfaces::N4) {
             println!("{deviation}");
         }
@@ -257,7 +257,7 @@ fn block_5() {
             offending_ie: deviation.offending_ie().map(OffendingIe::new),
             ..Default::default()
         };
-        let answer = Message { header: Header::session(0x1001, request.header.sequence), body: response.into() };
+        let answer = Message::session(0x1001, request.header.sequence, response);
         println!("{answer}: {}", hex::encode(answer.encode()?));
         println!("{} deviations in the answer", answer.check(Interfaces::N4).len());
         Ok(())

@@ -88,15 +88,9 @@ async fn an_smf_and_a_upf_set_up_an_association_and_a_session() {
     // the test, and does not hang it.
     let setup =
         AssociationSetupRequest::new(NodeId::Ipv4(Ipv4Addr::LOCALHOST), RecoveryTimeStamp::new(7));
-    let response = within(smf.request(
-        upf_address,
-        Message {
-            header: Header::node(0),
-            body: setup.into(),
-        },
-    ))
-    .await
-    .unwrap();
+    let response = within(smf.request(upf_address, Message::node(0, setup)))
+        .await
+        .unwrap();
     assert_eq!(response.body.cause(), Some(CauseValue::RequestAccepted));
 
     let seid = smf.with(|node, _| node.new_session()).await.unwrap();
@@ -120,15 +114,9 @@ async fn an_smf_and_a_upf_set_up_an_association_and_a_session() {
     );
     let request =
         SessionEstablishmentRequest::new_n4(NodeId::Ipv4(Ipv4Addr::LOCALHOST), f_seid, pdr, far);
-    let response = within(smf.request(
-        upf_address,
-        Message {
-            header: Header::session(0, 0),
-            body: request.into(),
-        },
-    ))
-    .await
-    .unwrap();
+    let response = within(smf.request(upf_address, Message::session(0, 0, request)))
+        .await
+        .unwrap();
     assert_eq!(response.header.seid, Some(seid), "to the SMF's SEID");
     let upf = within(answering).await.unwrap();
     assert_eq!(upf.handle().statistics().incoming_dropped, 0);
@@ -189,13 +177,7 @@ async fn both_ways_at_once() {
     let node_id = NodeId::Ipv4(Ipv4Addr::LOCALHOST);
     let (smf_handle, upf_handle) = (smf.handle(), upf.handle());
     let setup = AssociationSetupRequest::new(node_id.clone(), RecoveryTimeStamp::new(7));
-    let setup = smf_handle.request(
-        upf_address,
-        Message {
-            header: Header::node(0),
-            body: setup.into(),
-        },
-    );
+    let setup = smf_handle.request(upf_address, Message::node(0, setup));
     tokio::pin!(setup);
     loop {
         tokio::select! {
@@ -214,13 +196,7 @@ async fn both_ways_at_once() {
             ..Default::default()
         },
     );
-    let report = upf_handle.request(
-        smf_address,
-        Message {
-            header: Header::node(0),
-            body: report.into(),
-        },
-    );
+    let report = upf_handle.request(smf_address, Message::node(0, report));
     let seid = smf_handle.with(|node, _| node.new_session()).await.unwrap();
     let f_seid = FSeid {
         v4: true,
@@ -242,10 +218,11 @@ async fn both_ways_at_once() {
     );
     let establishment = smf_handle.request(
         upf_address,
-        Message {
-            header: Header::session(0, 0),
-            body: SessionEstablishmentRequest::new_n4(node_id, f_seid, pdr, far).into(),
-        },
+        Message::session(
+            0,
+            0,
+            SessionEstablishmentRequest::new_n4(node_id, f_seid, pdr, far),
+        ),
     );
     tokio::pin!(report, establishment);
     let (mut reported, mut established) = (false, false);
@@ -317,15 +294,14 @@ async fn a_probe_answers_twice() {
         .await
         .unwrap();
     let mut incoming = upf.incoming().await.unwrap();
-    let answer = Message {
-        header: Header::node(4),
-        body: AssociationSetupResponse::new(
+    let answer = Message::node(
+        4,
+        AssociationSetupResponse::new(
             NodeId::Ipv4(Ipv4Addr::LOCALHOST),
             accepted(),
             RecoveryTimeStamp::new(7),
-        )
-        .into(),
-    };
+        ),
+    );
     for _ in 0..2 {
         incoming
             .respond_message(answer.clone(), Delivery::Send)
@@ -347,10 +323,7 @@ async fn a_request_without_an_answer_times_out_after_n1() {
     let smf = smf_endpoint.handle();
     // A socket that takes the datagrams and answers none
     let silent = tokio::net::UdpSocket::bind(ANY).await.unwrap();
-    let heartbeat = Message {
-        header: Header::node(0),
-        body: HeartbeatRequest::new(RecoveryTimeStamp::new(7)).into(),
-    };
+    let heartbeat = Message::node(0, HeartbeatRequest::new(RecoveryTimeStamp::new(7)));
     // Within its bound: a node whose timer does not run fails the test, and does not hang it.
     let result = within(smf.request(silent.local_addr().unwrap(), heartbeat)).await;
     assert_eq!(result, Err(EndpointError::Failed(Failure::Timeout)));
@@ -408,10 +381,7 @@ async fn an_endpoint_of_both_families_reaches_an_ipv4_peer() {
 }
 
 fn heartbeat() -> Message {
-    Message {
-        header: Header::node(0),
-        body: HeartbeatRequest::new(RecoveryTimeStamp::new(7)).into(),
-    }
+    Message::node(0, HeartbeatRequest::new(RecoveryTimeStamp::new(7)))
 }
 
 /// A request that the caller sends through `Handle::with`, at the node's time, which the
@@ -428,10 +398,7 @@ async fn the_events_of_a_request_sent_with_the_node() {
         (upf.handle().local_addr(), true),
         (silent.local_addr().unwrap(), false),
     ] {
-        let heartbeat = Message {
-            header: Header::node(0),
-            body: HeartbeatRequest::new(RecoveryTimeStamp::new(7)).into(),
-        };
+        let heartbeat = Message::node(0, HeartbeatRequest::new(RecoveryTimeStamp::new(7)));
         let handle = smf.handle();
         let sent = handle.with(move |node, now| node.request(now, to, heartbeat));
         let sent = sent.await.unwrap().unwrap();
@@ -456,12 +423,7 @@ async fn the_events_of_a_request_sent_with_the_node() {
 fn setup(sequence: u32) -> Vec<u8> {
     let request =
         AssociationSetupRequest::new(NodeId::Ipv4(Ipv4Addr::LOCALHOST), RecoveryTimeStamp::new(1));
-    Message {
-        header: Header::node(sequence),
-        body: request.into(),
-    }
-    .encode()
-    .unwrap()
+    Message::node(sequence, request).encode().unwrap()
 }
 
 /// An Association Setup Request of `pools` UE IP address Pool Informations, each of one
@@ -472,12 +434,7 @@ fn setup_of_pools(sequence: u32, pools: usize) -> Vec<u8> {
     request
         .raw
         .extend((0..pools).map(|_| RawIe::new(233, [0, 177, 0, 0])));
-    Message {
-        header: Header::node(sequence),
-        body: request.into(),
-    }
-    .encode()
-    .unwrap()
+    Message::node(sequence, request).encode().unwrap()
 }
 
 /// The incoming queue holds requests up to the octets that they take decoded, as well as
@@ -757,30 +714,15 @@ async fn a_heartbeat_of_never() {
     });
     let request =
         AssociationSetupRequest::new(NodeId::Ipv4(Ipv4Addr::LOCALHOST), RecoveryTimeStamp::new(7));
-    smf.request(
-        upf_address,
-        Message {
-            header: Header::node(0),
-            body: request.clone().into(),
-        },
-    )
-    .await
-    .unwrap();
+    smf.request(upf_address, Message::node(0, request.clone()))
+        .await
+        .unwrap();
     tokio::time::sleep(Duration::from_millis(50)).await;
-    let heartbeat = Message {
-        header: Header::node(0),
-        body: HeartbeatRequest::new(RecoveryTimeStamp::new(7)).into(),
-    };
+    let heartbeat = Message::node(0, HeartbeatRequest::new(RecoveryTimeStamp::new(7)));
     assert!(smf.request(upf_address, heartbeat).await.is_ok());
-    smf.request(
-        upf_address,
-        Message {
-            header: Header::node(0),
-            body: request.into(),
-        },
-    )
-    .await
-    .unwrap();
+    smf.request(upf_address, Message::node(0, request))
+        .await
+        .unwrap();
     answering.await.unwrap();
 }
 
@@ -790,10 +732,7 @@ async fn a_dropped_request_is_cancelled() {
     let smf_endpoint = Endpoint::bind(ANY, config(Function::Cp)).await.unwrap();
     let smf = smf_endpoint.handle();
     let silent = tokio::net::UdpSocket::bind(ANY).await.unwrap();
-    let heartbeat = Message {
-        header: Header::node(0),
-        body: HeartbeatRequest::new(RecoveryTimeStamp::new(7)).into(),
-    };
+    let heartbeat = Message::node(0, HeartbeatRequest::new(RecoveryTimeStamp::new(7)));
     let _ = tokio::time::timeout(
         Duration::from_millis(10),
         smf.request(silent.local_addr().unwrap(), heartbeat),
@@ -816,10 +755,7 @@ async fn a_request_dropped_before_the_task_takes_it_is_cancelled() {
     let smf_endpoint = Endpoint::bind(ANY, config(Function::Cp)).await.unwrap();
     let smf = smf_endpoint.handle();
     let silent = tokio::net::UdpSocket::bind(ANY).await.unwrap();
-    let heartbeat = Message {
-        header: Header::node(0),
-        body: HeartbeatRequest::new(RecoveryTimeStamp::new(7)).into(),
-    };
+    let heartbeat = Message::node(0, HeartbeatRequest::new(RecoveryTimeStamp::new(7)));
     let mut buffer = [0; 64];
     for _ in 0..20 {
         assert!(
@@ -892,12 +828,7 @@ async fn an_entity_of_the_smf_takes_a_session_over() {
     let report = |seid, sequence, report_type, old: Option<FSeid>| {
         let mut report = SessionReportRequest::new(report_type);
         report.old_cp_f_seid = old;
-        Message {
-            header: Header::session(seid, sequence),
-            body: report.into(),
-        }
-        .encode()
-        .unwrap()
+        Message::session(seid, sequence, report).encode().unwrap()
     };
     let old = FSeid {
         v4: true,
@@ -965,10 +896,11 @@ async fn an_entity_of_the_smf_takes_a_session_over() {
     let request = Message::decode(&buffer[..length]).unwrap();
     assert!(matches!(request.body, Body::SessionModificationRequest(_)));
     assert_eq!(request.header.seid, Some(0x66));
-    let response = Message {
-        header: Header::session(local, request.header.sequence),
-        body: SessionModificationResponse::new(accepted()).into(),
-    };
+    let response = Message::session(
+        local,
+        request.header.sequence,
+        SessionModificationResponse::new(accepted()),
+    );
     upf.send_to(&response.encode().unwrap(), smf.handle().local_addr())
         .await
         .unwrap();

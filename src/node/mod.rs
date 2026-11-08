@@ -763,10 +763,7 @@ impl Node {
             if !self.beating.contains(&peer) {
                 let request =
                     HeartbeatRequest::new(RecoveryTimeStamp::new(self.config.recovery_time_stamp));
-                let message = Message {
-                    header: Header::node(0),
-                    body: request.into(),
-                };
+                let message = Message::node(0, request);
                 let heartbeat = Pending {
                     heartbeat: true,
                     ..Pending::default()

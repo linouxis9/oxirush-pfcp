@@ -68,10 +68,7 @@ fn establishment() -> Message {
         ),
     )
     .with_create_pdr(downlink);
-    Message {
-        header: Header::session(0, 7),
-        body: request.into(),
-    }
+    Message::session(0, 7, request)
 }
 
 #[test]
@@ -103,10 +100,7 @@ fn a_kept_ie_of_a_row_is_with_its_row() {
     );
     response.raw.push(RawIe::new(60, vec![0, 10, 0, 0, 2]));
     response.raw.push(RawIe::new(96, vec![0, 0, 0, 7]));
-    let message = Message {
-        header: Header::node(2),
-        body: response.into(),
-    };
+    let message = Message::node(2, response);
     let octets = message.encode().unwrap();
     let ies = "003c0005000a000001003c0005000a00000200130001010060000400000007";
     assert_eq!(hex::encode(&octets), format!("200a002300000200{ies}"));
@@ -173,10 +167,7 @@ fn what_a_message_lacks_selects_nothing() {
         let kind = select(tree, path).map_err(|error| error.kind());
         assert_eq!(kind, Err(tree::ErrorKind::NoSuchMember), "{path}");
     };
-    let heartbeat = Message {
-        header: Header::node(1),
-        body: HeartbeatRequest::new(RecoveryTimeStamp::new(7)).into(),
-    };
+    let heartbeat = Message::node(1, HeartbeatRequest::new(RecoveryTimeStamp::new(7)));
     let heartbeat = heartbeat.to_tree();
     nothing(&heartbeat, "/pfcp/Source IP Address");
     nothing(&heartbeat, "/pfcp/source-ip-address/IPv4 address");
@@ -311,11 +302,10 @@ fn what_a_value_lacks_selects_nothing() {
     misspelt(&response, "/pfcp/Node ID/Node ID value");
     misspelt(&response, "/pfcp/Node ID/Node ID Type");
     let name = b"\x03upf\x07example".to_vec();
-    let setup = Message {
-        header: Header::node(1),
-        body: AssociationSetupRequest::new(NodeId::Fqdn(name.into()), RecoveryTimeStamp::new(7))
-            .into(),
-    };
+    let setup = Message::node(
+        1,
+        AssociationSetupRequest::new(NodeId::Fqdn(name.into()), RecoveryTimeStamp::new(7)),
+    );
     let setup = setup.to_tree();
     let fqdn = select(&setup, "/pfcp/Node ID/FQDN").unwrap();
     assert_eq!(fqdn, [&tree!("upf.example")]);
@@ -325,10 +315,7 @@ fn what_a_value_lacks_selects_nothing() {
     // The header
     nothing(&response, "/Message Priority");
     nothing(&response, "/FO");
-    let heartbeat = Message {
-        header: Header::node(1),
-        body: HeartbeatRequest::new(RecoveryTimeStamp::new(7)).into(),
-    };
+    let heartbeat = Message::node(1, HeartbeatRequest::new(RecoveryTimeStamp::new(7)));
     let heartbeat = heartbeat.to_tree();
     nothing(&heartbeat, "/SEID");
     nothing(&heartbeat, "/Spare");
@@ -364,18 +351,13 @@ fn set_takes_the_paths_that_select_takes() {
         ..Default::default()
     };
     let qer = CreateQer::new(QerId::new(1), GateStatus::default()).with_packet_rate(rate);
-    let modification = Message {
-        header: Header::session(1, 1),
-        body: SessionModificationRequest::default()
-            .with_create_qer(qer)
-            .into(),
-    }
+    let modification = Message::session(
+        1,
+        1,
+        SessionModificationRequest::default().with_create_qer(qer),
+    )
     .to_tree();
-    let heartbeat = Message {
-        header: Header::node(1),
-        body: HeartbeatRequest::new(RecoveryTimeStamp::new(7)).into(),
-    }
-    .to_tree();
+    let heartbeat = Message::node(1, HeartbeatRequest::new(RecoveryTimeStamp::new(7))).to_tree();
     let unit = "/pfcp/Create QER/0/Packet Rate/Uplink Time Unit";
     for (tree, path, value, written) in [
         (
@@ -565,10 +547,7 @@ fn a_misspelt_name_below_what_a_message_lacks_is_an_error() {
     let response = Message::decode(&hex::decode(response).unwrap())
         .unwrap()
         .to_tree();
-    let heartbeat = Message {
-        header: Header::node(1),
-        body: HeartbeatRequest::new(RecoveryTimeStamp::new(7)).into(),
-    };
+    let heartbeat = Message::node(1, HeartbeatRequest::new(RecoveryTimeStamp::new(7)));
     let heartbeat = heartbeat.to_tree();
     misspelt(&heartbeat, "/pfcp/Source IP Address/Bogus");
     nothing(&heartbeat, "/pfcp/Source IP Address/V4");
@@ -661,14 +640,14 @@ fn a_misspelt_name_below_a_field_that_a_value_lacks_is_an_error() {
     let Body::SessionEstablishmentRequest(request) = establishment().body else {
         panic!()
     };
-    let request = Message {
-        header: Header::session(0, 1),
-        body: request
+    let request = Message::session(
+        0,
+        1,
+        request
             .with_create_qer(qer)
             .with_provide_atsss_control_information(atsss)
-            .with_mbs_session_n4_control_information(mbs)
-            .into(),
-    }
+            .with_mbs_session_n4_control_information(mbs),
+    )
     .to_tree();
     let rate = "/pfcp/Create QER/0/Packet Rate/Downlink Time Unit";
     nothing(&request, &format!("{rate}/Spare"));
@@ -806,10 +785,7 @@ fn the_path_of_a_deviation_is_one_of_the_tree() {
     // that name is of type 264: the tree has it by its number
     let mut response = SessionModificationResponse::new(Cause::new(CauseValue::RequestAccepted));
     response.raw.push(RawIe::new(252, vec![1]));
-    let mut message = Message {
-        header: Header::session(1, 1),
-        body: response.into(),
-    };
+    let mut message = Message::session(1, 1, response);
     assert_eq!(
         paths(&message),
         [("/pfcp/252".into(), vec![tree!({"octets": "01"})])]
@@ -854,10 +830,7 @@ fn the_path_of_a_deviation_is_one_of_the_tree() {
         Cause::new(CauseValue::RequestAccepted),
     );
     response.raw.push(RawIe::new(19, vec![2]));
-    let response = Message {
-        header: Header::node(2),
-        body: response.into(),
-    };
+    let response = Message::node(2, response);
     assert_eq!(
         paths(&response),
         [("/pfcp/Cause/1".into(), vec![tree!({"octets": "02"})])]
@@ -1009,11 +982,7 @@ fn a_field_of_either_form_has_one_rule() {
             panic!()
         };
         change(&mut request);
-        Message {
-            header: Header::session(0, 1),
-            body: Body::SessionEstablishmentRequest(request),
-        }
-        .to_tree()
+        Message::session(0, 1, Body::SessionEstablishmentRequest(request)).to_tree()
     };
     // Spare bits: a Time Unit without them, with them, and none
     let rate = |downlink: Option<Narrow<TimeUnit>>| PacketRate {
@@ -1464,12 +1433,7 @@ fn the_first_ie_of_a_row_there_once_is_its_value() {
 fn an_ie_of_no_row_named_as_a_row() {
     for (ie_type, length) in [(252u16, 0u16), (252, 2), (264, 0)] {
         let response = SessionModificationResponse::new(Cause::new(CauseValue::RequestAccepted));
-        let mut octets = Message {
-            header: Header::session(1, 9),
-            body: response.into(),
-        }
-        .encode()
-        .unwrap();
+        let mut octets = Message::session(1, 9, response).encode().unwrap();
         octets.extend_from_slice(&ie_type.to_be_bytes());
         octets.extend_from_slice(&length.to_be_bytes());
         octets.extend(std::iter::repeat_n(0xff, usize::from(length)));
@@ -1803,17 +1767,18 @@ fn the_fqdn_of_an_smf_set_id_as_its_name() {
     let fqdn = Fqdn::new("smf.set").unwrap();
     assert_eq!(fqdn, Fqdn(b"\x03smf\x03set".to_vec().into()));
     assert_eq!(fqdn.name().as_deref(), Some("smf.set"));
-    let request = |fqdn: Fqdn| Message {
-        header: Header::node(1),
-        body: AssociationSetupRequest::new(
-            NodeId::Ipv4(Ipv4Addr::new(10, 0, 0, 1)),
-            RecoveryTimeStamp::new(1),
+    let request = |fqdn: Fqdn| {
+        Message::node(
+            1,
+            AssociationSetupRequest::new(
+                NodeId::Ipv4(Ipv4Addr::new(10, 0, 0, 1)),
+                RecoveryTimeStamp::new(1),
+            )
+            .with_smf_set_id(SmfSetId {
+                fqdn,
+                ..Default::default()
+            }),
         )
-        .with_smf_set_id(SmfSetId {
-            fqdn,
-            ..Default::default()
-        })
-        .into(),
     };
     for (fqdn, tree) in [
         (fqdn, tree!("smf.set")),
@@ -1982,10 +1947,7 @@ fn each_message_of_a_datagram_on_its_own() {
 }
 
 fn heartbeat_request() -> Message {
-    Message {
-        header: Header::node(1),
-        body: HeartbeatRequest::new(RecoveryTimeStamp::new(1)).into(),
-    }
+    Message::node(1, HeartbeatRequest::new(RecoveryTimeStamp::new(1)))
 }
 
 /// A list of grouped IEs is sized for the IEs that its values can be: not for those of a
@@ -2026,10 +1988,7 @@ fn a_message_too_long_for_its_length() {
     for _ in 0..2 {
         request.raw.push(RawIe::new(1000, vec![0; 40_000]));
     }
-    let message = Message {
-        header: Header::node(1),
-        body: request.into(),
-    };
+    let message = Message::node(1, request);
     assert_eq!(
         message.encode(),
         Err(Error::MessageTooLong {
@@ -2067,12 +2026,7 @@ fn a_message_read_back_equals_the_one_decoded() {
     };
     let request = SessionSetDeletionRequest::new(NodeId::Ipv4(Ipv4Addr::new(10, 0, 0, 1)))
         .with_fq_csid(fq_csid);
-    let mut octets = Message {
-        header: Header::node(1),
-        body: request.into(),
-    }
-    .encode()
-    .unwrap();
+    let mut octets = Message::node(1, request).encode().unwrap();
     octets.extend_from_slice(&[0, 65, 0, 4, 0, 0, 0, 0]);
     let length = (octets.len() - 4) as u16;
     octets[2..4].copy_from_slice(&length.to_be_bytes());
@@ -2249,15 +2203,15 @@ fn values_as_their_clauses_have_them() {
         .with_pdr_id(PdrId::new(2))
         .with_downlink_data_service_information(service.clone())
         .with_downlink_data_service_information(service);
-    let message = Message {
-        header: Header::session(1, 1),
-        body: SessionReportRequest::new(ReportType {
+    let message = Message::session(
+        1,
+        1,
+        SessionReportRequest::new(ReportType {
             dldr: true,
             ..Default::default()
         })
-        .with_downlink_data_report(report)
-        .into(),
-    };
+        .with_downlink_data_report(report),
+    );
     assert!(
         message.check(Interfaces::N4).is_empty(),
         "{:?}",

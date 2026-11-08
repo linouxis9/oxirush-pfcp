@@ -118,6 +118,23 @@ pub struct Message {
 }
 
 impl Message {
+    /// A node related message of `body` and `sequence`: a node sends a request of its
+    /// own with a number of its own.
+    pub fn node(sequence: u32, body: impl Into<Body>) -> Self {
+        Self {
+            header: Header::node(sequence),
+            body: body.into(),
+        }
+    }
+
+    /// A session related message of `body` and `sequence`, to the peer's SEID `seid`.
+    pub fn session(seid: u64, sequence: u32, body: impl Into<Body>) -> Self {
+        Self {
+            header: Header::session(seid, sequence),
+            body: body.into(),
+        }
+    }
+
     /// Decode one message, which `octets` are whole.
     ///
     /// # Errors

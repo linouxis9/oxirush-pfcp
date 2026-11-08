@@ -94,10 +94,7 @@ fn setup(from: SocketAddr, features: u8) -> Message {
     let request = AssociationSetupRequest::new(node_id(from), RecoveryTimeStamp::new(1))
         .with_cp_function_features(cp)
         .with_smf_set_id(id);
-    Message {
-        header: Header::node(0),
-        body: request.into(),
-    }
+    Message::node(0, request)
 }
 
 fn establishment(from: SocketAddr, cp_seid: u64) -> Message {
@@ -119,10 +116,7 @@ fn establishment(from: SocketAddr, cp_seid: u64) -> Message {
             ..Default::default()
         },
     );
-    Message {
-        header: Header::session(0, 0),
-        body: SessionEstablishmentRequest::new_n4(node_id(from), f_seid, pdr, far).into(),
-    }
+    Message::session(0, 0, SessionEstablishmentRequest::new_n4(node_id(from), f_seid, pdr, far))
 }
 
 /// What a node keeps of the load and overload of its peers, checked: each is of a session
@@ -430,10 +424,7 @@ fuzz_target!(|octets: &[u8]| {
                         ..Default::default()
                     })
                     .with_old_cp_f_seid(old);
-                    let message = Message {
-                        header: Header::session(0, 0),
-                        body: report.into(),
-                    };
+                    let message = Message::session(0, 0, report);
                     sent.extend(upf.request(now, SMFS[0], message));
                 }
                 // The UPF reports on a session, as one it deleted or not.
@@ -491,10 +482,7 @@ fuzz_target!(|octets: &[u8]| {
                                 );
                             }
                             _ => {
-                                let late = Message {
-                                    header: Header::node(old.sequence),
-                                    body: HeartbeatResponse::new(RecoveryTimeStamp::new(1)).into(),
-                                };
+                                let late = Message::node(old.sequence, HeartbeatResponse::new(RecoveryTimeStamp::new(1)));
                                 let _ = node.respond_message(now, &old, late, Delivery::Send);
                             }
                         }

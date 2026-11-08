@@ -125,10 +125,7 @@ fn set_up(
     if cp != cp_features() {
         setup = setup.with_cp_function_features(cp);
     }
-    let message = Message {
-        header: Header::node(0),
-        body: setup.into(),
-    };
+    let message = Message::node(0, setup);
     smf.request(now, UPF, message).unwrap();
     pass(smf, upf, UPF, now);
     let (received, _) = request(upf);
@@ -176,15 +173,8 @@ fn established_on(smf: &mut Node, upf: &mut Node, now: Duration, address: Ipv4Ad
         },
     );
     let establishment = SessionEstablishmentRequest::new_n4(node_id(SMF), f_seid, pdr, far);
-    smf.request(
-        now,
-        UPF,
-        Message {
-            header: Header::session(0, 0),
-            body: establishment.into(),
-        },
-    )
-    .unwrap();
+    smf.request(now, UPF, Message::session(0, 0, establishment))
+        .unwrap();
     pass(smf, upf, UPF, now);
     let (received, _) = request(upf);
     let up_seid = upf.new_session();
@@ -207,10 +197,7 @@ fn decoded(transmit: &Transmit) -> Message {
 }
 
 fn heartbeat() -> Message {
-    Message {
-        header: Header::node(0),
-        body: HeartbeatRequest::new(RecoveryTimeStamp::new(1000)).into(),
-    }
+    Message::node(0, HeartbeatRequest::new(RecoveryTimeStamp::new(1000)))
 }
 
 // ── §6.4: reliable delivery ─────────────────────────────────────────────────
@@ -323,12 +310,7 @@ fn retransmission_identical() {
 fn response_copies_sequence() {
     let (_, mut upf) = associated(at(0));
     let update = AssociationUpdateRequest::new(node_id(SMF));
-    let octets = Message {
-        header: Header::node(0x1234),
-        body: update.into(),
-    }
-    .encode()
-    .unwrap();
+    let octets = Message::node(0x1234, update).encode().unwrap();
     upf.handle_datagram(at(1), SMF, &octets);
     let (received, _) = request(&mut upf);
     upf.respond(
@@ -344,12 +326,7 @@ fn response_copies_sequence() {
 fn retransmitted_request_answered_from_cache() {
     let (_, mut upf) = associated(at(0));
     let update = AssociationUpdateRequest::new(node_id(SMF));
-    let octets = Message {
-        header: Header::node(77),
-        body: update.into(),
-    }
-    .encode()
-    .unwrap();
+    let octets = Message::node(77, update).encode().unwrap();
     upf.handle_datagram(at(1), SMF, &octets);
     let (received, _) = request(&mut upf);
     // A retransmission before the answer is not a second request, and the number of a
@@ -363,12 +340,11 @@ fn retransmitted_request_answered_from_cache() {
             answered: false
         }]
     );
-    let changed = Message {
-        header: Header::node(77),
-        body: AssociationUpdateRequest::new(node_id(SMF))
-            .with_graceful_release_period(GracefulReleasePeriod::default())
-            .into(),
-    };
+    let changed = Message::node(
+        77,
+        AssociationUpdateRequest::new(node_id(SMF))
+            .with_graceful_release_period(GracefulReleasePeriod::default()),
+    );
     upf.handle_datagram(at(2), SMF, &changed.encode().unwrap());
     assert_eq!(violations(&mut upf), [ViolationKind::ChangedRetransmission]);
     upf.respond(
@@ -417,10 +393,7 @@ fn duplicate_response_discarded() {
 #[test]
 fn unknown_response_discarded() {
     let mut smf = node(SMF, Function::Cp);
-    let response = Message {
-        header: Header::node(4242),
-        body: HeartbeatResponse::new(RecoveryTimeStamp::new(1)).into(),
-    };
+    let response = Message::node(4242, HeartbeatResponse::new(RecoveryTimeStamp::new(1)));
     smf.handle_datagram(at(0), UPF, &response.encode().unwrap());
     assert_eq!(violations(&mut smf), [ViolationKind::UnknownSequence]);
     // A response to a request that the node gave up is late
@@ -560,10 +533,7 @@ fn load_control_reset_on_peer_restart() {
     let (cp_seid, _) = established(&mut smf, &mut upf, at(0));
     modified(&mut smf, &mut upf, cp_seid, at(1), with_load(900, 30));
     // The UPF restarts: its heartbeat says another Recovery Time Stamp
-    let restarted = Message {
-        header: Header::node(9),
-        body: HeartbeatRequest::new(RecoveryTimeStamp::new(3000)).into(),
-    };
+    let restarted = Message::node(9, HeartbeatRequest::new(RecoveryTimeStamp::new(3000)));
     smf.handle_datagram(at(2), UPF, &restarted.encode().unwrap());
     assert!(events(&mut smf).contains(&Event::PeerRestarted {
         peer: UPF,
@@ -662,10 +632,7 @@ fn overload_control_reset_on_peer_restart() {
         at(1),
         with_overload(500, 20, 10, false),
     );
-    let restarted = Message {
-        header: Header::node(9),
-        body: HeartbeatRequest::new(RecoveryTimeStamp::new(3000)).into(),
-    };
+    let restarted = Message::node(9, HeartbeatRequest::new(RecoveryTimeStamp::new(3000)));
     smf.handle_datagram(at(2), UPF, &restarted.encode().unwrap());
     assert_eq!(smf.overload_control(UPF), None);
     modified(
@@ -885,10 +852,7 @@ fn overload_of_the_address_of_the_up_f_seid() {
         },
     );
     let establishment = SessionEstablishmentRequest::new_n4(node_id(SMF), f_seid, pdr, far);
-    let message = Message {
-        header: Header::session(0, 0),
-        body: establishment.into(),
-    };
+    let message = Message::session(0, 0, establishment);
     smf.request(at(1), UPF, message).unwrap();
     pass(&mut smf, &mut upf, UPF, at(1));
     let (received, _) = request(&mut upf);
@@ -940,10 +904,7 @@ fn controls_of_a_peer_without_an_association_are_not_kept() {
             Metric::new(Percent(100)),
             timer.clone(),
         ));
-        let message = Message {
-            header: Header::session(cp_seid, u32::from(i) + 1),
-            body: report.into(),
-        };
+        let message = Message::session(cp_seid, u32::from(i) + 1, report);
         smf.handle_datagram(at(1), from, &message.encode().unwrap());
         assert!(smf.load_control(from).is_none() && smf.overload_control(from).is_none());
     }
@@ -1156,15 +1117,15 @@ fn throttling_loss_algorithm() {
     let overload = *with_overload(2, 40, 30, false)
         .overload_control_information
         .unwrap();
-    let report = Message {
-        header: Header::session(cp_seid, 70),
-        body: SessionReportRequest::new(ReportType {
+    let report = Message::session(
+        cp_seid,
+        70,
+        SessionReportRequest::new(ReportType {
             upir: true,
             ..Default::default()
         })
-        .with_overload_control_information(overload)
-        .into(),
-    };
+        .with_overload_control_information(overload),
+    );
     smf.handle_datagram(at(2), UPF, &report.encode().unwrap());
     assert_eq!(
         smf.overload_control(UPF).map(|overload| overload.sequence),
@@ -1183,10 +1144,11 @@ fn throttling_never_responses() {
     );
     // Node related requests, and responses, go
     assert!(smf.request(at(2), UPF, heartbeat()).is_ok());
-    let report = Message {
-        header: Header::session(cp_seid, 31),
-        body: SessionReportRequest::new(ReportType::default()).into(),
-    };
+    let report = Message::session(
+        cp_seid,
+        31,
+        SessionReportRequest::new(ReportType::default()),
+    );
     smf.handle_datagram(at(3), UPF, &report.encode().unwrap());
     let (received, _) = request(&mut smf);
     sent(&mut smf);
@@ -1235,10 +1197,7 @@ fn throttling_spares_priority() {
 #[test]
 fn message_priority_default() {
     let (_, mut upf) = associated(at(0));
-    let without = Message {
-        header: Header::node(100),
-        body: AssociationUpdateRequest::new(node_id(SMF)).into(),
-    };
+    let without = Message::node(100, AssociationUpdateRequest::new(node_id(SMF)));
     upf.handle_datagram(at(1), SMF, &without.encode().unwrap());
     let (received, _) = request(&mut upf);
     assert_eq!(received.priority, None);
@@ -1305,15 +1264,7 @@ fn response_copies_priority() {
 fn association_setup_by_cp() {
     let (mut smf, mut upf) = (node(SMF, Function::Cp), node(UPF, Function::Up));
     let setup = AssociationSetupRequest::new(node_id(SMF), RecoveryTimeStamp::new(1000));
-    smf.request(
-        at(0),
-        UPF,
-        Message {
-            header: Header::node(0),
-            body: setup.into(),
-        },
-    )
-    .unwrap();
+    smf.request(at(0), UPF, Message::node(0, setup)).unwrap();
     pass(&mut smf, &mut upf, UPF, at(0));
     let (received, _) = request(&mut upf);
     assert_eq!(received.node_id, Some(node_id(SMF)));
@@ -1343,15 +1294,7 @@ fn association_setup_by_cp() {
 fn association_setup_by_up() {
     let (mut smf, mut upf) = (node(SMF, Function::Cp), node(UPF, Function::Up));
     let setup = AssociationSetupRequest::new(node_id(UPF), RecoveryTimeStamp::new(1000));
-    upf.request(
-        at(0),
-        SMF,
-        Message {
-            header: Header::node(0),
-            body: setup.into(),
-        },
-    )
-    .unwrap();
+    upf.request(at(0), SMF, Message::node(0, setup)).unwrap();
     pass(&mut upf, &mut smf, SMF, at(0));
     let (received, _) = request(&mut smf);
     smf.respond(
@@ -1366,16 +1309,7 @@ fn association_setup_by_up() {
     // A rejection makes none
     let mut other = node(OTHER, Function::Up);
     let setup = AssociationSetupRequest::new(node_id(OTHER), RecoveryTimeStamp::new(1));
-    other
-        .request(
-            at(0),
-            SMF,
-            Message {
-                header: Header::node(0),
-                body: setup.into(),
-            },
-        )
-        .unwrap();
+    other.request(at(0), SMF, Message::node(0, setup)).unwrap();
     for transmit in sent(&mut other) {
         smf.handle_datagram(at(0), OTHER, &transmit.octets);
     }
@@ -1393,15 +1327,7 @@ fn association_setup_by_up() {
 fn association_setup_again() {
     let (mut smf, mut upf) = associated(at(0));
     let setup = AssociationSetupRequest::new(node_id(SMF), RecoveryTimeStamp::new(1000));
-    smf.request(
-        at(5),
-        UPF,
-        Message {
-            header: Header::node(0),
-            body: setup.into(),
-        },
-    )
-    .unwrap();
+    smf.request(at(5), UPF, Message::node(0, setup)).unwrap();
     pass(&mut smf, &mut upf, UPF, at(5));
     let (received, _) = request(&mut upf);
     upf.respond(
@@ -1427,15 +1353,7 @@ fn association_update() {
         ..Default::default()
     };
     let update = AssociationUpdateRequest::new(node_id(SMF)).with_cp_function_features(features);
-    smf.request(
-        at(1),
-        UPF,
-        Message {
-            header: Header::node(0),
-            body: update.into(),
-        },
-    )
-    .unwrap();
+    smf.request(at(1), UPF, Message::node(0, update)).unwrap();
     pass(&mut smf, &mut upf, UPF, at(1));
     let (received, message) = request(&mut upf);
     let Body::AssociationUpdateRequest(update) = &message.body else {
@@ -1463,10 +1381,7 @@ fn association_update() {
 #[test]
 fn association_update_unknown_node() {
     let mut upf = node(UPF, Function::Up);
-    let update = Message {
-        header: Header::node(3),
-        body: AssociationUpdateRequest::new(node_id(SMF)).into(),
-    };
+    let update = Message::node(3, AssociationUpdateRequest::new(node_id(SMF)));
     upf.handle_datagram(at(0), SMF, &update.encode().unwrap());
     assert_eq!(violations(&mut upf), [ViolationKind::UnknownNode]);
     let answer = decoded(&sent(&mut upf)[0]);
@@ -1481,15 +1396,7 @@ fn association_update_unknown_node() {
 fn association_release() {
     let (mut smf, mut upf) = associated(at(0));
     let release = AssociationReleaseRequest::new(node_id(SMF));
-    smf.request(
-        at(1),
-        UPF,
-        Message {
-            header: Header::node(0),
-            body: release.into(),
-        },
-    )
-    .unwrap();
+    smf.request(at(1), UPF, Message::node(0, release)).unwrap();
     pass(&mut smf, &mut upf, UPF, at(1));
     let (received, _) = request(&mut upf);
     upf.respond(
@@ -1513,15 +1420,7 @@ fn association_release_ends_sessions() {
     let (mut smf, mut upf) = associated(at(0));
     let (cp_seid, up_seid) = established(&mut smf, &mut upf, at(0));
     let release = AssociationReleaseRequest::new(node_id(SMF));
-    smf.request(
-        at(1),
-        UPF,
-        Message {
-            header: Header::node(0),
-            body: release.into(),
-        },
-    )
-    .unwrap();
+    smf.request(at(1), UPF, Message::node(0, release)).unwrap();
     pass(&mut smf, &mut upf, UPF, at(1));
     let (received, _) = request(&mut upf);
     upf.respond(
@@ -1567,10 +1466,11 @@ fn session_needs_association() {
             ..Default::default()
         },
     );
-    let establishment = Message {
-        header: Header::session(0, 6),
-        body: SessionEstablishmentRequest::new_n4(node_id(SMF), f_seid, pdr, far).into(),
-    };
+    let establishment = Message::session(
+        0,
+        6,
+        SessionEstablishmentRequest::new_n4(node_id(SMF), f_seid, pdr, far),
+    );
     upf.handle_datagram(at(0), SMF, &establishment.encode().unwrap());
     assert_eq!(
         violations(&mut upf),
@@ -1654,16 +1554,7 @@ fn node_report_and_session_sets() {
             true => (&mut smf, &mut upf, UPF, SMF),
             false => (&mut upf, &mut smf, SMF, UPF),
         };
-        let id = sender
-            .request(
-                at(1),
-                to,
-                Message {
-                    header: Header::node(0),
-                    body,
-                },
-            )
-            .unwrap();
+        let id = sender.request(at(1), to, Message::node(0, body)).unwrap();
         pass(sender, receiver, to, at(1));
         let (received, message) = request(receiver);
         assert_eq!(message.body.message_type(), message_type);
@@ -1714,10 +1605,7 @@ fn session_messages_carry_peer_seid() {
 #[test]
 fn unknown_seid_answered() {
     let (_, mut upf) = associated(at(0));
-    let modification = Message {
-        header: Header::session(0xdead, 12),
-        body: SessionModificationRequest::default().into(),
-    };
+    let modification = Message::session(0xdead, 12, SessionModificationRequest::default());
     upf.handle_datagram(at(1), SMF, &modification.encode().unwrap());
     assert_eq!(violations(&mut upf), [ViolationKind::UnknownSeid]);
     let answer = decoded(&sent(&mut upf)[0]);
@@ -1793,10 +1681,8 @@ fn sequences(node: &mut Node) -> Vec<u32> {
 fn bundled_datagram_each_message() {
     let (mut smf, mut upf) = bundling(at(0));
     let (_, up_seid) = established(&mut smf, &mut upf, at(0));
-    let modification = |sequence| Message {
-        header: Header::session(up_seid, sequence),
-        body: SessionModificationRequest::default().into(),
-    };
+    let modification =
+        |sequence| Message::session(up_seid, sequence, SessionModificationRequest::default());
     upf.handle_datagram(at(1), SMF, &bundle(&[modification(20), modification(21)]));
     assert_eq!(sequences(&mut upf), [20, 21]);
 }
@@ -1808,10 +1694,8 @@ fn bundled_datagram_each_message() {
 #[test]
 fn bundling_needs_both_to_announce_it() {
     let modifications = |up_seid, first: u32| {
-        let modification = |sequence| Message {
-            header: Header::session(up_seid, sequence),
-            body: SessionModificationRequest::default().into(),
-        };
+        let modification =
+            |sequence| Message::session(up_seid, sequence, SessionModificationRequest::default());
         bundle(&[modification(first), modification(first + 1)])
     };
     let refused = [ViolationKind::BundlingNotAgreed];
@@ -1829,13 +1713,15 @@ fn bundling_needs_both_to_announce_it() {
         set_up(&mut smf, &mut upf, at(0), cp, up);
         let (cp_seid, up_seid) = established(&mut smf, &mut upf, at(0));
         upf.handle_datagram(at(1), SMF, &modifications(up_seid, 20));
-        let report = |sequence| Message {
-            header: Header::session(cp_seid, sequence),
-            body: SessionReportRequest::new(ReportType {
-                upir: true,
-                ..Default::default()
-            })
-            .into(),
+        let report = |sequence| {
+            Message::session(
+                cp_seid,
+                sequence,
+                SessionReportRequest::new(ReportType {
+                    upir: true,
+                    ..Default::default()
+                }),
+            )
         };
         smf.handle_datagram(at(1), UPF, &bundle(&[report(30), report(31)]));
         match smf_bundles && upf_bundles {
@@ -1856,16 +1742,7 @@ fn bundling_needs_both_to_announce_it() {
     assert_eq!(sequences(&mut upf), [20, 21]);
     let update = AssociationUpdateRequest::new(node_id(SMF))
         .with_cp_function_features(CpFunctionFeatures::default());
-    let body = update.into();
-    smf.request(
-        at(2),
-        UPF,
-        Message {
-            header: Header::node(0),
-            body,
-        },
-    )
-    .unwrap();
+    smf.request(at(2), UPF, Message::node(0, update)).unwrap();
     pass(&mut smf, &mut upf, UPF, at(2));
     let (received, _) = request(&mut upf);
     upf.respond(
@@ -1889,10 +1766,7 @@ fn bundling_needs_both_to_announce_it() {
             };
             update = update.with_cp_function_features(cp);
         }
-        let message = Message {
-            header: Header::node(0),
-            body: update.into(),
-        };
+        let message = Message::node(0, update);
         smf.request(at(2), UPF, message).unwrap();
         pass(&mut smf, &mut upf, UPF, at(2));
         let (received, _) = request(&mut upf);
@@ -1902,13 +1776,15 @@ fn bundling_needs_both_to_announce_it() {
         pass(&mut upf, &mut smf, SMF, at(2));
         upf.handle_datagram(at(3), SMF, &modifications(up_seid, 40));
         assert_eq!(violations(&mut upf), refused, "the UPF's own");
-        let report = |sequence| Message {
-            header: Header::session(cp_seid, sequence),
-            body: SessionReportRequest::new(ReportType {
-                upir: true,
-                ..Default::default()
-            })
-            .into(),
+        let report = |sequence| {
+            Message::session(
+                cp_seid,
+                sequence,
+                SessionReportRequest::new(ReportType {
+                    upir: true,
+                    ..Default::default()
+                }),
+            )
         };
         smf.handle_datagram(at(3), UPF, &bundle(&[report(50), report(51)]));
         assert_eq!(
@@ -1922,23 +1798,22 @@ fn bundling_needs_both_to_announce_it() {
     let (cp_seid, _) = established(&mut smf, &mut upf, at(0));
     let update =
         AssociationUpdateRequest::new(node_id(SMF)).with_cp_function_features(cp_features());
-    let message = Message {
-        header: Header::node(0),
-        body: update.into(),
-    };
+    let message = Message::node(0, update);
     smf.request(at(2), UPF, message).unwrap();
     pass(&mut smf, &mut upf, UPF, at(2));
     let (received, _) = request(&mut upf);
     let answer = AssociationUpdateResponse::new(node_id(UPF), accepted());
     upf.respond(at(2), &received, answer).unwrap();
     pass(&mut upf, &mut smf, SMF, at(2));
-    let report = |sequence| Message {
-        header: Header::session(cp_seid, sequence),
-        body: SessionReportRequest::new(ReportType {
-            upir: true,
-            ..Default::default()
-        })
-        .into(),
+    let report = |sequence| {
+        Message::session(
+            cp_seid,
+            sequence,
+            SessionReportRequest::new(ReportType {
+                upir: true,
+                ..Default::default()
+            }),
+        )
     };
     smf.handle_datagram(at(3), UPF, &bundle(&[report(60), report(61)]));
     assert_eq!(violations(&mut smf), refused, "the SMF's own");
@@ -1950,10 +1825,8 @@ fn bundling_needs_both_to_announce_it() {
 fn bundled_message_of_another_version() {
     let (mut smf, mut upf) = bundling(at(0));
     let (_, up_seid) = established(&mut smf, &mut upf, at(0));
-    let modification = |sequence| Message {
-        header: Header::session(up_seid, sequence),
-        body: SessionModificationRequest::default().into(),
-    };
+    let modification =
+        |sequence| Message::session(up_seid, sequence, SessionModificationRequest::default());
     let mut octets = bundle(&[modification(20), modification(21), modification(22)]);
     let second = octets.len() / 3;
     octets[second] = (octets[second] & 0x1f) | 2 << 5;
@@ -1985,13 +1858,15 @@ fn bundled_messages_of_one_peer() {
         established_on(&mut smf, &mut upf, at(0), Ipv4Addr::new(10, 0, 0, 2));
     let (cp_second, up_second) =
         established_on(&mut smf, &mut upf, at(0), Ipv4Addr::new(10, 0, 0, 22));
-    let report = |seid, sequence| Message {
-        header: Header::session(seid, sequence),
-        body: SessionReportRequest::new(ReportType {
-            upir: true,
-            ..Default::default()
-        })
-        .into(),
+    let report = |seid, sequence| {
+        Message::session(
+            seid,
+            sequence,
+            SessionReportRequest::new(ReportType {
+                upir: true,
+                ..Default::default()
+            }),
+        )
     };
     smf.handle_datagram(
         at(1),
@@ -1999,10 +1874,8 @@ fn bundled_messages_of_one_peer() {
         &bundle(&[report(cp_first, 100), report(cp_second, 101)]),
     );
     assert_eq!(sequences(&mut smf), [100, 101]);
-    let modification = |seid, sequence| Message {
-        header: Header::session(seid, sequence),
-        body: SessionModificationRequest::default().into(),
-    };
+    let modification =
+        |seid, sequence| Message::session(seid, sequence, SessionModificationRequest::default());
     upf.handle_datagram(
         at(1),
         SMF,
@@ -2026,13 +1899,15 @@ fn a_bundle_of_an_f_seid_address_is_taken_as_its_messages_alone() {
     let up_address = Ipv4Addr::new(10, 0, 0, 22);
     let (cp_first, up_first) = established_on(&mut smf, &mut upf, at(0), up_address);
     let (cp_second, up_second) = established_on(&mut smf, &mut upf, at(0), up_address);
-    let report = |seid, sequence| Message {
-        header: Header::session(seid, sequence),
-        body: SessionReportRequest::new(ReportType {
-            upir: true,
-            ..Default::default()
-        })
-        .into(),
+    let report = |seid, sequence| {
+        Message::session(
+            seid,
+            sequence,
+            SessionReportRequest::new(ReportType {
+                upir: true,
+                ..Default::default()
+            }),
+        )
     };
     let from = up_address.into_socket(8805);
     smf.handle_datagram(at(1), from, &report(cp_first, 99).encode().unwrap());
@@ -2067,10 +1942,7 @@ fn a_bundle_of_an_f_seid_address_is_taken_as_its_messages_alone() {
                 },
             );
             let establishment = SessionEstablishmentRequest::new_n4(node_id(SMF), f_seid, pdr, far);
-            let message = Message {
-                header: Header::session(0, 0),
-                body: establishment.into(),
-            };
+            let message = Message::session(0, 0, establishment);
             smf.request(at(1), UPF, message).unwrap();
             pass(&mut smf, &mut upf, UPF, at(1));
             let (received, _) = request(&mut upf);
@@ -2088,10 +1960,8 @@ fn a_bundle_of_an_f_seid_address_is_taken_as_its_messages_alone() {
         })
         .collect();
     events(&mut upf);
-    let modification = |seid, sequence| Message {
-        header: Header::session(seid, sequence),
-        body: SessionModificationRequest::default().into(),
-    };
+    let modification =
+        |seid, sequence| Message::session(seid, sequence, SessionModificationRequest::default());
     let from = cp_address.into_socket(8805);
     // The UPF's session is of the CP F-SEID's address, which its requests come from
     assert_eq!(
@@ -2142,23 +2012,22 @@ fn an_adopted_peer_bundles_as_an_associated_one() {
         let setup = AssociationSetupRequest::new(node_id(OTHER), RecoveryTimeStamp::new(1000))
             .with_cp_function_features(features);
         let elsewhere = Ipv4Addr::new(10, 0, 0, 12).into_socket(8805);
-        let message = Message {
-            header: Header::node(0),
-            body: setup.into(),
-        };
+        let message = Message::node(0, setup);
         entity.request(at(0), elsewhere, message).unwrap();
         sent(&mut entity);
         entity.adopt_session(0x55, UPF, 0x66).unwrap();
         events(&mut entity);
         entity
     };
-    let report = |sequence| Message {
-        header: Header::session(0x55, sequence),
-        body: SessionReportRequest::new(ReportType {
-            dldr: true,
-            ..Default::default()
-        })
-        .into(),
+    let report = |sequence| {
+        Message::session(
+            0x55,
+            sequence,
+            SessionReportRequest::new(ReportType {
+                dldr: true,
+                ..Default::default()
+            }),
+        )
     };
     let reports = bundle(&[report(10), report(11)]);
     let mut taking = entity(true);
@@ -2195,10 +2064,7 @@ fn a_lone_message_with_the_fo_flag_is_one_message() {
             associated(at(0))
         };
         let (_, up_seid) = established(&mut smf, &mut upf, at(0));
-        let modification = Message {
-            header: Header::session(up_seid, 20),
-            body: SessionModificationRequest::default().into(),
-        };
+        let modification = Message::session(up_seid, 20, SessionModificationRequest::default());
         upf.handle_datagram(at(1), SMF, &lone(modification));
         let events = events(&mut upf);
         assert_eq!(requests_of(&events), 1, "{events:?}");
@@ -2320,12 +2186,9 @@ fn a_request_of_a_false_length_is_answered_invalid_length() {
     let (mut smf, mut upf) = associated(at(0));
     let (_, up_seid) = established(&mut smf, &mut upf, at(0));
     events(&mut upf);
-    let mut octets = Message {
-        header: Header::node(9),
-        body: AssociationUpdateRequest::new(node_id(SMF)).into(),
-    }
-    .encode()
-    .unwrap();
+    let mut octets = Message::node(9, AssociationUpdateRequest::new(node_id(SMF)))
+        .encode()
+        .unwrap();
     octets.extend_from_slice(&[0xde, 0xad, 0xbe, 0xef, 0, 0, 0, 0, 1, 2, 3]);
     upf.handle_datagram(at(1), SMF, &octets);
     let got = events(&mut upf);
@@ -2424,10 +2287,7 @@ fn version_not_supported_ends_the_requests_to_the_peer() {
         let second = smf.request(at(0), UPF, heartbeat()).unwrap();
         smf.request(at(0), OTHER, heartbeat()).unwrap();
         sent(&mut smf);
-        let answer = Message {
-            header: Header::node(0x777),
-            body: VersionNotSupportedResponse::default().into(),
-        };
+        let answer = Message::node(0x777, VersionNotSupportedResponse::default());
         let mut octets = answer.encode().unwrap();
         octets[0] = (octets[0] & 0x1f) | version << 5;
         smf.handle_datagram(at(1), UPF, &octets);
@@ -2464,15 +2324,7 @@ fn version_not_supported_ends_the_requests_to_the_peer() {
 fn a_cause_of_zero_accepts_nothing() {
     let (mut smf, mut upf) = (node(SMF, Function::Cp), node(UPF, Function::Up));
     let setup = AssociationSetupRequest::new(node_id(SMF), RecoveryTimeStamp::new(1000));
-    smf.request(
-        at(0),
-        UPF,
-        Message {
-            header: Header::node(0),
-            body: setup.into(),
-        },
-    )
-    .unwrap();
+    smf.request(at(0), UPF, Message::node(0, setup)).unwrap();
     pass(&mut smf, &mut upf, UPF, at(0));
     let (received, _) = request(&mut upf);
     let zero = Cause::new(CauseValue::from_value(0));
@@ -2526,10 +2378,7 @@ fn a_message_of_no_type_is_discarded() {
 #[test]
 fn a_request_of_the_wrong_direction_is_discarded() {
     let mut smf = node(SMF, Function::Cp);
-    let pfd = Message {
-        header: Header::node(4),
-        body: PfdManagementRequest::default().into(),
-    };
+    let pfd = Message::node(4, PfdManagementRequest::default());
     smf.handle_datagram(at(0), OTHER, &pfd.encode().unwrap());
     assert_eq!(kinds_of(&events(&mut smf)), [ViolationKind::WrongDirection]);
     assert!(sent(&mut smf).is_empty());
@@ -2544,17 +2393,16 @@ fn a_request_of_the_wrong_direction_is_discarded() {
         upf.request(at(0), SMF, pfd.clone()),
         Err(NodeError::WrongDirection)
     );
-    let report = Message {
-        header: Header::node(5),
-        body: NodeReportRequest::new(
+    let report = Message::node(
+        5,
+        NodeReportRequest::new(
             node_id(OTHER),
             NodeReportType {
                 uprr: true,
                 ..Default::default()
             },
-        )
-        .into(),
-    };
+        ),
+    );
     smf.handle_datagram(at(0), OTHER, &report.encode().unwrap());
     assert_eq!(
         kinds_of(&events(&mut smf)),
@@ -2598,10 +2446,10 @@ fn a_rejection_has_a_header_of_its_own() {
 #[test]
 fn a_sequence_number_again_after_its_answer() {
     let mut upf = node(UPF, Function::Up);
-    let first = Message {
-        header: Header::node(1),
-        body: AssociationSetupRequest::new(node_id(SMF), RecoveryTimeStamp::new(1000)).into(),
-    };
+    let first = Message::node(
+        1,
+        AssociationSetupRequest::new(node_id(SMF), RecoveryTimeStamp::new(1000)),
+    );
     upf.handle_datagram(at(0), SMF, &first.encode().unwrap());
     let (received, _) = request(&mut upf);
     upf.respond(
@@ -2611,10 +2459,10 @@ fn a_sequence_number_again_after_its_answer() {
     )
     .unwrap();
     sent(&mut upf);
-    let again = Message {
-        header: Header::node(1),
-        body: AssociationSetupRequest::new(node_id(SMF), RecoveryTimeStamp::new(2000)).into(),
-    };
+    let again = Message::node(
+        1,
+        AssociationSetupRequest::new(node_id(SMF), RecoveryTimeStamp::new(2000)),
+    );
     upf.handle_datagram(at(5), SMF, &again.encode().unwrap());
     let got = events(&mut upf);
     assert_eq!(requests_of(&got), 1, "{got:?}");
@@ -2622,10 +2470,7 @@ fn a_sequence_number_again_after_its_answer() {
         peer: SMF,
         recovery_time_stamp: 2000
     }));
-    let heartbeat = Message {
-        header: Header::node(2),
-        body: HeartbeatRequest::new(RecoveryTimeStamp::new(2000)).into(),
-    };
+    let heartbeat = Message::node(2, HeartbeatRequest::new(RecoveryTimeStamp::new(2000)));
     upf.handle_datagram(at(6), SMF, &heartbeat.encode().unwrap());
     assert_eq!(
         sent(&mut upf).len(),
@@ -2685,10 +2530,7 @@ fn a_retransmission_alone_of_a_bundled_request() {
 fn a_request_is_answered_once_by_its_response() {
     let (_, mut upf) = associated(at(0));
     events(&mut upf);
-    let update = Message {
-        header: Header::node(7),
-        body: AssociationUpdateRequest::new(node_id(SMF)).into(),
-    };
+    let update = Message::node(7, AssociationUpdateRequest::new(node_id(SMF)));
     upf.handle_datagram(at(1), SMF, &update.encode().unwrap());
     let (received, _) = request(&mut upf);
     assert_eq!(
@@ -2762,18 +2604,17 @@ fn a_response_of_another_type_is_discarded() {
 #[test]
 fn cache_only_and_forget() {
     let mut upf = node(UPF, Function::Up);
-    let setup = Message {
-        header: Header::node(3),
-        body: AssociationSetupRequest::new(node_id(SMF), RecoveryTimeStamp::new(1000)).into(),
-    };
+    let setup = Message::node(
+        3,
+        AssociationSetupRequest::new(node_id(SMF), RecoveryTimeStamp::new(1000)),
+    );
     let octets = setup.encode().unwrap();
     upf.handle_datagram(at(0), SMF, &octets);
     let (received, _) = request(&mut upf);
-    let answer = Message {
-        header: Header::node(3),
-        body: AssociationSetupResponse::new(node_id(UPF), accepted(), RecoveryTimeStamp::new(1000))
-            .into(),
-    };
+    let answer = Message::node(
+        3,
+        AssociationSetupResponse::new(node_id(UPF), accepted(), RecoveryTimeStamp::new(1000)),
+    );
     upf.respond_message(at(0), &received, answer.clone(), Delivery::Forget)
         .unwrap();
     assert!(sent(&mut upf).is_empty());
@@ -2799,14 +2640,17 @@ fn cache_only_and_forget() {
 #[test]
 fn a_probe_answer_to_a_request_forgotten_changes_nothing() {
     let mut upf = node(UPF, Function::Up);
-    let setup = |sequence| Message {
-        header: Header::node(sequence),
-        body: AssociationSetupRequest::new(node_id(SMF), RecoveryTimeStamp::new(1000)).into(),
+    let setup = |sequence| {
+        Message::node(
+            sequence,
+            AssociationSetupRequest::new(node_id(SMF), RecoveryTimeStamp::new(1000)),
+        )
     };
-    let answer = |sequence| Message {
-        header: Header::node(sequence),
-        body: AssociationSetupResponse::new(node_id(UPF), accepted(), RecoveryTimeStamp::new(1000))
-            .into(),
+    let answer = |sequence| {
+        Message::node(
+            sequence,
+            AssociationSetupResponse::new(node_id(UPF), accepted(), RecoveryTimeStamp::new(1000)),
+        )
     };
     upf.handle_datagram(at(0), SMF, &setup(3).encode().unwrap());
     let (received, _) = request(&mut upf);
@@ -2969,15 +2813,7 @@ fn a_cp_function_keeps_its_sessions_on_a_new_setup() {
     let (mut smf, mut upf) = associated(at(0));
     let (cp_seid, _) = established(&mut smf, &mut upf, at(0));
     let setup = AssociationSetupRequest::new(node_id(UPF), RecoveryTimeStamp::new(1000));
-    upf.request(
-        at(1),
-        SMF,
-        Message {
-            header: Header::node(0),
-            body: setup.into(),
-        },
-    )
-    .unwrap();
+    upf.request(at(1), SMF, Message::node(0, setup)).unwrap();
     pass(&mut upf, &mut smf, SMF, at(1));
     let (received, _) = request(&mut smf);
     let answer =
@@ -3009,16 +2845,7 @@ fn reassociation_ends_the_old_sessions() {
         if null {
             setup.raw.push(RawIe::new(116, Vec::new()));
         }
-        upf.handle_datagram(
-            at(10),
-            SMF,
-            &Message {
-                header: Header::node(500),
-                body: setup.into(),
-            }
-            .encode()
-            .unwrap(),
-        );
+        upf.handle_datagram(at(10), SMF, &Message::node(500, setup).encode().unwrap());
         let (received, _) = request(&mut upf);
         upf.respond(
             at(10),
@@ -3041,10 +2868,7 @@ fn reassociation_ends_the_old_sessions() {
             "{got:?}"
         );
         assert_eq!(upf.session(up_seid).is_none(), !ended.is_empty());
-        let modification = Message {
-            header: Header::session(up_seid, 501),
-            body: SessionModificationRequest::default().into(),
-        };
+        let modification = Message::session(up_seid, 501, SessionModificationRequest::default());
         upf.handle_datagram(at(11), SMF, &modification.encode().unwrap());
         let got = events(&mut upf);
         assert_eq!(
@@ -3063,10 +2887,10 @@ fn a_replaced_association_heartbeats_its_new_address() {
         ..config(SMF, Function::Cp)
     });
     for (from, sequence) in [(UPF, 1u32), (OTHER, 2)] {
-        let setup = Message {
-            header: Header::node(sequence),
-            body: AssociationSetupRequest::new(node_id(UPF), RecoveryTimeStamp::new(5)).into(),
-        };
+        let setup = Message::node(
+            sequence,
+            AssociationSetupRequest::new(node_id(UPF), RecoveryTimeStamp::new(5)),
+        );
         smf.handle_datagram(at(0), from, &setup.encode().unwrap());
         let (received, _) = request(&mut smf);
         smf.respond(
@@ -3094,10 +2918,10 @@ fn a_replaced_association_heartbeats_its_new_address() {
 fn a_release_ends_the_association_that_it_names() {
     let mut upf = node(UPF, Function::Up);
     for (from, sequence) in [(SMF, 1u32), (OTHER, 2)] {
-        let setup = Message {
-            header: Header::node(sequence),
-            body: AssociationSetupRequest::new(node_id(from), RecoveryTimeStamp::new(5)).into(),
-        };
+        let setup = Message::node(
+            sequence,
+            AssociationSetupRequest::new(node_id(from), RecoveryTimeStamp::new(5)),
+        );
         upf.handle_datagram(at(0), from, &setup.encode().unwrap());
         let (received, _) = request(&mut upf);
         upf.respond(
@@ -3108,10 +2932,7 @@ fn a_release_ends_the_association_that_it_names() {
         .unwrap();
         sent(&mut upf);
     }
-    let release = Message {
-        header: Header::node(3),
-        body: AssociationReleaseRequest::new(node_id(SMF)).into(),
-    };
+    let release = Message::node(3, AssociationReleaseRequest::new(node_id(SMF)));
     upf.handle_datagram(at(1), OTHER, &release.encode().unwrap());
     let (received, _) = request(&mut upf);
     assert!(received.stranger);
@@ -3145,10 +2966,11 @@ fn a_deletion_ends_the_session_that_it_deletes() {
     smf.session_request(at(1), first, SessionDeletionRequest::default())
         .unwrap();
     let request = decoded(&sent(&mut smf)[0]);
-    let response = Message {
-        header: Header::session(second, request.header.sequence),
-        body: SessionDeletionResponse::new(accepted()).into(),
-    };
+    let response = Message::session(
+        second,
+        request.header.sequence,
+        SessionDeletionResponse::new(accepted()),
+    );
     smf.handle_datagram(at(1), UPF, &response.encode().unwrap());
     assert!(smf.session(first).is_none());
     assert!(smf.session(second).is_some());
@@ -3180,15 +3002,8 @@ fn a_session_follows_its_f_seids() {
         },
     );
     let establishment = SessionEstablishmentRequest::new_n4(node_id(SMF), f_seid, pdr, far);
-    smf.request(
-        at(0),
-        UPF,
-        Message {
-            header: Header::session(0, 0),
-            body: establishment.into(),
-        },
-    )
-    .unwrap();
+    smf.request(at(0), UPF, Message::session(0, 0, establishment))
+        .unwrap();
     pass(&mut smf, &mut upf, UPF, at(0));
     let (received, _) = request(&mut upf);
     let up_seid = upf.new_session();
@@ -3300,10 +3115,11 @@ fn sessions_that_end_without_a_procedure() {
     smf.request(
         at(0),
         UPF,
-        Message {
-            header: Header::session(0, 0),
-            body: SessionEstablishmentRequest::new_n4(node_id(SMF), f_seid, pdr, far).into(),
-        },
+        Message::session(
+            0,
+            0,
+            SessionEstablishmentRequest::new_n4(node_id(SMF), f_seid, pdr, far),
+        ),
     )
     .unwrap();
     for attempt in 1..=4 {
@@ -3367,10 +3183,10 @@ fn overload_control_of_a_new_period() {
 
 /// An Association Setup Request of `from`, of sequence number `sequence`.
 fn setup_of(from: SocketAddr, sequence: u32, stamp: u32) -> Vec<u8> {
-    Message {
-        header: Header::node(sequence),
-        body: AssociationSetupRequest::new(node_id(from), RecoveryTimeStamp::new(stamp)).into(),
-    }
+    Message::node(
+        sequence,
+        AssociationSetupRequest::new(node_id(from), RecoveryTimeStamp::new(stamp)),
+    )
     .encode()
     .unwrap()
 }
@@ -3470,15 +3286,7 @@ fn a_second_answer_has_no_effect() {
     let mut upf = node(UPF, Function::Up);
     let mut smf = node(SMF, Function::Cp);
     let setup = AssociationSetupRequest::new(node_id(SMF), RecoveryTimeStamp::new(1000));
-    smf.request(
-        at(0),
-        UPF,
-        Message {
-            header: Header::node(0),
-            body: setup.into(),
-        },
-    )
-    .unwrap();
+    smf.request(at(0), UPF, Message::node(0, setup)).unwrap();
     pass(&mut smf, &mut upf, UPF, at(0));
     let (received, _) = request(&mut upf);
     upf.respond(at(0), &received, setup_answer()).unwrap();
@@ -3486,10 +3294,7 @@ fn a_second_answer_has_no_effect() {
     events(&mut smf);
     events(&mut upf);
     let (_, up_seid) = established(&mut smf, &mut upf, at(1));
-    let again = Message {
-        header: Header::node(received.sequence),
-        body: setup_answer().into(),
-    };
+    let again = Message::node(received.sequence, setup_answer());
     upf.respond_message(at(2), &received, again, Delivery::CacheOnly)
         .unwrap();
     assert!(events(&mut upf).is_empty());
@@ -3507,15 +3312,7 @@ fn a_later_answer_has_no_effect_after_keep_or_eviction() {
         });
         let mut smf = node(SMF, Function::Cp);
         let setup = AssociationSetupRequest::new(node_id(SMF), RecoveryTimeStamp::new(1000));
-        smf.request(
-            at(0),
-            UPF,
-            Message {
-                header: Header::node(0),
-                body: setup.into(),
-            },
-        )
-        .unwrap();
+        smf.request(at(0), UPF, Message::node(0, setup)).unwrap();
         pass(&mut smf, &mut upf, UPF, at(0));
         let (received, _) = request(&mut upf);
         upf.respond(at(0), &received, setup_answer()).unwrap();
@@ -3539,10 +3336,7 @@ fn a_later_answer_has_no_effect_after_keep_or_eviction() {
         };
         upf.handle_timeout(now);
         events(&mut upf);
-        let again = Message {
-            header: Header::node(received.sequence),
-            body: setup_answer().into(),
-        };
+        let again = Message::node(received.sequence, setup_answer());
         upf.respond_message(now, &received, again, Delivery::CacheOnly)
             .unwrap();
         assert!(events(&mut upf).is_empty(), "evicted {evicted}");
@@ -3594,10 +3388,7 @@ fn a_request_of_another_peers_node_id() {
         violations(&mut upf),
         [ViolationKind::SessionWithoutAssociation]
     );
-    let release = Message {
-        header: Header::node(4),
-        body: AssociationReleaseRequest::new(node_id(SMF)).into(),
-    };
+    let release = Message::node(4, AssociationReleaseRequest::new(node_id(SMF)));
     assert_eq!(taken(&mut upf, OTHER, release), Ok(true));
     assert!(upf.association(SMF).is_some());
 }
@@ -3621,10 +3412,7 @@ fn a_request_is_judged_by_the_first_ie_of_each_type() {
         release
             .raw
             .push(RawIe::new(60, [&[0], &second[..]].concat()));
-        Message {
-            header: Header::node(5),
-            body: release.into(),
-        }
+        Message::node(5, release)
     };
     for second in [[10, 0, 0, 3], [10, 0, 0, 7]] {
         upf.handle_datagram(at(1), SMF, &release(second).encode().unwrap());
@@ -3644,10 +3432,7 @@ fn a_request_is_judged_by_the_first_ie_of_each_type() {
     body.raw.push(RawIe::new(57, Vec::new()));
     body.raw
         .push(RawIe::new(57, [2, 0, 0, 0, 0, 0, 0, 0, 0, 10, 0, 0, 1]));
-    let null_first = Message {
-        header: Header::session(0, 6),
-        body: Body::SessionEstablishmentRequest(body),
-    };
+    let null_first = Message::session(0, 6, Body::SessionEstablishmentRequest(body));
     assert_eq!(taken(&mut upf, SMF, null_first), Ok(false));
     let (cp_seid, _) = established(&mut smf, &mut upf, at(0));
     let mut report = SessionReportRequest::new(ReportType {
@@ -3657,10 +3442,7 @@ fn a_request_is_judged_by_the_first_ie_of_each_type() {
     report.raw.push(RawIe::new(57, Vec::new()));
     let old = [&[2u8][..], &cp_seid.to_be_bytes(), &[10, 0, 0, 1]].concat();
     report.raw.push(RawIe::new(57, old));
-    let report = Message {
-        header: Header::session(0, 7),
-        body: report.into(),
-    };
+    let report = Message::session(0, 7, report);
     assert_eq!(
         taken(&mut smf, UPF, report),
         Err(vec![ViolationKind::UnknownSeid])
@@ -3676,12 +3458,9 @@ fn a_session_request_of_a_session_of_the_host() {
     let (mut smf, mut upf) = associated(at(0));
     let (_, up_seid) = established(&mut smf, &mut upf, at(0));
     let deletion = |seid| {
-        Message {
-            header: Header::session(seid, 9),
-            body: SessionDeletionRequest::default().into(),
-        }
-        .encode()
-        .unwrap()
+        Message::session(seid, 9, SessionDeletionRequest::default())
+            .encode()
+            .unwrap()
     };
     let stranger: SocketAddr = "10.0.0.66:8805".parse().unwrap();
     upf.handle_datagram(at(1), stranger, &deletion(up_seid));
@@ -3728,10 +3507,7 @@ fn debug_prints_no_key() {
         .join(", ");
     let printed = |text: &str| text.contains(&password) || text.contains("68756e74657232");
     // An unknown session's modification, with a Tunnel Password kept as an IE
-    let mut modification = Message {
-        header: Header::session(0x777, 5),
-        body: SessionModificationRequest::default().into(),
-    };
+    let mut modification = Message::session(0x777, 5, SessionModificationRequest::default());
     if let Body::SessionModificationRequest(request) = &mut modification.body {
         request.raw.push(RawIe::new(313, b"hunter2".to_vec()));
     }
@@ -3806,10 +3582,11 @@ fn requests_go_to_port_8805() {
             ..Default::default()
         },
     );
-    let establishment = Message {
-        header: Header::session(0, 2),
-        body: SessionEstablishmentRequest::new_n4(node_id(SMF), f_seid, pdr, far).into(),
-    };
+    let establishment = Message::session(
+        0,
+        2,
+        SessionEstablishmentRequest::new_n4(node_id(SMF), f_seid, pdr, far),
+    );
     upf.handle_datagram(at(11), ephemeral, &establishment.encode().unwrap());
     let (received, _) = request(&mut upf);
     let up_seid = upf.new_session();
@@ -3829,10 +3606,7 @@ fn requests_go_to_port_8805() {
     });
     upf.session_request(at(12), up_seid, report).unwrap();
     assert_eq!(sent(&mut upf)[0].to, SMF, "the report");
-    let pfd = Message {
-        header: Header::node(3),
-        body: PfdManagementRequest::default().into(),
-    };
+    let pfd = Message::node(3, PfdManagementRequest::default());
     upf.handle_datagram(at(13), SMF, &pfd.encode().unwrap());
     assert_eq!(requests_of(&events(&mut upf)), 1, "of the association");
 }
@@ -3889,11 +3663,10 @@ fn peers_on_one_address() {
         });
         let mut seids = Vec::new();
         for (peer, name, stamp) in [(smf1, "smf1", 1001), (smf2, "smf2", 1002)] {
-            let setup = Message {
-                header: Header::node(1),
-                body: AssociationSetupRequest::new(fqdn(name), RecoveryTimeStamp::new(stamp))
-                    .into(),
-            };
+            let setup = Message::node(
+                1,
+                AssociationSetupRequest::new(fqdn(name), RecoveryTimeStamp::new(stamp)),
+            );
             upf.handle_datagram(at(0), peer, &setup.encode().unwrap());
             let (received, _) = request(&mut upf);
             let answer =
@@ -3917,10 +3690,11 @@ fn peers_on_one_address() {
                     ..Default::default()
                 },
             );
-            let establishment = Message {
-                header: Header::session(0, 2),
-                body: SessionEstablishmentRequest::new_n4(fqdn(name), f_seid, pdr, far).into(),
-            };
+            let establishment = Message::session(
+                0,
+                2,
+                SessionEstablishmentRequest::new_n4(fqdn(name), f_seid, pdr, far),
+            );
             upf.handle_datagram(at(1), peer, &establishment.encode().unwrap());
             let (received, _) = request(&mut upf);
             let up_seid = upf.new_session();
@@ -3956,10 +3730,8 @@ fn peers_on_one_address() {
         // Their heartbeats, each with its stamp: no restart
         for i in 0..4 {
             for (peer, stamp) in [(smf1, 1001), (smf2, 1002)] {
-                let heartbeat = Message {
-                    header: Header::node(10 + i),
-                    body: HeartbeatRequest::new(RecoveryTimeStamp::new(stamp)).into(),
-                };
+                let heartbeat =
+                    Message::node(10 + i, HeartbeatRequest::new(RecoveryTimeStamp::new(stamp)));
                 upf.handle_datagram(at(2), peer, &heartbeat.encode().unwrap());
             }
         }
@@ -3969,10 +3741,7 @@ fn peers_on_one_address() {
                 .any(|event| matches!(event, Event::PeerRestarted { .. }))
         );
         // The release of the first ends its sessions alone
-        let release = Message {
-            header: Header::node(3),
-            body: AssociationReleaseRequest::new(fqdn("smf1")).into(),
-        };
+        let release = Message::node(3, AssociationReleaseRequest::new(fqdn("smf1")));
         upf.handle_datagram(at(3), smf1, &release.encode().unwrap());
         let (received, _) = request(&mut upf);
         upf.respond(
@@ -4010,10 +3779,11 @@ fn establishment(cp_seid: u64) -> Message {
             ..Default::default()
         },
     );
-    Message {
-        header: Header::session(0, 0),
-        body: SessionEstablishmentRequest::new_n4(node_id(SMF), f_seid, pdr, far).into(),
-    }
+    Message::session(
+        0,
+        0,
+        SessionEstablishmentRequest::new_n4(node_id(SMF), f_seid, pdr, far),
+    )
 }
 
 /// An establishment of a local SEID that a session or another establishment has is
@@ -4158,16 +3928,10 @@ fn a_move_of_no_session_frees_its_new_seid() {
     pass(&mut upf, &mut smf, SMF, at(1));
     assert!(smf.session(new).is_none());
     // A modification that request() sends with the SEID of no session of the node
-    let modification = Message {
-        header: Header::session(up_seid + 1000, 0),
-        body: to(0x4242).into(),
-    };
+    let modification = Message::session(up_seid + 1000, 0, to(0x4242));
     smf.request(at(2), UPF, modification).unwrap();
     let sequence = decoded(&sent(&mut smf)[0]).header.sequence;
-    let response = Message {
-        header: Header::session(1, sequence),
-        body: SessionModificationResponse::new(accepted()).into(),
-    };
+    let response = Message::session(1, sequence, SessionModificationResponse::new(accepted()));
     smf.handle_datagram(at(2), UPF, &response.encode().unwrap());
     assert!(smf.session(0x4242).is_none());
 }
@@ -4198,13 +3962,15 @@ fn the_previous_seid_of_a_moved_session() {
     .unwrap();
     pass(&mut upf, &mut smf, SMF, at(1));
     events(&mut smf);
-    let report = |sequence| Message {
-        header: Header::session(cp_seid, sequence),
-        body: SessionReportRequest::new(ReportType {
-            upir: true,
-            ..Default::default()
-        })
-        .into(),
+    let report = |sequence| {
+        Message::session(
+            cp_seid,
+            sequence,
+            SessionReportRequest::new(ReportType {
+                upir: true,
+                ..Default::default()
+            }),
+        )
     };
     // 2 x N1 x T1 is 18 s: at 20 s, the previous SEID is of the session still
     smf.handle_datagram(at(20), UPF, &report(900).encode().unwrap());
@@ -4224,10 +3990,7 @@ fn the_previous_seid_of_a_moved_session() {
 fn a_session_request_by_its_seid_whatever_its_address() {
     let (mut smf, mut upf) = associated(at(0));
     let (cp_seid, up_seid) = established_on(&mut smf, &mut upf, at(0), Ipv4Addr::new(10, 0, 0, 22));
-    let deletion = Message {
-        header: Header::session(up_seid, 0),
-        body: SessionDeletionRequest::default().into(),
-    };
+    let deletion = Message::session(up_seid, 0, SessionDeletionRequest::default());
     smf.request(at(1), UPF, deletion).unwrap();
     for transmit in sent(&mut smf) {
         upf.handle_datagram(at(1), SMF, &transmit.octets);
@@ -4295,10 +4058,11 @@ fn a_seid_of_zero_is_of_no_session() {
             ..Default::default()
         },
     );
-    let again = Message {
-        header: Header::session(0, 0),
-        body: SessionEstablishmentRequest::new_n4(node_id(SMF), f_seid, pdr, far).into(),
-    };
+    let again = Message::session(
+        0,
+        0,
+        SessionEstablishmentRequest::new_n4(node_id(SMF), f_seid, pdr, far),
+    );
     assert!(smf.request(at(3), UPF, again).is_ok());
     let (mut smf, mut upf) = associated(at(0));
     assert_eq!(
@@ -4321,20 +4085,14 @@ fn a_seid_of_zero_is_of_no_session() {
         Err(NodeError::SeidZero)
     );
     // A probe's answer with it: no session 0 on either side
-    let message = Message {
-        header: Header::session(cp_seid, received.sequence),
-        body: response.into(),
-    };
+    let message = Message::session(cp_seid, received.sequence, response);
     upf.respond_message(at(1), &received, message, Delivery::Send)
         .unwrap();
     assert!(upf.session(0).is_none());
     pass(&mut upf, &mut smf, SMF, at(1));
     assert!(smf.session(cp_seid).is_none());
     assert_eq!(violations(&mut smf), [ViolationKind::SeidZero]);
-    let modification = Message {
-        header: Header::session(0, 77),
-        body: SessionModificationRequest::default().into(),
-    };
+    let modification = Message::session(0, 77, SessionModificationRequest::default());
     upf.handle_datagram(at(2), SMF, &modification.encode().unwrap());
     assert_eq!(violations(&mut upf), [ViolationKind::UnknownSeid]);
 }
@@ -4363,10 +4121,11 @@ fn a_peer_seid_of_zero_is_kept_by_no_session() {
             ..Default::default()
         },
     );
-    let establishment = Message {
-        header: Header::session(0, 40),
-        body: SessionEstablishmentRequest::new_n4(node_id(SMF), zero.clone(), pdr, far).into(),
-    };
+    let establishment = Message::session(
+        0,
+        40,
+        SessionEstablishmentRequest::new_n4(node_id(SMF), zero.clone(), pdr, far),
+    );
     upf.handle_datagram(at(1), SMF, &establishment.encode().unwrap());
     assert_eq!(violations(&mut upf), [ViolationKind::SeidZero]);
     let Body::SessionEstablishmentResponse(answer) = decoded(&sent(&mut upf)[0]).body else {
@@ -4381,12 +4140,11 @@ fn a_peer_seid_of_zero_is_kept_by_no_session() {
     );
     // A modification that moves the session to SEID 0
     let (cp_seid, up_seid) = established(&mut smf, &mut upf, at(2));
-    let modification = Message {
-        header: Header::session(up_seid, 41),
-        body: SessionModificationRequest::default()
-            .with_cp_f_seid(zero)
-            .into(),
-    };
+    let modification = Message::session(
+        up_seid,
+        41,
+        SessionModificationRequest::default().with_cp_f_seid(zero),
+    );
     upf.handle_datagram(at(3), SMF, &modification.encode().unwrap());
     let got = events(&mut upf);
     assert!(
@@ -4458,12 +4216,7 @@ fn setup_of_set(node_id: NodeId, features: CpFunctionFeatures, set: Option<&str>
             ..Default::default()
         });
     }
-    Message {
-        header: Header::node(1),
-        body: request.into(),
-    }
-    .encode()
-    .unwrap()
+    Message::node(1, request).encode().unwrap()
 }
 
 /// A UPF associated with an SMF at each of `smfs`, which gives its Node ID, its features and
@@ -4506,10 +4259,11 @@ fn upf_of_set(
             ..Default::default()
         },
     );
-    let establishment = Message {
-        header: Header::session(0, 2),
-        body: SessionEstablishmentRequest::new_n4(node_id.clone(), f_seid, pdr, far).into(),
-    };
+    let establishment = Message::session(
+        0,
+        2,
+        SessionEstablishmentRequest::new_n4(node_id.clone(), f_seid, pdr, far),
+    );
     upf.handle_datagram(at(0), *from, &establishment.encode().unwrap());
     let (received, _) = request(&mut upf);
     let up_seid = upf.new_session();
@@ -4581,18 +4335,9 @@ fn a_request_of_another_peers_session_is_a_strangers() {
         (SMF, node_id(SMF), mpas(), Some("set")),
         (smf_b, node_id(smf_b), mpas(), Some("set")),
     ];
-    let modification = |seid, sequence| Message {
-        header: Header::session(seid, sequence),
-        body: SessionModificationRequest::default().into(),
-    };
-    let deletion = |seid| Message {
-        header: Header::session(seid, 5),
-        body: SessionDeletionRequest::default().into(),
-    };
-    let node_message = |sequence, body: Body| Message {
-        header: Header::node(sequence),
-        body,
-    };
+    let modification =
+        |seid, sequence| Message::session(seid, sequence, SessionModificationRequest::default());
+    let deletion = |seid| Message::session(seid, 5, SessionDeletionRequest::default());
     let (mut upf, up_seid) = upf_of_set(false, &smfs);
     // Of a session that is not theirs: B with an association, C without
     assert_eq!(taken(&mut upf, smf_c, modification(up_seid, 6)), Ok(true));
@@ -4619,22 +4364,22 @@ fn a_request_of_another_peers_session_is_a_strangers() {
         Err(vec![ViolationKind::UnknownSeid])
     );
     // An update or a release of the association of another SMF, and of none
-    let update = |node_id| AssociationUpdateRequest::new(node_id).into();
-    let release = |node_id| AssociationReleaseRequest::new(node_id).into();
+    let update = |node_id| AssociationUpdateRequest::new(node_id);
+    let release = |node_id| AssociationReleaseRequest::new(node_id);
     assert_eq!(
-        taken(&mut upf, smf_c, node_message(12, update(node_id(SMF)))),
+        taken(&mut upf, smf_c, Message::node(12, update(node_id(SMF)))),
         Ok(true)
     );
     assert_eq!(
-        taken(&mut upf, smf_b, node_message(13, release(node_id(SMF)))),
+        taken(&mut upf, smf_b, Message::node(13, release(node_id(SMF)))),
         Ok(true)
     );
     assert_eq!(
-        taken(&mut upf, SMF, node_message(14, update(node_id(SMF)))),
+        taken(&mut upf, SMF, Message::node(14, update(node_id(SMF)))),
         Ok(false)
     );
     assert_eq!(
-        taken(&mut upf, smf_c, node_message(15, update(node_id(smf_c)))),
+        taken(&mut upf, smf_c, Message::node(15, update(node_id(smf_c)))),
         Err(vec![ViolationKind::UnknownNode])
     );
     // An establishment needs an association (§6.2.6.2.1)
@@ -4655,10 +4400,8 @@ fn mpas_a_release_keeps_the_sessions_of_the_set() {
         (smf_b, node_id(smf_b), mpas(), Some("set")),
     ];
     let (mut upf, up_seid) = upf_of_set(true, &smfs);
-    let release = |from: SocketAddr| Message {
-        header: Header::node(9),
-        body: AssociationReleaseRequest::new(node_id(from)).into(),
-    };
+    let release =
+        |from: SocketAddr| Message::node(9, AssociationReleaseRequest::new(node_id(from)));
     for (from, kept) in [(SMF, true), (smf_b, false)] {
         upf.handle_datagram(at(2), from, &release(from).encode().unwrap());
         let (received, _) = request(&mut upf);
@@ -4747,14 +4490,14 @@ fn a_session_handed_over_to_an_smf_of_the_set() {
         .unwrap();
         assert_eq!(decoded(&sent(&mut smf)[0]).header.seid, Some(0x77));
         // A report of the session that it took over is of its own
-        let report = Message {
-            header: Header::session(local, 10),
-            body: SessionReportRequest::new(ReportType {
+        let report = Message::session(
+            local,
+            10,
+            SessionReportRequest::new(ReportType {
                 upir: true,
                 ..Default::default()
-            })
-            .into(),
-        };
+            }),
+        );
         assert_eq!(taken(&mut smf, UPF, report), Ok(false));
         // Its modifications go to the UPF's SEID
         smf.session_request(at(2), local, SessionModificationRequest::default())
@@ -4792,15 +4535,8 @@ fn a_session_moved_to_another_smf_of_the_set() {
         ..Default::default()
     })
     .with_old_cp_f_seid(old);
-    upf.request(
-        at(1),
-        other,
-        Message {
-            header: Header::session(0, 0),
-            body: report.into(),
-        },
-    )
-    .unwrap();
+    upf.request(at(1), other, Message::session(0, 0, report))
+        .unwrap();
     let sequence = decoded(&sent(&mut upf)[0]).header.sequence;
     let new = FSeid {
         v4: true,
@@ -4808,12 +4544,11 @@ fn a_session_moved_to_another_smf_of_the_set() {
         ipv4: Some(Ipv4Addr::new(10, 0, 0, 7)),
         ..Default::default()
     };
-    let response = Message {
-        header: Header::session(up_seid, sequence),
-        body: SessionReportResponse::new(accepted())
-            .with_cp_f_seid(new)
-            .into(),
-    };
+    let response = Message::session(
+        up_seid,
+        sequence,
+        SessionReportResponse::new(accepted()).with_cp_f_seid(new),
+    );
     upf.handle_datagram(at(1), other, &response.encode().unwrap());
     let session = upf.session(up_seid).unwrap();
     assert_eq!((session.peer, session.peer_seid), (other, Some(0x99)));
@@ -4911,26 +4646,27 @@ fn a_probe_answer_of_another_type_changes_nothing() {
         .unwrap();
     pass(&mut smf, &mut upf, UPF, at(1));
     let (received, _) = request(&mut upf);
-    let wrong = Message {
-        header: Header::session(cp_seid, received.sequence),
-        body: SessionDeletionResponse::new(accepted()).into(),
-    };
+    let wrong = Message::session(
+        cp_seid,
+        received.sequence,
+        SessionDeletionResponse::new(accepted()),
+    );
     upf.respond_message(at(1), &received, wrong, Delivery::Send)
         .unwrap();
     assert!(upf.session(up_seid).is_some());
 
     // A setup answered with a release response: the association is not formed.
     let mut fresh = node(UPF, Function::Up);
-    let setup = Message {
-        header: Header::node(1),
-        body: AssociationSetupRequest::new(node_id(SMF), RecoveryTimeStamp::new(1000)).into(),
-    };
+    let setup = Message::node(
+        1,
+        AssociationSetupRequest::new(node_id(SMF), RecoveryTimeStamp::new(1000)),
+    );
     fresh.handle_datagram(at(0), SMF, &setup.encode().unwrap());
     let (received, _) = request(&mut fresh);
-    let wrong = Message {
-        header: Header::node(received.sequence),
-        body: AssociationReleaseResponse::new(node_id(UPF), accepted()).into(),
-    };
+    let wrong = Message::node(
+        received.sequence,
+        AssociationReleaseResponse::new(node_id(UPF), accepted()),
+    );
     fresh
         .respond_message(at(0), &received, wrong, Delivery::Send)
         .unwrap();
@@ -4949,12 +4685,11 @@ fn an_association_update_changes_the_set_features() {
     ];
     let (mut upf, up_seid) = upf_of_set(true, &smfs);
     // A turns MPAS off in an Association Update, with no new SMF Set ID.
-    let update = Message {
-        header: Header::node(8),
-        body: AssociationUpdateRequest::new(node_id(SMF))
-            .with_cp_function_features(CpFunctionFeatures::default())
-            .into(),
-    };
+    let update = Message::node(
+        8,
+        AssociationUpdateRequest::new(node_id(SMF))
+            .with_cp_function_features(CpFunctionFeatures::default()),
+    );
     upf.handle_datagram(at(2), SMF, &update.encode().unwrap());
     let (received, _) = request(&mut upf);
     upf.respond(
@@ -5036,15 +4771,7 @@ fn mpas_of_associations_that_the_upf_sets_up() {
                 mpas: true,
                 ..Default::default()
             });
-        upf.request(
-            at(0),
-            smf,
-            Message {
-                header: Header::node(0),
-                body: setup.into(),
-            },
-        )
-        .unwrap();
+        upf.request(at(0), smf, Message::node(0, setup)).unwrap();
         let sequence = decoded(&sent(&mut upf)[0]).header.sequence;
         let response =
             AssociationSetupResponse::new(node_id(smf), accepted(), RecoveryTimeStamp::new(1000))
@@ -5053,10 +4780,7 @@ fn mpas_of_associations_that_the_upf_sets_up() {
                     fqdn: Fqdn::new("set").unwrap(),
                     ..Default::default()
                 });
-        let response = Message {
-            header: Header::node(sequence),
-            body: response.into(),
-        };
+        let response = Message::node(sequence, response);
         upf.handle_datagram(at(0), smf, &response.encode().unwrap());
     }
     events(&mut upf);
@@ -5096,15 +4820,7 @@ fn cp_keeps_with_a_upf_that_sets_up(update: Option<bool>) -> bool {
     };
     let setup = AssociationSetupRequest::new(node_id(UPF), RecoveryTimeStamp::new(1000))
         .with_up_function_features(up_mpas(true));
-    upf.request(
-        at(0),
-        SMF,
-        Message {
-            header: Header::node(0),
-            body: setup.into(),
-        },
-    )
-    .unwrap();
+    upf.request(at(0), SMF, Message::node(0, setup)).unwrap();
     pass(&mut upf, &mut smf, SMF, at(0));
     let (received, _) = request(&mut smf);
     let answer =
@@ -5117,15 +4833,7 @@ fn cp_keeps_with_a_upf_that_sets_up(update: Option<bool>) -> bool {
     if let Some(mpas) = update {
         let update =
             AssociationUpdateRequest::new(node_id(UPF)).with_up_function_features(up_mpas(mpas));
-        upf.request(
-            at(0),
-            SMF,
-            Message {
-                header: Header::node(0),
-                body: update.into(),
-            },
-        )
-        .unwrap();
+        upf.request(at(0), SMF, Message::node(0, update)).unwrap();
         pass(&mut upf, &mut smf, SMF, at(0));
         let (received, _) = request(&mut smf);
         smf.respond(
@@ -5167,12 +4875,11 @@ fn mpas_a_release_leaves_a_taken_over_session_with_its_smf() {
     ];
     let (mut upf, up_seid) = upf_of_set(true, &smfs);
     // B takes the session over, with its Node ID and no new CP F-SEID.
-    let takeover = Message {
-        header: Header::session(up_seid, 7),
-        body: SessionModificationRequest::default()
-            .with_node_id(node_id(b))
-            .into(),
-    };
+    let takeover = Message::session(
+        up_seid,
+        7,
+        SessionModificationRequest::default().with_node_id(node_id(b)),
+    );
     upf.handle_datagram(at(1), b, &takeover.encode().unwrap());
     let (received, _) = request(&mut upf);
     assert!(received.stranger);
@@ -5182,17 +4889,11 @@ fn mpas_a_release_leaves_a_taken_over_session_with_its_smf() {
         SessionModificationResponse::new(accepted()),
     )
     .unwrap();
-    let bs = |seq| Message {
-        header: Header::session(up_seid, seq),
-        body: SessionModificationRequest::default().into(),
-    };
+    let bs = |seq| Message::session(up_seid, seq, SessionModificationRequest::default());
     // The session is B's now: B's own modification is not a stranger's.
     assert_eq!(taken(&mut upf, b, bs(8)), Ok(false));
     // A releases its association.
-    let release = Message {
-        header: Header::node(9),
-        body: AssociationReleaseRequest::new(node_id(a)).into(),
-    };
+    let release = Message::node(9, AssociationReleaseRequest::new(node_id(a)));
     upf.handle_datagram(at(2), a, &release.encode().unwrap());
     let (received, _) = request(&mut upf);
     upf.respond(
@@ -5214,9 +4915,11 @@ fn mpas_a_release_leaves_a_taken_over_session_with_its_smf() {
 fn an_answer_to_a_request_no_longer_waiting_says_so() {
     let answer =
         || AssociationSetupResponse::new(node_id(UPF), accepted(), RecoveryTimeStamp::new(1000));
-    let setup = || Message {
-        header: Header::node(1),
-        body: AssociationSetupRequest::new(node_id(SMF), RecoveryTimeStamp::new(1000)).into(),
+    let setup = || {
+        Message::node(
+            1,
+            AssociationSetupRequest::new(node_id(SMF), RecoveryTimeStamp::new(1000)),
+        )
     };
     // Forgotten by the caller.
     let mut upf = node(UPF, Function::Up);
@@ -5542,24 +5245,24 @@ fn a_probe_answer_of_another_type_leaves_the_next_one_its_effect() {
     smf.request(at(0), UPF, establishment(cp_seid)).unwrap();
     pass(&mut smf, &mut upf, UPF, at(0));
     let (received, _) = request(&mut upf);
-    let wrong = Message {
-        header: Header::session(cp_seid, received.sequence),
-        body: HeartbeatResponse::new(RecoveryTimeStamp::new(1000)).into(),
-    };
+    let wrong = Message::session(
+        cp_seid,
+        received.sequence,
+        HeartbeatResponse::new(RecoveryTimeStamp::new(1000)),
+    );
     upf.respond_message(at(0), &received, wrong, Delivery::Send)
         .unwrap();
     let up_seid = 0x5151;
-    let right = Message {
-        header: Header::session(cp_seid, received.sequence),
-        body: SessionEstablishmentResponse::new(node_id(UPF), accepted())
-            .with_up_f_seid(FSeid {
-                v4: true,
-                seid: Some(up_seid),
-                ipv4: Some(Ipv4Addr::new(10, 0, 0, 2)),
-                ..Default::default()
-            })
-            .into(),
-    };
+    let right = Message::session(
+        cp_seid,
+        received.sequence,
+        SessionEstablishmentResponse::new(node_id(UPF), accepted()).with_up_f_seid(FSeid {
+            v4: true,
+            seid: Some(up_seid),
+            ipv4: Some(Ipv4Addr::new(10, 0, 0, 2)),
+            ..Default::default()
+        }),
+    );
     upf.respond_message(at(0), &received, right, Delivery::Send)
         .unwrap();
     pass(&mut upf, &mut smf, SMF, at(0));
@@ -5584,9 +5287,10 @@ fn a_probe_answer_of_another_type_leaves_the_next_one_its_effect() {
 /// A UPF's report of SEID 0 that hands over the session of the Old CP F-SEID 0x1234 of
 /// 10.0.0.9 (§5.22.2, §5.22.3 bullet 6).
 fn handover_report() -> Message {
-    Message {
-        header: Header::session(0, 9),
-        body: SessionReportRequest::new(ReportType {
+    Message::session(
+        0,
+        9,
+        SessionReportRequest::new(ReportType {
             uisr: true,
             ..Default::default()
         })
@@ -5595,9 +5299,8 @@ fn handover_report() -> Message {
             seid: Some(0x1234),
             ipv4: Some(Ipv4Addr::new(10, 0, 0, 9)),
             ..Default::default()
-        })
-        .into(),
-    }
+        }),
+    )
 }
 
 /// Table 7.4.4.4-1: the Association Update Response carries the responder's function
@@ -5616,10 +5319,7 @@ fn cp_keeps_after_an_update_answered_with(before: bool, after: bool, cause: Caus
     smf.request(
         at(1),
         UPF,
-        Message {
-            header: Header::node(0),
-            body: AssociationUpdateRequest::new(node_id(SMF)).into(),
-        },
+        Message::node(0, AssociationUpdateRequest::new(node_id(SMF))),
     )
     .unwrap();
     pass(&mut smf, &mut upf, UPF, at(1));
@@ -5725,12 +5425,9 @@ fn a_retransmission_of_a_held_request_is_an_event() {
     assert_eq!(events(&mut upf), [retransmission(5, true)]);
     assert_eq!(sent(&mut upf), answer);
     // A session request of a host without an association, which the node rejects itself
-    let modification = Message {
-        header: Header::session(0x10, 6),
-        body: SessionModificationRequest::default().into(),
-    }
-    .encode()
-    .unwrap();
+    let modification = Message::session(0x10, 6, SessionModificationRequest::default())
+        .encode()
+        .unwrap();
     let mut upf = node(UPF, Function::Up);
     upf.handle_datagram(at(0), SMF, &modification);
     assert_eq!(
@@ -5819,14 +5516,14 @@ fn an_answer_after_two_moves_goes_to_its_session() {
     move_session(&mut smf, &mut upf, cp_seid, 0x77, at(1));
     move_session(&mut smf, &mut upf, 0x77, 0x88, at(1));
     // The UPF still sends to the first SEID (NOTE 2)
-    let earlier = Message {
-        header: Header::session(cp_seid, 77),
-        body: SessionReportRequest::new(ReportType {
+    let earlier = Message::session(
+        cp_seid,
+        77,
+        SessionReportRequest::new(ReportType {
             dldr: true,
             ..Default::default()
-        })
-        .into(),
-    };
+        }),
+    );
     smf.handle_datagram(at(2), UPF, &earlier.encode().unwrap());
     let (received, _) = request(&mut smf);
     assert_eq!(received.seid, Some(0x88));
@@ -5847,14 +5544,14 @@ fn respond_as_answers_a_handover_alone() {
     let (mut smf, mut upf) = associated(at(0));
     let (first, _) = established(&mut smf, &mut upf, at(0));
     let (second, _) = established(&mut smf, &mut upf, at(0));
-    let report = Message {
-        header: Header::session(first, 10),
-        body: SessionReportRequest::new(ReportType {
+    let report = Message::session(
+        first,
+        10,
+        SessionReportRequest::new(ReportType {
             upir: true,
             ..Default::default()
-        })
-        .into(),
-    };
+        }),
+    );
     smf.handle_datagram(at(1), UPF, &report.encode().unwrap());
     let (received, _) = request(&mut smf);
     assert_eq!(received.seid, Some(first));
@@ -5930,22 +5627,23 @@ fn mpas_an_entity_controls_the_session_that_it_takes_over() {
     assert_eq!(transmits[0].to, UPF);
     let modification = decoded(&transmits[0]);
     assert_eq!(modification.header.seid, Some(0x66));
-    let response = Message {
-        header: Header::session(0x55, modification.header.sequence),
-        body: SessionModificationResponse::new(accepted()).into(),
-    };
+    let response = Message::session(
+        0x55,
+        modification.header.sequence,
+        SessionModificationResponse::new(accepted()),
+    );
     other.handle_datagram(at(2), UPF, &response.encode().unwrap());
     assert!(matches!(&events(&mut other)[..], [Event::Response { .. }]));
     // The UPF's requests of the session, beyond the room of strangers
     for sequence in 10..20 {
-        let report = Message {
-            header: Header::session(0x55, sequence),
-            body: SessionReportRequest::new(ReportType {
+        let report = Message::session(
+            0x55,
+            sequence,
+            SessionReportRequest::new(ReportType {
                 dldr: true,
                 ..Default::default()
-            })
-            .into(),
-        };
+            }),
+        );
         other.handle_datagram(at(3), UPF, &report.encode().unwrap());
     }
     assert_eq!(requests_of(&events(&mut other)), 10);
@@ -5958,10 +5656,11 @@ fn mpas_an_entity_controls_the_session_that_it_takes_over() {
         .session_request(at(64), 0x55, SessionDeletionRequest::default())
         .unwrap();
     let deletion = decoded(&sent(&mut other)[0]);
-    let response = Message {
-        header: Header::session(0x55, deletion.header.sequence),
-        body: SessionDeletionResponse::new(accepted()).into(),
-    };
+    let response = Message::session(
+        0x55,
+        deletion.header.sequence,
+        SessionDeletionResponse::new(accepted()),
+    );
     other.handle_datagram(at(64), UPF, &response.encode().unwrap());
     assert!(other.session(0x55).is_none());
     assert_eq!(other.poll_timeout(), None);
@@ -5983,14 +5682,14 @@ fn the_requests_of_the_host_of_an_f_seid_are_no_strangers() {
     let (cp_seid, _) = established_on(&mut smf, &mut upf, at(0), Ipv4Addr::new(10, 0, 0, 12));
     let host = Ipv4Addr::new(10, 0, 0, 12).into_socket(8805);
     for sequence in [10, 11, 12] {
-        let report = Message {
-            header: Header::session(cp_seid, sequence),
-            body: SessionReportRequest::new(ReportType {
+        let report = Message::session(
+            cp_seid,
+            sequence,
+            SessionReportRequest::new(ReportType {
                 dldr: true,
                 ..Default::default()
-            })
-            .into(),
-        };
+            }),
+        );
         smf.handle_datagram(at(1), host, &report.encode().unwrap());
     }
     assert_eq!(requests_of(&events(&mut smf)), 3);
@@ -6022,10 +5721,7 @@ fn a_peer_at_its_ipv4_mapped_address_is_its_ipv4_address() {
         }
     };
     let setup = AssociationSetupRequest::new(node_id(SMF), RecoveryTimeStamp::new(1000));
-    let setup = Message {
-        header: Header::node(0),
-        body: setup.into(),
-    };
+    let setup = Message::node(0, setup);
     smf.request(at(0), mapped(UPF), setup).unwrap();
     carry(&mut smf, &mut upf, UPF, SMF);
     let (received, _) = request(&mut upf);
@@ -6052,10 +5748,7 @@ fn a_peer_at_its_ipv4_mapped_address_is_its_ipv4_address() {
     );
     let far = CreateFar::new(FarId::new(1), ApplyAction::default());
     let establishment = SessionEstablishmentRequest::new_n4(node_id(SMF), cp_f_seid, pdr, far);
-    let establishment = Message {
-        header: Header::session(0, 0),
-        body: establishment.into(),
-    };
+    let establishment = Message::session(0, 0, establishment);
     smf.request(at(0), mapped(UPF), establishment).unwrap();
     carry(&mut smf, &mut upf, UPF, SMF);
     let (received, _) = request(&mut upf);
@@ -6115,10 +5808,7 @@ fn the_stamps_that_a_flood_spares_follow_the_associations() {
     );
     smf.adopt_session(0x55, OTHER, 0x66).unwrap();
     let beat = |smf: &mut Node, from: SocketAddr, stamp: u32| {
-        let request = Message {
-            header: Header::node(7),
-            body: HeartbeatRequest::new(RecoveryTimeStamp::new(stamp)).into(),
-        };
+        let request = Message::node(7, HeartbeatRequest::new(RecoveryTimeStamp::new(stamp)));
         smf.handle_datagram(at(1), from, &request.encode().unwrap());
         sent(smf);
         events(smf)
@@ -6152,14 +5842,14 @@ fn mpas_an_adopted_session_is_none_of_a_strangers() {
     });
     other.adopt_session(0x55, UPF, 0x66).unwrap();
     let stranger = Ipv4Addr::new(10, 0, 0, 8).into_socket(8805);
-    let report = Message {
-        header: Header::session(0x55, 10),
-        body: SessionReportRequest::new(ReportType {
+    let report = Message::session(
+        0x55,
+        10,
+        SessionReportRequest::new(ReportType {
             dldr: true,
             ..Default::default()
-        })
-        .into(),
-    };
+        }),
+    );
     assert_eq!(
         taken(&mut other, stranger, report),
         Err(vec![ViolationKind::SessionWithoutAssociation])
@@ -6205,14 +5895,14 @@ fn an_adopted_seid_spares_the_room_of_strangers_to_its_peer_alone() {
     assert_eq!(requests_of(&events(&mut other)), 0);
     assert_eq!(other.counters().refused, 10);
     // The session's report, from its peer, does not wait
-    let report = Message {
-        header: Header::session(1, 31),
-        body: SessionReportRequest::new(ReportType {
+    let report = Message::session(
+        1,
+        31,
+        SessionReportRequest::new(ReportType {
             dldr: true,
             ..Default::default()
-        })
-        .into(),
-    };
+        }),
+    );
     other.handle_datagram(at(1), UPF, &report.encode().unwrap());
     assert_eq!(requests_of(&events(&mut other)), 1);
 }
@@ -6270,12 +5960,7 @@ fn a_replaced_association_stops_the_heartbeats_of_its_old_address() {
     let setup = |sequence: u32| {
         let request =
             AssociationSetupRequest::new(fqdn("upf.example"), RecoveryTimeStamp::new(1000));
-        Message {
-            header: Header::node(sequence),
-            body: request.into(),
-        }
-        .encode()
-        .unwrap()
+        Message::node(sequence, request).encode().unwrap()
     };
     let elsewhere = Ipv4Addr::new(10, 0, 0, 7).into_socket(8805);
     for (now, from) in [(0, UPF), (10, elsewhere)] {
@@ -6300,18 +5985,12 @@ fn a_replaced_association_stops_the_heartbeats_of_its_old_address() {
     set_up(&mut smf, &mut upf, at(0), cp_features(), up_features());
     let other_port = SocketAddr::new(UPF.ip(), 9000);
     let setup = AssociationSetupRequest::new(node_id(SMF), RecoveryTimeStamp::new(1000));
-    let message = Message {
-        header: Header::node(0),
-        body: setup.into(),
-    };
+    let message = Message::node(0, setup);
     smf.request(at(10), other_port, message).unwrap();
     pass(&mut smf, &mut upf, other_port, at(10));
     let (received, _) = request(&mut upf);
     let answer = setup_answer();
-    let response = Message {
-        header: Header::node(received.sequence),
-        body: answer.into(),
-    };
+    let response = Message::node(received.sequence, answer);
     smf.handle_datagram(at(10), other_port, &response.encode().unwrap());
     events(&mut smf);
     smf.handle_timeout(at(70));
@@ -6328,12 +6007,9 @@ fn the_stamps_of_hosts_go_only_once_the_node_is_full() {
         ..config(UPF, Function::Up)
     });
     let heartbeat = |stamp| {
-        Message {
-            header: Header::node(1),
-            body: HeartbeatRequest::new(RecoveryTimeStamp::new(stamp)).into(),
-        }
-        .encode()
-        .unwrap()
+        Message::node(1, HeartbeatRequest::new(RecoveryTimeStamp::new(stamp)))
+            .encode()
+            .unwrap()
     };
     let hosts = [3, 4, 5, 6].map(|last| Ipv4Addr::new(10, 0, 0, last).into_socket(8805));
     let restarted = |upf: &mut Node, host| {

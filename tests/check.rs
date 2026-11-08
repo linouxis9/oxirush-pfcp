@@ -53,10 +53,7 @@ fn establishment() -> Message {
         ..Default::default()
     };
     let request = SessionEstablishmentRequest::new_n4(NodeId::Ipv4(SMF), seid, pdr(1), far(1));
-    Message {
-        header: Header::session(0, 7),
-        body: request.into(),
-    }
+    Message::session(0, 7, request)
 }
 
 fn kinds(message: &Message, interface: Interfaces) -> Vec<DeviationKind> {
@@ -171,10 +168,7 @@ fn the_cause_follows_the_presence_of_the_grouped_ie() {
 
     let mut modification = SessionModificationRequest::default().with_create_pdr(pdr(1));
     modification.create_pdr[0].pdr_id = None;
-    let message = Message {
-        header: Header::session(0x2002, 8),
-        body: modification.into(),
-    };
+    let message = Message::session(0x2002, 8, modification);
     let found = message.check(Interfaces::N4);
     assert_eq!(
         found[0].kind,
@@ -196,10 +190,7 @@ fn the_cause_follows_the_presence_of_the_grouped_ie() {
     assert_eq!(found[0].cause, None, "an optional grouped IE");
 
     let response = SessionEstablishmentResponse::default();
-    let message = Message {
-        header: Header::session(0x1001, 7),
-        body: response.into(),
-    };
+    let message = Message::session(0x1001, 7, response);
     assert!(
         message
             .check(Interfaces::N4)
@@ -218,10 +209,7 @@ fn a_rejection_carries_only_what_it_may() {
         offending_ie: Some(OffendingIe::new(96)),
         ..Default::default()
     };
-    let mut message = Message {
-        header: Header::session(0x1001, 7),
-        body: response.into(),
-    };
+    let mut message = Message::session(0x1001, 7, response);
     assert!(
         message.check(Interfaces::N4).is_empty(),
         "{:?}",
@@ -305,10 +293,7 @@ fn a_rejection_carries_no_ie_that_it_may_not_as_octets_either() {
 fn seid_0_only_where_the_peer_seid_is_not_known() {
     let establishment = establishment();
     assert!(establishment.check(Interfaces::N4).is_empty());
-    let modification = Message {
-        header: Header::session(0, 8),
-        body: SessionModificationRequest::default().into(),
-    };
+    let modification = Message::session(0, 8, SessionModificationRequest::default());
     assert!(
         modification
             .check(Interfaces::N4)
@@ -319,10 +304,7 @@ fn seid_0_only_where_the_peer_seid_is_not_known() {
         cause: Some(Cause::new(CauseValue::SessionContextNotFound)),
         ..Default::default()
     };
-    let mut message = Message {
-        header: Header::session(0, 8),
-        body: response.into(),
-    };
+    let mut message = Message::session(0, 8, response);
     assert!(
         message.check(Interfaces::N4).is_empty(),
         "{:?}",
@@ -359,10 +341,7 @@ fn a_report_of_seid_0_carries_the_old_cp_f_seid() {
         if with_old {
             body = body.with_old_cp_f_seid(old.clone());
         }
-        Message {
-            header: Header::session(seid, 9),
-            body: body.into(),
-        }
+        Message::session(seid, 9, body)
     };
     // A report of SEID 0 with the Old CP F-SEID, and one of a known SEID without it: fine.
     assert!(report(0, true).check(Interfaces::N4).is_empty());
@@ -387,22 +366,19 @@ fn a_report_of_seid_0_carries_the_old_cp_f_seid() {
 #[test]
 fn a_message_type_of_the_interface() {
     let request = PfdManagementRequest::default();
-    let message = Message {
-        header: Header::node(3),
-        body: request.into(),
-    };
+    let message = Message::node(3, request);
     assert!(kinds(&message, Interfaces::N4).is_empty());
     assert_eq!(
         kinds(&message, Interfaces::SXA),
         [DeviationKind::MessageNotOnInterface { message_type: 3 }]
     );
-    let other = Message {
-        header: Header::node(3),
-        body: Body::Other {
+    let other = Message::node(
+        3,
+        Body::Other {
             message_type: 99,
             octets: Octets::default(),
         },
-    };
+    );
     assert_eq!(
         kinds(&other, Interfaces::N4),
         [DeviationKind::UnknownMessage { message_type: 99 }]
@@ -417,10 +393,7 @@ fn check_one_change_per_rule() {
         .with_remove_pdr(RemovePdr::new(PdrId::new(3)))
         .with_create_far(far(4))
         .with_update_far(UpdateFar::new(FarId::new(5)));
-    let message = Message {
-        header: Header::session(0x2002, 8),
-        body: modification.into(),
-    };
+    let message = Message::session(0x2002, 8, modification);
     assert_eq!(
         kinds(&message, Interfaces::N4),
         [DeviationKind::RuleChangedTwice { rule: "PDR", id: 3 }]
@@ -466,10 +439,7 @@ fn check_overload_reduction_metric() {
         overload_control_information: Some(Box::new(overload)),
         ..Default::default()
     };
-    let message = Message {
-        header: Header::session(0x1001, 7),
-        body: response.into(),
-    };
+    let message = Message::session(0x1001, 7, response);
     assert_eq!(
         kinds(&message, Interfaces::N4),
         [DeviationKind::ReadAs {
@@ -530,20 +500,14 @@ fn a_request_by_the_name_of_its_type() {
     {
         assert!(!is_request(message_type), "{message_type}");
     }
-    let request = Message {
-        header: Header::node(1),
-        body: NodeReportRequest::default().into(),
-    };
+    let request = Message::node(1, NodeReportRequest::default());
     let causes: Vec<_> = request
         .check(Interfaces::N4)
         .iter()
         .map(|deviation| deviation.cause)
         .collect();
     assert_eq!(causes, [Some(CauseValue::MandatoryIeMissing); 2]);
-    let response = Message {
-        header: Header::node(1),
-        body: NodeReportResponse::default().into(),
-    };
+    let response = Message::node(1, NodeReportResponse::default());
     assert!(
         response
             .check(Interfaces::N4)
@@ -866,18 +830,19 @@ fn a_reserved_node_id_type_of_an_fq_csid_is_incorrect() {
 /// labels that run past their end or are too many.
 #[test]
 fn the_fqdn_of_an_smf_set_id_is_labels() {
-    let setup = |fqdn: Fqdn| Message {
-        header: Header::node(1),
-        body: AssociationSetupRequest::new(NodeId::Ipv4(SMF), RecoveryTimeStamp::new(1))
-            .with_cp_function_features(CpFunctionFeatures {
-                mpas: true,
-                ..Default::default()
-            })
-            .with_smf_set_id(SmfSetId {
-                fqdn,
-                ..Default::default()
-            })
-            .into(),
+    let setup = |fqdn: Fqdn| {
+        Message::node(
+            1,
+            AssociationSetupRequest::new(NodeId::Ipv4(SMF), RecoveryTimeStamp::new(1))
+                .with_cp_function_features(CpFunctionFeatures {
+                    mpas: true,
+                    ..Default::default()
+                })
+                .with_smf_set_id(SmfSetId {
+                    fqdn,
+                    ..Default::default()
+                }),
+        )
     };
     let label = |length: u8| [&[length][..], &vec![b'a'; usize::from(length)]].concat();
     let labels = |last| [label(63), label(63), label(63), label(last)].concat();
@@ -1016,9 +981,10 @@ fn a_conditional_ie_that_does_not_decode_is_incorrect() {
     // In a response, a Local F-TEID of Created PDR without its TEID
     let mut created = CreatedPdr::new(PdrId::new(1));
     created.raw.push(cut(21, &[1]));
-    let response = Message {
-        header: Header::session(0x1001, 7),
-        body: SessionEstablishmentResponse::new(
+    let response = Message::session(
+        0x1001,
+        7,
+        SessionEstablishmentResponse::new(
             NodeId::Ipv4(SMF),
             Cause::new(CauseValue::RequestAccepted),
         )
@@ -1028,9 +994,8 @@ fn a_conditional_ie_that_does_not_decode_is_incorrect() {
             ipv4: Some(SMF),
             ..Default::default()
         })
-        .with_created_pdr(created)
-        .into(),
-    };
+        .with_created_pdr(created),
+    );
     assert_eq!(
         checked(&response),
         [(
@@ -1158,14 +1123,7 @@ fn the_conditions_that_a_message_shows() {
     // An accepted establishment has the UP F-SEID
     let response =
         SessionEstablishmentResponse::new(node.clone(), Cause::new(CauseValue::RequestAccepted));
-    missing(
-        Message {
-            header: Header::session(0x1001, 7),
-            body: response.into(),
-        },
-        57,
-        None,
-    );
+    missing(Message::session(0x1001, 7, response), 57, None);
     // A rejection for a missing or incorrect IE names it
     for cause in [
         CauseValue::MandatoryIeMissing,
@@ -1173,35 +1131,14 @@ fn the_conditions_that_a_message_shows() {
         CauseValue::MandatoryIeIncorrect,
     ] {
         let response = SessionModificationResponse::new(Cause::new(cause));
-        missing(
-            Message {
-                header: Header::session(0x1001, 7),
-                body: response.into(),
-            },
-            40,
-            None,
-        );
+        missing(Message::session(0x1001, 7, response), 40, None);
     }
     let response =
         SessionModificationResponse::new(Cause::new(CauseValue::RuleCreationModificationFailure));
-    missing(
-        Message {
-            header: Header::session(0x1001, 7),
-            body: response.into(),
-        },
-        114,
-        None,
-    );
+    missing(Message::session(0x1001, 7, response), 114, None);
     let response =
         SessionModificationResponse::new(Cause::new(CauseValue::RequestPartiallyAccepted));
-    missing(
-        Message {
-            header: Header::session(0x1001, 7),
-            body: response.into(),
-        },
-        272,
-        None,
-    );
+    missing(Message::session(0x1001, 7, response), 272, None);
     // A report has what its type says
     let report = NodeReportRequest::new(
         node.clone(),
@@ -1211,10 +1148,7 @@ fn the_conditions_that_a_message_shows() {
         },
     );
     missing(
-        Message {
-            header: Header::node(1),
-            body: report.into(),
-        },
+        Message::node(1, report),
         102,
         Some(CauseValue::ConditionalIeMissing),
     );
@@ -1223,10 +1157,7 @@ fn the_conditions_that_a_message_shows() {
         ..Default::default()
     });
     missing(
-        Message {
-            header: Header::session(0x1001, 7),
-            body: report.into(),
-        },
+        Message::session(0x1001, 7, report),
         83,
         Some(CauseValue::ConditionalIeMissing),
     );
@@ -1420,10 +1351,7 @@ fn the_absence_rules_that_their_scope_shows() {
             ..Default::default()
         })
         .with_query_urr(QueryUrr::new(UrrId::new(1)));
-    let message = Message {
-        header: Header::session(1, 1),
-        body: modification.into(),
-    };
+    let message = Message::session(1, 1, modification);
     let found: Vec<_> = message
         .check(Interfaces::N4)
         .into_iter()
@@ -1464,10 +1392,7 @@ fn the_conditions_that_their_scope_shows() {
     };
     let setup = AssociationSetupRequest::new(NodeId::Ipv4(SMF), RecoveryTimeStamp::new(1))
         .with_cp_function_features(mpas.clone());
-    let message = Message {
-        header: Header::node(1),
-        body: setup.clone().into(),
-    };
+    let message = Message::node(1, setup.clone());
     assert_eq!(
         kinds(&message, Interfaces::N4),
         [DeviationKind::ConditionalMissing { ie_type: 180 }]
@@ -1476,10 +1401,7 @@ fn the_conditions_that_their_scope_shows() {
         fqdn: Fqdn(b"\x03set".to_vec().into()),
         ..Default::default()
     };
-    let message = Message {
-        header: Header::node(1),
-        body: setup.with_smf_set_id(set).into(),
-    };
+    let message = Message::node(1, setup.with_smf_set_id(set));
     assert_eq!(kinds(&message, Interfaces::N4), []);
     let response = AssociationSetupResponse::new(
         NodeId::Ipv4(SMF),
@@ -1487,10 +1409,7 @@ fn the_conditions_that_their_scope_shows() {
         RecoveryTimeStamp::new(1),
     )
     .with_cp_function_features(mpas);
-    let message = Message {
-        header: Header::node(1),
-        body: response.into(),
-    };
+    let message = Message::node(1, response);
     assert_eq!(
         kinds(&message, Interfaces::N4),
         [DeviationKind::ConditionalMissing { ie_type: 180 }]
@@ -1775,10 +1694,7 @@ fn eps_cups_on_its_interfaces() {
         buffering.clone(),
     )
     .with_create_bar(CreateBar::new(BarId::new(1)));
-    let sxa = Message {
-        header: Header::session(0, 1),
-        body: sxa.into(),
-    };
+    let sxa = Message::session(0, 1, sxa);
     assert!(
         sxa.check(Interfaces::SXA).is_empty(),
         "{:?}",
@@ -1832,10 +1748,7 @@ fn eps_cups_on_its_interfaces() {
         forward.clone(),
     )
     .with_create_urr(urr);
-    let sxb = Message {
-        header: Header::session(0, 2),
-        body: sxb.into(),
-    };
+    let sxb = Message::session(0, 2, sxb);
     assert!(
         sxb.check(Interfaces::SXB).is_empty(),
         "{:?}",
@@ -1874,10 +1787,7 @@ fn eps_cups_on_its_interfaces() {
             .with_duplicating_parameters(duplicating),
     )
     .with_create_bar(CreateBar::new(BarId::new(1)));
-    let both = Message {
-        header: Header::session(0, 3),
-        body: both.into(),
-    };
+    let both = Message::session(0, 3, both);
     assert!(
         both.check(Interfaces::SXA_SXB).is_empty(),
         "{:?}",
@@ -1925,78 +1835,70 @@ fn messages_of_each_interface() {
     };
     let cases: Vec<(Message, Interfaces, Option<Interfaces>)> = vec![
         (
-            Message {
-                header: Header::session(0x2001, 1),
-                body: SessionModificationRequest::default()
+            Message::session(
+                0x2001,
+                1,
+                SessionModificationRequest::default()
                     .with_update_far(
                         UpdateFar::new(FarId::new(1)).with_apply_action(ApplyAction {
                             drop: true,
                             ..Default::default()
                         }),
                     )
-                    .with_remove_qer(RemoveQer::new(QerId::new(1)))
-                    .into(),
-            },
+                    .with_remove_qer(RemoveQer::new(QerId::new(1))),
+            ),
             Interfaces::SXB,
             Some(Interfaces::SXA),
         ),
         (
-            Message {
-                header: Header::session(0x2001, 2),
-                body: SessionReportRequest::new(ReportType {
+            Message::session(
+                0x2001,
+                2,
+                SessionReportRequest::new(ReportType {
                     usar: true,
                     ..Default::default()
                 })
-                .with_usage_report(urr)
-                .into(),
-            },
+                .with_usage_report(urr),
+            ),
             Interfaces::SXB,
             None,
         ),
         (
-            Message {
-                header: Header::node(3),
-                body: AssociationUpdateRequest::new(node.clone()).into(),
-            },
+            Message::node(3, AssociationUpdateRequest::new(node.clone())),
             Interfaces::SXA,
             None,
         ),
         (
-            Message {
-                header: Header::node(4),
-                body: AssociationReleaseRequest::new(node.clone()).into(),
-            },
+            Message::node(4, AssociationReleaseRequest::new(node.clone())),
             Interfaces::SXB,
             None,
         ),
         (
-            Message {
-                header: Header::node(5),
-                body: PfdManagementRequest::default()
-                    .with_application_ids_pfds(
-                        ApplicationIDsPFDs::new(ApplicationId(b"app".to_vec().into()))
-                            .with_pfd_context(PfdContext::new(pfd)),
-                    )
-                    .into(),
-            },
+            Message::node(
+                5,
+                PfdManagementRequest::default().with_application_ids_pfds(
+                    ApplicationIDsPFDs::new(ApplicationId(b"app".to_vec().into()))
+                        .with_pfd_context(PfdContext::new(pfd)),
+                ),
+            ),
             Interfaces::SXC,
             Some(Interfaces::SXA),
         ),
         (
-            Message {
-                header: Header::node(6),
-                body: SessionSetDeletionRequest::new(node.clone())
+            Message::node(
+                6,
+                SessionSetDeletionRequest::new(node.clone())
                     .with_fq_csid(fq_csid([10, 0, 0, 1], 1))
-                    .with_fq_csid(fq_csid([10, 0, 0, 5], 2))
-                    .into(),
-            },
+                    .with_fq_csid(fq_csid([10, 0, 0, 5], 2)),
+            ),
             Interfaces::SXA,
             Some(Interfaces::SXC),
         ),
         (
-            Message {
-                header: Header::session(0, 7),
-                body: SessionEstablishmentRequest::new_sxc(
+            Message::session(
+                0,
+                7,
+                SessionEstablishmentRequest::new_sxc(
                     node.clone(),
                     seid.clone(),
                     CreatePdr::new_sxc(
@@ -2012,16 +1914,16 @@ fn messages_of_each_interface() {
                             ..Default::default()
                         },
                     ),
-                )
-                .into(),
-            },
+                ),
+            ),
             Interfaces::SXC,
             Some(Interfaces::SXA),
         ),
         (
-            Message {
-                header: Header::session(0, 8),
-                body: SessionEstablishmentRequest::new_n4mb(
+            Message::session(
+                0,
+                8,
+                SessionEstablishmentRequest::new_n4mb(
                     node.clone(),
                     seid,
                     CreatePdr::new_n4mb(PdrId::new(1), Precedence::new(1), pdi())
@@ -2038,9 +1940,8 @@ fn messages_of_each_interface() {
                         tmgi_field: Some([1, 2, 3, 4, 5, 6]),
                         ..Default::default()
                     }),
-                )
-                .into(),
-            },
+                ),
+            ),
             Interfaces::N4MB,
             Some(Interfaces::SXA),
         ),
@@ -2059,10 +1960,7 @@ fn messages_of_each_interface() {
     for csid in 0..3 {
         deletion = deletion.with_fq_csid(fq_csid([10, 0, 0, 1], csid));
     }
-    let deletion = Message {
-        header: Header::node(9),
-        body: deletion.into(),
-    };
+    let deletion = Message::node(9, deletion);
     assert!(deletion.check(Interfaces::SXA).is_empty());
     assert_eq!(
         deletion
@@ -2274,22 +2172,18 @@ fn the_flag_rules_of_clause_8_2_in_a_message() {
         let found = rules(&message);
         assert_eq!(found, [("8.2.26", rule, incorrect)], "{rule}");
     }
-    let report = Message {
-        header: Header::session(5, 1),
-        body: SessionReportRequest::new(ReportType::default()).into(),
-    };
+    let report = Message::session(5, 1, SessionReportRequest::new(ReportType::default()));
     assert_eq!(rules(&report), [("8.2.21", "no bit is set", incorrect)]);
     let urr = CreateUrr::new(
         UrrId::new(1),
         MeasurementMethod::default(),
         ReportingTriggers::default(),
     );
-    let modification = Message {
-        header: Header::session(5, 1),
-        body: SessionModificationRequest::default()
-            .with_create_urr(urr)
-            .into(),
-    };
+    let modification = Message::session(
+        5,
+        1,
+        SessionModificationRequest::default().with_create_urr(urr),
+    );
     assert_eq!(
         rules(&modification),
         [
@@ -2297,10 +2191,10 @@ fn the_flag_rules_of_clause_8_2_in_a_message() {
             ("8.2.19", "no bit is set", incorrect)
         ]
     );
-    let node = Message {
-        header: Header::node(1),
-        body: NodeReportRequest::new(NodeId::Ipv4(SMF), NodeReportType::default()).into(),
-    };
+    let node = Message::node(
+        1,
+        NodeReportRequest::new(NodeId::Ipv4(SMF), NodeReportType::default()),
+    );
     assert_eq!(rules(&node), [("8.2.69", "no bit is set", incorrect)]);
 }
 
@@ -2460,10 +2354,7 @@ fn a_spare_cause_is_read_as_its_receiver_reads_it() {
         if pdr {
             response = response.with_created_pdr(CreatedPdr::new(PdrId::new(1)));
         }
-        Message {
-            header: Header::session(0x1001, 7),
-            body: response.into(),
-        }
+        Message::session(0x1001, 7, response)
     };
     let up_f_seid = DeviationKind::ConditionalMissing { ie_type: 57 };
     let read_as = |value| DeviationKind::ReadAs { value, read: 1 };
@@ -2514,10 +2405,7 @@ fn the_aoci_of_a_rejected_establishment() {
             }),
             _ => response,
         };
-        Message {
-            header: Header::session(0x1001, 7),
-            body: response.into(),
-        }
+        Message::session(0x1001, 7, response)
     };
     let found = |message: Message| {
         message
@@ -2538,11 +2426,11 @@ fn the_aoci_of_a_rejected_establishment() {
     assert_eq!(found(establishment(rejected, aoci(false))), broken);
     assert_eq!(found(establishment(rejected, aoci(true))), []);
     assert_eq!(found(establishment(CauseValue::RequestAccepted, None)), []);
-    let modification = Message {
-        header: Header::session(0x1001, 7),
-        body: SessionModificationResponse::new(Cause::new(rejected))
-            .with_overload_control_information(oci(None))
-            .into(),
-    };
+    let modification = Message::session(
+        0x1001,
+        7,
+        SessionModificationResponse::new(Cause::new(rejected))
+            .with_overload_control_information(oci(None)),
+    );
     assert_eq!(found(modification), []);
 }

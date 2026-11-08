@@ -331,10 +331,7 @@ impl Node {
         self.request_of(
             now,
             peer,
-            Message {
-                header: Header::session(peer_seid, 0),
-                body: body.into(),
-            },
+            Message::session(peer_seid, 0, body),
             Some(local_seid),
         )
     }

@@ -7,7 +7,8 @@ All notable changes to `oxirush-pfcp` are recorded here.
 The first version, of TS 29.244 V19.6.0 (2026-06):
 
 - Every message and IE type of N4, N4mb, Sxa, Sxb and Sxc, decoded and encoded back byte
-  for byte, and built with `new()` and `with_*()`.
+  for byte, and built with `new()` and `with_*()`; a message of its body with
+  `Message::node` and `Message::session`.
 - `check()`: how a message breaks the tables and clauses on an interface, each deviation
   with its path, its clause and the Cause of the answer; `deviations()` of a value on its
   own.

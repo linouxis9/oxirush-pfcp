@@ -391,10 +391,7 @@ impl Node {
             return;
         }
         if is_request(message_type) {
-            let message = Message {
-                header: Header::node(header.sequence),
-                body: VersionNotSupportedResponse::default().into(),
-            };
+            let message = Message::node(header.sequence, VersionNotSupportedResponse::default());
             if let Ok(octets) = message.encode() {
                 self.queue(Transmit {
                     to: from,

@@ -47,10 +47,7 @@ fn a_message_and_an_ie_are_their_trees_in_json() {
         pdr,
         far,
     );
-    let message = Message {
-        header: Header::session(0, 7),
-        body: request.into(),
-    };
+    let message = Message::session(0, 7, request);
 
     let json = serde_json::to_string(&message).unwrap();
     assert!(json.contains(r#""Source Interface":"Access""#), "{json}");
