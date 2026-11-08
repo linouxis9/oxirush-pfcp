@@ -408,6 +408,18 @@ impl Field for U40 {
     fn size(&self) -> usize {
         5
     }
+    fn fits(&self) -> bool {
+        self.0 < 1 << 40
+    }
+    fn check(&self, path: &crate::check::Path, clause: &'static str, found: &mut Vec<Deviation>) {
+        if !self.fits() {
+            found.push(Deviation::new(
+                path,
+                clause,
+                DeviationKind::Rule("a value wider than its bits"),
+            ));
+        }
+    }
     #[cfg(feature = "tree")]
     fn to_tree(&self) -> oxirush_utils::tree::Value {
         oxirush_utils::tree::unsigned(self.0)
@@ -973,6 +985,18 @@ impl Field for U24 {
     }
     fn size(&self) -> usize {
         3
+    }
+    fn fits(&self) -> bool {
+        self.0 < 1 << 24
+    }
+    fn check(&self, path: &crate::check::Path, clause: &'static str, found: &mut Vec<Deviation>) {
+        if !self.fits() {
+            found.push(Deviation::new(
+                path,
+                clause,
+                DeviationKind::Rule("a value wider than its bits"),
+            ));
+        }
     }
     #[cfg(feature = "tree")]
     fn to_tree(&self) -> oxirush_utils::tree::Value {

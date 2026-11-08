@@ -329,6 +329,9 @@ impl Field for SsmAddress {
     fn size(&self) -> usize {
         self.distribution.size() + self.source.size()
     }
+    fn fits(&self) -> bool {
+        self.distribution.fits() && self.source.fits()
+    }
     fn check(&self, path: &crate::check::Path, clause: &'static str, found: &mut Vec<Deviation>) {
         self.distribution.check(path, clause, found);
         self.source.check(path, clause, found);

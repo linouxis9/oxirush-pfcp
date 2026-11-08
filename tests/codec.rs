@@ -2625,3 +2625,103 @@ fn small_values_from_their_fields() {
     assert_eq!(octets, [0x20 | 30]);
     assert_eq!(Timer::decode(&octets), Some(timer));
 }
+
+/// `T` read from `octets` (spaces apart), which it encodes back to, of the length that it
+/// says, whose tree reads back.
+fn read_back<T>(octets: &str) -> T
+where
+    T: Codec + tree::Tree + PartialEq + std::fmt::Debug,
+{
+    let octets = hex::decode(octets.replace(' ', "")).unwrap();
+    let value = T::decode(&octets).unwrap_or_else(|| panic!("{}", hex::encode(&octets)));
+    let mut again = Vec::new();
+    value.encode(&mut again).unwrap();
+    assert_eq!(again, octets, "{value:?}");
+    assert_eq!(value.encoded_len(), octets.len(), "{value:?}");
+    let written = tree::Tree::to_tree(&value);
+    assert_eq!(tree::from_value::<T>(&written).unwrap(), value, "{written}");
+    value
+}
+
+/// What a field holds at most: 255 values of a counted list (§8.2.156), which its tree
+/// reads too; a number of 40 bits (§8.2.8); a value of six bits (§8.2.214); an address of
+/// one of four types and of 63 octets (§8.2.207).
+#[test]
+fn a_field_holds_what_its_bits_hold() {
+    let qfis = |count: usize| PmfControlInformation {
+        pqpm: true,
+        qfis: Some(Counted(vec![SixBits::new(Number(1)); count])),
+        ..Default::default()
+    };
+    assert!(qfis(255).deviations().is_empty());
+    let many = DeviationKind::Rule("more values than their number can say");
+    let found: Vec<_> = qfis(256).deviations().into_iter().map(|d| d.kind).collect();
+    assert_eq!(found, [many]);
+    let refused = tree::from_value::<PmfControlInformation>(&tree::Tree::to_tree(&qfis(256)));
+    assert!(refused.is_err());
+    let most = (1u64 << 40) - 1;
+    let mbr = |ul: u64| tree::from_value::<Mbr>(&tree!({"UL MBR": ul, "DL MBR": 0}));
+    assert_eq!(mbr(most).unwrap().ul_mbr, U40(most));
+    assert!(mbr(most + 1).is_err());
+    // A number of 40 or 24 bits that a value built holds above them is refused, and told
+    let wider = DeviationKind::Rule("a value wider than its bits");
+    let kinds = |value: &dyn Check| {
+        value
+            .deviations()
+            .into_iter()
+            .map(|d| d.kind)
+            .collect::<Vec<_>>()
+    };
+    for (ul, fits) in [(most, true), (most + 1, false)] {
+        let mbr = Mbr {
+            ul_mbr: U40(ul),
+            ..Default::default()
+        };
+        assert_eq!(mbr.encode(&mut Vec::new()).is_ok(), fits, "{ul}");
+        assert_eq!(kinds(&mbr).is_empty(), fits, "{ul}");
+    }
+    let trace: TraceInformation = read_back("02f839 000001 0101 05 0102 040a000001");
+    for (id, fits) in [(0xff_ffff, true), (0x100_0000, false)] {
+        let trace = TraceInformation {
+            trace_id: U24(id),
+            ..trace.clone()
+        };
+        assert_eq!(trace.encode(&mut Vec::new()).is_ok(), fits, "{id}");
+        assert_eq!(kinds(&trace) == [wider.clone()], !fits, "{id}");
+    }
+    let dscp = DscpToPpiMappingInformation {
+        dscp_values: Each(vec![SixBits::new(Number(64))]),
+        ..Default::default()
+    };
+    assert!(dscp.encode(&mut Vec::new()).is_err());
+    let address = |address_type: u8, length: usize| TypedAddress {
+        address_type,
+        address: vec![1; length],
+    };
+    let ssm = |source: TypedAddress| MbsSessionIdentifier {
+        ssmi: true,
+        source_specific_ip_multicast_address: Some(SsmAddress {
+            distribution: address(0, 4),
+            source,
+        }),
+        ..Default::default()
+    };
+    let wide = DeviationKind::Rule("an Address Type or an Address longer than their bits can say");
+    for (source, fits) in [
+        (address(3, 63), true),
+        (address(4, 4), false),
+        (address(0, 64), false),
+    ] {
+        let value = ssm(source);
+        assert_eq!(value.encode(&mut Vec::new()).is_ok(), fits, "{value:?}");
+        let found = value
+            .deviations()
+            .into_iter()
+            .map(|deviation| deviation.kind);
+        assert_eq!(
+            !found.collect::<Vec<_>>().contains(&wide),
+            fits,
+            "{value:?}"
+        );
+    }
+}
