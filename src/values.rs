@@ -40,7 +40,7 @@ pub(crate) trait Field: Sized {
     const CELLS: &'static [NarrowCell] = &[];
     /// Read the field, and step over it.
     fn read(octets: &mut &[u8]) -> Option<Self>;
-    /// Write the field.
+    /// Write the field, which fits its bits: [`put`] refuses one that does not.
     fn write(&self, out: &mut Vec<u8>);
     /// Its length.
     fn size(&self) -> usize;
@@ -52,8 +52,9 @@ pub(crate) trait Field: Sized {
         _found: &mut Vec<Deviation>,
     ) {
     }
-    /// Whether its length, its number or its type fit the bits that say them: a value
-    /// that does not is refused by `encode()` and reported by `check()`.
+    /// Whether its length, its number or its type fit the bits that say them: [`put`],
+    /// which writes each field of a value, refuses one that does not, and `check()`
+    /// reports it.
     fn fits(&self) -> bool {
         true
     }
@@ -71,6 +72,22 @@ pub(crate) trait Field: Sized {
     /// scalar.
     #[cfg(feature = "tree")]
     const BELOW: &'static crate::paths::Below = &crate::paths::Below::Scalar;
+}
+
+/// Write `field`, named `name`, of a value of the IE `ie`: refused where its length, its
+/// number or its type do not fit the bits that say them ([`Field::fits`]). Each value
+/// writes each of its fields so.
+pub(crate) fn put<F: Field>(
+    field: &F,
+    ie: &'static str,
+    name: &'static str,
+    out: &mut Vec<u8>,
+) -> Result<(), Error> {
+    if !field.fits() {
+        return Err(Error::FieldLength { ie, field: name });
+    }
+    field.write(out);
+    Ok(())
 }
 
 /// How a value is laid out, as the crate reads it: what the test `spec` compares with the
@@ -1042,104 +1059,27 @@ macro_rules! address_field {
 }
 address_field!(Ipv4Addr, 4; Ipv6Addr, 16);
 
-/// A value that is one number, then the octets that a later release adds, and the rules
-/// of its clause that follow it.
-macro_rules! pfcp_number {
+/// A value of one field, then the octets that a later release adds, and the rules of its
+/// clause that follow it: a [`pfcp_layout`] of that field, whose tree is the field alone,
+/// and `new()` of it.
+macro_rules! pfcp_field {
     ($( $(#[$meta:meta])* $ty:ident($t:ty) $field:literal $clause:literal $( check($this:ident, $path:ident, $found:ident) $rules:block )?; )*) => {$(
-        $(#[$meta])*
-        #[derive(Debug, Clone, Default, PartialEq, Eq)]
-        pub struct $ty {
-            #[doc = concat!("The ", $field, ".")]
-            pub value: $t,
-            /// The octets after it, which a later release adds: the unknown octets of
-            /// §8.1.2, `"unknown octets"` in a tree.
-            pub extra: Octets,
+        crate::macros::pfcp_layout! {
+            $(#[$meta])*
+            pub struct $ty $clause { fields { value $field: $t } }
+            $( check($this, $path, $found) $rules )?
         }
 
         impl $ty {
-            /// The name of its field.
-            pub(crate) const FIELDS: &'static [&'static str] = &[$field];
-            /// The members that its tree may have: its field and its unknown octets. Without
-            /// them, its tree is the number alone.
-            pub(crate) const MEMBERS: &'static [&'static str] = &[$field, crate::ie::UNKNOWN_OCTETS];
-            /// What the tree of each field may hold below it: nothing, of scalars alone.
-            #[cfg(feature = "tree")]
-            pub(crate) const MEMBERS_BELOW: &'static [(&'static str, &'static crate::paths::Below)] = &[];
-            /// Its layout.
-            #[doc(hidden)]
-            #[cfg(feature = "spec")]
-            pub const LAYOUT: Option<&'static Layout> = Some(&Layout {
-                head: &[],
-                bits: &[],
-                fields: &[Member { name: $field, octets: <$t as Field>::OCTETS, cells: <$t as Field>::CELLS, condition: "true" }],
-            });
-
             /// The value.
             pub fn new(value: $t) -> Self {
                 Self { value, extra: Octets::default() }
             }
         }
-
-        impl Codec for $ty {
-            fn decode(mut octets: &[u8]) -> Option<Self> {
-                let value = Field::read(&mut octets)?;
-                Some(Self { value, extra: Octets::copied(octets) })
-            }
-            fn encode(&self, out: &mut Vec<u8>) -> Result<(), Error> {
-                Field::write(&self.value, out);
-                out.extend_from_slice(&self.extra);
-                Ok(())
-            }
-            fn encoded_len(&self) -> usize {
-                Field::size(&self.value) + self.extra.len()
-            }
-        }
-
-        impl Rules for $ty {
-            fn check(&self, path: &crate::check::Path, found: &mut Vec<crate::check::Deviation>) {
-                Field::check(&self.value, path, $clause, found);
-                $(
-                    let ($this, $path, $found) = (self, path, found);
-                    $rules
-                )?
-            }
-        }
-
-        #[cfg(feature = "serde")]
-        oxirush_utils::impl_serde!($ty);
-
-        /// The number alone, or `{"Rule ID": 1, "unknown octets": "00"}` with the octets of a
-        /// later release (§8.1.2).
-        #[cfg(feature = "tree")]
-        impl oxirush_utils::tree::Tree for $ty {
-            const NAME: &'static str = <$ty as crate::ie::IeType>::TYPE_NAME;
-            fn to_tree(&self) -> oxirush_utils::tree::Value {
-                if self.extra.is_empty() {
-                    return Field::to_tree(&self.value);
-                }
-                let mut members = oxirush_utils::tree::Members::new();
-                members.put($field, Field::to_tree(&self.value));
-                members.put(crate::ie::UNKNOWN_OCTETS, oxirush_utils::tree::octets(&self.extra));
-                members.finish()
-            }
-            fn from_tree(
-                value: &oxirush_utils::tree::Value,
-                reading: &mut oxirush_utils::tree::Reading,
-            ) -> Result<Self, oxirush_utils::tree::Refused> {
-                if !value.is_object() {
-                    return Ok(Self::new(<$t as Field>::from_tree(value, reading)?));
-                }
-                let read = reading.members(value, Self::MEMBERS)?;
-                Ok(Self {
-                    value: reading.member(&read, $field, <$t as Field>::from_tree)?,
-                    extra: reading.optional(&read, crate::ie::UNKNOWN_OCTETS, |value, reading| reading.octets(value))?.map(Octets::from).unwrap_or_default(),
-                })
-            }
-        }
     )*};
 }
 
-pfcp_number! {
+pfcp_field! {
     /// PDR ID (§8.2.36): the Rule ID of a PDR.
     PdrId(u16) "Rule ID" "8.2.36";
     /// Precedence (§8.2.11).
@@ -1631,7 +1571,7 @@ impl oxirush_utils::tree::Tree for NodeId {
     }
 }
 
-pfcp_number! {
+pfcp_field! {
     /// BAR ID (§8.2.57).
     BarId(u8) "BAR ID value" "8.2.57";
     /// Transport Level Marking (§8.2.12): the ToS/Traffic Class, and its mask, of 0xFC.
@@ -1931,11 +1871,12 @@ listed_value!(
 );
 
 /// A value that is octets that its clause does not split, of the lengths that it gives, if
-/// it gives some.
+/// it gives some; `[secret]` for a key or a password, which `Debug` does not print, nor
+/// an error of its tree: their number alone.
 macro_rules! pfcp_octets {
-    ($( $(#[$meta:meta])* $ty:ident $name:literal $clause:literal $(lengths $lengths:pat => $rule:literal)?; )*) => {$(
+    ($( $(#[$meta:meta])* $ty:ident $name:literal $clause:literal $(lengths $lengths:pat => $rule:literal)? $([$secret:ident])?; )*) => {$(
         $(#[$meta])*
-        #[derive(Debug, Clone, Default, PartialEq, Eq)]
+        #[derive(Clone, Default, PartialEq, Eq)]
         pub struct $ty(pub Octets);
 
         impl $ty {
@@ -1950,6 +1891,17 @@ macro_rules! pfcp_octets {
             #[doc(hidden)]
             #[cfg(feature = "spec")]
             pub const LAYOUT: Option<&'static Layout> = Some(&Layout { head: &[], bits: &[], fields: &[Member { name: $name, octets: None, cells: &[], condition: "true" }] });
+            /// Whether its octets are a key or a password.
+            const SECRET: bool = pfcp_octets!(@secret $($secret)?);
+        }
+
+        impl core::fmt::Debug for $ty {
+            fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+                match Self::SECRET {
+                    true => write!(f, concat!(stringify!($ty), "({} octets)"), self.0.len()),
+                    false => f.debug_tuple(stringify!($ty)).field(&self.0).finish(),
+                }
+            }
         }
 
         impl Codec for $ty {
@@ -1986,19 +1938,100 @@ macro_rules! pfcp_octets {
                 value: &oxirush_utils::tree::Value,
                 reading: &mut oxirush_utils::tree::Reading,
             ) -> Result<Self, oxirush_utils::tree::Refused> {
-                reading.octets(value).map(|octets| Self(octets.into()))
+                let octets = match Self::SECRET {
+                    true => reading.secret(|reading| reading.octets(value))?,
+                    false => reading.octets(value)?,
+                };
+                Ok(Self(octets.into()))
             }
         }
 
         crate::ie::listed_value!($ty);
     )*};
+    (@secret) => { false };
+    (@secret secret) => { true };
 }
 
-pub(crate) use {pfcp_number, pfcp_octets};
+pub(crate) use {pfcp_field, pfcp_octets};
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::values_clauses::*;
+    use crate::values_figures::TunnelPreference;
+
+    /// A field that its bits cannot say is refused, of each kind of field whose bits can
+    /// be too few, by `put`, which writes each field of each kind of value: a layout, a
+    /// value of one field, the tags of MAC Addresses and the Node Type of an FQ-CSID.
+    #[test]
+    fn a_field_that_its_bits_cannot_say_is_refused_by_encode() {
+        let long = || Octets::from(alloc::vec![1; 256]);
+        let address = TypedAddress {
+            address_type: 4,
+            address: alloc::vec![1; 4],
+        };
+        // Refused, and nothing written
+        fn refused<F: Field>(field: &F) -> bool {
+            let mut out = Vec::new();
+            let refused = put(field, "IE", "field", &mut out);
+            refused
+                == Err(Error::FieldLength {
+                    ie: "IE",
+                    field: "field",
+                })
+                && out.is_empty()
+        }
+        assert!(refused(&U24(1 << 24)) && refused(&U40(1 << 40)));
+        assert!(refused(&SixBits::new(Number(64))));
+        assert!(refused(&Lv8(long())));
+        assert!(refused(&Lv16(Octets::from(alloc::vec![1; 65_536]))));
+        assert!(refused(&Counted(alloc::vec![0u8; 256])));
+        assert!(refused(&Each(alloc::vec![U24(1 << 24)])));
+        assert!(refused(&address));
+        let ssm = SsmAddress {
+            distribution: address.clone(),
+            ..SsmAddress::default()
+        };
+        assert!(refused(&ssm));
+        assert!(refused(&DigitsLv8(long())) && refused(&TextLv8(long())));
+        assert!(refused(&SecretLv8(long())));
+        let out = &mut Vec::new();
+        // Each kind of value
+        let length = |ie, field| Err(Error::FieldLength { ie, field });
+        let preference = TunnelPreference::new(U24(1 << 24));
+        assert_eq!(
+            preference.encode(out),
+            length("Tunnel Preference", "Tunnel Preference value")
+        );
+        let mbr = Mbr {
+            ul_mbr: U40(1 << 40),
+            ..Mbr::default()
+        };
+        assert_eq!(mbr.encode(out), length("MBR", "UL MBR"));
+        let detected = MacAddressesDetected {
+            c_tag: Some(Lv8(long())),
+            ..MacAddressesDetected::default()
+        };
+        assert_eq!(
+            detected.encode(out),
+            length("MAC Addresses Detected", "C-TAG")
+        );
+        let removed = MacAddressesRemoved {
+            c_tag: Some(Lv8(Octets::from(alloc::vec![1; 3]))),
+            s_tag: Some(Lv8(long())),
+            ..MacAddressesRemoved::default()
+        };
+        assert_eq!(
+            removed.encode(out),
+            length("MAC Addresses Removed", "S-TAG")
+        );
+        let fq_csid = FqCsid {
+            node_address: Octets::from(alloc::vec![10, 0, 0, 1]),
+            node_type: Some(Narrow::new(NodeType::from_value(16))),
+            ..FqCsid::default()
+        };
+        assert_eq!(fq_csid.encode(out), length("FQ-CSID", "Node Type"));
+    }
 
     /// A Number of six bits is, as a field of its own, its whole octet, which a Narrow parts
     /// into the number and the spare bits.

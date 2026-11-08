@@ -28,7 +28,8 @@ The first version, of TS 29.244 V19.6.0 (2026-06):
   that is not there is not told, and `set` writes a value that a message lacks whole. An
   error of `Message::from_tree` is at a path that `paths::select` takes. A tree writes
   each field that its value always has; it leaves out a flag that is not set and a field
-  that its flags do not have.
+  that its flags do not have; a value of one field without flags is that field, while it
+  has no unknown octets.
 - With `node`, `Node`, a PFCP entity without I/O: delivery and retransmission (§6.4),
   heartbeat, associations, sessions, load and overload control, and bundles (§6.5). A
   request that names another's session or association, as another SMF of a set sends

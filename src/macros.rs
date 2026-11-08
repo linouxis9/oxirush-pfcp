@@ -94,8 +94,10 @@ macro_rules! pfcp_ies {
 /// A value of a layout of clause 8.2: fields that are always there, then an octet of
 /// flags and fields each present when its condition over the flags holds, then the octets
 /// that a later release adds ("present only if explicitly specified"), which the value
-/// keeps. A value of fields alone has no flags. A field of a length that the flags give,
-/// `[length]` after its kind, is read from that many octets.
+/// keeps. A value of fields alone has no flags, and the tree of a value of one field
+/// alone is that field while it has no unknown octets. A field of a length that the flags
+/// give, `[length]` after its kind, is read from that many octets. Each field is written
+/// by [`put`](crate::values::put), which refuses one that its bits cannot say.
 ///
 /// ```text
 /// pub struct FTeid "8.2.3" {
@@ -233,24 +235,13 @@ macro_rules! pfcp_layout {
                 if let Some(field) = self.wide() {
                     return Err(crate::Error::FieldLength { ie, field });
                 }
-                $($(
-                    if !crate::values::Field::fits(&self.$head) {
-                        return Err(crate::Error::FieldLength { ie, field: $head_name });
-                    }
-                )*)?
-                $($(
-                    if let Some(field) = pfcp_layout!(@get [$($cond)?] self.$field)
-                        && !crate::values::Field::fits(field)
-                    {
-                        return Err(crate::Error::FieldLength { ie, field: $field_name });
-                    }
-                )*)?
-                $($( crate::values::Field::write(&self.$head, out); )*)?
+                $($( crate::values::put(&self.$head, ie, $head_name, out)?; )*)?
                 $(
+                    // The octet of flags, whose fields wide() checked.
                     crate::values::Field::write(&(self.spare & !Self::FLAGS $( | pfcp_layout!(@bits write [$($width $(as $fkind)?)?] $fk, self.$flag, $bit) )*), out);
                     $(
                         if let Some(field) = pfcp_layout!(@get [$($cond)?] self.$field) {
-                            crate::values::Field::write(field, out);
+                            crate::values::put(field, ie, $field_name, out)?;
                         }
                     )*
                 )?
@@ -303,6 +294,13 @@ macro_rules! pfcp_layout {
             const NAME: &'static str = <Self as crate::ie::IeType>::TYPE_NAME;
 
             fn to_tree(&self) -> oxirush_utils::tree::Value {
+                // A value of one field, without flags, is that field, while it has no
+                // unknown octets.
+                $($(
+                    if Self::FIELDS.len() == 1 && self.extra.is_empty() {
+                        return crate::values::Field::to_tree(&self.$head);
+                    }
+                )*)?
                 let mut members = oxirush_utils::tree::Members::new();
                 $($( members.put($head_name, crate::values::Field::to_tree(&self.$head)); )*)?
                 $(
@@ -326,6 +324,12 @@ macro_rules! pfcp_layout {
                 value: &oxirush_utils::tree::Value,
                 reading: &mut oxirush_utils::tree::Reading,
             ) -> Result<Self, oxirush_utils::tree::Refused> {
+                $($(
+                    if Self::FIELDS.len() == 1 && !value.is_object() {
+                        let $head = <$hkind as crate::values::Field>::from_tree(value, reading)?;
+                        return Ok(Self { $head, ..Self::default() });
+                    }
+                )*)?
                 let read = reading.members(value, Self::MEMBERS)?;
                 $($(
                     let $head = reading.member(&read, $head_name, <$hkind as crate::values::Field>::from_tree)?;

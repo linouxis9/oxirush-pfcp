@@ -2124,10 +2124,12 @@ fn a_message_too_long_for_its_length() {
 }
 
 /// The octets after the fields of an IE, of a later release, are "the unknown octets" of
-/// §8.1.2 in a tree.
+/// §8.1.2 in a tree. A value of one field, without flags, is that field alone without
+/// them: a number, and the octets after their length of a Forwarding Policy.
 #[test]
 fn the_unknown_octets_of_an_ie() {
     let mut precedence = Precedence::new(1);
+    assert_eq!(tree::Tree::to_tree(&precedence), tree!(1));
     precedence.extra = Octets::copied(&[0xaa]);
     let tree = tree::Tree::to_tree(&precedence);
     assert_eq!(
@@ -2135,6 +2137,20 @@ fn the_unknown_octets_of_an_ie() {
         r#"{"Precedence value":1,"unknown octets":"aa"}"#
     );
     assert_eq!(tree::from_value::<Precedence>(&tree).unwrap(), precedence);
+    let mut policy = ForwardingPolicy {
+        forwarding_policy_identifier: Lv8(Octets::copied(b"p1")),
+        ..Default::default()
+    };
+    let tree = tree::Tree::to_tree(&policy);
+    assert_eq!(tree, tree!("7031"));
+    assert_eq!(tree::from_value::<ForwardingPolicy>(&tree).unwrap(), policy);
+    policy.extra = Octets::copied(&[0xaa]);
+    let tree = tree::Tree::to_tree(&policy);
+    assert_eq!(
+        tree.to_string(),
+        r#"{"Forwarding Policy Identifier":"7031","unknown octets":"aa"}"#
+    );
+    assert_eq!(tree::from_value::<ForwardingPolicy>(&tree).unwrap(), policy);
 }
 
 /// A message read back from its tree is equal to the one decoded: an FQ-CSID of IPv6

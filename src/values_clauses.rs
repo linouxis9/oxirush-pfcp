@@ -526,7 +526,7 @@ pfcp_layout! {
     }
 }
 
-pfcp_number! {
+pfcp_field! {
     /// RAT Type (§8.2.186): its value of Table 8.2.186-1.
     RatType(RatTypeValue) "RAT Type" "8.2.186";
 }
@@ -786,72 +786,11 @@ pfcp_layout! {
     }
 }
 
-/// Octets that are a key, which `Debug` does not print: their number only.
-macro_rules! pfcp_secret {
-    ($( $(#[$meta:meta])* $ty:ident $name:literal; )*) => {$(
-        $(#[$meta])*
-        #[derive(Clone, Default, PartialEq, Eq)]
-        pub struct $ty(pub Octets);
-
-        impl fmt::Debug for $ty {
-            fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-                write!(f, concat!(stringify!($ty), "({} octets)"), self.0.len())
-            }
-        }
-
-        impl $ty {
-            /// The name of its field.
-            pub(crate) const FIELDS: &'static [&'static str] = &[$name];
-            /// None: its tree is its octets.
-            pub(crate) const MEMBERS: &'static [&'static str] = &[];
-            /// What the tree of each field may hold below it: nothing, of scalars alone.
-            #[cfg(feature = "tree")]
-            pub(crate) const MEMBERS_BELOW: &'static [(&'static str, &'static crate::paths::Below)] = &[];
-            /// Its layout.
-            #[doc(hidden)]
-            #[cfg(feature = "spec")]
-            pub const LAYOUT: Option<&'static Layout> = Some(&Layout { head: &[], bits: &[], fields: &[Member { name: $name, octets: None, cells: &[], condition: "true" }] });
-        }
-
-        impl Codec for $ty {
-            fn decode(octets: &[u8]) -> Option<Self> {
-                Some(Self(Octets::copied(octets)))
-            }
-            fn encode(&self, out: &mut Vec<u8>) -> Result<(), Error> {
-                out.extend_from_slice(&self.0);
-                Ok(())
-            }
-            fn encoded_len(&self) -> usize {
-                self.0.len()
-            }
-        }
-
-        impl Rules for $ty {}
-
-        #[cfg(feature = "serde")]
-        oxirush_utils::impl_serde!($ty);
-
-        #[cfg(feature = "tree")]
-        impl oxirush_utils::tree::Tree for $ty {
-            const NAME: &'static str = <$ty as crate::ie::IeType>::TYPE_NAME;
-            fn to_tree(&self) -> oxirush_utils::tree::Value {
-                oxirush_utils::tree::octets(&self.0)
-            }
-            fn from_tree(
-                value: &oxirush_utils::tree::Value,
-                reading: &mut oxirush_utils::tree::Reading,
-            ) -> Result<Self, oxirush_utils::tree::Refused> {
-                reading.secret(|reading| reading.octets(value)).map(|octets| Self(octets.into()))
-            }
-        }
-    )*};
-}
-
-pfcp_secret! {
+pfcp_octets! {
     /// HMAC Key (STAMP) (§8.2.274): a key.
-    HmacKeyStamp "HMAC Key";
+    HmacKeyStamp "HMAC Key" "8.2.274" [secret];
     /// Tunnel Password (§8.2.212): a password.
-    TunnelPassword "Tunnel Password value";
+    TunnelPassword "Tunnel Password value" "8.2.212" [secret];
 }
 
 /// The IE types whose content is a key or a password, which the `Debug` of an IE kept as
@@ -903,8 +842,6 @@ listed_value!(
     UpFunctionFeatures,
     CpFunctionFeatures,
     KeyIdAndSharedSecret,
-    HmacKeyStamp,
-    TunnelPassword,
 );
 
 pfcp_layout! {
@@ -1028,14 +965,8 @@ impl Codec for FqCsid {
                 clause: "8.2.43",
             });
         }
-        if let Some(node_type) = self.node_type {
-            if !node_type.fits() {
-                return Err(Error::FieldLength {
-                    ie: "FQ-CSID",
-                    field: "Node Type",
-                });
-            }
-            node_type.write(out);
+        if let Some(node_type) = &self.node_type {
+            crate::values::put(node_type, "FQ-CSID", "Node Type", out)?;
         }
         out.extend_from_slice(&self.extra);
         Ok(())
@@ -1215,10 +1146,10 @@ macro_rules! mac_addresses {
                     out.extend_from_slice(mac);
                 }
                 if let Some(tag) = &self.c_tag {
-                    tag.write(out);
+                    crate::values::put(tag, $name, "C-TAG", out)?;
                 }
                 if let Some(tag) = &self.s_tag {
-                    tag.write(out);
+                    crate::values::put(tag, $name, "S-TAG", out)?;
                 }
                 out.extend_from_slice(&self.extra);
                 Ok(())
@@ -1233,6 +1164,9 @@ macro_rules! mac_addresses {
 
         impl Rules for $ty {
             fn check(&self, path: &crate::check::Path, found: &mut Vec<Deviation>) {
+                for tag in [&self.c_tag, &self.s_tag].into_iter().flatten() {
+                    Field::check(tag, path, $clause, found);
+                }
                 check_tags(self.c_tag.as_ref(), self.s_tag.as_ref(), path, $clause, found);
             }
         }

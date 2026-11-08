@@ -30,7 +30,7 @@ use crate::octets::Octets;
 use crate::values::*;
 use crate::values_clauses::{DigitsLv8, TextLv8};
 
-pfcp_number! {
+pfcp_field! {
     /// Cause (§8.2.1).
     Cause(CauseValue) "Cause value" "8.2.1";
     /// Offending IE (§8.2.22).
