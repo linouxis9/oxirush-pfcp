@@ -47,6 +47,7 @@ impl Node {
     /// Take a datagram that `from` sent: each of its messages, bundled with the FO flag,
     /// on its own (§6.5).
     pub fn handle_datagram(&mut self, now: Duration, from: SocketAddr, octets: &[u8]) {
+        let from = canonical(from);
         self.prune(now);
         let Some((header, message_type, _)) = Header::decode(octets) else {
             // Too short for a header: discarded (§7.6.3).

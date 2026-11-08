@@ -366,6 +366,54 @@ async fn a_request_without_an_answer_times_out_after_n1() {
     assert!(datagrams.windows(2).all(|pair| pair[0] == pair[1]));
 }
 
+/// An endpoint on a socket of both families sends to an IPv4 address at its IPv4-mapped
+/// address, and takes the response that comes from it as from the IPv4 address. A system
+/// whose sockets of IPv6 take no IPv4 has nothing to test.
+#[tokio::test]
+async fn an_endpoint_of_both_families_reaches_an_ipv4_peer() {
+    let any_v6: SocketAddr = "[::]:0".parse().unwrap();
+    let both = std::net::UdpSocket::bind(any_v6).and_then(|socket| {
+        let probe = std::net::UdpSocket::bind(ANY)?;
+        let mapped = SocketAddr::new(
+            Ipv4Addr::LOCALHOST.to_ipv6_mapped().into(),
+            probe.local_addr()?.port(),
+        );
+        socket.send_to(&[0], mapped)
+    });
+    if both.is_err() {
+        return;
+    }
+    let smf_endpoint = Endpoint::bind(any_v6, config(Function::Cp)).await.unwrap();
+    let smf = smf_endpoint.handle();
+    let upf = tokio::net::UdpSocket::bind(ANY).await.unwrap();
+    let upf_address = upf.local_addr().unwrap();
+    let request = smf.request(upf_address, heartbeat());
+    tokio::pin!(request);
+    let mut buffer = [0; 64];
+    let (length, from) = tokio::select! {
+        received = upf.recv_from(&mut buffer) => received.unwrap(),
+        result = &mut request => panic!("{result:?}"),
+    };
+    let heartbeat = Message::decode(&buffer[..length]).unwrap();
+    let response = Message {
+        header: heartbeat.header,
+        body: HeartbeatResponse::new(RecoveryTimeStamp::new(1)).into(),
+    };
+    upf.send_to(&response.encode().unwrap(), from)
+        .await
+        .unwrap();
+    let response = within(request).await.unwrap();
+    assert!(matches!(response.body, Body::HeartbeatResponse(_)));
+    assert_eq!(smf.statistics().send_errors, 0);
+}
+
+fn heartbeat() -> Message {
+    Message {
+        header: Header::node(0),
+        body: HeartbeatRequest::new(RecoveryTimeStamp::new(7)).into(),
+    }
+}
+
 /// A request that the caller sends through `Handle::with`, at the node's time, which the
 /// closure is given: its response, and its timeout, come as events.
 #[tokio::test]

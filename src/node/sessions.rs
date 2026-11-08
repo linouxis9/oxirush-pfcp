@@ -67,7 +67,7 @@ impl Node {
         if self.in_use(local_seid) || self.sessions.contains_key(&local_seid) {
             return Err(NodeError::SeidInUse);
         }
-        let peer = self.request_address(peer);
+        let peer = self.request_address(canonical(peer));
         let node = self
             .association_of(peer)
             .map(|association| association.key.clone());

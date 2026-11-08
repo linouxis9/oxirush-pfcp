@@ -27,6 +27,9 @@
 //!   **message priority (§6.2.4.5)**.
 //! - **Bundling (§6.5),** when both peers announced BUNDL.
 //!
+//! An IPv4 peer that a socket of both families gives at its IPv4-mapped IPv6 address is
+//! its IPv4 address, in what the node takes and in what it sends ([`Transmit::to`]).
+//!
 //! The node answers itself only what the clauses decide alone: a heartbeat, a request
 //! that does not decode, one of a peer without an association or of a session that the
 //! node does not have. What a peer does wrong is an [`Event::Violation`]. Every
@@ -145,7 +148,8 @@ pub const PORT: u16 = 8805;
 /// A datagram to send.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Transmit {
-    /// To whom.
+    /// To whom: an IPv4 peer by its IPv4 address, which a socket of both families sends to
+    /// at its IPv4-mapped address.
     pub to: SocketAddr,
     /// Its priority: 0 the highest.
     pub priority: u8,
@@ -548,6 +552,19 @@ fn sends(function: Function, message_type: u8) -> bool {
     }
 }
 
+/// An address as the node takes it: an IPv4-mapped IPv6 address, which a socket of both
+/// families gives an IPv4 peer, is the IPv4 address (RFC 4291 §2.5.5.2), as the node
+/// compares it with the addresses of the F-SEIDs and the Node IDs.
+fn canonical(address: SocketAddr) -> SocketAddr {
+    match address {
+        SocketAddr::V6(v6) => match v6.ip().to_ipv4_mapped() {
+            Some(ip) => SocketAddr::new(IpAddr::V4(ip), v6.port()),
+            None => address,
+        },
+        SocketAddr::V4(_) => address,
+    }
+}
+
 /// The peer of `from` whose F-SEID has `fseid`: its address of the family of `from`, on
 /// the port of `from` (§5.6.2).
 fn fseid_peer(from: SocketAddr, fseid: &FSeid) -> SocketAddr {
@@ -762,7 +779,7 @@ impl Node {
     /// The association with a peer, of its address, or of its address and port without
     /// `request_port` (§4.2.2). A peer has one: a setup of another Node ID ends it.
     pub fn association(&self, peer: SocketAddr) -> Option<&Association> {
-        self.association_of(peer)
+        self.association_of(canonical(peer))
     }
 
     /// The session of a local SEID.

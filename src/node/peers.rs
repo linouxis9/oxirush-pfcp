@@ -425,7 +425,7 @@ impl Node {
     /// `false` for a peer without an association.
     pub fn end_association(&mut self, peer: SocketAddr) -> bool {
         let Some(key) = self
-            .association_of(peer)
+            .association_of(canonical(peer))
             .map(|association| association.key.clone())
         else {
             return false;
@@ -439,6 +439,7 @@ impl Node {
     /// whatever the address of their F-SEIDs, and those of its address. Their local
     /// SEIDs.
     pub fn end_sessions_of(&mut self, peer: SocketAddr) -> Vec<u64> {
+        let peer = canonical(peer);
         let key = self
             .association_of(peer)
             .map(|association| association.key.clone());

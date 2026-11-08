@@ -5994,6 +5994,103 @@ fn the_requests_of_the_host_of_an_f_seid_are_no_strangers() {
     assert_eq!(smf.counters().refused, 1);
 }
 
+/// §4.3.2, §5.6.2, §6.5: a socket of both families gives an IPv4 peer as its IPv4-mapped
+/// IPv6 address, which the node takes as the IPv4 address. The session goes to the
+/// address of the UP F-SEID, the node keeps the address of its own F-SEID, a report from
+/// the address of the UP F-SEID is taken (§7.2.2.4.1 NOTE), and the node sends to the
+/// IPv4 addresses, as on sockets of IPv4.
+#[test]
+fn a_peer_at_its_ipv4_mapped_address_is_its_ipv4_address() {
+    let mapped = |address: SocketAddr| match address.ip() {
+        std::net::IpAddr::V4(ip) => SocketAddr::new(ip.to_ipv6_mapped().into(), address.port()),
+        std::net::IpAddr::V6(_) => address,
+    };
+    let (mut smf, mut upf) = (node(SMF, Function::Cp), node(UPF, Function::Up));
+    let carry = |from: &mut Node, to: &mut Node, address: SocketAddr, seen_as: SocketAddr| {
+        for transmit in sent(from) {
+            assert_eq!(transmit.to, address);
+            to.handle_datagram(at(0), mapped(seen_as), &transmit.octets);
+        }
+    };
+    let setup = AssociationSetupRequest::new(node_id(SMF), RecoveryTimeStamp::new(1000));
+    let setup = Message {
+        header: Header::node(0),
+        body: setup.into(),
+    };
+    smf.request(at(0), mapped(UPF), setup).unwrap();
+    carry(&mut smf, &mut upf, UPF, SMF);
+    let (inbound, _) = request(&mut upf);
+    assert_eq!(inbound.from, SMF);
+    upf.respond(at(0), &inbound, setup_answer()).unwrap();
+    carry(&mut upf, &mut smf, SMF, UPF);
+    assert!(smf.association(mapped(UPF)).is_some());
+    assert_eq!(
+        smf.association(UPF).map(|association| association.peer),
+        Some(UPF)
+    );
+    events(&mut smf);
+    let cp_seid = smf.new_session();
+    let cp_f_seid = FSeid {
+        v4: true,
+        seid: Some(cp_seid),
+        ipv4: Some(Ipv4Addr::new(10, 0, 0, 1)),
+        ..Default::default()
+    };
+    let pdr = CreatePdr::new_n4(
+        PdrId::new(1),
+        Precedence::new(1),
+        Pdi::new(SourceInterface::new(SourceInterfaceValue::Access)),
+    );
+    let far = CreateFar::new(FarId::new(1), ApplyAction::default());
+    let establishment = SessionEstablishmentRequest::new_n4(node_id(SMF), cp_f_seid, pdr, far);
+    let establishment = Message {
+        header: Header::session(0, 0),
+        body: establishment.into(),
+    };
+    smf.request(at(0), mapped(UPF), establishment).unwrap();
+    carry(&mut smf, &mut upf, UPF, SMF);
+    let (inbound, _) = request(&mut upf);
+    let up_seid = upf.new_session();
+    let f_seid_address = Ipv4Addr::new(10, 0, 0, 7);
+    let up_f_seid = FSeid {
+        v4: true,
+        seid: Some(up_seid),
+        ipv4: Some(f_seid_address),
+        ..Default::default()
+    };
+    let response =
+        SessionEstablishmentResponse::new(node_id(UPF), accepted()).with_up_f_seid(up_f_seid);
+    upf.respond(at(0), &inbound, response).unwrap();
+    carry(&mut upf, &mut smf, SMF, UPF);
+    events(&mut smf);
+    let session = smf.session(cp_seid).unwrap();
+    assert_eq!(session.peer, f_seid_address.into_socket(8805));
+    assert_eq!(
+        session.local_address,
+        Some(Ipv4Addr::new(10, 0, 0, 1).into())
+    );
+    let session = upf.session(up_seid).unwrap();
+    assert_eq!(session.peer, SMF);
+    assert_eq!(session.local_address, Some(f_seid_address.into()));
+    // The UPF reports from the address of its F-SEID
+    let report = SessionReportRequest::new(ReportType {
+        dldr: true,
+        ..Default::default()
+    });
+    upf.session_request(at(0), up_seid, report).unwrap();
+    let f_seid_peer = f_seid_address.into_socket(8805);
+    carry(&mut upf, &mut smf, SMF, f_seid_peer);
+    let (inbound, _) = request(&mut smf);
+    assert_eq!((inbound.from, inbound.stranger), (f_seid_peer, false));
+    // The session's modification goes to the address of the UP F-SEID
+    let modification = SessionModificationRequest::default();
+    smf.session_request(at(0), cp_seid, modification).unwrap();
+    assert_eq!(
+        sent(&mut smf).last().map(|transmit| transmit.to),
+        Some(f_seid_peer)
+    );
+}
+
 /// `NodeConfig::capacity`: the Recovery Time Stamps that a flood of hosts without an
 /// association pushes out are not those of the associated peers: the restart of one is
 /// told after a flood, while its association lasts, and that of an adopted session's peer,

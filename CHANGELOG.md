@@ -15,6 +15,7 @@ The first version, of TS 29.244 V19.6.0 (2026-06):
 - With `node`, `Node`, a PFCP entity without I/O: delivery and retransmission (§6.4),
   heartbeat, associations, sessions, load and overload control, and bundles (§6.5). A
   request that names another's session or association, as another SMF of a set sends
-  (§5.22), goes to the caller as `Inbound::stranger`.
+  (§5.22), goes to the caller as `Inbound::stranger`. An IPv4 peer that a socket of both
+  families gives at its IPv4-mapped address is its IPv4 address.
 - With `endpoint`, `Endpoint`, a node on a Tokio UDP socket, and its `Handle`.
 - `no_std` with an allocator, but for `endpoint`; Rust 1.88.

@@ -100,6 +100,7 @@ impl Node {
         to: SocketAddr,
         message: Message,
     ) -> Result<RequestId, NodeError> {
+        let to = canonical(to);
         let local_seid = match &message.body {
             Body::SessionEstablishmentRequest(request) => {
                 request.cp_f_seid.as_ref().and_then(|f_seid| f_seid.seid)
@@ -374,7 +375,7 @@ impl Node {
     /// response to a reserved sequence number is then a violation, as any unknown one.
     pub fn send_raw(&mut self, to: SocketAddr, priority: u8, octets: Vec<u8>) {
         self.queue(Transmit {
-            to,
+            to: canonical(to),
             priority,
             octets: octets.into(),
         });

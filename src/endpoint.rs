@@ -366,6 +366,7 @@ impl Endpoint {
         let queued = Arc::new(AtomicUsize::new(0));
         let task = Task {
             socket,
+            ipv6: local.is_ipv6(),
             node: Node::new(config),
             start: Instant::now(),
             commands: command_rx,
@@ -561,6 +562,8 @@ impl Handle {
 
 struct Task {
     socket: UdpSocket,
+    /// The socket is of IPv6: it sends to an IPv4 peer at its IPv4-mapped address.
+    ipv6: bool,
     node: Node,
     start: Instant,
     commands: mpsc::Receiver<Command>,
@@ -697,7 +700,13 @@ impl Task {
     /// Send what the node has to send, and give its events out.
     async fn flush(&mut self) {
         while let Some(transmit) = self.node.poll_transmit() {
-            match self.socket.send_to(&transmit.octets, transmit.to).await {
+            let to = match transmit.to {
+                SocketAddr::V4(to) if self.ipv6 => {
+                    SocketAddr::new(to.ip().to_ipv6_mapped().into(), to.port())
+                }
+                to => to,
+            };
+            match self.socket.send_to(&transmit.octets, to).await {
                 Ok(_) => self.statistics.sent.fetch_add(1, Ordering::Relaxed),
                 Err(_) => self.statistics.send_errors.fetch_add(1, Ordering::Relaxed),
             };

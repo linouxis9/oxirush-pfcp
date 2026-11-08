@@ -149,7 +149,7 @@ impl Node {
     /// The latest load control information of a peer, by the Node ID of its association
     /// (§6.2.3.3.1), kept while the association lasts.
     pub fn load_control(&self, peer: SocketAddr) -> Option<LoadControl> {
-        let association = self.association_of(peer)?;
+        let association = self.association_of(canonical(peer))?;
         self.load
             .get(&Scope::Node(association.key.clone()))
             .copied()
@@ -161,6 +161,7 @@ impl Node {
     /// or the association, remains: what the last of them takes with it ends without
     /// [`Event::OverloadEnded`].
     pub fn overload_control(&self, peer: SocketAddr) -> Option<OverloadControl> {
+        let peer = canonical(peer);
         let node = self
             .association_of(peer)
             .map(|association| Scope::Node(association.key.clone()));
