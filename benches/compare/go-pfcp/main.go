@@ -16,8 +16,8 @@
 // WORKLOAD is `decode`, the message parsed as go-pfcp parses it, with its IEs as
 // octets until a value is asked; `read`, the message parsed and the same values read as
 // `read()` of the benches reads them; or `encode`, the parsed message written again. It
-// runs the workload ROUNDS times, for `perf stat`, and prints the time of a round, which
-// is a note, with the allocations that the runtime counts for one.
+// runs the workload ROUNDS times, and prints the time of a round, which is a note, with
+// the allocations that the runtime counts for one.
 package main
 
 import (

@@ -1,7 +1,7 @@
 //! `measure WORKLOAD MESSAGE ROUNDS`: a workload on a message (frame, decode, read,
-//! encode, check, and with the feature `tree` to_tree and from_tree), ROUNDS times, for `perf
-//! stat`, which counts the instructions; with the feature `heap`, the allocations of one
-//! round, by dhat. It prints the time of a round, which is a note and no measurement.
+//! encode, check, and with the feature `tree` to_tree and from_tree), ROUNDS times, and the
+//! time of a round, which is a note and no measurement; with the feature `heap`, the
+//! allocations of one round, by dhat.
 
 use std::hint::black_box;
 #[cfg(not(feature = "heap"))]

@@ -354,8 +354,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 ## Performance
 
 [`benches/`](https://github.com/linouxis9/oxirush-pfcp/blob/main/benches/README.md)
-measures each workload, in instructions and allocations, against go-pfcp v0.0.24,
-with the revision that its figures are of and how to run them.
+measures each workload, its time and its allocations, beside go-pfcp v0.0.24, with
+the revision that its figures are of and how to take them.
 
 ## Tests
 
