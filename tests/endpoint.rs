@@ -327,6 +327,8 @@ async fn a_request_without_an_answer_times_out_after_n1() {
     // Within its bound: a node whose timer does not run fails the test, and does not hang it.
     let result = within(smf.request(silent.local_addr().unwrap(), heartbeat)).await;
     assert_eq!(result, Err(EndpointError::Failed(Failure::Timeout)));
+    let failed = EndpointError::Failed(Failure::Timeout);
+    assert_eq!(failed.to_string(), Failure::Timeout.to_string());
     // The first and the N1 = 2 retransmissions, the same octets
     let mut buffer = [0; 64];
     let mut datagrams = Vec::new();

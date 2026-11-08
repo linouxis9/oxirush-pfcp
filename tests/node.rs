@@ -289,6 +289,19 @@ fn timeout_after_n1() {
     );
 }
 
+/// What a failure and an error of the node say.
+#[test]
+fn a_failure_and_an_error_say_what_they_are() {
+    assert_eq!(
+        Failure::Timeout.to_string(),
+        "no response after N1 retransmissions (TS 29.244 6.4)"
+    );
+    assert_eq!(
+        NodeError::NotAHandover.to_string(),
+        "the request hands no session over, as one of SEID 0 does (TS 29.244 5.22.2)"
+    );
+}
+
 #[test]
 fn retransmission_identical() {
     let mut smf = node(SMF, Function::Cp);

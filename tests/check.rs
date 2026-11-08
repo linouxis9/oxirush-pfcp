@@ -587,6 +587,38 @@ fn rules() -> [Vec<u8>; 2] {
     [pdr, far]
 }
 
+/// §7.6.9 and §8.1.2: an IE of a type of Table 8.1.2-1 that the table of its scope has no
+/// row of is unexpected; one of a type that no release has is unknown. Each is at its
+/// name in the tree.
+#[test]
+fn an_ie_of_no_row_is_unexpected_and_one_of_no_type_unknown() {
+    let octets = node_message(
+        1,
+        &[ie(96, &RTS), ie(60, &[0, 10, 0, 0, 1]), ie(1000, &[1])],
+    );
+    let message = Message::decode(&octets).unwrap();
+    let found: Vec<(String, &str, DeviationKind)> = message
+        .check(Interfaces::N4)
+        .into_iter()
+        .map(|deviation| (deviation.path, deviation.clause, deviation.kind))
+        .collect();
+    assert_eq!(
+        found,
+        [
+            (
+                "/pfcp/Node ID".to_string(),
+                "7.6.9",
+                DeviationKind::Unexpected { ie_type: 60 }
+            ),
+            (
+                "/pfcp/1000".to_string(),
+                "8.1.2",
+                DeviationKind::UnknownType { ie_type: 1000 }
+            ),
+        ]
+    );
+}
+
 /// §7.6.10: of an IE that its table has once, the first is handled and the others are
 /// ignored; when the first does not decode, the second is not taken in its place.
 #[test]

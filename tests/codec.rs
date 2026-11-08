@@ -1058,6 +1058,9 @@ fn a_field_of_either_form_has_one_rule() {
             .clone()
             .with_mbs_session_n4_control_information(mbs(None))
     });
+    for written in [&tree, &without] {
+        assert_eq!(&Message::from_tree(written).unwrap().to_tree(), written);
+    }
     let ssm = "/pfcp/MBS Session N4 Control Information/0/MBS Session Identifier/Source Specific IP Multicast Address";
     for (tree, address, value, kind) in [
         (

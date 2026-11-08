@@ -11,12 +11,19 @@ exclude_re = [
     # The arm of a place that the paths know nothing of, which takes the plain rule. Without
     # it, such a place that is there falls to the last arm, the plain rule too; and none that
     # is absent is ever reached: what the paths step to below what is not there is always a
-    # place that they know (a row, a list, a field, a member of a field), and a place that
-    # they know nothing of (a message of no table, an IE kept as octets) is always there.
+    # place that they know (a row, a list, a field, a member of a field, an IE kept as
+    # octets), and a place that they know nothing of (a message of no table, and what it
+    # holds) is always there.
     'src/tree\.rs:\d+:\d+: delete match arm \(_, Of::Nothing\) in <impl tree::Family for Paths>::step$',
     # The spare bits and the value of a Narrow are of disjoint bits of its octet, which
     # their | and their ^ write alike.
     'src/values\.rs:\d+:\d+: replace \| with \^ in <impl Field for Narrow<E>>::write$',
+    # An Endpoint on a socket of IPv6 sends to an IPv4 peer at its IPv4-mapped address, which
+    # macOS and the BSDs need; Linux, where the mutants run, takes the IPv4 address on such a
+    # socket as well. The test an_endpoint_of_both_families_reaches_an_ipv4_peer fails
+    # without the guard on macOS, and on Linux under a shim that refuses an IPv4 address on
+    # a socket of IPv6 as macOS does.
+    'src/endpoint\.rs:\d+:\d+: replace match guard self\.ipv6 with false in Task::flush$',
     # The Node-ID Type of an FQ-CSID, of four bits once checked, and the number of its CSIDs,
     # fifteen at most, are of the two halves of their octet, which | and ^ write alike.
     'src/values_clauses\.rs:\d+:\d+: replace \| with \^ in <impl Codec for FqCsid>::encode$',
