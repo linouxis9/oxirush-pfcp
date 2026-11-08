@@ -1140,3 +1140,28 @@ fn a_grouped_ie_has_the_rows_of_its_place() {
     set(&mut request, information, value()).unwrap();
     Message::from_tree(&request).unwrap();
 }
+
+/// `paths::row_at` names the row of a table and the IE type of the IE at a path, or of the
+/// list of them, there or not: none for the header, a member of a value, or an IE of no
+/// row.
+#[test]
+fn a_path_is_at_the_row_of_its_ie() {
+    let tree = establishment().to_tree();
+    let at = |path: &str| {
+        let found = oxirush_pfcp::paths::row_at(&tree, path).unwrap();
+        found.map(|(row, info)| (row.name, info.ie_type))
+    };
+    assert_eq!(at("/pfcp/Node ID"), Some(("Node ID", 60)));
+    assert_eq!(at("/pfcp/Create PDR"), Some(("Create PDR", 1)));
+    assert_eq!(at("/pfcp/Create PDR/1"), Some(("Create PDR", 1)));
+    assert_eq!(
+        at("/pfcp/Create PDR/0/PDI/Local F-TEID"),
+        Some(("Local F-TEID", 21))
+    );
+    assert_eq!(at("/pfcp/Create QER"), Some(("Create QER", 7)));
+    assert_eq!(at("/pfcp/Create PDR/0/PDR ID/Rule ID"), None);
+    assert_eq!(at("/SEID"), None);
+    assert_eq!(at("/pfcp/Load Control Information/Sequence Number"), None);
+    assert_eq!(at("/pfcp/Create PDR/7/PDI"), None);
+    assert!(oxirush_pfcp::paths::row_at(&tree, "/pfcp/Bogus").is_err());
+}
