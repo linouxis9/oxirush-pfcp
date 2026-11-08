@@ -808,6 +808,32 @@ fn the_path_of_a_deviation_is_one_of_the_tree() {
         paths(&response),
         [("/pfcp/Cause/1".into(), vec![tree!({"octets": "02"})])]
     );
+    // The Cause first on the wire and two more, then without the value of the first: the
+    // IEs kept as octets are the entries of its row
+    let octets = [
+        [0x20, 10, 0, 28, 0, 0, 2, 0].as_slice(),
+        &[0, 19, 0, 1, 1],
+        &[0, 60, 0, 5, 0, 10, 0, 0, 1],
+        &[0, 19, 0, 1, 2],
+        &[0, 19, 0, 1, 3],
+    ]
+    .concat();
+    let mut response = Message::decode(&octets).unwrap();
+    assert_eq!(response.encode().unwrap(), octets);
+    let Body::AssociationReleaseResponse(released) = &mut response.body else {
+        panic!()
+    };
+    released.cause = None;
+    assert_eq!(
+        paths(&response),
+        [
+            (
+                "/pfcp/Cause".into(),
+                vec![tree!([{"octets": "02"}, {"octets": "03"}])]
+            ),
+            ("/pfcp/Cause/1".into(), vec![tree!({"octets": "03"})]),
+        ]
+    );
 }
 
 #[test]
