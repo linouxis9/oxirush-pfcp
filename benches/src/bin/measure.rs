@@ -4,6 +4,7 @@
 //! round, by dhat. It prints the time of a round, which is a note and no measurement.
 
 use std::hint::black_box;
+#[cfg(not(feature = "heap"))]
 use std::time::Instant;
 
 use oxirush_pfcp::Message;
@@ -43,7 +44,10 @@ fn run(workload: &str, octets: &[u8]) -> u64 {
 
 fn main() {
     let arguments: Vec<String> = std::env::args().collect();
-    let (workload, name, rounds) = (&arguments[1], &arguments[2], arguments[3].parse::<u64>().unwrap());
+    let (workload, name) = (&arguments[1], &arguments[2]);
+    // The allocations are counted for one round.
+    #[cfg(not(feature = "heap"))]
+    let rounds = arguments[3].parse::<u64>().unwrap();
     let messages = messages();
     // `captures`: each message of PFCP_CAPTURES in a round.
     if name == "captures" {
@@ -65,17 +69,19 @@ fn main() {
             );
             return;
         }
-        #[allow(unreachable_code)]
-        let start = Instant::now();
-        let mut sum = 0;
-        for _ in 0..rounds {
-            for octets in &captures {
-                sum += run(workload, octets);
+        #[cfg(not(feature = "heap"))]
+        {
+            let start = Instant::now();
+            let mut sum = 0;
+            for _ in 0..rounds {
+                for octets in &captures {
+                    sum += run(workload, octets);
+                }
             }
+            black_box(sum);
+            eprintln!("{workload} {} captures: {:.0} ns a round (a note)", captures.len(), start.elapsed().as_nanos() as f64 / rounds.max(1) as f64);
+            return;
         }
-        black_box(sum);
-        eprintln!("{workload} {} captures: {:.0} ns a round (a note)", captures.len(), start.elapsed().as_nanos() as f64 / rounds.max(1) as f64);
-        return;
     }
     let (_, octets) = messages.iter().find(|(known, _)| known == name).expect("no such message");
     #[cfg(feature = "heap")]
@@ -109,7 +115,7 @@ fn main() {
         );
         return;
     }
-    #[allow(unreachable_code)]
+    #[cfg(not(feature = "heap"))]
     {
         let start = Instant::now();
         let mut sum = 0;

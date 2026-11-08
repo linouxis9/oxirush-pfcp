@@ -74,9 +74,13 @@ jobs:
         env:
           RUSTDOCFLAGS: -D warnings
 
+  # The benches with each of their features: `heap` counts the allocations in place of
+  # timing a workload, which the other builds do.
   benches:
     name: Benchmarks build
     runs-on: ubuntu-latest
+    env:
+      RUSTFLAGS: -D warnings
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -84,6 +88,7 @@ jobs:
         with:
           workspaces: benches
       - run: cargo build --release --manifest-path benches/Cargo.toml --features tree
+      - run: cargo build --release --manifest-path benches/Cargo.toml --all-features
 
   # tests/readme.rs is the test of the blocks of README.md that the README tool of
   # oxirush-aper writes, at this revision: it must be the one of the README.
