@@ -2625,6 +2625,29 @@ fn the_flag_rules_of_clause_8_2_in_a_message() {
 }
 
 /// What check() finds in a value of `octets`, which encodes back to them.
+/// A field that its clause has encoded as another IE, from its octet 5, is checked as that
+/// IE: the Destination Interface and the Network Instance fields of a Remote GTP-U Peer
+/// (§8.2.70), whose Destination Interface of a spare value is told as that of the IE, and
+/// one without its octet 5 as no Destination Interface; the QFIs of a PMF Control
+/// Information, each the octet 5 of a QFI IE (§8.2.156), whose two bits above are spare.
+#[test]
+fn a_field_encoded_as_an_ie_is_checked_as_that_ie() {
+    let spare = value_found::<DestinationInterface>("0f");
+    assert_eq!(spare, [("8.2.24", DeviationKind::SpareValue { value: 15 })]);
+    // V4 and DI, then the address, and the Destination Interface field after its length
+    let peer = |field: &str| value_found::<RemoteGtpUPeer>(&format!("060a000001{field}"));
+    assert_eq!(peer("00010f"), spare);
+    assert_eq!(peer("000101"), []);
+    assert_eq!(peer("00020102"), []);
+    let missing = "a Destination Interface field without the octet of its value";
+    assert_eq!(peer("0000"), [("8.2.70", DeviationKind::Rule(missing))]);
+    // NI, with V4: any octets are a Network Instance
+    assert_eq!(value_found::<RemoteGtpUPeer>("0a0a00000100036e3666"), []);
+    assert_eq!(value_found::<PmfControlInformation>("04020105"), []);
+    let qfis = value_found::<PmfControlInformation>("04020145");
+    assert_eq!(qfis, [("8.1.2", DeviationKind::SpareBits)]);
+}
+
 fn value_found<T: Codec + Check>(octets: &str) -> Vec<(&'static str, DeviationKind)> {
     let octets = hex::decode(octets).unwrap();
     let value = T::decode(&octets).unwrap();

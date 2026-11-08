@@ -219,10 +219,10 @@ pfcp_layout! {
 
 pfcp_layout! {
     /// PMF Control Information (§8.2.156): its flags, then, with PQPM, the number of QFIs and the QFIs,
-    /// kept as their octets.
+    /// each "the Octet 5 of the QFI IE" (§8.2.89), whose two bits above the QFI are spare.
     pub struct PmfControlInformation "8.2.156" {
         flags(u8) { pqpm "PQPM": 3, drtti "DRTTI": 2, pmfi "PMFI": 1 }
-        qfis "value of QFI": Counted<u8> if pqpm,
+        qfis "value of QFI": Counted<SixBits> if pqpm,
     }
 }
 

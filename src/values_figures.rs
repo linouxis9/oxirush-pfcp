@@ -1012,7 +1012,9 @@ pfcp_layout! {
 }
 
 pfcp_layout! {
-    /// Remote GTP-U Peer (§8.2.70).
+    /// Remote GTP-U Peer (§8.2.70). Its Destination Interface field is "encoded as the same
+    /// as Destination Interface IE (from octet 5 ...)", which check() checks as that IE; its
+    /// Network Instance field, as a Network Instance IE (§8.2.4), is any octets.
     pub struct RemoteGtpUPeer "8.2.70" {
         flags(u8) { rts "RTS": 5, ni "NI": 4, di "DI": 3, v4 "V4": 2, v6 "V6": 1 }
         ipv4_address "IPv4 address": Ipv4Addr if v4,
@@ -1023,6 +1025,16 @@ pfcp_layout! {
     }
     check(this, path, found) {
         flag_rule(!(this.v4 || this.v6), path, "8.2.70", "neither V4 nor V6 is set", found);
+        if let Some(field) = &this.destination_interface_field {
+            match <crate::DestinationInterface as crate::ie::Codec>::decode(&field.0) {
+                Some(value) => crate::check::Rules::check(&value, path, found),
+                None => found.push(crate::check::Deviation::new(
+                    path,
+                    "8.2.70",
+                    crate::check::DeviationKind::Rule("a Destination Interface field without the octet of its value"),
+                )),
+            }
+        }
     }
 }
 
