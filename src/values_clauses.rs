@@ -482,8 +482,10 @@ pfcp_bits! {
     }
     check(this, path, found) {
         // Of AURI, "the Number of Additional Usage Reports value shall be set to "0" by the
-        // sender".
-        flag_rule(this.auri && this.number != 0, path, "8.2.91", "AURI is set with a Number of Additional Usage Reports other than 0", found);
+        // sender and ignored by the receiver", as a spare bit is.
+        if this.auri && this.number != 0 {
+            found.push(Deviation::new(path, "8.2.91", crate::check::DeviationKind::SpareBits));
+        }
     }
 }
 

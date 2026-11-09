@@ -682,7 +682,8 @@ fn the_tags_of_mac_addresses() {
 }
 
 /// The bits 8 to 5 of the octet "v" of a Flow Label are spare and zero (§8.2.5), and the
-/// Number of Additional Usage Reports is 0 where AURI says that more follow (§8.2.91).
+/// Number of Additional Usage Reports is 0 where AURI says that more follow, "set to "0" by
+/// the sender and ignored by the receiver" (§8.2.91): told as a spare bit is, with no Cause.
 #[test]
 fn the_spare_bits_of_a_flow_label_and_the_number_of_more_usage_reports() {
     let kinds = |value: &dyn Check| -> Vec<(&'static str, DeviationKind)> {
@@ -708,7 +709,27 @@ fn the_spare_bits_of_a_flow_label_and_the_number_of_more_usage_reports() {
     };
     assert_eq!(kinds(&more(true, 0)), []);
     assert_eq!(kinds(&more(false, 3)), []);
-    let rule =
-        DeviationKind::Rule("AURI is set with a Number of Additional Usage Reports other than 0");
-    assert_eq!(kinds(&more(true, 3)), [("8.2.91", rule)]);
+    assert_eq!(
+        kinds(&more(true, 3)),
+        [("8.2.91", DeviationKind::SpareBits)]
+    );
+    // In a request, whose receiver answers a deviation of its IEs with a Cause
+    let report = SessionReportRequest {
+        report_type: Some(ReportType {
+            usar: true,
+            ..Default::default()
+        }),
+        additional_usage_reports_information: Some(more(true, 5)),
+        ..Default::default()
+    };
+    let found: Vec<_> = Message::session(1, 7, report)
+        .check(Interfaces::N4)
+        .into_iter()
+        .map(|deviation| (deviation.path, deviation.kind, deviation.cause))
+        .collect();
+    let at = "/pfcp/Additional Usage Reports Information".to_string();
+    assert!(
+        found.contains(&(at, DeviationKind::SpareBits, None)),
+        "{found:?}"
+    );
 }

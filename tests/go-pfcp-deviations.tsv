@@ -71,10 +71,10 @@ node-report-request_test.go	Multiple IEs	/pfcp/GTP-U Path QoS Report/1/QoS Infor
 node-report-request_test.go	Single IE	/pfcp/Clock Drift Report/0/Cumulative rateRatio Threshold	7.6.9	Unexpected { ie_type: 208 }	-
 node-report-request_test.go	Single IE	/pfcp/Clock Drift Report/0/Time Offset Threshold	7.6.9	Unexpected { ie_type: 207 }	-
 node-report-request_test.go	Single IE	/pfcp/GTP-U Path QoS Report/0/QoS Information/0/DSCP	8.2.12	Rule("a ToS/Traffic Class mask other than 0xFC")	MandatoryIeIncorrect
-session-deletion-response_test.go	Multiple IEs	/pfcp/Additional Usage Reports Information	8.2.91	Rule("AURI is set with a Number of Additional Usage Reports other than 0")	-
+session-deletion-response_test.go	Multiple IEs	/pfcp/Additional Usage Reports Information	8.2.91	SpareBits	-
 session-deletion-response_test.go	Multiple IEs	/pfcp/Usage Report/0/Usage Report Trigger	8.1.2	SpareBits	-
 session-deletion-response_test.go	Multiple IEs	/pfcp/Usage Report/1/Usage Report Trigger	8.1.2	SpareBits	-
-session-deletion-response_test.go	Single IE	/pfcp/Additional Usage Reports Information	8.2.91	Rule("AURI is set with a Number of Additional Usage Reports other than 0")	-
+session-deletion-response_test.go	Single IE	/pfcp/Additional Usage Reports Information	8.2.91	SpareBits	-
 session-deletion-response_test.go	Single IE	/pfcp/Usage Report/0/Usage Report Trigger	8.1.2	SpareBits	-
 session-establishment-request_test.go	Multiple IEs	/SEID	7.2.2.4.2	Rule("a Session Establishment Request of a SEID other than 0")	-
 session-establishment-request_test.go	Multiple IEs	/pfcp/Create FAR/0/Forwarding Parameters/Transport Level Marking	8.2.12	Rule("a ToS/Traffic Class mask other than 0xFC")	MandatoryIeIncorrect
@@ -189,13 +189,13 @@ session-modification-request_test.go	Single IE	/pfcp/Update PDR/0/PDI/UE IP addr
 session-modification-request_test.go	Single IE	/pfcp/Update QER/0/Packet Rate Status	7.6.9	Unexpected { ie_type: 193 }	-
 session-modification-request_test.go	Single IE	/pfcp/Update QER/0/QER Control Indications	8.1.2	SpareBits	-
 session-modification-request_test.go	Single IE	/pfcp/Update SRR/0/QoS Monitoring per QoS flow Control Information/0/Reporting Frequency	8.2.168	SpareBits	-
-session-modification-response_test.go	Multiple IEs	/pfcp/Additional Usage Reports Information	8.2.91	Rule("AURI is set with a Number of Additional Usage Reports other than 0")	-
+session-modification-response_test.go	Multiple IEs	/pfcp/Additional Usage Reports Information	8.2.91	SpareBits	-
 session-modification-response_test.go	Multiple IEs	/pfcp/Created Bridge~1Router Info	7.6.9	Unexpected { ie_type: 195 }	-
 session-modification-response_test.go	Multiple IEs	/pfcp/Usage Report/0/Usage Report Trigger	8.1.2	SpareBits	-
-session-modification-response_test.go	Single IE	/pfcp/Additional Usage Reports Information	8.2.91	Rule("AURI is set with a Number of Additional Usage Reports other than 0")	-
+session-modification-response_test.go	Single IE	/pfcp/Additional Usage Reports Information	8.2.91	SpareBits	-
 session-modification-response_test.go	Single IE	/pfcp/Created Bridge~1Router Info	7.6.9	Unexpected { ie_type: 195 }	-
 session-modification-response_test.go	Single IE	/pfcp/Usage Report/0/Usage Report Trigger	8.1.2	SpareBits	-
-session-report-request_test.go	Multiple IEs	/pfcp/Additional Usage Reports Information	8.2.91	Rule("AURI is set with a Number of Additional Usage Reports other than 0")	MandatoryIeIncorrect
+session-report-request_test.go	Multiple IEs	/pfcp/Additional Usage Reports Information	8.2.91	SpareBits	-
 session-report-request_test.go	Multiple IEs	/pfcp/Downlink Data Report/Downlink Data Service Information/0	8.1.2	SpareBits	-
 session-report-request_test.go	Multiple IEs	/pfcp/Downlink Data Report/Downlink Data Service Information/0	8.1.2	SpareBits	-
 session-report-request_test.go	Multiple IEs	/pfcp/Old CP F-SEID	7.2.2.4.2	Rule("a Session Report Request of a SEID other than 0 with the Old CP F-SEID")	-
@@ -204,7 +204,7 @@ session-report-request_test.go	Multiple IEs	/pfcp/Session Report/0/QoS Monitorin
 session-report-request_test.go	Multiple IEs	/pfcp/Session Report/1/Access Availability Control Information	7.6.9	Unexpected { ie_type: 216 }	-
 session-report-request_test.go	Multiple IEs	/pfcp/Session Report/1/QoS Monitoring Report/0/QoS Monitoring Measurement	8.2.171	Rule("PLMF is set with a packet delay")	MandatoryIeIncorrect
 session-report-request_test.go	Multiple IEs	/pfcp/Usage Report/0/Usage Report Trigger	8.1.2	SpareBits	-
-session-report-request_test.go	Single IE	/pfcp/Additional Usage Reports Information	8.2.91	Rule("AURI is set with a Number of Additional Usage Reports other than 0")	MandatoryIeIncorrect
+session-report-request_test.go	Single IE	/pfcp/Additional Usage Reports Information	8.2.91	SpareBits	-
 session-report-request_test.go	Single IE	/pfcp/Downlink Data Report/Downlink Data Service Information/0	8.1.2	SpareBits	-
 session-report-request_test.go	Single IE	/pfcp/Downlink Data Report/Downlink Data Service Information/0	8.1.2	SpareBits	-
 session-report-request_test.go	Single IE	/pfcp/Old CP F-SEID	7.2.2.4.2	Rule("a Session Report Request of a SEID other than 0 with the Old CP F-SEID")	-
