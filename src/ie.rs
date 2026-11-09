@@ -138,7 +138,7 @@ pub(crate) const UNKNOWN_OCTETS: &str = "unknown octets";
 
 /// Whether an IE of `ie_type` may hold a key: one of a key, or a grouped IE that a table
 /// gives one, at any depth. No grouped IE holds one of its own type, at any depth.
-fn holds_secret(ie_type: u16) -> bool {
+pub(crate) fn holds_secret(ie_type: u16) -> bool {
     if crate::values_clauses::SECRETS.contains(&ie_type) {
         return true;
     }

@@ -281,7 +281,12 @@ pub(crate) fn scope_from_tree<S: Scope + TreeScope>(
                 );
                 return Err(reading.refuse(ErrorKind::Value, why));
             }
-            read_ies(&mut scope, row, ie_type, held, reading)
+            // An IE that may hold a key, at any depth, is read as a secret: a refusal
+            // shows nothing that is written of it.
+            match crate::ie::holds_secret(ie_type) {
+                true => reading.secret(|reading| read_ies(&mut scope, row, ie_type, held, reading)),
+                false => read_ies(&mut scope, row, ie_type, held, reading),
+            }
         })?;
         let position = at.unwrap_or(usize::MAX);
         for ie in read {

@@ -254,7 +254,7 @@ PFCP Session Modification Response (SEID 0x1001, sequence 8): 213500170000000000
 
 With `tree`, a message is a tree that prints as JSON, with the names of the
 specification, and reads back. The tree carries keys in hexadecimal, as the
-Tunnel Password, which `Debug` hides: do not log it.
+Tunnel Password, which `Debug` and the errors of a tree hide: do not log it.
 
 ```rust
 use oxirush_pfcp::Message;
