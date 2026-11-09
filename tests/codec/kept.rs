@@ -365,7 +365,9 @@ fn a_value_added_to_a_message_of_its_own_order_goes_to_its_row() {
 }
 
 /// A Length that a tree writes of an IE kept as octets, which is the length of its content,
-/// is no false Length: the IE has none, and reads back as the value that its octets are.
+/// is no false Length: the IE keeps it, as the header keeps a Message Length of its own,
+/// and the tree of the message writes it again; its octets read back as the value that
+/// they are, and are checked as it.
 #[test]
 fn the_length_of_its_own_content_is_no_false_length() {
     let tree = tree!({"message": "PFCP Association Setup Request", "Sequence Number": 1,
@@ -374,14 +376,12 @@ fn the_length_of_its_own_content_is_no_false_length() {
     let Body::AssociationSetupRequest(request) = &message.body else {
         panic!()
     };
-    assert_eq!(request.raw[0].length, None);
+    assert_eq!(request.raw[0].length, Some(1));
+    assert_eq!(message.to_tree(), tree);
+    assert_eq!(Message::from_tree(&message.to_tree()).unwrap(), message);
     let read = Message::decode(&message.encode().unwrap()).unwrap();
-    let read = read.to_tree();
-    let features = select(&read, "/pfcp/CP Function Features/LOAD").unwrap();
+    let tree = read.to_tree();
+    let features = select(&tree, "/pfcp/CP Function Features/LOAD").unwrap();
     assert_eq!(features, [&tree!(true)]);
-    let written = message.to_tree();
-    assert_eq!(
-        select(&written, "/pfcp/CP Function Features").unwrap(),
-        [&tree!({"octets": "b9"})]
-    );
+    assert_eq!(message.check(Interfaces::N4), read.check(Interfaces::N4));
 }

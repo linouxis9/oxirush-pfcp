@@ -125,8 +125,8 @@ pub struct RawIe {
     /// The Enterprise ID of a vendor IE, which its octets follow.
     pub enterprise_id: Option<u16>,
     /// A Length to write in place of the one of the octets: a false length, which a test
-    /// sends on purpose. A decoded IE never has one, nor one that a tree gives the length
-    /// of its content.
+    /// sends on purpose, or the length of the content, which is kept as `Header::length`
+    /// is. A decoded IE never has one.
     pub length: Option<u16>,
     /// The content after the Length, or after the Enterprise ID of a vendor IE.
     pub octets: Octets,
