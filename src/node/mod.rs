@@ -478,7 +478,9 @@ pub enum NodeError {
     WrongDirection,
     /// Every sequence number is outstanding, reserved or recent.
     NoSequence,
-    /// An answer to a request that has one already (§6.4).
+    /// An answer to a request that has one already (§6.4): of the node's, or one that ended
+    /// it as its peer read it, as the response that a bundle carried, or a Version Not
+    /// Supported Response (§6.5, §7.2.1A).
     Answered,
     /// An answer to a request that is no longer waiting: it expired past `keep`, or the
     /// caller forgot it.

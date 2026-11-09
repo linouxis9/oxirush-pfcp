@@ -627,8 +627,14 @@ fn an_answer_that_bundles_the_response_of_another_request_answers_it() {
         assert_eq!(upf.session(up_seid).unwrap().peer_seid, Some(cp_seid));
         assert_eq!(smf.session(cp_seid).unwrap().peer_seid, Some(up_seid));
     }
-    // The second's own answer, which the peer discards, changes nothing
+    // The second has its answer: its own after is the error of a request answered
+    // already, and sends nothing
     let third = upf.new_session();
-    upf.respond(at(1), &received[1], response(third)).unwrap();
+    assert_eq!(
+        upf.respond(at(1), &received[1], response(third)),
+        Err(NodeError::Answered)
+    );
     assert!(upf.session(third).is_none());
+    pass(&mut upf, &mut smf, SMF, at(1));
+    assert_eq!(violations(&mut smf), []);
 }

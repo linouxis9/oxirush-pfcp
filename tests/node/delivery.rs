@@ -1570,8 +1570,8 @@ fn a_probe_answer_that_the_peer_cannot_read_changes_nothing() {
 }
 
 /// §7.2.1A, §7.6.2: a Version Not Supported Response ends every request of the peer to
-/// the node, whichever request it answers: the node's answers to them after change
-/// nothing, as the peer discards them.
+/// the node, whichever request it answers: `respond` to another of them after is the error
+/// of a request answered already, and sends nothing.
 #[test]
 fn a_version_not_supported_answer_ends_every_request_of_the_peer() {
     let (mut smf, mut upf) = associated(at(0));
@@ -1605,10 +1605,13 @@ fn a_version_not_supported_answer_ends_every_request_of_the_peer() {
     let f_seid = FSeid::ipv4(up_seid, Ipv4Addr::new(10, 0, 0, 2));
     let response =
         SessionEstablishmentResponse::new(node_id(UPF), accepted()).with_up_f_seid(f_seid);
-    upf.respond(at(2), &received[1], response).unwrap();
+    assert_eq!(
+        upf.respond(at(2), &received[1], response),
+        Err(NodeError::Answered)
+    );
     assert!(upf.session(up_seid).is_none());
     pass(&mut upf, &mut smf, SMF, at(2));
-    assert_eq!(violations(&mut smf), [ViolationKind::DuplicateResponse]);
+    assert_eq!(violations(&mut smf), []);
     assert!(smf.sessions().next().is_none());
 }
 

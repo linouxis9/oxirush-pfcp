@@ -426,11 +426,12 @@ impl Answers {
             .is_some_and(|entry| entry.id == id && entry.response.is_none())
     }
 
-    /// Whether the request `id` of `key` has its answer already.
+    /// Whether the request `id` of `key` has its answer already: one that the node keeps,
+    /// or one that ended it as its peer read it, which leaves it open no more.
     pub(crate) fn answered(&self, key: &(SocketAddr, u32), id: u64) -> bool {
-        self.entries
-            .get(key)
-            .is_some_and(|entry| entry.id == id && entry.response.is_some())
+        self.entries.get(key).is_some_and(|entry| {
+            entry.id == id && (entry.response.is_some() || entry.open.is_none())
+        })
     }
 
     fn index(&mut self, entry: &Answered) -> &mut BTreeSet<(Duration, SocketAddr, u32)> {
