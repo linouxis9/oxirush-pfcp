@@ -1004,3 +1004,106 @@ fn what_the_place_of_a_value_has_it_set() {
         [("8.2.206", DeviationKind::SpareBits)]
     );
 }
+
+/// §8.2.43: "Values of Number of CSID greater than 1 shall only be employed in the PFCP
+/// Session Deletion Request", which has no FQ-CSID: in a Session Set Deletion Request, and
+/// in the Session Change Info of a Session Set Modification Request, which are of sets of
+/// sessions too. "The value 0 shall be used in a PFCP Session Modification Request, with
+/// the FQ-CSID Node-ID Type and Node-Address fields set to all zeros, and with the Node
+/// Type indicating one node type, to remove an FQ-CSID". §8.2.108: the MCC and the MNC of a
+/// Trace Information are decimal digits, but the filler of an MNC of two (TS 24.008 clause
+/// 10.5.1.4).
+#[test]
+fn the_identifiers_of_an_fq_csid_in_its_message_and_the_digits_of_a_plmn() {
+    let told = |message: Message| -> Vec<(String, &'static str, DeviationKind)> {
+        let octets = message.encode().unwrap();
+        Message::decode(&octets)
+            .unwrap()
+            .check(Interfaces::N4)
+            .into_iter()
+            .filter(|deviation| ["8.2.43", "8.2.108"].contains(&deviation.clause))
+            .map(|deviation| (deviation.path, deviation.clause, deviation.kind))
+            .collect()
+    };
+    let fq_csid = |node_address: [u8; 4], csids: Vec<u16>, node_type| FqCsid {
+        node_id_type: 0,
+        node_address: node_address.into(),
+        csids,
+        node_type,
+        extra: Octets::default(),
+    };
+    let smf = Some(Narrow {
+        value: NodeType::PgwCSmf,
+        spare: 0,
+    });
+    let several =
+        "more than one PDN Connection Set Identifier outside a request of a set of sessions";
+    let mut message = establishment();
+    request_with(&mut message, |request| {
+        request.fq_csid = vec![fq_csid([10, 0, 0, 1], vec![1, 2], smf)];
+    });
+    assert_eq!(
+        told(message),
+        [(
+            "/pfcp/FQ-CSID/0".to_string(),
+            "8.2.43",
+            DeviationKind::Rule(several)
+        )]
+    );
+    let set = SessionSetDeletionRequest {
+        node_id: Some(NodeId::Ipv4(SMF)),
+        fq_csid: vec![fq_csid([10, 0, 0, 1], vec![1, 2, 3], smf)],
+        ..Default::default()
+    };
+    assert_eq!(told(Message::node(1, set)), []);
+    // A removal in a Session Modification Request
+    let removal = |fq_csid| {
+        let request = SessionModificationRequest {
+            fq_csid: vec![fq_csid],
+            ..Default::default()
+        };
+        told(Message::session(1, 8, request))
+    };
+    assert_eq!(removal(fq_csid([0; 4], vec![], smf)), []);
+    let removes = "an FQ-CSID of no PDN Connection Set Identifier with a Node-ID Type or a Node-Address other than zeros, or no Node Type";
+    let rule = || {
+        vec![(
+            "/pfcp/FQ-CSID/0".to_string(),
+            "8.2.43",
+            DeviationKind::Rule(removes),
+        )]
+    };
+    assert_eq!(removal(fq_csid([10, 0, 0, 1], vec![], smf)), rule());
+    assert_eq!(removal(fq_csid([0; 4], vec![], None)), rule());
+    assert_eq!(removal(fq_csid([10, 0, 0, 1], vec![7], smf)), []);
+    // The digits of the PLMN of a Trace Information
+    let trace = |plmn: [u8; 3]| {
+        let mut message = establishment();
+        request_with(&mut message, |request| {
+            request.trace_information = Some(TraceInformation {
+                mcc_mnc: PlmnId(plmn),
+                trace_id: U24(1),
+                triggering_events: Lv8(vec![1u8].into()),
+                session_trace_depth: 1,
+                list_of_interfaces: Lv8(vec![1u8].into()),
+                ip_address_of_trace_collection_entity: Lv8(vec![10u8, 0, 0, 1].into()),
+                ..Default::default()
+            });
+        });
+        told(message)
+    };
+    assert_eq!(trace([0x02, 0xf8, 0x39]), []);
+    assert_eq!(trace([0x13, 0x00, 0x14]), []);
+    let digits = "an MCC or MNC digit that is not decimal";
+    for plmn in [[0x0a, 0xf8, 0x39], [0x02, 0xf8, 0x3b], [0x02, 0xe8, 0x39]] {
+        assert_eq!(
+            trace(plmn),
+            [(
+                "/pfcp/Trace Information".to_string(),
+                "8.2.108",
+                DeviationKind::Rule(digits)
+            )],
+            "{plmn:02x?}"
+        );
+    }
+}

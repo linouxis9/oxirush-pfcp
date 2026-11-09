@@ -649,6 +649,9 @@ pfcp_layout! {
     check(this, path, found) {
         let address = this.ip_address_of_trace_collection_entity.0.len();
         flag_rule(!matches!(address, 4 | 16), path, "8.2.108", "an IP Address of the Trace Collection Entity of neither 4 nor 16 octets", found);
+        // "See TS 24.008 [5], clause 10.5.1.4, Mobile Identity, for the coding of MCC and
+        // MNC": decimal digits, but the filler of an MNC of two.
+        flag_rule(this.mcc_mnc.plmn().is_none(), path, "8.2.108", "an MCC or MNC digit that is not decimal", found);
     }
 }
 
@@ -788,6 +791,42 @@ impl Rules for FqCsid {
             let kind = crate::check::DeviationKind::Inconsistent { field };
             found.push(Deviation::new(path, "8.2.43", kind));
         }
+    }
+
+    fn check_placed(
+        &self,
+        table: &'static str,
+        path: &crate::check::Path,
+        found: &mut Vec<Deviation>,
+    ) {
+        // "Values of Number of CSID greater than 1 shall only be employed in the PFCP
+        // Session Deletion Request", which has no FQ-CSID: the Session Set Deletion
+        // Request, and the Session Change Info of a Session Set Modification Request, of a
+        // set of sessions too.
+        let sets = ["7.4.6.1-1", "7.4.7.1-2"];
+        let rule =
+            "more than one PDN Connection Set Identifier outside a request of a set of sessions";
+        flag_rule(
+            self.csids.len() > 1 && !sets.contains(&table),
+            path,
+            "8.2.43",
+            rule,
+            found,
+        );
+        // "The value 0 shall be used in a PFCP Session Modification Request, with the
+        // FQ-CSID Node-ID Type and Node-Address fields set to all zeros, and with the Node
+        // Type indicating one node type, to remove an FQ-CSID".
+        let removal = self.node_id_type == 0
+            && self.node_address.iter().all(|octet| *octet == 0)
+            && self.node_type.is_some();
+        let rule = "an FQ-CSID of no PDN Connection Set Identifier with a Node-ID Type or a Node-Address other than zeros, or no Node Type";
+        flag_rule(
+            self.csids.is_empty() && table == "7.5.4.1-1" && !removal,
+            path,
+            "8.2.43",
+            rule,
+            found,
+        );
     }
 }
 
