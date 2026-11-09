@@ -541,8 +541,13 @@ pub struct Lv8(pub Octets);
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Lv16(pub Octets);
 
+/// The octets of a Network Instance after a length of two octets: the Network Instance
+/// field of Remote GTP-U Peer (§8.2.70), whose tree is that of a Network Instance.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct NameLv16(pub Octets);
+
 macro_rules! length_value {
-    ($($ty:ident $length:ty),*) => {$(
+    ($($ty:ident $length:ty, $tree:ident),*) => {$(
         impl Field for $ty {
             fn read(octets: &mut &[u8]) -> Option<Self> {
                 let length = usize::from(<$length as Field>::read(octets)?);
@@ -569,14 +574,14 @@ macro_rules! length_value {
             }
             #[cfg(feature = "tree")]
             fn to_tree(&self) -> oxirush_utils::tree::Value {
-                oxirush_utils::tree::octets(&self.0)
+                length_value!(@to_tree $tree &self.0)
             }
             #[cfg(feature = "tree")]
             fn from_tree(
                 value: &oxirush_utils::tree::Value,
                 reading: &mut oxirush_utils::tree::Reading,
             ) -> Result<Self, oxirush_utils::tree::Refused> {
-                let octets = reading.octets(value)?;
+                let octets = length_value!(@from_tree $tree value, reading)?;
                 if octets.len() > usize::from(<$length>::MAX) {
                     return Err(reading.mismatch("octets that their length can say", value));
                 }
@@ -584,8 +589,12 @@ macro_rules! length_value {
             }
         }
     )*};
+    (@to_tree octets $octets:expr) => { oxirush_utils::tree::octets($octets) };
+    (@to_tree name $octets:expr) => { crate::values::name_tree($octets) };
+    (@from_tree octets $value:ident, $reading:ident) => { $reading.octets($value) };
+    (@from_tree name $value:ident, $reading:ident) => { crate::values::name_from_tree($value, $reading) };
 }
-length_value!(Lv8 u8, Lv16 u16);
+length_value!(Lv8 u8, octets, Lv16 u16, octets, NameLv16 u16, name);
 
 /// The octets up to the end of the IE: the last field of a layout whose length its clause
 /// does not give.

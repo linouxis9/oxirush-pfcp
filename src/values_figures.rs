@@ -798,8 +798,9 @@ pfcp_octets! {
     FramedRoute "Framed-Route" "8.2.109";
     /// Framed-IPv6-Route (§8.2.111).
     FramedIPv6Route "Framed-IPv6-Route" "8.2.111";
-    /// APN/DNN (§8.2.117).
-    ApnDnn "APN/DNN" "8.2.117";
+    /// APN/DNN (§8.2.117): the labels of an APN or a DNN (TS 23.003 clause 9.1), whose tree
+    /// is that of a Network Instance.
+    ApnDnn "APN/DNN" "8.2.117" [name];
     /// Port Management Information Container (§8.2.144).
     PortManagementInformationContainer "Port Management Information" "8.2.144";
     /// Data Network Access Identifier (§8.2.161).
@@ -1023,13 +1024,14 @@ pfcp_layout! {
 pfcp_layout! {
     /// Remote GTP-U Peer (§8.2.70). Its Destination Interface field is "encoded as the same
     /// as Destination Interface IE (from octet 5 ...)", which check() checks as that IE; its
-    /// Network Instance field, as a Network Instance IE (§8.2.4), is any octets.
+    /// Network Instance field, as a Network Instance IE (§8.2.4), is any octets, and its tree
+    /// that of a Network Instance.
     pub struct RemoteGtpUPeer "8.2.70" {
         flags(u8) { rts "RTS": 5, ni "NI": 4, di "DI": 3, v4 "V4": 2, v6 "V6": 1 }
         ipv4_address "IPv4 address": Ipv4Addr if v4,
         ipv6_address "IPv6 address": Ipv6Addr if v6,
         destination_interface_field "Destination Interface field": Lv16 if di,
-        network_instance_field "Network Instance field": Lv16 if ni,
+        network_instance_field "Network Instance field": NameLv16 if ni,
         recovery_timestamp "Recovery Timestamp": u32 if rts,
     }
     check(this, path, found) {

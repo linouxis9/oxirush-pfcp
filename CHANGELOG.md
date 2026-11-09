@@ -59,7 +59,10 @@ The first version, of TS 29.244 V19.6.0 (2026-06):
   IPFilterRule, and the URL and the Domain Name of PFD Contents are their text
   (`TextLv16`), or `{"octets": ...}` for octets that are no UTF-8; a Network Instance of
   the labels of a name is that name, and its octets in hexadecimal otherwise, and where
-  the name is of hexadecimal digits.
+  the name is of an even number of hexadecimal digits, which a tree reads as octets, as
+  are an APN/DNN and the Network Instance field of Remote GTP-U Peer (`NameLv16`);
+  `NetworkInstance::from_name()` builds one of a name. The members of a Node ID, as of
+  any value, go by their names in any case: `{"fqdn": ...}`.
 - With `node`, `Node`, a PFCP entity without I/O: delivery and retransmission (§6.4),
   heartbeat, associations, sessions, load and overload control, and bundles (§6.5). A
   request that names another's session or association, as another SMF of a set sends
