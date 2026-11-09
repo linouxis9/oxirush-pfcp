@@ -1074,6 +1074,15 @@ macro_rules! pfcp_table {
                 0
             }
 
+            fn clear(&mut self, ie_type: u16) {
+                $(
+                    if ie_type == <$vty as crate::ie::IeType>::IE_TYPE {
+                        self.$field = Default::default();
+                        return;
+                    }
+                )*
+            }
+
             fn decodes(&self, ie_type: u16, octets: &[u8]) -> bool {
                 $(
                     if ie_type == <$vty as crate::ie::IeType>::IE_TYPE {
@@ -1098,19 +1107,34 @@ macro_rules! pfcp_table {
         #[allow(unused_variables, unused_mut, unused_assignments)]
         impl crate::check::Checked for $ty {
             fn check_values(&self, path: &crate::check::Path, context: crate::check::Context, found: &mut alloc::vec::Vec<crate::check::Deviation>) {
+                // The conditions read the scope as its receiver on the interface takes it:
+                // without the values of the rows that the interface does not have.
+                const CONDITIONS: bool = false $( || pfcp_table!(@checked $($scope)? $($ascope)?) )*;
+                let mut off = 0u64;
+                if CONDITIONS {
+                    let (rows, mut row) = (<Self as crate::table::Scope>::table().rows, 0);
+                    $(
+                        if !crate::table::FieldValues::<$vty>::values(&self.$field).is_empty() && !rows[row].roles.iter().any(|role| role.interfaces.has(context.interface)) {
+                            off |= 1 << row;
+                        }
+                        row += 1;
+                    )*
+                }
+                let taken = crate::check::taken(self, off);
+                let view: &Self = taken.as_ref().unwrap_or(self);
                 let mut row = 0;
                 $(
                     crate::check::check_field_values::<$vty, _, _>(
                         self, row, &self.$field, path, context, found,
                     );
                     $({
-                        let $scope: &Self = self;
+                        let $scope: &Self = view;
                         if $condition {
                             crate::check::condition_missing(self, row, path, context, found);
                         }
                     })?
                     $({
-                        let $ascope: &Self = self;
+                        let $ascope: &Self = view;
                         if $absent {
                             crate::check::condition_absent(self, row, path, context, found);
                         }

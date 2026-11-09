@@ -375,6 +375,8 @@ pub(crate) trait Scope: Default {
     fn held(&self) -> usize;
     /// How many values the field of `ie_type` has.
     fn count(&self, ie_type: u16) -> usize;
+    /// Remove the values of the field of `ie_type`.
+    fn clear(&mut self, ie_type: u16);
     /// Whether `octets` decode as the value of the field of `ie_type`.
     fn decodes(&self, ie_type: u16, octets: &[u8]) -> bool;
     /// Whether a decode of the octets of the scope reads as a value an IE that it keeps as

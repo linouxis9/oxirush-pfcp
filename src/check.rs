@@ -890,6 +890,22 @@ fn invalid_length(path: impl fmt::Display, ie_type: u16, context: Context) -> De
     deviation
 }
 
+/// The scope as its receiver takes it, which the conditions of its table read: without
+/// the values of the rows of `off`, by their positions, which its interface does not have
+/// and which it discards (§7.6.9). `None` for the scope as it is.
+#[cold]
+pub(crate) fn taken<S: Scope + Clone>(scope: &S, off: u64) -> Option<S> {
+    if off == 0 {
+        return None;
+    }
+    let mut taken = scope.clone();
+    let rows = S::table().rows.iter().enumerate();
+    for (_, row) in rows.filter(|(at, _)| off >> at & 1 == 1) {
+        taken.clear(row.ie_type);
+    }
+    Some(taken)
+}
+
 /// Whether each interface of the context has a row, which the condition beside it then
 /// needs.
 fn on_each(row: &Row, context: Context) -> bool {

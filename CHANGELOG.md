@@ -21,7 +21,8 @@ The first version, of TS 29.244 V19.6.0 (2026-06):
   does not tell apart; `Row::content` the table of a grouped IE in its place, of an IE
   type whose content differs by place. `Row::on` gives what a row is on an interface, or
   on a set of them: its presence, the IEs that a message needs and how many it may have,
-  and `None` where it is not: its IEs have no Cause there (§7.6.9); `Row::is_list`
+  and `None` where it is not: its IEs have no Cause there (§7.6.9), and the conditions of
+  the table, which read the rows of the interface alone, do not read them; `Row::is_list`
   whether its tree is a list. A field that its clause encodes as another IE is checked
   as that IE: the Destination Interface of a Remote GTP-U Peer, the C-TAG and S-TAG of
   Outer Header Creation and of MAC Addresses Detected and Removed, and the QFIs of a PMF

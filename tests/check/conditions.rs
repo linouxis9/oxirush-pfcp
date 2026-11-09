@@ -637,3 +637,150 @@ fn the_rows_whose_condition_is_checked() {
         }
     }
 }
+
+/// §7.6.9: a condition reads the scope as its receiver on the interface takes it, without
+/// the IEs of a row that the interface does not have, which it discards: they neither
+/// make a condition hold nor have an IE absent. One of each kind: a MAR ID on Sxa leaves
+/// the FAR ID that its absence needs, a UE IP address on Sxa that asks for an address needs
+/// no Network Instance, and an Ethernet Packet Filter on Sxb, or an Extended Transport
+/// Level Marking on Sxa, has no SDF Filter or Transport Level Marking absent. On N4, which
+/// has each row, they do.
+#[test]
+fn a_condition_reads_the_rows_of_the_interface_alone() {
+    let node = NodeId::Ipv4(SMF);
+    let seid = FSeid::ipv4(1, SMF);
+    let far = far(1);
+    let tunnel =
+        |source| Pdi::new(SourceInterface::new(source)).with_local_f_teid(FTeid::choose_ipv4());
+    let sxa = |pdr: CreatePdr, far: CreateFar| {
+        Message::session(
+            0,
+            1,
+            SessionEstablishmentRequest::new_sxa(node.clone(), seid.clone(), pdr, far),
+        )
+    };
+    let sxb = |pdr: CreatePdr| {
+        Message::session(
+            0,
+            1,
+            SessionEstablishmentRequest::new_sxb(node.clone(), seid.clone(), pdr, far.clone()),
+        )
+    };
+    let n4 = |pdr: CreatePdr, far: CreateFar| {
+        Message::session(
+            0,
+            1,
+            SessionEstablishmentRequest::new_n4(node.clone(), seid.clone(), pdr, far),
+        )
+    };
+    let at = |message: &Message, interface| -> Vec<(String, DeviationKind, Option<CauseValue>)> {
+        let found = message.check(interface).into_iter();
+        found
+            .map(|deviation| (deviation.path, deviation.kind, deviation.cause))
+            .collect()
+    };
+    let off = |path: &str, ie_type| {
+        (
+            path.to_string(),
+            DeviationKind::NotOnInterface { ie_type },
+            None,
+        )
+    };
+    // A MAR ID, which Sxa discards: the FAR ID is missing
+    let mar = CreatePdr::new_sxa(PdrId::new(1), tunnel(SourceInterfaceValue::Access))
+        .with_mar_id(MarId::new(1));
+    assert_eq!(
+        at(&sxa(mar, far.clone()), Interfaces::SXA),
+        [
+            (
+                "/pfcp/Create PDR/0/FAR ID".to_string(),
+                DeviationKind::ConditionalMissing { ie_type: 108 },
+                Some(CauseValue::ConditionalIeMissing),
+            ),
+            off("/pfcp/Create PDR/0/MAR ID", 170),
+        ]
+    );
+    let mar = pdr(1).with_mar_id(MarId::new(1));
+    let mar = CreatePdr {
+        far_id: None,
+        ..mar
+    };
+    assert_eq!(at(&n4(mar, far.clone()), Interfaces::N4), []);
+    // A UE IP address that asks for an address, which Sxa discards: no Network Instance is
+    // needed
+    let ue = UeIpAddress {
+        chv4: true,
+        ..Default::default()
+    };
+    let pdi = tunnel(SourceInterfaceValue::Access).with_ue_ip_address(ue.clone());
+    let pdr = CreatePdr::new_sxa(PdrId::new(1), pdi).with_far_id(FarId::new(1));
+    assert_eq!(
+        at(&sxa(pdr, far.clone()), Interfaces::SXA),
+        [off("/pfcp/Create PDR/0/PDI/UE IP address", 93)]
+    );
+    let pdi = tunnel(SourceInterfaceValue::Access).with_ue_ip_address(ue);
+    let pdr = CreatePdr::new_n4(PdrId::new(1), Precedence::new(1), pdi).with_far_id(FarId::new(1));
+    let kinds: Vec<_> = at(&n4(pdr, far.clone()), Interfaces::N4)
+        .into_iter()
+        .map(|(_, kind, _)| kind)
+        .collect();
+    assert_eq!(kinds, [DeviationKind::ConditionalMissing { ie_type: 22 }]);
+    // An Ethernet Packet Filter, which Sxb discards: the SDF Filter may be there
+    let sdf = SdfFilter {
+        fd: true,
+        flow_description: Some(TextLv16::from("permit out ip from any to assigned")),
+        ..Default::default()
+    };
+    let pdi = Pdi::new(SourceInterface::new(SourceInterfaceValue::Core))
+        .with_sdf_filter(sdf)
+        .with_ethernet_packet_filter(EthernetPacketFilter::default());
+    let pdr = |pdi: Pdi| {
+        CreatePdr::new_n4(PdrId::new(1), Precedence::new(1), pdi).with_far_id(FarId::new(1))
+    };
+    assert_eq!(
+        at(&sxb(pdr(pdi.clone())), Interfaces::SXB),
+        [off("/pfcp/Create PDR/0/PDI/Ethernet Packet Filter", 132)]
+    );
+    let excluded =
+        |path: &str, ie_type| (path.to_string(), DeviationKind::Excluded { ie_type }, None);
+    assert_eq!(
+        at(&n4(pdr(pdi), far.clone()), Interfaces::N4),
+        [excluded("/pfcp/Create PDR/0/PDI/SDF Filter", 23)]
+    );
+    // An Extended Transport Level Marking, which Sxa discards: the Transport Level Marking
+    // may be there
+    let forwarding =
+        ForwardingParameters::new(DestinationInterface::new(DestinationInterfaceValue::Core))
+            .with_transport_level_marking(TransportLevelMarking::new(0xb8fc))
+            .with_extended_transport_level_marking(ExtendedTransportLevelMarking::new(
+                TransportLevelMarking::new(0xb8fc),
+                PduSetImportance {
+                    psi0: true,
+                    ..Default::default()
+                },
+            ));
+    let marked = CreateFar::new(
+        FarId::new(1),
+        ApplyAction {
+            forw: true,
+            ..Default::default()
+        },
+    )
+    .with_forwarding_parameters(forwarding);
+    let pdr = CreatePdr::new_sxa(PdrId::new(1), tunnel(SourceInterfaceValue::Access))
+        .with_far_id(FarId::new(1));
+    assert_eq!(
+        at(&sxa(pdr, marked.clone()), Interfaces::SXA),
+        [off(
+            "/pfcp/Create FAR/0/Forwarding Parameters/Extended Transport Level Marking",
+            383
+        )]
+    );
+    assert_eq!(
+        at(&n4(self::pdr(1), marked), Interfaces::N4),
+        [excluded(
+            "/pfcp/Create FAR/0/Forwarding Parameters/Transport Level Marking",
+            30
+        )]
+    );
+}
