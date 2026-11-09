@@ -610,8 +610,9 @@ macro_rules! pfcp_bits {
         oxirush_utils::impl_serde!($ty);
 
         /// The flags that are set and the fields, with `Spare`, `length` (the octets of
-        /// the fields that the value has, when it lacks some) and `extra` where they are
-        /// not what a sender of this release writes.
+        /// the fields that the value has, when it has not all of them, which a tree reads
+        /// from `MIN` to `N`) and `extra` where they are not what a sender of this release
+        /// writes.
         #[cfg(feature = "tree")]
         impl oxirush_utils::tree::Tree for $ty {
             const NAME: &'static str = <Self as crate::ie::IeType>::TYPE_NAME;
@@ -625,7 +626,7 @@ macro_rules! pfcp_bits {
                 if self.spare.iter().any(|spare| *spare != 0) {
                     members.put("Spare", oxirush_utils::tree::octets(&self.spare));
                 }
-                if usize::from(self.present) < $n {
+                if usize::from(self.present) != $n {
                     members.put("length", oxirush_utils::tree::unsigned(self.present.into()));
                 }
                 if !self.extra.is_empty() {

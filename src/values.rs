@@ -376,13 +376,6 @@ impl NodeId {
         };
         fqdn_name(octets)
     }
-
-    #[cfg(feature = "tree")]
-    fn encoded(&self) -> Vec<u8> {
-        let mut out = Vec::new();
-        let _ = Codec::encode(self, &mut out);
-        out
-    }
 }
 
 #[cfg(feature = "serde")]
@@ -396,19 +389,20 @@ impl oxirush_utils::tree::Tree for NodeId {
     const NAME: &'static str = "Node ID";
     fn to_tree(&self) -> oxirush_utils::tree::Value {
         use oxirush_utils::tree;
+        let other = |kind: u8, value: &[u8]| {
+            let mut members = tree::Members::new();
+            members.put("Node ID Type", tree::unsigned(kind.into()));
+            members.put("Node ID value", tree::octets(value));
+            members.finish()
+        };
         match self {
             Self::Ipv4(address) => tree::Value::String(alloc::format!("{address}")),
             Self::Ipv6(address) => tree::Value::String(alloc::format!("{address}")),
-            Self::Fqdn(_) | Self::Other(..) => match self.fqdn() {
+            Self::Fqdn(labels) => match self.fqdn() {
                 Some(text) => tree::alternative("FQDN", tree::text(&text)),
-                None => {
-                    let octets = self.encoded();
-                    let mut members = tree::Members::new();
-                    members.put("Node ID Type", tree::unsigned(octets[0].into()));
-                    members.put("Node ID value", tree::octets(&octets[1..]));
-                    members.finish()
-                }
+                None => other(2, labels),
             },
+            Self::Other(first, rest) => other(*first, rest),
         }
     }
     fn from_tree(

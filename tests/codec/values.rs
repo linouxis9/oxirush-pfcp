@@ -680,9 +680,10 @@ fn the_cause_of_each_response() {
 /// and Removed, whose C-TAG field is of no octets where it is absent before an S-TAG
 /// (§8.2.103), and the Node Type of an FQ-CSID; no unknown octets follow a field that runs
 /// to the end of the IE (Offending IE Information, SMF Set ID, DSCP to PPI Mapping
-/// Information); a field of the length that its flags give has no more octets (Failed
-/// Rule ID); a value of bits has as many of its octets as it may (Apply Action); a Node ID
-/// of other octets is none that a variant is. No tree writes one of them.
+/// Information); a field of the length that its flags give has no more octets, and no
+/// fewer with octets after it (Failed Rule ID); a value of bits has as many of its octets as
+/// it may (Apply Action): the tree of each is refused. A Node ID of other octets is none
+/// that a variant is: its tree is its Node ID Type and value, which load as that variant.
 #[test]
 fn a_value_whose_octets_would_read_as_another_is_refused() {
     fn refused<T: Codec + Check + tree::Tree + PartialEq>(value: T, field: &str) {
@@ -697,10 +698,9 @@ fn a_value_whose_octets_would_read_as_another_is_refused() {
             .collect();
         let told = |kind: &DeviationKind| matches!(kind, DeviationKind::Inconsistent { field: told } if *told == field);
         assert!(kinds.iter().any(told), "{field}: {kinds:?}");
-        // No tree writes it
+        // Its tree does not load: it says why
         let written = tree::Tree::to_tree(&value);
-        let read = tree::from_value::<T>(&written).ok();
-        assert!(read.is_none_or(|read| read != value), "{written}");
+        assert!(tree::from_value::<T>(&written).is_err(), "{written}");
     }
     fn kept<T: Codec + PartialEq + core::fmt::Debug>(value: T) {
         let mut octets = Vec::new();
@@ -818,7 +818,7 @@ fn a_value_whose_octets_would_read_as_another_is_refused() {
         },
         "Rule ID value",
     );
-    for present in [0, 3] {
+    for present in [0, 3, 9] {
         refused(
             ApplyAction {
                 forw: true,
@@ -833,15 +833,21 @@ fn a_value_whose_octets_would_read_as_another_is_refused() {
         present: 1,
         ..Default::default()
     });
-    for (node, field) in [
-        (NodeId::Fqdn(Octets::default()), "Node ID value"),
+    for (node, field, read) in [
+        (
+            NodeId::Fqdn(Octets::default()),
+            "Node ID value",
+            NodeId::Other(2, Octets::default()),
+        ),
         (
             NodeId::Other(0, vec![10u8, 0, 0, 1].into()),
             "Node ID value",
+            NodeId::Ipv4(Ipv4Addr::new(10, 0, 0, 1)),
         ),
         (
             NodeId::Other(2, b"\x03smf".to_vec().into()),
             "Node ID value",
+            NodeId::Fqdn(b"\x03smf".to_vec().into()),
         ),
     ] {
         match node.encode(&mut Vec::new()) {
@@ -858,6 +864,13 @@ fn a_value_whose_octets_would_read_as_another_is_refused() {
                 field: "Node ID value"
             }),
             "{kinds:?}"
+        );
+        // Its tree is its Node ID Type and value, which load as the Node ID that they read as
+        let written = tree::Tree::to_tree(&node);
+        assert_eq!(
+            tree::from_value::<NodeId>(&written).ok(),
+            Some(read),
+            "{written}"
         );
     }
     kept(NodeId::Other(0, vec![10u8, 0, 0].into()));
