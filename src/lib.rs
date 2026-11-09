@@ -154,7 +154,8 @@ pub enum Error {
     },
     /// A value whose fields disagree with its flags, as its clause has them, or whose
     /// octets would read as another value: a field missing where a later one, or unknown
-    /// octets, would read as it.
+    /// octets, would read as it, or one of the length that its flags give that is longer,
+    /// or shorter with octets after it.
     Inconsistent {
         /// The IE type.
         ie: &'static str,

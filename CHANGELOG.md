@@ -19,8 +19,8 @@ The first version, of TS 29.244 V19.6.0 (2026-06):
   C-TAG and S-TAG of MAC Addresses Detected and Removed, whose absent C-TAG field before
   an S-TAG is of no octets, and the Node Type of an FQ-CSID), unknown octets after a
   field that runs to the end of the IE, a field longer than the length that its flags
-  give, a value of bits of a number of octets that it may not have, and a Node ID of
-  other octets that are an address or an FQDN.
+  give, or shorter with octets after it, a value of bits of a number of octets that it
+  may not have, and a Node ID of other octets that are an address or an FQDN.
 - `check()`: how a message breaks the tables and clauses on an interface, each deviation
   with its path, its clause and the Cause of the answer; `deviations()` of a value on
   its own. A `Row` is its roles, each with its presence, its interfaces and how many IEs

@@ -806,10 +806,18 @@ fn a_value_whose_octets_would_read_as_another_is_refused() {
     kept(rule(vec![0, 1]));
     kept(rule(vec![1]));
     kept(FailedRuleId {
-        extra: unknown,
+        extra: unknown.clone(),
         ..rule(vec![0, 1])
     });
     refused(rule(vec![0, 1, 2]), "Rule ID value");
+    // Shorter than its type's, with octets after it, which would read as part of it
+    refused(
+        FailedRuleId {
+            extra: unknown,
+            ..rule(vec![1])
+        },
+        "Rule ID value",
+    );
     for present in [0, 3] {
         refused(
             ApplyAction {

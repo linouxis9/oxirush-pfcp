@@ -189,7 +189,8 @@ pub enum DeviationKind {
     },
     /// A field that is there where the flags of its IE do not have it, or the reverse, or
     /// whose octets would read as another value: one missing where a later field, or
-    /// unknown octets, would read as it.
+    /// unknown octets, would read as it, or one of the length that its flags give that
+    /// is longer, or shorter with octets after it.
     Inconsistent {
         /// The field.
         field: &'static str,

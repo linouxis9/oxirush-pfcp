@@ -305,3 +305,86 @@ fn a_message_is_checked_as_its_octets_whatever_holds_them() {
         );
     }
 }
+
+/// A Failed Rule ID shorter than the ID of its type, with octets after it, would read as
+/// another value: wherever it is, its message does not encode, and `check()` tells it, as
+/// a tree of it does not load.
+#[test]
+fn a_failed_rule_id_that_would_read_as_another_is_refused_wherever_it_is() {
+    let rule = FailedRuleId {
+        rule_id_type: RuleIdType::Pdr,
+        rule_id_value: Rest(vec![1u8].into()),
+        extra: vec![0xaau8].into(),
+        ..Default::default()
+    };
+    let partial = PartialFailureInformation {
+        failed_rule_id: Some(rule.clone()),
+        failure_cause: Some(Cause::new(CauseValue::RuleCreationModificationFailure)),
+        offending_ie_information: vec![OffendingIeInformation::default()],
+        ..Default::default()
+    };
+    let establishment = |change: &dyn Fn(&mut SessionEstablishmentResponse)| {
+        let mut response = SessionEstablishmentResponse {
+            node_id: Some(NodeId::Ipv4(SMF)),
+            ..Default::default()
+        };
+        change(&mut response);
+        Message::session(1, 7, response)
+    };
+    let modification = |change: &dyn Fn(&mut SessionModificationResponse)| {
+        let mut response = SessionModificationResponse::default();
+        change(&mut response);
+        Message::session(1, 7, response)
+    };
+    let failed = Some(Cause::new(CauseValue::RuleCreationModificationFailure));
+    let partially = Some(Cause::new(CauseValue::RequestPartiallyAccepted));
+    let at_top = "/pfcp/Failed Rule ID";
+    let within = "/pfcp/Partial Failure Information/0/Failed Rule ID";
+    for (message, at) in [
+        (
+            establishment(&|r| {
+                r.cause = failed.clone();
+                r.failed_rule_id = Some(rule.clone());
+            }),
+            at_top,
+        ),
+        (
+            establishment(&|r| {
+                r.cause = partially.clone();
+                r.partial_failure_information = vec![partial.clone()];
+            }),
+            within,
+        ),
+        (
+            modification(&|r| {
+                r.cause = failed.clone();
+                r.failed_rule_id = Some(rule.clone());
+            }),
+            at_top,
+        ),
+        (
+            modification(&|r| {
+                r.cause = partially.clone();
+                r.partial_failure_information = vec![partial.clone()];
+            }),
+            within,
+        ),
+    ] {
+        match message.encode() {
+            Err(Error::Inconsistent { field, .. }) => assert_eq!(field, "Rule ID value"),
+            other => panic!("{at}: {other:?}"),
+        }
+        let told = DeviationKind::Inconsistent {
+            field: "Rule ID value",
+        };
+        let found = message.check(Interfaces::N4);
+        assert!(
+            found
+                .iter()
+                .any(|deviation| deviation.kind == told && deviation.path == at),
+            "{found:?}"
+        );
+        #[cfg(feature = "tree")]
+        assert!(Message::from_tree(&message.to_tree()).is_err(), "{at}");
+    }
+}

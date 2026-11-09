@@ -196,11 +196,13 @@ macro_rules! pfcp_layout {
 
             /// Whether each field is there as its flags say, and its octets read as it: the
             /// name of the first that is not. A field of the length that its flags give has
-            /// no more octets, and a field that runs to the end of the IE has no unknown
-            /// octets after it, which would read as part of it.
+            /// no more octets, and no fewer where octets follow it, and a field that runs to
+            /// the end of the IE has no unknown octets after it: they would read as part of it.
             #[allow(unused_variables, unused_mut, unused_assignments)]
             pub(crate) fn inconsistent(&self) -> Option<&'static str> {
                 let mut ends = false;
+                // A field shorter than the length that its flags give.
+                let mut short = None;
                 $($( ends = <$hkind as crate::fields::Field>::TO_THE_END; )*)?
                 $(
                     $( let $flag = self.$flag; )*
@@ -211,14 +213,22 @@ macro_rules! pfcp_layout {
                             }
                         )?
                         let field = pfcp_layout!(@get [$($cond)?] self.$field);
+                        if short.is_some() && field.is_some_and(|field| crate::fields::Field::size(field) > 0) {
+                            return short;
+                        }
                         $(
-                            if field.is_some_and(|field| crate::fields::Field::size(field) > $length) {
+                            let size = field.map_or(0, crate::fields::Field::size);
+                            if size > $length {
                                 return Some($field_name);
                             }
+                            short = short.or((field.is_some() && size < $length).then_some($field_name));
                         )?
                         ends = field.is_some() && pfcp_layout!(@ends [$($length)?] $kind $(<$param>)?);
                     )*
                 )?
+                if short.is_some() && !self.extra.is_empty() {
+                    return short;
+                }
                 (ends && !self.extra.is_empty()).then_some(crate::ie::UNKNOWN_OCTETS)
             }
         }
