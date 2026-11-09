@@ -61,6 +61,11 @@ pfcp_layout! {
         const RPTPI: u8 = 0x10;
         let media = this.rtp_multiplexed_media.as_ref().map_or(&[][..], |media| &media.0[..]);
         let any = |rule: fn(u8) -> bool| media.iter().any(|media| rule(media.0.first().copied().unwrap_or(0)));
+        // Their bits 6 to 8 "are spare and reserved for future use, shall be set to "0" by
+        // the sender and discarded by the receiver".
+        if any(|flags| flags & 0xe0 != 0) {
+            found.push(Deviation::new(path, "8.2.5", crate::check::DeviationKind::SpareBits));
+        }
         // Their number is "greater or equal to 1".
         flag_rule(this.rtp_multiplexed_media.as_ref().is_some_and(|media| media.0.is_empty()), path, "8.2.5", "SMMII is set with no (S)RTP Multiplexed Media Identification Information", found);
         flag_rule(any(|flags| flags & (MIDPI | RHIDMPI | RPTPI) == MIDPI), path, "8.2.5", "a media identification has MIDPI, and neither RPTPI nor RHIDMPI", found);

@@ -566,6 +566,12 @@ fn the_media_identifications_of_an_sdf_filter() {
     ] {
         assert_eq!(value_found::<SdfFilter>(octets), [], "{octets}");
     }
+    // Bits 6 to 8 of the flags of a media identification "are spare and reserved for future
+    // use, shall be set to "0" by the sender and discarded by the receiver"
+    for octets in ["20000100052100000001", "200002000501000000010002827f"] {
+        let spare = ("8.2.5", DeviationKind::SpareBits);
+        assert_eq!(value_found::<SdfFilter>(octets), [spare], "{octets}");
+    }
 }
 
 /// §8.2.168: bit 3 of Reporting Frequency is reserved, "set to "0" by the sender" and
