@@ -231,8 +231,11 @@ impl Deviation {
 
 impl fmt::Display for Deviation {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let name =
-            |ie_type: u16| ie_type_info(ie_type).map_or("an IE of no release", |info| info.name);
+        let name = |ie_type: u16| match ie_type_info(ie_type) {
+            Some(info) => info.name,
+            None if ie_type >= VENDOR => "a vendor IE",
+            None => "an IE of no release",
+        };
         match &self.kind {
             DeviationKind::MandatoryMissing { ie_type } => {
                 write!(f, "the mandatory {} is missing", name(*ie_type))

@@ -88,6 +88,29 @@ fn check_names_the_clause() {
         "{}",
         found[1]
     );
+    // A vendor IE of a false Length, and an IE of a type that no release has
+    let mut heartbeat = HeartbeatRequest::new(RecoveryTimeStamp::new(7));
+    for ie_type in [32767, 0x8001] {
+        heartbeat.raw.push(RawIe {
+            length: Some(9),
+            ..RawIe::new(ie_type, vec![0, 1, 2])
+        });
+    }
+    let said: Vec<String> = Message::node(1, heartbeat)
+        .check(Interfaces::N4)
+        .iter()
+        .map(ToString::to_string)
+        .collect();
+    assert!(
+        said.iter()
+            .any(|said| said.starts_with("an IE of no release has a Length")),
+        "{said:?}"
+    );
+    assert!(
+        said.iter()
+            .any(|said| said.starts_with("a vendor IE has a Length")),
+        "{said:?}"
+    );
 }
 
 /// The four values that the crate reads by hand, whose figures the test `spec` does not
