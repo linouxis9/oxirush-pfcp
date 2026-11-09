@@ -122,7 +122,12 @@ test `codec` expects them (`other_vectors_round_trip`, with `--ignored` and
   the octets of the Paging Policy Indication value and of the QFI of Downlink Data
   Service Information, which §8.2.27 has spare
   (`NewDownlinkDataServiceInformation(true, true, 0xff, 0xff)` in
-  `message/session-report-request_test.go`).
+  `message/session-report-request_test.go`), and bits 8 to 5 of the first octet of the
+  Flow Label of SDF Filter, which §8.2.5 has spare (`NewSDFFilter(..., "ddd", ...)`).
+- Additional Usage Reports Information has AURI with a Number of Additional Usage Reports
+  other than 0, which §8.2.91 has the sender set to 0 when AURI says that more follow:
+  `NewAdditionalUsageReportsInformation(num)` (`ie/additional-usage-reports-information.go`)
+  sets AURI for any number but 0.
 - The GTP-U Path QoS Control Information of a periodic QoS Report Trigger has a
   Measurement Method where Table 7.4.4.1.3-1 has the Measurement Period, which periodic
   reporting needs, and an Association Setup Response of CP Function Features of MPAS

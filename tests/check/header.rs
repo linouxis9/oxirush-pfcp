@@ -59,6 +59,24 @@ fn seid_0_only_where_the_peer_seid_is_not_known() {
         kinds(&Message::session(0, 8, deletion), Interfaces::N4),
         [reserved]
     );
+    // An answer of "Session context not found" has SEID 0, as its peer's is not known
+    // (bullet 2); one of another Cause may have another
+    let response = SessionModificationResponse::new(Cause::new(CauseValue::SessionContextNotFound));
+    let found = Message::session(0x1001, 8, response).check(Interfaces::N4);
+    let found: Vec<_> = found
+        .iter()
+        .map(|deviation| (deviation.path.as_str(), deviation.clause, &deviation.kind))
+        .collect();
+    let rule = DeviationKind::Rule(
+        "a response of the Cause Session context not found of a SEID other than 0",
+    );
+    assert_eq!(found, [("/SEID", "7.2.2.4.2", &rule)]);
+    let response = SessionModificationResponse::new(Cause::new(CauseValue::MandatoryIeMissing))
+        .with_offending_ie(OffendingIe::new(1));
+    assert_eq!(
+        kinds(&Message::session(0x1001, 8, response), Interfaces::N4),
+        []
+    );
 }
 
 /// §7.2.2.4.2 bullet 4, §5.22.2 bullet 4, Table 7.5.8.1-1: a Session Report Request of

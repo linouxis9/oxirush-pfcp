@@ -680,3 +680,35 @@ fn the_tags_of_mac_addresses() {
         ]
     );
 }
+
+/// The bits 8 to 5 of the octet "v" of a Flow Label are spare and zero (§8.2.5), and the
+/// Number of Additional Usage Reports is 0 where AURI says that more follow (§8.2.91).
+#[test]
+fn the_spare_bits_of_a_flow_label_and_the_number_of_more_usage_reports() {
+    let kinds = |value: &dyn Check| -> Vec<(&'static str, DeviationKind)> {
+        let found = value.deviations().into_iter();
+        found
+            .map(|deviation| (deviation.clause, deviation.kind))
+            .collect()
+    };
+    let label = |flow_label| SdfFilter {
+        fl: true,
+        flow_label: Some(U24(flow_label)),
+        ..Default::default()
+    };
+    assert_eq!(kinds(&label(0x0f_ffff)), []);
+    assert_eq!(
+        kinds(&label(0xf0_0001)),
+        [("8.2.5", DeviationKind::SpareBits)]
+    );
+    let more = |auri, number| AdditionalUsageReportsInformation {
+        auri,
+        number,
+        ..Default::default()
+    };
+    assert_eq!(kinds(&more(true, 0)), []);
+    assert_eq!(kinds(&more(false, 3)), []);
+    let rule =
+        DeviationKind::Rule("AURI is set with a Number of Additional Usage Reports other than 0");
+    assert_eq!(kinds(&more(true, 3)), [("8.2.91", rule)]);
+}

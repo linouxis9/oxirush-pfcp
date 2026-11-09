@@ -46,6 +46,10 @@ pfcp_layout! {
         rtp_multiplexed_media "(S)RTP Multiplexed Media Identification Information": Counted<Lv16> if smmii,
     }
     check(this, path, found) {
+        // "The bits 8 to 5 of the octet "v" shall be spare and set to zero".
+        if this.flow_label.is_some_and(|label| label.0 & 0xf0_0000 != 0) {
+            found.push(Deviation::new(path, "8.2.5", crate::check::DeviationKind::SpareBits));
+        }
         // The octet of flags of an (S)RTP Multiplexed Media Identification Information:
         // SSRCPI, PTPI, MIDPI, RHIDMPI and RPTPI, bits 1 to 5. One of the RTCP Packet Type is
         // of (S)RTCP traffic only, one of the Payload Type of (S)RTP only, and one of neither
@@ -475,6 +479,11 @@ pfcp_bits! {
     /// usage reports, its seven high bits in octet 5 and its eight low ones in octet 6.
     pub struct AdditionalUsageReportsInformation "8.2.91" octets 2 min 2 {
         auri "AURI": 0 8 1, number "Number of Additional Usage Reports value": 0 1 7 + 1 1 8,
+    }
+    check(this, path, found) {
+        // Of AURI, "the Number of Additional Usage Reports value shall be set to "0" by the
+        // sender".
+        flag_rule(this.auri && this.number != 0, path, "8.2.91", "AURI is set with a Number of Additional Usage Reports other than 0", found);
     }
 }
 

@@ -323,7 +323,8 @@ impl Message {
         let seid = header.seid;
         let cause = self.body.cause();
         // SEID 0: an establishment, a report to another SMF, or an answer to a session
-        // that the node does not have or to a request that it rejects (§7.2.2.4.2).
+        // that the node does not have, which has it, or to a request that it rejects
+        // (§7.2.2.4.2).
         let seid_zero_known = seid == Some(0) && matches!(message_type, 52 | 54)
             || seid == Some(0) && cause.is_some_and(|cause| cause.accepts());
         // A Session Report Request of SEID 0 moves the session to another SMF of the set
@@ -367,6 +368,8 @@ impl Message {
             (establishment && seid.is_some_and(|seid| seid != 0), "/SEID", "7.2.2.4.2",
                 Rule("a Session Establishment Request of a SEID other than 0")),
             (seid_zero_known, "/SEID", "7.2.2.4.2", Rule("SEID 0 where the peer's SEID is known")),
+            (seid.is_some_and(|seid| seid != 0) && cause == Some(CauseValue::SessionContextNotFound), "/SEID", "7.2.2.4.2",
+                Rule("a response of the Cause Session context not found of a SEID other than 0")),
             (seid == Some(0) && old == Some(false), "/pfcp/Old CP F-SEID", "7.2.2.4.2",
                 Rule("a Session Report Request of SEID 0 without the Old CP F-SEID")),
             (seid.is_some_and(|seid| seid != 0) && old == Some(true), "/pfcp/Old CP F-SEID", "7.2.2.4.2",

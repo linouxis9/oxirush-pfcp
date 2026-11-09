@@ -71,22 +71,28 @@ node-report-request_test.go	Multiple IEs	/pfcp/GTP-U Path QoS Report/1/QoS Infor
 node-report-request_test.go	Single IE	/pfcp/Clock Drift Report/0/Cumulative rateRatio Threshold	7.6.9	Unexpected { ie_type: 208 }	-
 node-report-request_test.go	Single IE	/pfcp/Clock Drift Report/0/Time Offset Threshold	7.6.9	Unexpected { ie_type: 207 }	-
 node-report-request_test.go	Single IE	/pfcp/GTP-U Path QoS Report/0/QoS Information/0/DSCP	8.2.12	Rule("a ToS/Traffic Class mask other than 0xFC")	MandatoryIeIncorrect
+session-deletion-response_test.go	Multiple IEs	/pfcp/Additional Usage Reports Information	8.2.91	Rule("AURI is set with a Number of Additional Usage Reports other than 0")	-
 session-deletion-response_test.go	Multiple IEs	/pfcp/Usage Report/0/Usage Report Trigger	8.1.2	SpareBits	-
 session-deletion-response_test.go	Multiple IEs	/pfcp/Usage Report/1/Usage Report Trigger	8.1.2	SpareBits	-
+session-deletion-response_test.go	Single IE	/pfcp/Additional Usage Reports Information	8.2.91	Rule("AURI is set with a Number of Additional Usage Reports other than 0")	-
 session-deletion-response_test.go	Single IE	/pfcp/Usage Report/0/Usage Report Trigger	8.1.2	SpareBits	-
 session-establishment-request_test.go	Multiple IEs	/SEID	7.2.2.4.2	Rule("a Session Establishment Request of a SEID other than 0")	-
 session-establishment-request_test.go	Multiple IEs	/pfcp/Create FAR/0/Forwarding Parameters/Transport Level Marking	8.2.12	Rule("a ToS/Traffic Class mask other than 0xFC")	MandatoryIeIncorrect
 session-establishment-request_test.go	Multiple IEs	/pfcp/Create FAR/0/Redundant Transmission Parameters	7.6.9	Unexpected { ie_type: 255 }	-
 session-establishment-request_test.go	Multiple IEs	/pfcp/Create PDR/0/Outer Header Removal	8.1.2	SpareBits	-
+session-establishment-request_test.go	Multiple IEs	/pfcp/Create PDR/0/PDI/Ethernet Packet Filter/0/SDF Filter/0	8.2.5	SpareBits	-
 session-establishment-request_test.go	Multiple IEs	/pfcp/Create PDR/0/PDI/Local F-TEID	7.5.2.2-2	Excluded { ie_type: 21 }	-
 session-establishment-request_test.go	Multiple IEs	/pfcp/Create PDR/0/PDI/Network Instance	7.5.2.2-2	Excluded { ie_type: 22 }	-
 session-establishment-request_test.go	Multiple IEs	/pfcp/Create PDR/0/PDI/SDF Filter	7.5.2.2-2	Excluded { ie_type: 23 }	-
+session-establishment-request_test.go	Multiple IEs	/pfcp/Create PDR/0/PDI/SDF Filter/0	8.2.5	SpareBits	-
 session-establishment-request_test.go	Multiple IEs	/pfcp/Create PDR/0/PDI/UE IP address	7.5.2.2-2	Excluded { ie_type: 93 }	-
 session-establishment-request_test.go	Multiple IEs	/pfcp/Create PDR/0/UE IP address Pool Identity/0	7.6.8	Incorrect { ie_type: 177 }	-
 session-establishment-request_test.go	Multiple IEs	/pfcp/Create PDR/1/Outer Header Removal	8.1.2	SpareBits	-
+session-establishment-request_test.go	Multiple IEs	/pfcp/Create PDR/1/PDI/Ethernet Packet Filter/0/SDF Filter/0	8.2.5	SpareBits	-
 session-establishment-request_test.go	Multiple IEs	/pfcp/Create PDR/1/PDI/Local F-TEID	7.5.2.2-2	Excluded { ie_type: 21 }	-
 session-establishment-request_test.go	Multiple IEs	/pfcp/Create PDR/1/PDI/Network Instance	7.5.2.2-2	Excluded { ie_type: 22 }	-
 session-establishment-request_test.go	Multiple IEs	/pfcp/Create PDR/1/PDI/SDF Filter	7.5.2.2-2	Excluded { ie_type: 23 }	-
+session-establishment-request_test.go	Multiple IEs	/pfcp/Create PDR/1/PDI/SDF Filter/0	8.2.5	SpareBits	-
 session-establishment-request_test.go	Multiple IEs	/pfcp/Create PDR/1/PDI/UE IP address	7.5.2.2-2	Excluded { ie_type: 93 }	-
 session-establishment-request_test.go	Multiple IEs	/pfcp/Create PDR/1/UE IP address Pool Identity/0	7.6.8	Incorrect { ie_type: 177 }	-
 session-establishment-request_test.go	Multiple IEs	/pfcp/Create QER/0/QER Control Indications	8.1.2	SpareBits	-
@@ -95,9 +101,11 @@ session-establishment-request_test.go	Single IE	/SEID	7.2.2.4.2	Rule("a Session 
 session-establishment-request_test.go	Single IE	/pfcp/Create FAR/0/Forwarding Parameters/Transport Level Marking	8.2.12	Rule("a ToS/Traffic Class mask other than 0xFC")	MandatoryIeIncorrect
 session-establishment-request_test.go	Single IE	/pfcp/Create FAR/0/Redundant Transmission Parameters	7.6.9	Unexpected { ie_type: 255 }	-
 session-establishment-request_test.go	Single IE	/pfcp/Create PDR/0/Outer Header Removal	8.1.2	SpareBits	-
+session-establishment-request_test.go	Single IE	/pfcp/Create PDR/0/PDI/Ethernet Packet Filter/0/SDF Filter/0	8.2.5	SpareBits	-
 session-establishment-request_test.go	Single IE	/pfcp/Create PDR/0/PDI/Local F-TEID	7.5.2.2-2	Excluded { ie_type: 21 }	-
 session-establishment-request_test.go	Single IE	/pfcp/Create PDR/0/PDI/Network Instance	7.5.2.2-2	Excluded { ie_type: 22 }	-
 session-establishment-request_test.go	Single IE	/pfcp/Create PDR/0/PDI/SDF Filter	7.5.2.2-2	Excluded { ie_type: 23 }	-
+session-establishment-request_test.go	Single IE	/pfcp/Create PDR/0/PDI/SDF Filter/0	8.2.5	SpareBits	-
 session-establishment-request_test.go	Single IE	/pfcp/Create PDR/0/PDI/UE IP address	7.5.2.2-2	Excluded { ie_type: 93 }	-
 session-establishment-request_test.go	Single IE	/pfcp/Create PDR/0/UE IP address Pool Identity/0	7.6.8	Incorrect { ie_type: 177 }	-
 session-establishment-request_test.go	Single IE	/pfcp/Create QER/0/QER Control Indications	8.1.2	SpareBits	-
@@ -119,15 +127,19 @@ session-modification-request_test.go	Multiple IEs	/pfcp/Access Availability Info
 session-modification-request_test.go	Multiple IEs	/pfcp/Create FAR/0/Forwarding Parameters/Transport Level Marking	8.2.12	Rule("a ToS/Traffic Class mask other than 0xFC")	MandatoryIeIncorrect
 session-modification-request_test.go	Multiple IEs	/pfcp/Create FAR/0/Redundant Transmission Parameters	7.6.9	Unexpected { ie_type: 255 }	-
 session-modification-request_test.go	Multiple IEs	/pfcp/Create PDR/0/Outer Header Removal	8.1.2	SpareBits	-
+session-modification-request_test.go	Multiple IEs	/pfcp/Create PDR/0/PDI/Ethernet Packet Filter/0/SDF Filter/0	8.2.5	SpareBits	-
 session-modification-request_test.go	Multiple IEs	/pfcp/Create PDR/0/PDI/Local F-TEID	7.5.2.2-2	Excluded { ie_type: 21 }	-
 session-modification-request_test.go	Multiple IEs	/pfcp/Create PDR/0/PDI/Network Instance	7.5.2.2-2	Excluded { ie_type: 22 }	-
 session-modification-request_test.go	Multiple IEs	/pfcp/Create PDR/0/PDI/SDF Filter	7.5.2.2-2	Excluded { ie_type: 23 }	-
+session-modification-request_test.go	Multiple IEs	/pfcp/Create PDR/0/PDI/SDF Filter/0	8.2.5	SpareBits	-
 session-modification-request_test.go	Multiple IEs	/pfcp/Create PDR/0/PDI/UE IP address	7.5.2.2-2	Excluded { ie_type: 93 }	-
 session-modification-request_test.go	Multiple IEs	/pfcp/Create PDR/0/UE IP address Pool Identity/0	7.6.8	Incorrect { ie_type: 177 }	-
 session-modification-request_test.go	Multiple IEs	/pfcp/Create PDR/1/Outer Header Removal	8.1.2	SpareBits	-
+session-modification-request_test.go	Multiple IEs	/pfcp/Create PDR/1/PDI/Ethernet Packet Filter/0/SDF Filter/0	8.2.5	SpareBits	-
 session-modification-request_test.go	Multiple IEs	/pfcp/Create PDR/1/PDI/Local F-TEID	7.5.2.2-2	Excluded { ie_type: 21 }	-
 session-modification-request_test.go	Multiple IEs	/pfcp/Create PDR/1/PDI/Network Instance	7.5.2.2-2	Excluded { ie_type: 22 }	-
 session-modification-request_test.go	Multiple IEs	/pfcp/Create PDR/1/PDI/SDF Filter	7.5.2.2-2	Excluded { ie_type: 23 }	-
+session-modification-request_test.go	Multiple IEs	/pfcp/Create PDR/1/PDI/SDF Filter/0	8.2.5	SpareBits	-
 session-modification-request_test.go	Multiple IEs	/pfcp/Create PDR/1/PDI/UE IP address	7.5.2.2-2	Excluded { ie_type: 93 }	-
 session-modification-request_test.go	Multiple IEs	/pfcp/Create PDR/1/UE IP address Pool Identity/0	7.6.8	Incorrect { ie_type: 177 }	-
 session-modification-request_test.go	Multiple IEs	/pfcp/Create QER/0/QER Control Indications	8.1.2	SpareBits	-
@@ -135,9 +147,11 @@ session-modification-request_test.go	Multiple IEs	/pfcp/Create SRR/0/QoS Monitor
 session-modification-request_test.go	Multiple IEs	/pfcp/Update FAR/0/Redundant Transmission Parameters	7.6.9	Unexpected { ie_type: 255 }	-
 session-modification-request_test.go	Multiple IEs	/pfcp/Update FAR/0/Update Forwarding parameters/Transport Level Marking	8.2.12	Rule("a ToS/Traffic Class mask other than 0xFC")	MandatoryIeIncorrect
 session-modification-request_test.go	Multiple IEs	/pfcp/Update PDR/0/Outer Header Removal	8.1.2	SpareBits	-
+session-modification-request_test.go	Multiple IEs	/pfcp/Update PDR/0/PDI/Ethernet Packet Filter/0/SDF Filter/0	8.2.5	SpareBits	-
 session-modification-request_test.go	Multiple IEs	/pfcp/Update PDR/0/PDI/Local F-TEID	7.5.2.2-2	Excluded { ie_type: 21 }	-
 session-modification-request_test.go	Multiple IEs	/pfcp/Update PDR/0/PDI/Network Instance	7.5.2.2-2	Excluded { ie_type: 22 }	-
 session-modification-request_test.go	Multiple IEs	/pfcp/Update PDR/0/PDI/SDF Filter	7.5.2.2-2	Excluded { ie_type: 23 }	-
+session-modification-request_test.go	Multiple IEs	/pfcp/Update PDR/0/PDI/SDF Filter/0	8.2.5	SpareBits	-
 session-modification-request_test.go	Multiple IEs	/pfcp/Update PDR/0/PDI/UE IP address	7.5.2.2-2	Excluded { ie_type: 93 }	-
 session-modification-request_test.go	Multiple IEs	/pfcp/Update QER/0/Packet Rate Status	7.6.9	Unexpected { ie_type: 193 }	-
 session-modification-request_test.go	Multiple IEs	/pfcp/Update QER/0/QER Control Indications	8.1.2	SpareBits	-
@@ -154,9 +168,11 @@ session-modification-request_test.go	Single IE	/pfcp/Access Availability Informa
 session-modification-request_test.go	Single IE	/pfcp/Create FAR/0/Forwarding Parameters/Transport Level Marking	8.2.12	Rule("a ToS/Traffic Class mask other than 0xFC")	MandatoryIeIncorrect
 session-modification-request_test.go	Single IE	/pfcp/Create FAR/0/Redundant Transmission Parameters	7.6.9	Unexpected { ie_type: 255 }	-
 session-modification-request_test.go	Single IE	/pfcp/Create PDR/0/Outer Header Removal	8.1.2	SpareBits	-
+session-modification-request_test.go	Single IE	/pfcp/Create PDR/0/PDI/Ethernet Packet Filter/0/SDF Filter/0	8.2.5	SpareBits	-
 session-modification-request_test.go	Single IE	/pfcp/Create PDR/0/PDI/Local F-TEID	7.5.2.2-2	Excluded { ie_type: 21 }	-
 session-modification-request_test.go	Single IE	/pfcp/Create PDR/0/PDI/Network Instance	7.5.2.2-2	Excluded { ie_type: 22 }	-
 session-modification-request_test.go	Single IE	/pfcp/Create PDR/0/PDI/SDF Filter	7.5.2.2-2	Excluded { ie_type: 23 }	-
+session-modification-request_test.go	Single IE	/pfcp/Create PDR/0/PDI/SDF Filter/0	8.2.5	SpareBits	-
 session-modification-request_test.go	Single IE	/pfcp/Create PDR/0/PDI/UE IP address	7.5.2.2-2	Excluded { ie_type: 93 }	-
 session-modification-request_test.go	Single IE	/pfcp/Create PDR/0/UE IP address Pool Identity/0	7.6.8	Incorrect { ie_type: 177 }	-
 session-modification-request_test.go	Single IE	/pfcp/Create QER/0/QER Control Indications	8.1.2	SpareBits	-
@@ -164,28 +180,34 @@ session-modification-request_test.go	Single IE	/pfcp/Create SRR/0/QoS Monitoring
 session-modification-request_test.go	Single IE	/pfcp/Update FAR/0/Redundant Transmission Parameters	7.6.9	Unexpected { ie_type: 255 }	-
 session-modification-request_test.go	Single IE	/pfcp/Update FAR/0/Update Forwarding parameters/Transport Level Marking	8.2.12	Rule("a ToS/Traffic Class mask other than 0xFC")	MandatoryIeIncorrect
 session-modification-request_test.go	Single IE	/pfcp/Update PDR/0/Outer Header Removal	8.1.2	SpareBits	-
+session-modification-request_test.go	Single IE	/pfcp/Update PDR/0/PDI/Ethernet Packet Filter/0/SDF Filter/0	8.2.5	SpareBits	-
 session-modification-request_test.go	Single IE	/pfcp/Update PDR/0/PDI/Local F-TEID	7.5.2.2-2	Excluded { ie_type: 21 }	-
 session-modification-request_test.go	Single IE	/pfcp/Update PDR/0/PDI/Network Instance	7.5.2.2-2	Excluded { ie_type: 22 }	-
 session-modification-request_test.go	Single IE	/pfcp/Update PDR/0/PDI/SDF Filter	7.5.2.2-2	Excluded { ie_type: 23 }	-
+session-modification-request_test.go	Single IE	/pfcp/Update PDR/0/PDI/SDF Filter/0	8.2.5	SpareBits	-
 session-modification-request_test.go	Single IE	/pfcp/Update PDR/0/PDI/UE IP address	7.5.2.2-2	Excluded { ie_type: 93 }	-
 session-modification-request_test.go	Single IE	/pfcp/Update QER/0/Packet Rate Status	7.6.9	Unexpected { ie_type: 193 }	-
 session-modification-request_test.go	Single IE	/pfcp/Update QER/0/QER Control Indications	8.1.2	SpareBits	-
 session-modification-request_test.go	Single IE	/pfcp/Update SRR/0/QoS Monitoring per QoS flow Control Information/0/Reporting Frequency	8.2.168	SpareBits	-
+session-modification-response_test.go	Multiple IEs	/pfcp/Additional Usage Reports Information	8.2.91	Rule("AURI is set with a Number of Additional Usage Reports other than 0")	-
 session-modification-response_test.go	Multiple IEs	/pfcp/Created Bridge~1Router Info	7.6.9	Unexpected { ie_type: 195 }	-
 session-modification-response_test.go	Multiple IEs	/pfcp/Usage Report/0/Usage Report Trigger	8.1.2	SpareBits	-
+session-modification-response_test.go	Single IE	/pfcp/Additional Usage Reports Information	8.2.91	Rule("AURI is set with a Number of Additional Usage Reports other than 0")	-
 session-modification-response_test.go	Single IE	/pfcp/Created Bridge~1Router Info	7.6.9	Unexpected { ie_type: 195 }	-
 session-modification-response_test.go	Single IE	/pfcp/Usage Report/0/Usage Report Trigger	8.1.2	SpareBits	-
+session-report-request_test.go	Multiple IEs	/pfcp/Additional Usage Reports Information	8.2.91	Rule("AURI is set with a Number of Additional Usage Reports other than 0")	MandatoryIeIncorrect
+session-report-request_test.go	Multiple IEs	/pfcp/Downlink Data Report/Downlink Data Service Information/0	8.1.2	SpareBits	-
+session-report-request_test.go	Multiple IEs	/pfcp/Downlink Data Report/Downlink Data Service Information/0	8.1.2	SpareBits	-
 session-report-request_test.go	Multiple IEs	/pfcp/Old CP F-SEID	7.2.2.4.2	Rule("a Session Report Request of a SEID other than 0 with the Old CP F-SEID")	-
-session-report-request_test.go	Multiple IEs	/pfcp/Downlink Data Report/Downlink Data Service Information/0	8.1.2	SpareBits	-
-session-report-request_test.go	Multiple IEs	/pfcp/Downlink Data Report/Downlink Data Service Information/0	8.1.2	SpareBits	-
 session-report-request_test.go	Multiple IEs	/pfcp/Session Report/0/Access Availability Control Information	7.6.9	Unexpected { ie_type: 216 }	-
 session-report-request_test.go	Multiple IEs	/pfcp/Session Report/0/QoS Monitoring Report/0/QoS Monitoring Measurement	8.2.171	Rule("PLMF is set with a packet delay")	MandatoryIeIncorrect
 session-report-request_test.go	Multiple IEs	/pfcp/Session Report/1/Access Availability Control Information	7.6.9	Unexpected { ie_type: 216 }	-
 session-report-request_test.go	Multiple IEs	/pfcp/Session Report/1/QoS Monitoring Report/0/QoS Monitoring Measurement	8.2.171	Rule("PLMF is set with a packet delay")	MandatoryIeIncorrect
 session-report-request_test.go	Multiple IEs	/pfcp/Usage Report/0/Usage Report Trigger	8.1.2	SpareBits	-
+session-report-request_test.go	Single IE	/pfcp/Additional Usage Reports Information	8.2.91	Rule("AURI is set with a Number of Additional Usage Reports other than 0")	MandatoryIeIncorrect
+session-report-request_test.go	Single IE	/pfcp/Downlink Data Report/Downlink Data Service Information/0	8.1.2	SpareBits	-
+session-report-request_test.go	Single IE	/pfcp/Downlink Data Report/Downlink Data Service Information/0	8.1.2	SpareBits	-
 session-report-request_test.go	Single IE	/pfcp/Old CP F-SEID	7.2.2.4.2	Rule("a Session Report Request of a SEID other than 0 with the Old CP F-SEID")	-
-session-report-request_test.go	Single IE	/pfcp/Downlink Data Report/Downlink Data Service Information/0	8.1.2	SpareBits	-
-session-report-request_test.go	Single IE	/pfcp/Downlink Data Report/Downlink Data Service Information/0	8.1.2	SpareBits	-
 session-report-request_test.go	Single IE	/pfcp/Session Report/0/Access Availability Control Information	7.6.9	Unexpected { ie_type: 216 }	-
 session-report-request_test.go	Single IE	/pfcp/Session Report/0/QoS Monitoring Report/0/QoS Monitoring Measurement	8.2.171	Rule("PLMF is set with a packet delay")	MandatoryIeIncorrect
 session-report-request_test.go	Single IE	/pfcp/Usage Report/0/Usage Report Trigger	8.1.2	SpareBits	-
