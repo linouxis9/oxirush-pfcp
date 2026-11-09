@@ -124,7 +124,7 @@ fn a_false_length_is_told_with_its_ie() {
     let rule = DeviationKind::Rule("a Message Length other than the octets after the first four");
     assert_eq!(
         told(&setup),
-        [("/Message Length".into(), rule.clone(), invalid, None)]
+        [("/header/Message Length".into(), rule.clone(), invalid, None)]
     );
     // A heartbeat, with an IE of a list and one of no row that do not frame
     let mut heartbeat = HeartbeatRequest::new(RecoveryTimeStamp::new(7));
@@ -154,7 +154,7 @@ fn a_false_length_is_told_with_its_ie() {
                 None,
                 None
             ),
-            ("/Message Length".into(), rule, None, None),
+            ("/header/Message Length".into(), rule, None, None),
         ]
     );
 }
@@ -287,8 +287,7 @@ fn a_message_is_checked_as_its_octets_whatever_holds_them() {
     // (d)
     #[cfg(feature = "tree")]
     {
-        let written = oxirush_utils::tree!({"message": "PFCP Session Establishment Request", "SEID": 0,
-        "Sequence Number": 1, "ies": {
+        let written = oxirush_utils::tree!({"message": "PFCP Session Establishment Request", "header": {"SEID": 0, "Sequence Number": 1}, "ies": {
         "Node ID": "10.0.0.1", "CP F-SEID": {"V4": true, "SEID": 1, "IPv4 address": "10.0.0.1"},
         "Create PDR": [{"PDR ID": 1, "Precedence": 1, "PDI": {"Source Interface": "Core"}, "FAR ID": 1}],
         "Create FAR": [{"FAR ID": 1, "Apply Action": {"DROP": true}}],

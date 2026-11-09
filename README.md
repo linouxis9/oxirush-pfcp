@@ -268,7 +268,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // A tree written by hand, with names in any case and spelling
     let written = tree!({
         "message": "PFCP Heartbeat Request",
-        "Sequence Number": 9,
+        "header": {"Sequence Number": 9},
         "ies": {"recovery time stamp": 3_900_000_000u32}
     });
     let heartbeat = Message::from_tree(&written)?;
@@ -280,8 +280,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 ```json
 {
   "message": "PFCP Session Establishment Response",
-  "SEID": 4097,
-  "Sequence Number": 7,
+  "header": {
+    "SEID": 4097,
+    "Sequence Number": 7
+  },
   "ies": {
     "Node ID": "10.0.0.2",
     "Cause": "Request accepted (success)",

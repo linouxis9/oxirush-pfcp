@@ -1,7 +1,7 @@
 // The Rust blocks of README.md, each as a function, with what the README shows under
 // each: `../oxirush-aper/protocols/tests/readme.py` writes this file from the README and
 // says how. Do not edit it.
-#![cfg(feature = "serde")]
+#![cfg(all(feature = "serde", feature = "endpoint"))]
 #![allow(unused)]
 
 use std::cell::RefCell;
@@ -73,8 +73,10 @@ PFCP Session Modification Response (SEID 0x1001, sequence 8): 213500170000000000
 "#),
     (block_6, r#"{
   "message": "PFCP Session Establishment Response",
-  "SEID": 4097,
-  "Sequence Number": 7,
+  "header": {
+    "SEID": 4097,
+    "Sequence Number": 7
+  },
   "ies": {
     "Node ID": "10.0.0.2",
     "Cause": "Request accepted (success)",
@@ -280,7 +282,7 @@ fn block_6() {
         // A tree written by hand, with names in any case and spelling
         let written = tree!({
             "message": "PFCP Heartbeat Request",
-            "Sequence Number": 9,
+            "header": {"Sequence Number": 9},
             "ies": {"recovery time stamp": 3_900_000_000u32}
         });
         let heartbeat = Message::from_tree(&written)?;

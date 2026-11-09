@@ -338,15 +338,18 @@ impl Message {
         };
         // A field of more than its bits, at its member of the tree of the message.
         let wide = header.overflow().map(|(field, _)| match field {
-            "Version" => ("/Version", "a version of more than 3 bits"),
-            "Spare" => ("/Spare", "spare bits of octet 1 of more than 2 bits"),
-            "Sequence Number" => ("/Sequence Number", "a sequence number of more than 24 bits"),
+            "Version" => ("/header/Version", "a version of more than 3 bits"),
+            "Spare" => ("/header/Spare", "spare bits of octet 1 of more than 2 bits"),
+            "Sequence Number" => (
+                "/header/Sequence Number",
+                "a sequence number of more than 24 bits",
+            ),
             "Message Priority" => (
-                "/Message Priority",
+                "/header/Message Priority",
                 "a message priority of more than 4 bits",
             ),
             _ => (
-                "/Spare octet",
+                "/header/Spare octet",
                 "spare bits of the last octet of more than its bits",
             ),
         });
@@ -357,18 +360,18 @@ impl Message {
         // on N4mb. The last octet is spare, or its bits after the priority are (§7.2.2.3).
         #[rustfmt::skip]
         let rules = [
-            (header.version != 1, "/Version", "7.2.2.4.1", Rule("the version is not 1")),
+            (header.version != 1, "/header/Version", "7.2.2.4.1", Rule("the version is not 1")),
             (wide.is_some(), wide_field, "7.2.2.1", Rule(too_wide)),
-            (header.spare != 0, "/Spare", "7.2.2.1", DeviationKind::SpareBits),
-            (header.spare_last != 0, "/Spare octet", "7.2.2.1", DeviationKind::SpareBits),
-            (node && seid.is_some(), "/SEID", "7.2.2.2", Rule("a node related message has the S flag")),
-            (session && seid.is_none(), "/SEID", "7.2.2.4.1", Rule("a session related message has no SEID")),
-            (node && header.priority.is_some(), "/Message Priority", "7.2.2.2", Rule("a node related message has the MP flag")),
-            (node && header.follow_on, "/FO", "6.5", Rule("a node related message is bundled")),
-            (establishment && seid.is_some_and(|seid| seid != 0), "/SEID", "7.2.2.4.2",
+            (header.spare != 0, "/header/Spare", "7.2.2.1", DeviationKind::SpareBits),
+            (header.spare_last != 0, "/header/Spare octet", "7.2.2.1", DeviationKind::SpareBits),
+            (node && seid.is_some(), "/header/SEID", "7.2.2.2", Rule("a node related message has the S flag")),
+            (session && seid.is_none(), "/header/SEID", "7.2.2.4.1", Rule("a session related message has no SEID")),
+            (node && header.priority.is_some(), "/header/Message Priority", "7.2.2.2", Rule("a node related message has the MP flag")),
+            (node && header.follow_on, "/header/FO", "6.5", Rule("a node related message is bundled")),
+            (establishment && seid.is_some_and(|seid| seid != 0), "/header/SEID", "7.2.2.4.2",
                 Rule("a Session Establishment Request of a SEID other than 0")),
-            (seid_zero_known, "/SEID", "7.2.2.4.2", Rule("SEID 0 where the peer's SEID is known")),
-            (seid.is_some_and(|seid| seid != 0) && cause == Some(CauseValue::SessionContextNotFound), "/SEID", "7.2.2.4.2",
+            (seid_zero_known, "/header/SEID", "7.2.2.4.2", Rule("SEID 0 where the peer's SEID is known")),
+            (seid.is_some_and(|seid| seid != 0) && cause == Some(CauseValue::SessionContextNotFound), "/header/SEID", "7.2.2.4.2",
                 Rule("a response of the Cause Session context not found of a SEID other than 0")),
             (seid == Some(0) && old == Some(false), "/pfcp/Old CP F-SEID", "7.2.2.4.2",
                 Rule("a Session Report Request of SEID 0 without the Old CP F-SEID")),
@@ -387,7 +390,7 @@ impl Message {
             .is_some_and(|length| usize::from(length) != after)
         {
             let rule = Rule("a Message Length other than the octets after the first four");
-            let mut deviation = Deviation::new("/Message Length", "7.6.3", rule);
+            let mut deviation = Deviation::new("/header/Message Length", "7.6.3", rule);
             deviation.cause = context.invalid_length();
             found.push(deviation);
         }
@@ -553,8 +556,11 @@ pub(crate) mod forms {
     use crate::header::Header;
 
     /// The members that the tree of a message may have.
-    pub(crate) const NAMES: &[&str] = &[
-        "message",
+    pub(crate) const NAMES: &[&str] = &["message", "header", "ies"];
+
+    /// The members that the header of the tree of a message may have: the fields of the
+    /// header (§7.2.2), and the Message Length to write in place of the message's.
+    pub(crate) const HEADER: &[&str] = &[
         "Version",
         "Spare",
         "FO",
@@ -563,19 +569,17 @@ pub(crate) mod forms {
         "Message Priority",
         "Spare octet",
         "Message Length",
-        "ies",
     ];
 
     #[cfg(feature = "serde")]
     oxirush_utils::impl_serde!(Message);
 
-    /// `{"message": NAME, "SEID": ..., "Sequence Number": ..., "ies": {...}}`, with the
-    /// other members of the header where they are not what a sender writes.
+    /// `{"message": NAME, "header": {"SEID": ..., "Sequence Number": ...}, "ies": {...}}`,
+    /// with the other fields of the header where they are not what a sender writes.
     impl Tree for Message {
         const NAME: &'static str = "PFCP message";
 
         fn to_tree(&self) -> Value {
-            let header = &self.header;
             let mut members = Members::new();
             members.put(
                 "message",
@@ -584,30 +588,7 @@ pub(crate) mod forms {
                     None => tree::unsigned(self.body.message_type().into()),
                 },
             );
-            if header.version != 1 {
-                members.put("Version", tree::unsigned(header.version.into()));
-            }
-            if header.spare != 0 {
-                members.put("Spare", tree::unsigned(header.spare.into()));
-            }
-            if header.follow_on {
-                members.put("FO", Value::Bool(true));
-            }
-            members.put_optional("SEID", header.seid.map(tree::unsigned));
-            members.put("Sequence Number", tree::unsigned(header.sequence.into()));
-            members.put_optional(
-                "Message Priority",
-                header
-                    .priority
-                    .map(|priority| tree::unsigned(priority.into())),
-            );
-            if header.spare_last != 0 {
-                members.put("Spare octet", tree::unsigned(header.spare_last.into()));
-            }
-            members.put_optional(
-                "Message Length",
-                header.length.map(|length| tree::unsigned(length.into())),
-            );
+            members.put("header", header_tree(&self.header));
             members.put("ies", self.body.ies_tree());
             members.finish()
         }
@@ -632,45 +613,83 @@ pub(crate) mod forms {
                     }
                     false => Ok(Ok(reading.named(value, &Body::names())?)),
                 })?;
-            let small = |reading: &mut Reading, name: &'static str, most: u64| {
-                reading.optional(&read, name, |value, reading| {
-                    reading.unsigned(value, 0, most)
-                })
-            };
-            let version = small(reading, "Version", 7)?.unwrap_or(1) as u8;
-            let spare = small(reading, "Spare", 3)?.unwrap_or(0) as u8;
-            let follow_on = reading
-                .optional(&read, "FO", |value, reading| reading.boolean(value))?
-                .unwrap_or(false);
-            let seid = reading.optional(&read, "SEID", |value, reading| {
-                reading.unsigned(value, 0, u64::MAX)
-            })?;
-            let sequence = reading.member(&read, "Sequence Number", |value, reading| {
-                reading.unsigned(value, 0, 0xff_ffff)
-            })? as u32;
-            let priority = small(reading, "Message Priority", 15)?.map(|priority| priority as u8);
-            let spare_last = small(
-                reading,
-                "Spare octet",
-                if priority.is_some() { 15 } else { 255 },
-            )?
-            .unwrap_or(0) as u8;
-            let length = small(reading, "Message Length", 65535)?.map(|length| length as u16);
-            let header = Header {
-                version,
-                spare,
-                follow_on,
-                seid,
-                sequence,
-                priority,
-                spare_last,
-                length,
-            };
+            let header = reading.member(&read, "header", read_header)?;
             let body = reading.member(&read, "ies", |value, reading| {
                 Body::from_ies_tree(kind, value, reading)
             })?;
             Ok(Self { header, body })
         }
+    }
+
+    /// The tree of a header: the SEID that it has and its sequence number, and its other
+    /// fields where they are not what a sender writes.
+    fn header_tree(header: &Header) -> Value {
+        let mut members = Members::new();
+        if header.version != 1 {
+            members.put("Version", tree::unsigned(header.version.into()));
+        }
+        if header.spare != 0 {
+            members.put("Spare", tree::unsigned(header.spare.into()));
+        }
+        if header.follow_on {
+            members.put("FO", Value::Bool(true));
+        }
+        members.put_optional("SEID", header.seid.map(tree::unsigned));
+        members.put("Sequence Number", tree::unsigned(header.sequence.into()));
+        members.put_optional(
+            "Message Priority",
+            header
+                .priority
+                .map(|priority| tree::unsigned(priority.into())),
+        );
+        if header.spare_last != 0 {
+            members.put("Spare octet", tree::unsigned(header.spare_last.into()));
+        }
+        members.put_optional(
+            "Message Length",
+            header.length.map(|length| tree::unsigned(length.into())),
+        );
+        members.finish()
+    }
+
+    /// The header that the tree of a header writes: its sequence number, and each other
+    /// field that it does not write as a sender writes it.
+    fn read_header(value: &Value, reading: &mut Reading) -> Result<Header, Refused> {
+        let read = reading.members(value, HEADER)?;
+        let small = |reading: &mut Reading, name: &'static str, most: u64| {
+            reading.optional(&read, name, |value, reading| {
+                reading.unsigned(value, 0, most)
+            })
+        };
+        let version = small(reading, "Version", 7)?.unwrap_or(1) as u8;
+        let spare = small(reading, "Spare", 3)?.unwrap_or(0) as u8;
+        let follow_on = reading
+            .optional(&read, "FO", |value, reading| reading.boolean(value))?
+            .unwrap_or(false);
+        let seid = reading.optional(&read, "SEID", |value, reading| {
+            reading.unsigned(value, 0, u64::MAX)
+        })?;
+        let sequence = reading.member(&read, "Sequence Number", |value, reading| {
+            reading.unsigned(value, 0, 0xff_ffff)
+        })? as u32;
+        let priority = small(reading, "Message Priority", 15)?.map(|priority| priority as u8);
+        let spare_last = small(
+            reading,
+            "Spare octet",
+            if priority.is_some() { 15 } else { 255 },
+        )?
+        .unwrap_or(0) as u8;
+        let length = small(reading, "Message Length", 65535)?.map(|length| length as u16);
+        Ok(Header {
+            version,
+            spare,
+            follow_on,
+            seid,
+            sequence,
+            priority,
+            spare_last,
+            length,
+        })
     }
 
     impl Message {

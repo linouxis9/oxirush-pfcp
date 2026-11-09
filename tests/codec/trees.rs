@@ -479,14 +479,14 @@ fn a_number_of_six_bits_in_a_tree() {
 fn a_tree_written_in_any_order_encodes_in_the_order_of_its_table() {
     let written = tree!({
         "message": "PFCP Association Setup Request",
-        "Sequence Number": 9,
+        "header": {"Sequence Number": 9},
         "ies": {"Recovery Time Stamp": 3_900_000_000u32, "Node ID": "10.0.0.1"}
     });
     let octets = Message::from_tree(&written).unwrap().encode().unwrap();
     assert_eq!(&octets[8..10], &[0, 60], "the Node ID first");
     let in_order = tree!({
         "message": "PFCP Association Setup Request",
-        "Sequence Number": 9,
+        "header": {"Sequence Number": 9},
         "ies": {"Node ID": "10.0.0.1", "Recovery Time Stamp": 3_900_000_000u32}
     });
     assert_eq!(
@@ -496,7 +496,7 @@ fn a_tree_written_in_any_order_encodes_in_the_order_of_its_table() {
     // With octets of a row and an IE of no row
     let written = tree!({
         "message": "PFCP Association Setup Request",
-        "Sequence Number": 9,
+        "header": {"Sequence Number": 9},
         "ies": {"Source IP Address": {"octets": "0a"}, "Recovery Time Stamp": [{"octets": "01"}, 3_900_000_000u32], "Node ID": "10.0.0.1"}
     });
     let message = Message::from_tree(&written).unwrap();
@@ -513,7 +513,7 @@ fn a_tree_written_in_any_order_encodes_in_the_order_of_its_table() {
 /// refused.
 #[test]
 fn a_row_goes_by_its_name() {
-    let response = |ies: tree::Value| tree!({"message": "PFCP Session Establishment Response", "SEID": 1, "Sequence Number": 1, "ies": ies});
+    let response = |ies: tree::Value| tree!({"message": "PFCP Session Establishment Response", "header": {"SEID": 1, "Sequence Number": 1}, "ies": ies});
     // At the scope, with the name of the row to write
     let refused = |written: &tree::Value, row: &str| {
         let error = Message::from_tree(written).unwrap_err();
@@ -525,7 +525,7 @@ fn a_row_goes_by_its_name() {
         tree!({"Node ID": "10.0.0.2", "Cause": 1, "F-SEID": {"V4": true, "SEID": 1, "IPv4 address": "10.0.0.2"}}),
     );
     assert_eq!(refused(&by_type, "UP F-SEID"), no_such);
-    let request = tree!({"message": "PFCP Session Establishment Request", "SEID": 0, "Sequence Number": 1, "ies": {"SGW-C FQ-CSID": {"octets": "01"}}});
+    let request = tree!({"message": "PFCP Session Establishment Request", "header": {"SEID": 0, "Sequence Number": 1}, "ies": {"SGW-C FQ-CSID": {"octets": "01"}}});
     assert_eq!(refused(&request, "FQ-CSID"), no_such);
     let twice = response(tree!({"Node ID": "10.0.0.2", "node_id": "10.0.0.3", "Cause": 1}));
     let value = (tree::ErrorKind::Value, "/pfcp".to_string());
@@ -536,7 +536,7 @@ fn a_row_goes_by_its_name() {
 /// the repetitions of a row there once by their octets.
 #[test]
 fn a_row_is_written_as_its_table_has_it() {
-    let request = |ies: tree::Value| tree!({"message": "PFCP Session Establishment Request", "SEID": 0, "Sequence Number": 1, "ies": ies});
+    let request = |ies: tree::Value| tree!({"message": "PFCP Session Establishment Request", "header": {"SEID": 0, "Sequence Number": 1}, "ies": ies});
     let far = tree!({"FAR ID": 1, "Apply Action": {"DROP": true}});
     let refused = |written: tree::Value| {
         let error = Message::from_tree(&request(written)).unwrap_err();
@@ -559,14 +559,13 @@ fn a_row_is_written_as_its_table_has_it() {
 /// IEs are octets.
 #[test]
 fn a_message_goes_by_its_name() {
-    let heartbeat =
-        tree!({"message": 1, "Sequence Number": 9, "ies": {"octets": "006000040000000a"}});
+    let heartbeat = tree!({"message": 1, "header": {"Sequence Number": 9}, "ies": {"octets": "006000040000000a"}});
     let error = Message::from_tree(&heartbeat).unwrap_err();
     assert_eq!(
         (error.kind(), error.at()),
         (tree::ErrorKind::Value, "/message")
     );
-    let other = tree!({"message": 99, "Sequence Number": 9, "ies": {"octets": "006000040000000a"}});
+    let other = tree!({"message": 99, "header": {"Sequence Number": 9}, "ies": {"octets": "006000040000000a"}});
     let other = Message::from_tree(&other).unwrap();
     assert!(matches!(
         other.body,
@@ -576,6 +575,109 @@ fn a_message_goes_by_its_name() {
         }
     ));
     assert_eq!(Message::decode(&other.encode().unwrap()).unwrap(), other);
+}
+
+/// The header is a member of the tree of its own, beside the name of the message and its
+/// IEs, as the paths and the deviations of `check()` name it: a field of the header beside
+/// `ies` is no member of a message, and a member of the header that it has not is refused
+/// with those that it has.
+#[test]
+fn a_header_is_a_member_of_the_tree() {
+    let deletion = Message::session(1, 7, SessionDeletionRequest::default());
+    let tree = deletion.to_tree();
+    assert_eq!(
+        tree,
+        tree!({
+            "message": "PFCP Session Deletion Request",
+            "header": {"SEID": 1, "Sequence Number": 7},
+            "ies": {}
+        })
+    );
+    assert_eq!(select(&tree, "/header/SEID").unwrap(), [&tree!(1)]);
+    assert_eq!(
+        select(&tree, "/header/Message Priority").unwrap(),
+        Vec::<&tree::Value>::new()
+    );
+    let refused = |written: &tree::Value| {
+        let error = Message::from_tree(written).unwrap_err();
+        (
+            error.kind(),
+            error.at().to_string(),
+            error.reason().to_string(),
+        )
+    };
+    let beside = tree!({"message": "PFCP Session Deletion Request", "SEID": 1, "header": {"Sequence Number": 7}, "ies": {}});
+    let (kind, at, reason) = refused(&beside);
+    assert_eq!((kind, at.as_str()), (tree::ErrorKind::NoSuchMember, ""));
+    assert!(reason.contains("message, header, ies"), "{reason}");
+    let misspelt = tree!({"message": "PFCP Session Deletion Request", "header": {"SEID": 1, "Sequense Number": 7}, "ies": {}});
+    let (kind, at, reason) = refused(&misspelt);
+    assert_eq!(
+        (kind, at.as_str()),
+        (tree::ErrorKind::NoSuchMember, "/header")
+    );
+    assert!(reason.contains("Sequence Number"), "{reason}");
+    assert!(select(&tree, "/header/Sequense Number").is_err());
+    // A deviation of the header is at its field in the header
+    let node = Message::node(1, HeartbeatRequest::new(RecoveryTimeStamp::new(7)));
+    let mut bundled = node.clone();
+    bundled.header.follow_on = true;
+    let paths: Vec<String> = bundled
+        .check(Interfaces::N4)
+        .into_iter()
+        .map(|deviation| deviation.path)
+        .collect();
+    assert_eq!(paths, ["/header/FO"]);
+}
+
+/// A header that its user writes, in any spelling of its names, reads back as the header
+/// that it writes, each of its fields, and prints by their names.
+#[test]
+fn a_header_written_by_its_user_reads_back() {
+    let written = tree!({
+        "message": "PFCP Session Deletion Request",
+        "header": {
+            "version": 2,
+            "spare": 1,
+            "fo": true,
+            "seid": 1,
+            "sequence_number": 9,
+            "message-priority": 3,
+            "spare_octet": 5,
+            "Message Length": 12
+        },
+        "ies": {}
+    });
+    let message = Message::from_tree(&written).unwrap();
+    assert_eq!(
+        message.header,
+        Header {
+            version: 2,
+            spare: 1,
+            follow_on: true,
+            seid: Some(1),
+            sequence: 9,
+            priority: Some(3),
+            spare_last: 5,
+            length: Some(12),
+        }
+    );
+    let printed = tree!({
+        "message": "PFCP Session Deletion Request",
+        "header": {
+            "Version": 2,
+            "Spare": 1,
+            "FO": true,
+            "SEID": 1,
+            "Sequence Number": 9,
+            "Message Priority": 3,
+            "Spare octet": 5,
+            "Message Length": 12
+        },
+        "ies": {}
+    });
+    assert_eq!(message.to_tree(), printed);
+    assert_eq!(Message::from_tree(&printed).unwrap(), message);
 }
 
 /// A Node ID of other octets than an address or an FQDN is its Node ID Type and its value

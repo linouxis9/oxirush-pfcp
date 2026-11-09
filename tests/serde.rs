@@ -62,12 +62,12 @@ fn a_message_and_an_ie_are_their_trees_in_json() {
 fn an_error_of_a_tree_prints_no_key() {
     let establishment = |ies: &str| {
         format!(
-            r#"{{"message": "PFCP Session Establishment Request", "SEID": 0, "Sequence Number": 7, "ies": {ies}}}"#
+            r#"{{"message": "PFCP Session Establishment Request", "header": {{"SEID": 0, "Sequence Number": 7}}, "ies": {ies}}}"#
         )
     };
     let association = |ies: &str| {
         format!(
-            r#"{{"message": "PFCP Association Setup Request", "Sequence Number": 7, "ies": {{"Node ID": "10.0.0.1", "Recovery Time Stamp": 1, {ies}}}}}"#
+            r#"{{"message": "PFCP Association Setup Request", "header": {{"Sequence Number": 7}}, "ies": {{"Node ID": "10.0.0.1", "Recovery Time Stamp": 1, {ies}}}}}"#
         )
     };
     for written in [

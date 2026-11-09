@@ -45,7 +45,9 @@ The first version, of TS 29.244 V19.6.0 (2026-06):
   IE at that grouped IE, which its receiver cannot read. A false Length whose octets frame
   as other IEs is checked as those, its receiver telling no fault there (§7.6.7).
 - With `tree`, a message as a tree that prints as JSON, on oxirush-utils 0.2, whose
-  `tree` the crate exports at its root, and read and edited by path (`paths::select`,
+  `tree` the crate exports at its root: `{"message": ..., "header": {...}, "ies": {...}}`,
+  the header a member of its own, of the fields of §7.2.2 by their names, as `check()`
+  names them (`/header/SEID`); and read and edited by path (`paths::select`,
   `paths::set`), and `paths::row_at` names the row and the IE type of the IE at a path,
   which its tables name whether the message has the place or not; with `serde`,
   serialized as its tree. What a message lacks selects nothing, whatever

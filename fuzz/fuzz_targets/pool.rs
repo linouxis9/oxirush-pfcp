@@ -246,7 +246,7 @@ pub fn written(message: &Message) {
         Err(error) => {
             let told = message.check(Interfaces::ALL).into_iter().any(|deviation| {
                 matches!(deviation.kind, DeviationKind::InvalidLength { .. })
-                    || deviation.path == "/Message Length"
+                    || deviation.path == "/header/Message Length"
             });
             assert!(told, "check() does not tell why the octets do not decode: {error}: {}", hex(&octets));
             let mut tree = tree;

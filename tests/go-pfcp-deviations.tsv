@@ -50,13 +50,13 @@ association-update-request_test.go	Single IE	/pfcp/UE IP Address Usage Informati
 association-update-request_test.go	Single IE	/pfcp/UE IP address Pool Information/0/UE IP address Pool Identity	7.6.8	MandatoryIncorrect { ie_type: 177 }	-
 generic_test.go	No-SEID	/pfcp/Application ID	7.6.9	Unexpected { ie_type: 24 }	-
 generic_test.go	No-SEID	/pfcp/Recovery Time Stamp	7.4.2.1-1	MandatoryMissing { ie_type: 96 }	-
-generic_test.go	Normal	/SEID	7.2.2.4.2	Rule("a Session Establishment Request of a SEID other than 0")	-
+generic_test.go	Normal	/header/SEID	7.2.2.4.2	Rule("a Session Establishment Request of a SEID other than 0")	-
 generic_test.go	Normal	/pfcp/Application ID	7.6.9	Unexpected { ie_type: 24 }	-
 generic_test.go	Normal	/pfcp/CP F-SEID	7.5.2.1-1	MandatoryMissing { ie_type: 57 }	MandatoryIeMissing
 generic_test.go	Normal	/pfcp/Create FAR	7.5.2.1-1	MandatoryMissing { ie_type: 3 }	MandatoryIeMissing
 generic_test.go	Normal	/pfcp/Create PDR	7.5.2.1-1	MandatoryMissing { ie_type: 1 }	MandatoryIeMissing
 generic_test.go	Normal	/pfcp/Node ID	7.5.2.1-1	MandatoryMissing { ie_type: 60 }	MandatoryIeMissing
-header_test.go	Session	/SEID	7.2.2.4.2	Rule("a Session Establishment Request of a SEID other than 0")	-
+header_test.go	Session	/header/SEID	7.2.2.4.2	Rule("a Session Establishment Request of a SEID other than 0")	-
 header_test.go	Session	/pfcp/Application ID	7.6.9	Unexpected { ie_type: 24 }	-
 header_test.go	Session	/pfcp/CP F-SEID	7.5.2.1-1	MandatoryMissing { ie_type: 57 }	MandatoryIeMissing
 header_test.go	Session	/pfcp/Create FAR	7.5.2.1-1	MandatoryMissing { ie_type: 3 }	MandatoryIeMissing
@@ -76,7 +76,7 @@ session-deletion-response_test.go	Multiple IEs	/pfcp/Usage Report/0/Usage Report
 session-deletion-response_test.go	Multiple IEs	/pfcp/Usage Report/1/Usage Report Trigger	8.1.2	SpareBits	-
 session-deletion-response_test.go	Single IE	/pfcp/Additional Usage Reports Information	8.2.91	SpareBits	-
 session-deletion-response_test.go	Single IE	/pfcp/Usage Report/0/Usage Report Trigger	8.1.2	SpareBits	-
-session-establishment-request_test.go	Multiple IEs	/SEID	7.2.2.4.2	Rule("a Session Establishment Request of a SEID other than 0")	-
+session-establishment-request_test.go	Multiple IEs	/header/SEID	7.2.2.4.2	Rule("a Session Establishment Request of a SEID other than 0")	-
 session-establishment-request_test.go	Multiple IEs	/pfcp/Create FAR/0/Forwarding Parameters/Transport Level Marking	8.2.12	Rule("a ToS/Traffic Class mask other than 0xFC")	MandatoryIeIncorrect
 session-establishment-request_test.go	Multiple IEs	/pfcp/Create FAR/0/Redundant Transmission Parameters	7.6.9	Unexpected { ie_type: 255 }	-
 session-establishment-request_test.go	Multiple IEs	/pfcp/Create PDR/0/Outer Header Removal	8.1.2	SpareBits	-
@@ -97,7 +97,7 @@ session-establishment-request_test.go	Multiple IEs	/pfcp/Create PDR/1/PDI/UE IP 
 session-establishment-request_test.go	Multiple IEs	/pfcp/Create PDR/1/UE IP address Pool Identity/0	7.6.8	Incorrect { ie_type: 177 }	-
 session-establishment-request_test.go	Multiple IEs	/pfcp/Create QER/0/QER Control Indications	8.1.2	SpareBits	-
 session-establishment-request_test.go	Multiple IEs	/pfcp/Create SRR/0/QoS Monitoring per QoS flow Control Information/0/Reporting Frequency	8.2.168	SpareBits	-
-session-establishment-request_test.go	Single IE	/SEID	7.2.2.4.2	Rule("a Session Establishment Request of a SEID other than 0")	-
+session-establishment-request_test.go	Single IE	/header/SEID	7.2.2.4.2	Rule("a Session Establishment Request of a SEID other than 0")	-
 session-establishment-request_test.go	Single IE	/pfcp/Create FAR/0/Forwarding Parameters/Transport Level Marking	8.2.12	Rule("a ToS/Traffic Class mask other than 0xFC")	MandatoryIeIncorrect
 session-establishment-request_test.go	Single IE	/pfcp/Create FAR/0/Redundant Transmission Parameters	7.6.9	Unexpected { ie_type: 255 }	-
 session-establishment-request_test.go	Single IE	/pfcp/Create PDR/0/Outer Header Removal	8.1.2	SpareBits	-

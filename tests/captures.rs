@@ -96,7 +96,7 @@ const EXPECTED: &[Found] = &[
     (
         "open5gs-5gs-upf-restart",
         "43",
-        "/SEID",
+        "/header/SEID",
         "7.2.2.4.2",
         DeviationKind::Rule("a Session Establishment Request of a SEID other than 0"),
         None,
@@ -195,15 +195,15 @@ fn each_deviation_is_at_a_path_that_select_takes() {
     // A Created/Updated Traffic Endpoint without its ID; an APN/DNN of no row of its
     // table; an HMAC Key (STAMP), of a table of N4 alone, on Sxa
     messages.push(tree(oxirush_utils::tree!({
-        "message": "PFCP Session Modification Response", "SEID": 1, "Sequence Number": 1,
+        "message": "PFCP Session Modification Response", "header": {"SEID": 1, "Sequence Number": 1},
         "ies": {"Cause": 1, "Created/Updated Traffic Endpoint": [{"F-TEID": [{"V4": true, "TEID": 1, "IPv4 address": "10.0.0.2"}]}]}
     })));
     messages.push(tree(oxirush_utils::tree!({
-        "message": "PFCP Heartbeat Request", "Sequence Number": 1,
+        "message": "PFCP Heartbeat Request", "header": {"Sequence Number": 1},
         "ies": {"Recovery Time Stamp": 7, "APN/DNN": {"octets": "03696d73"}}
     })));
     messages.push(tree(oxirush_utils::tree!({
-        "message": "PFCP Association Setup Request", "Sequence Number": 1,
+        "message": "PFCP Association Setup Request", "header": {"Sequence Number": 1},
         "ies": {"Node ID": "10.0.0.1", "Recovery Time Stamp": 7,
             "N6 Delay Measurement Control Information": [{"Measurement Protocols": [{"STAMP": true}],
                 "Protocol Specific Configuration Parameters": {"Measurement Protocol": {"STAMP": true}, "HMAC Key (STAMP)": "00"}}]}

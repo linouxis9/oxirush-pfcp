@@ -332,7 +332,7 @@ fn a_header_value_that_its_bits_cannot_hold() {
         });
         assert_eq!(
             wide.map(|deviation| deviation.path),
-            Some(format!("/{field}")),
+            Some(format!("/header/{field}")),
             "{header:?}"
         );
     }
@@ -353,7 +353,7 @@ fn a_header_value_that_its_bits_cannot_hold() {
             .collect::<Vec<_>>(),
         [DeviationKind::SpareBits]
     );
-    let written = tree!({"message": "PFCP Session Deletion Request", "SEID": 1, "Sequence Number": 1, "Message Priority": 3, "Spare octet": 0x35, "ies": {}});
+    let written = tree!({"message": "PFCP Session Deletion Request", "header": {"SEID": 1, "Sequence Number": 1, "Message Priority": 3, "Spare octet": 0x35}, "ies": {}});
     assert!(Message::from_tree(&written).is_err());
 }
 

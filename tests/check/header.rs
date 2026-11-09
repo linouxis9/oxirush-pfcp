@@ -70,7 +70,7 @@ fn seid_0_only_where_the_peer_seid_is_not_known() {
     let rule = DeviationKind::Rule(
         "a response of the Cause Session context not found of a SEID other than 0",
     );
-    assert_eq!(found, [("/SEID", "7.2.2.4.2", &rule)]);
+    assert_eq!(found, [("/header/SEID", "7.2.2.4.2", &rule)]);
     let response = SessionModificationResponse::new(Cause::new(CauseValue::MandatoryIeMissing))
         .with_offending_ie(OffendingIe::new(1));
     assert_eq!(

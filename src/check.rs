@@ -36,7 +36,7 @@ pub struct Deviation {
     /// takes: the IE, at its position in the list
     /// of its row (`/pfcp/Create PDR/0/PDI`); the row, for what the row has as a whole (a
     /// mandatory IE missing, more IEs than it allows, an interface without it); a field of
-    /// the header (`/SEID`); `/message` for the message type; and `/pfcp` for the IEs
+    /// the header (`/header/SEID`); `/message` for the message type; and `/pfcp` for the IEs
     /// together. A name with a `/` has it written `~1`: `/pfcp/APN~1DNN`.
     pub path: String,
     /// The clause or the table that the message breaks.

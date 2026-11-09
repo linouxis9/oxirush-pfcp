@@ -453,6 +453,13 @@ impl Below {
     }
 }
 
+/// Whether `name` is a field of the header of a message.
+fn is_header_field(name: &str) -> bool {
+    crate::message::forms::HEADER
+        .iter()
+        .any(|field| tree::same_name(field, name))
+}
+
 /// What the tree of the field `name` of a value of `info` may hold below it.
 fn below_member(info: &IeTypeInfo, name: &str) -> &'static Below {
     members_below(info.ie_type)
@@ -482,6 +489,8 @@ pub(crate) enum Of {
     Nothing,
     /// A message.
     Message(&'static MessageTypeInfo),
+    /// The header of a message: its fields, which are scalars.
+    Header,
     /// The IEs of a message or of a grouped IE, of the table of their place.
     Ies(&'static Table),
     /// The values of a row, as a row that is a list has them, and one that is there more
@@ -500,6 +509,7 @@ impl core::fmt::Debug for Of {
         match self {
             Self::Nothing => f.write_str("Nothing"),
             Self::Message(info) => f.debug_tuple("Message").field(&info.name()).finish(),
+            Self::Header => f.write_str("Header"),
             Self::Ies(table) => f.debug_tuple("Ies").field(&table.id).finish(),
             Self::List(row) => f.debug_tuple("List").field(&row.name).finish(),
             Self::Value(info) => f.debug_tuple("Value").field(&info.name).finish(),
@@ -672,8 +682,10 @@ impl tree::Family for Paths {
         }
         match *shape {
             Of::Message(info) if tree::same_name(name, "ies") => Of::Ies(info.table),
-            // The other members of the header are scalars.
+            Of::Message(_) if tree::same_name(name, "header") => Of::Header,
+            // The name of the message and the fields of the header are scalars.
             Of::Message(_) => Of::Below(&Below::Scalar),
+            Of::Header if is_header_field(name) => Of::Below(&Below::Scalar),
             Of::Ies(_) => Of::Below(&KEPT),
             Of::Value(info)
                 if info
@@ -702,6 +714,7 @@ impl tree::Family for Paths {
             Of::Message(_) => crate::message::forms::NAMES
                 .iter()
                 .any(|member| tree::same_name(member, name)),
+            Of::Header => is_header_field(name),
             Of::Ies(table) => row_named(table, name).is_some(),
             Of::Value(info) => info
                 .members
@@ -744,6 +757,7 @@ fn no_such_member(of: Of, name: &str) -> Option<String> {
             no_such_ie(table, &names, name)
         }
         Of::Message(_) => members(crate::message::forms::NAMES),
+        Of::Header => members(crate::message::forms::HEADER),
         Of::Value(info) => members(info.members),
         Of::Below(Below::Object(_, below)) => {
             members(&below.iter().map(|(member, _)| *member).collect::<Vec<_>>())
@@ -822,10 +836,10 @@ pub fn select<'v>(tree: &'v Value, path: &str) -> Result<Vec<&'v Value>, tree::E
 /// ```
 /// use oxirush_pfcp::{paths, tree};
 ///
-/// let tree = tree!({"message": "PFCP Heartbeat Request", "Sequence Number": 1, "ies": {"Recovery Time Stamp": 7}});
+/// let tree = tree!({"message": "PFCP Heartbeat Request", "header": {"Sequence Number": 1}, "ies": {"Recovery Time Stamp": 7}});
 /// let (row, info) = paths::row_at(&tree, "/pfcp/Source IP Address")?.unwrap();
 /// assert_eq!((row.name, info.ie_type), ("Source IP Address", 192));
-/// assert!(paths::row_at(&tree, "/Sequence Number")?.is_none());
+/// assert!(paths::row_at(&tree, "/header/Sequence Number")?.is_none());
 /// # Ok::<(), tree::Error>(())
 /// ```
 ///
@@ -913,8 +927,12 @@ mod tests {
         let ies = Paths.member(&message, "ies", Some(&heartbeat["ies"]));
         assert_eq!(alloc::format!("{ies:?}"), r#"Ies("7.4.2.1-1")"#);
         // The header is no table of IEs: its fields are scalars
-        let sequence = Paths.member(&message, "Sequence Number", None);
+        let header = Paths.member(&message, "header", Some(&heartbeat["header"]));
+        assert_eq!(alloc::format!("{header:?}"), "Header");
+        let sequence = Paths.member(&header, "Sequence Number", None);
         assert_eq!(alloc::format!("{sequence:?}"), "Below(Scalar)");
+        let nothing = Paths.member(&header, "Bogus", None);
+        assert_eq!(alloc::format!("{nothing:?}"), "Nothing");
         let stamp = &heartbeat["ies"]["Recovery Time Stamp"];
         let value = Paths.member(&ies, "Recovery Time Stamp", Some(stamp));
         assert_eq!(

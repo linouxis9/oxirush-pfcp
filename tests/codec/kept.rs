@@ -370,7 +370,7 @@ fn a_value_added_to_a_message_of_its_own_order_goes_to_its_row() {
 /// they are, and are checked as it.
 #[test]
 fn the_length_of_its_own_content_is_no_false_length() {
-    let tree = tree!({"message": "PFCP Association Setup Request", "Sequence Number": 1,
+    let tree = tree!({"message": "PFCP Association Setup Request", "header": {"Sequence Number": 1},
         "ies": {"Node ID": "127.0.0.4", "Recovery Time Stamp": 7, "CP Function Features": {"octets": "b9", "length": 1}}});
     let message = Message::from_tree(&tree).unwrap();
     let Body::AssociationSetupRequest(request) = &message.body else {

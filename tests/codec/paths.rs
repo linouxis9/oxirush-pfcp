@@ -104,7 +104,7 @@ fn what_a_message_lacks_selects_nothing() {
     assert_eq!(selected, [&tree!(1), &tree!(2)]);
     // A response that lacks its UP F-SEID, and fields that a Created PDR lacks
     let response = tree!({
-        "message": "PFCP Session Establishment Response", "SEID": 1, "Sequence Number": 1,
+        "message": "PFCP Session Establishment Response", "header": {"SEID": 1, "Sequence Number": 1},
         "ies": {
             "Node ID": "10.0.0.1",
             "Cause": "Request accepted (success)",
@@ -159,7 +159,7 @@ fn what_a_message_lacks_selects_nothing() {
     let kept: Vec<u16> = request.raw.iter().map(|ie| ie.ie_type).collect();
     assert_eq!(kept, [32769, 60]);
     // A tree that writes it by its number is read by its name too
-    let written = tree!({"message": "PFCP Heartbeat Request", "Sequence Number": 1,
+    let written = tree!({"message": "PFCP Heartbeat Request", "header": {"Sequence Number": 1},
         "ies": {"Recovery Time Stamp": 7, "60": {"octets": "000a000001"}}});
     let node_id = tree!({"octets": "000a000001"});
     assert_eq!(select(&written, "/pfcp/Node ID").unwrap(), [&node_id]);
@@ -226,12 +226,12 @@ fn what_a_value_lacks_selects_nothing() {
     nothing(&setup, "/pfcp/Node ID/Node ID Type");
     misspelt(&setup, "/pfcp/Node ID/octets");
     // The header
-    nothing(&response, "/Message Priority");
-    nothing(&response, "/FO");
+    nothing(&response, "/header/Message Priority");
+    nothing(&response, "/header/FO");
     let heartbeat = Message::node(1, HeartbeatRequest::new(RecoveryTimeStamp::new(7)));
     let heartbeat = heartbeat.to_tree();
-    nothing(&heartbeat, "/SEID");
-    nothing(&heartbeat, "/Spare");
+    nothing(&heartbeat, "/header/SEID");
+    nothing(&heartbeat, "/header/Spare");
     misspelt(&heartbeat, "/Bogus");
     // The length of a value of octets of bits that lacks some, and the spare bits of one
     let establishment = establishment().to_tree();
@@ -418,8 +418,7 @@ fn set_adds_an_entry_at_the_end_of_a_list() {
     assert_eq!(pdi.sdf_filter.len(), 1);
     assert_eq!(request.create_urr.len(), 1);
     // Below the IEs of a message that has none
-    let mut written =
-        tree!({"message": "PFCP Session Modification Request", "SEID": 1, "Sequence Number": 1});
+    let mut written = tree!({"message": "PFCP Session Modification Request", "header": {"SEID": 1, "Sequence Number": 1}});
     set(&mut written, "/pfcp/Remove PDR/0/PDR ID", 4).unwrap();
     let Body::SessionModificationRequest(request) = Message::from_tree(&written).unwrap().body
     else {
@@ -469,7 +468,7 @@ fn what_is_not_there_selects_nothing_whatever_the_path_names_below_it() {
         // Below a field or a flag that a value or the header lacks
         (&response, "/pfcp/UP F-SEID/IPv6 address/Bogus", Ok(0)),
         (&response, "/pfcp/UP F-SEID/V6/*", Ok(0)),
-        (&response, "/Message Priority/Bogus", Ok(0)),
+        (&response, "/header/Message Priority/Bogus", Ok(0)),
         // Below a member of the object of a value written as a scalar, an address
         (&response, "/pfcp/Node ID/FQDN/Bogus", Ok(0)),
         // Where the value is there, a misspelt name is an error, and a role that the wire
@@ -562,11 +561,13 @@ fn a_misspelt_name_says_what_from_tree_says() {
         "{octets}"
     );
     // The header, and an IE kept as its octets, have their members
-    let header = refused("/Sequence Numbr");
+    let header = refused("/header/Sequence Numbr");
     assert!(
-        header.contains("it has message, Version, Spare"),
+        header.contains("it has Version, Spare, FO, SEID, Sequence Number"),
         "{header}"
     );
+    let message = refused("/Sequence Number");
+    assert!(message.contains("it has message, header, ies"), "{message}");
     let mut kept = tree.clone();
     kept["ies"]["Cause"] = tree!({"octets": "01"});
     let error = select(&kept, "/pfcp/Cause/Bogus").unwrap_err().to_string();
@@ -605,8 +606,8 @@ fn a_misspelt_name_says_what_from_tree_says() {
 /// refused by the name written.
 #[test]
 fn an_error_of_from_tree_is_at_a_path_that_select_takes() {
-    let heartbeat = |ies: tree::Value| tree!({"message": "PFCP Heartbeat Request", "Sequence Number": 1, "ies": ies});
-    let modification = |ies: tree::Value| tree!({"message": "PFCP Session Modification Response", "SEID": 1, "Sequence Number": 1, "ies": ies});
+    let heartbeat = |ies: tree::Value| tree!({"message": "PFCP Heartbeat Request", "header": {"Sequence Number": 1}, "ies": ies});
+    let modification = |ies: tree::Value| tree!({"message": "PFCP Session Modification Response", "header": {"SEID": 1, "Sequence Number": 1}, "ies": ies});
     for (tree, at, kind) in [
         (
             heartbeat(tree!({"Recovery Time Stamp": 7, "Cause": 1, "Load Metric": 2})),
@@ -645,14 +646,14 @@ fn an_error_of_from_tree_is_at_a_path_that_select_takes() {
             tree::ErrorKind::Value,
         ),
         (
-            tree!({"message": "PFCP Session Establishment Response", "SEID": 1, "Sequence Number": 1,
+            tree!({"message": "PFCP Session Establishment Response", "header": {"SEID": 1, "Sequence Number": 1},
                 "ies": {"Node ID": "10.0.0.2", "Cause": 1, "UP F-SEID": {"V4": true, "SEIDD": 1}}}),
             "/pfcp/UP F-SEID",
             tree::ErrorKind::NoSuchMember,
         ),
         (
-            tree!({"message": "PFCP Heartbeat Request", "Sequence Number": "x", "ies": {}}),
-            "/Sequence Number",
+            tree!({"message": "PFCP Heartbeat Request", "header": {"Sequence Number": "x"}, "ies": {}}),
+            "/header/Sequence Number",
             tree::ErrorKind::Value,
         ),
     ] {
@@ -695,9 +696,9 @@ fn the_path_of_a_deviation_is_one_of_the_tree() {
     assert_eq!(
         paths(&heartbeat),
         [
-            ("/Spare".into(), vec![tree!(1)]),
-            ("/Spare octet".into(), vec![tree!(2)]),
-            ("/Message Priority".into(), vec![tree!(3)]),
+            ("/header/Spare".into(), vec![tree!(1)]),
+            ("/header/Spare octet".into(), vec![tree!(2)]),
+            ("/header/Message Priority".into(), vec![tree!(3)]),
         ]
     );
     // Packet Rate Status Report, type 252, in a Session Modification Response, whose row of
@@ -727,8 +728,7 @@ fn the_path_of_a_deviation_is_one_of_the_tree() {
     tree::remove(&mut second, "/Precedence").unwrap();
     let request = tree!({
         "message": "PFCP Session Establishment Request",
-        "SEID": 0,
-        "Sequence Number": 1,
+        "header": {"SEID": 0, "Sequence Number": 1},
         "ies": {
             "Node ID": "10.0.0.1",
             "CP F-SEID": {"V4": true, "SEID": 1, "IPv4 address": "10.0.0.1"},
@@ -1014,8 +1014,9 @@ pub(super) fn members_hold(message: &tree::Value) -> usize {
         "Spare octet",
         "Message Length",
     ];
-    for member in header.iter().filter(|member| !members.contains_key(member)) {
-        let selected = select(message, &format!("/{member}"));
+    let written = members["header"].as_object().unwrap();
+    for member in header.iter().filter(|member| !written.contains_key(member)) {
+        let selected = select(message, &format!("/header/{member}"));
         assert_eq!(
             selected.map_err(|error| error.kind()),
             Ok(vec![]),
@@ -1134,14 +1135,14 @@ fn a_grouped_ie_has_the_rows_of_its_place() {
     let information =
         "/pfcp/Session Report/0/Access Availability Report/Access Availability Information";
     let value = || tree!([{"Access Type": "3GPP access type"}]);
-    let mut deletion = tree!({"message": "PFCP Session Deletion Response", "SEID": 1, "Sequence Number": 1,
+    let mut deletion = tree!({"message": "PFCP Session Deletion Response", "header": {"SEID": 1, "Sequence Number": 1},
         "ies": {"Cause": "Request accepted (success)", "Session Report": [{"SRR ID": 1}]}});
     let availability = "/pfcp/Session Report/0/Access Availability Report";
     assert!(select(&deletion, availability).unwrap().is_empty());
     assert!(set(&mut deletion, information, value()).is_err());
     set(&mut deletion, availability, tree!({"octets": "0001"})).unwrap();
     Message::from_tree(&deletion).unwrap();
-    let mut request = tree!({"message": "PFCP Session Report Request", "SEID": 1, "Sequence Number": 1,
+    let mut request = tree!({"message": "PFCP Session Report Request", "header": {"SEID": 1, "Sequence Number": 1},
         "ies": {"Report Type": {"SESR": true}, "Session Report": [{"SRR ID": 1}]}});
     set(&mut request, information, value()).unwrap();
     Message::from_tree(&request).unwrap();
@@ -1166,7 +1167,7 @@ fn a_path_is_at_the_row_of_its_ie() {
     );
     assert_eq!(at("/pfcp/Create QER"), Some(("Create QER", 7)));
     assert_eq!(at("/pfcp/Create PDR/0/PDR ID/Rule ID"), None);
-    assert_eq!(at("/SEID"), None);
+    assert_eq!(at("/header/SEID"), None);
     assert_eq!(at("/pfcp/Load Control Information/Sequence Number"), None);
     assert_eq!(at("/pfcp/Create PDR/7/PDI"), Some(("PDI", 2)));
     assert_eq!(at("/pfcp/Create PDR/*/PDI"), Some(("PDI", 2)));
@@ -1179,7 +1180,7 @@ fn a_path_is_at_the_row_of_its_ie() {
     assert_eq!(at("/pfcp/Create PDR/0/1"), None);
     assert_eq!(at("/pfcp/Create PDR/0/PDI/Local F-TEID/TEID"), None);
     // A grouped IE of two contents, by the table of its place
-    let report = tree!({"message": "PFCP Session Report Request", "SEID": 1, "Sequence Number": 1,
+    let report = tree!({"message": "PFCP Session Report Request", "header": {"SEID": 1, "Sequence Number": 1},
         "ies": {"Report Type": {"USAR": true}}});
     let found = oxirush_pfcp::paths::row_at(&report, "/pfcp/Usage Report/0/Start Time").unwrap();
     assert_eq!(
@@ -1195,7 +1196,7 @@ fn a_path_is_at_the_row_of_its_ie() {
 /// number.
 #[test]
 fn a_row_of_the_name_of_another_ie_type_is_the_row() {
-    let tree = tree!({"message": "PFCP Session Modification Response", "SEID": 1, "Sequence Number": 1,
+    let tree = tree!({"message": "PFCP Session Modification Response", "header": {"SEID": 1, "Sequence Number": 1},
         "ies": {"Cause": 1, "Packet Rate Status Report": [{"QER ID": 1, "Packet Rate Status": {}}], "252": {"octets": "01"}}});
     let reports = select(&tree, "/pfcp/Packet Rate Status Report/0/QER ID").unwrap();
     assert_eq!(reports, [&tree!(1)]);

@@ -675,9 +675,9 @@ fn the_cause_of_each_response() {
     for info in MESSAGE_TYPES {
         let session = !is_node_related(info.message_type);
         let mut written =
-            tree!({"message": info.name(), "Sequence Number": 1, "ies": {"Cause": 3}});
+            tree!({"message": info.name(), "header": {"Sequence Number": 1}, "ies": {"Cause": 3}});
         if session {
-            written["SEID"] = tree!(1);
+            written["header"]["SEID"] = tree!(1);
         }
         let has = info.table.row_of(19).is_some() && !is_request(info.message_type);
         let Ok(message) = Message::from_tree(&written) else {

@@ -154,7 +154,7 @@ fn refused(ours: &Message, octets: &[u8], error: &PfcpError) {
     let found = ours.check(if own.has(Interfaces::N4) { Interfaces::N4 } else { own });
     let tree = ours.to_tree();
     // A deviation of the whole message, which its receiver discards (§7.6.2, §7.6.4, §7.6.5)
-    let whole = found.iter().any(|deviation| ["/message", "/Version"].contains(&&deviation.path[..]));
+    let whole = found.iter().any(|deviation| ["/message", "/header/Version"].contains(&&deviation.path[..]));
     // A deviation of an IE of one of `types`: one that names its type, or at it or within it
     let about = |types: &[u16], kinds: &dyn Fn(&DeviationKind) -> bool| {
         found.iter().any(|deviation| {
