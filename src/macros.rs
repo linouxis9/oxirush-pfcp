@@ -103,7 +103,9 @@ macro_rules! pfcp_ies {
 /// keeps. A value of fields alone has no flags, and the tree of a value of one field
 /// alone is that field while it has no unknown octets. A field of a length that the flags
 /// give, `[length]` after its kind, is read from that many octets. Each field is written
-/// by [`put`](crate::fields::put), which refuses one that its bits cannot say.
+/// by [`put`](crate::fields::put), which refuses one that its bits cannot say. A `check`
+/// block adds the rules of its clause, and a `placed` block those that its place in a
+/// table gives ([`Rules::check_placed`](crate::check::Rules::check_placed)).
 ///
 /// ```text
 /// pub struct FTeid "8.2.3" {
@@ -124,6 +126,7 @@ macro_rules! pfcp_layout {
             )?
         }
         $( check($this:ident, $path:ident, $found:ident) $rules:block )?
+        $( placed($pthis:ident, $table:ident, $ppath:ident, $pfound:ident) $placed:block )?
     )*) => {$(
         $(#[$meta])*
         #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -325,6 +328,13 @@ macro_rules! pfcp_layout {
                     $rules
                 )?
             }
+
+            $(
+                fn check_placed(&self, $table: &'static str, $ppath: &crate::check::Path, $pfound: &mut alloc::vec::Vec<crate::check::Deviation>) {
+                    let $pthis = self;
+                    $placed
+                }
+            )?
         }
 
         #[cfg(feature = "serde")]

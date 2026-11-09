@@ -1181,6 +1181,9 @@ pfcp_layout! {
             found.push(crate::check::Deviation::new(path, "8.2.242", crate::check::DeviationKind::Rule("V4 and CHV4 are both set")));
         }
     }
+    placed(address, table, path, found) {
+        flag_rule(address.chv4 && crate::check::of_the_up_function(table), path, "8.2.242", "CHV4 is set in an IE of the UP function", found);
+    }
 }
 
 pfcp_layout! {

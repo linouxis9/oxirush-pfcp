@@ -828,3 +828,179 @@ fn a_field_that_the_value_of_another_has_not() {
         [(DeviationKind::Rule(time), None, None)]
     );
 }
+
+/// §8.2.62: S/D of a UE IP Address says a source or a destination address in a PDI, a
+/// Create and an Update Traffic Endpoint, and "shall be set to "0" and ignored by the
+/// receiver" in the others: told there as a spare bit is, with no Cause. CH and CHID of an
+/// F-TEID, CHV4 and CHV6 of a UE IP Address, CH of a Local Ingress Tunnel and CHV4 of a
+/// Mapped N6 IP Address "shall only be set by the CP function": set in an IE of a message
+/// that the UP function sends, they are told. §8.2.206: bits 4 to 1 of the last octet of
+/// the NID of an MBS Session Identifier "shall all be encoded as 0".
+#[test]
+fn what_the_place_of_a_value_has_it_set() {
+    let placed = |message: &Message,
+                  interface|
+     -> Vec<(String, &'static str, DeviationKind, Option<CauseValue>)> {
+        let octets = message.encode().unwrap();
+        Message::decode(&octets)
+            .unwrap()
+            .check(interface)
+            .into_iter()
+            .filter(|deviation| {
+                ["8.2.3", "8.2.62", "8.2.209", "8.2.242"].contains(&deviation.clause)
+            })
+            .map(|deviation| {
+                (
+                    deviation.path,
+                    deviation.clause,
+                    deviation.kind,
+                    deviation.cause,
+                )
+            })
+            .collect()
+    };
+    let destination = UeIpAddress {
+        v4: true,
+        sd: true,
+        ipv4: Some(Ipv4Addr::new(10, 45, 0, 2)),
+        ..Default::default()
+    };
+    let chosen = UeIpAddress {
+        chv4: true,
+        ..Default::default()
+    };
+    // In a PDI, a Create and an Update Traffic Endpoint of the CP function: neither is told
+    let mut message = establishment();
+    request_with(&mut message, |request| {
+        let pdi = request.create_pdr[0].pdi.as_mut().unwrap();
+        pdi.ue_ip_address = vec![destination.clone(), chosen.clone()];
+        pdi.local_f_teid = Some(FTeid::choose_ipv4());
+        request.create_traffic_endpoint = vec![CreateTrafficEndpoint {
+            traffic_endpoint_id: Some(TrafficEndpointId::new(1)),
+            ue_ip_address: vec![destination.clone(), chosen.clone()],
+            ..Default::default()
+        }];
+    });
+    assert_eq!(placed(&message, Interfaces::N4), []);
+    let update = SessionModificationRequest {
+        update_traffic_endpoint: vec![UpdateTrafficEndpoint {
+            traffic_endpoint_id: Some(TrafficEndpointId::new(1)),
+            ue_ip_address: vec![destination.clone()],
+            ..Default::default()
+        }],
+        ..Default::default()
+    };
+    assert_eq!(placed(&Message::session(1, 8, update), Interfaces::N4), []);
+    // In a Created PDR and a Created Traffic Endpoint of the UP function
+    let response = SessionEstablishmentResponse {
+        node_id: Some(NodeId::Ipv4(SMF)),
+        cause: Some(Cause::new(CauseValue::RequestAccepted)),
+        up_f_seid: Some(FSeid::ipv4(1, SMF)),
+        created_pdr: vec![CreatedPdr {
+            pdr_id: Some(PdrId::new(1)),
+            f_teid: vec![FTeid::choose_ipv4()],
+            ue_ip_address: vec![destination.clone(), chosen.clone()],
+            ..Default::default()
+        }],
+        created_traffic_endpoint: vec![CreatedTrafficEndpoint {
+            traffic_endpoint_id: Some(TrafficEndpointId::new(1)),
+            ue_ip_address: vec![destination.clone()],
+            mapped_n6_ip_address: Some(MappedN6IpAddress {
+                chv4: true,
+                ..Default::default()
+            }),
+            ..Default::default()
+        }],
+        ..Default::default()
+    };
+    let spare = |path: &str| (path.to_string(), "8.2.62", DeviationKind::SpareBits, None);
+    let rule =
+        |path: &str, clause, rule| (path.to_string(), clause, DeviationKind::Rule(rule), None);
+    let by_up = "CH or CHID is set in an IE of the UP function";
+    let chosen_by_up = "CHV4 or CHV6 is set in an IE of the UP function";
+    let mapped_by_up = "CHV4 is set in an IE of the UP function";
+    assert_eq!(
+        placed(&Message::session(1, 7, response.clone()), Interfaces::N4),
+        [
+            rule("/pfcp/Created PDR/0/F-TEID/0", "8.2.3", by_up),
+            spare("/pfcp/Created PDR/0/UE IP Address/0"),
+            rule(
+                "/pfcp/Created PDR/0/UE IP Address/1",
+                "8.2.62",
+                chosen_by_up
+            ),
+            spare("/pfcp/Created Traffic Endpoint/0/UE IP Address/0"),
+            rule(
+                "/pfcp/Created Traffic Endpoint/0/Mapped N6 IP Address",
+                "8.2.242",
+                mapped_by_up
+            ),
+        ]
+    );
+    // A Local Ingress Tunnel of an MB-UPF, on N4mb
+    let tunnel = LocalIngressTunnel {
+        ch: true,
+        v4: true,
+        ..Default::default()
+    };
+    let mbs = SessionEstablishmentResponse {
+        created_pdr: vec![CreatedPdr {
+            pdr_id: Some(PdrId::new(1)),
+            local_ingress_tunnel: Some(tunnel.clone()),
+            ..Default::default()
+        }],
+        ..response.clone()
+    };
+    let by_up = "CH is set in an IE of the UP function";
+    assert_eq!(
+        placed(&Message::session(1, 7, mbs), Interfaces::N4MB),
+        [rule(
+            "/pfcp/Created PDR/0/Local Ingress Tunnel",
+            "8.2.209",
+            by_up
+        )]
+    );
+    // In an Updated PDR of a Session Modification Response, and in a Usage Report of a
+    // Session Report Request
+    let modified = SessionModificationResponse {
+        cause: Some(Cause::new(CauseValue::RequestAccepted)),
+        updated_pdr: vec![UpdatedPdr {
+            pdr_id: Some(PdrId::new(1)),
+            ue_ip_address: vec![destination.clone()],
+            ..Default::default()
+        }],
+        ..Default::default()
+    };
+    assert_eq!(
+        placed(&Message::session(1, 8, modified), Interfaces::N4),
+        [spare("/pfcp/Updated PDR/0/UE IP Address/0")]
+    );
+    let report = SessionReportRequest {
+        report_type: Some(ReportType {
+            usar: true,
+            ..Default::default()
+        }),
+        usage_report: vec![UsageReport {
+            urr_id: Some(UrrId::new(1)),
+            ur_seqn: Some(UrSeqn::new(1)),
+            usage_report_trigger: Some(UsageReportTrigger {
+                perio: true,
+                ..Default::default()
+            }),
+            ue_ip_address: Some(destination),
+            ..Default::default()
+        }],
+        ..Default::default()
+    };
+    assert_eq!(
+        placed(&Message::session(1, 9, report), Interfaces::N4),
+        [spare("/pfcp/Usage Report/0/UE IP address")]
+    );
+    // The NID: 11 digits, and four bits of 0
+    let nid = |last: &str| format!("05 010203 02f839 123456789a{last}").replace(' ', "");
+    assert_eq!(value_found::<MbsSessionIdentifier>(&nid("b0")), []);
+    assert_eq!(
+        value_found::<MbsSessionIdentifier>(&nid("b5")),
+        [("8.2.206", DeviationKind::SpareBits)]
+    );
+}

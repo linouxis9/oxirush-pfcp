@@ -167,8 +167,10 @@ pub enum DeviationKind {
     VendorId,
     /// Spare bits that are not zero (§8.1.2), and a reserved bit or a field that its clause
     /// has the sender set to 0 and the receiver ignore, as bit 3 of Reporting Frequency
-    /// (§8.2.168), the Number of Additional Usage Reports with AURI (§8.2.91) and a field of
-    /// RTP Header Extension Additional Information whose flag is 0 (§8.2.241).
+    /// (§8.2.168), the Number of Additional Usage Reports with AURI (§8.2.91), a field of
+    /// RTP Header Extension Additional Information whose flag is 0 (§8.2.241), S/D of a UE
+    /// IP Address outside a PDI, a Create and an Update Traffic Endpoint (§8.2.62), and the
+    /// four bits after the NID of an MBS Session Identifier (§8.2.206).
     SpareBits,
     /// A value that its table has as spare, or does not have: the receiver ignores it
     /// (§7.6.8).
@@ -341,6 +343,22 @@ pub trait Rules {
     fn check(&self, path: &Path<'_>, found: &mut Vec<Deviation>) {
         let _ = (path, found);
     }
+
+    /// Add what is wrong with the value in a row of the table `table`, by its number
+    /// (`"7.5.2.2-2"`), which the value alone does not show: a field that its clause has
+    /// set in some tables alone, or by the CP function alone.
+    fn check_placed(&self, table: &'static str, path: &Path<'_>, found: &mut Vec<Deviation>) {
+        let _ = (table, path, found);
+    }
+}
+
+/// Whether the IEs of the table `table` are of a message that the UP function sends: a
+/// response to a session establishment, modification or deletion, or a session report
+/// (clauses 7.5.3, 7.5.5, 7.5.7, 7.5.8).
+pub(crate) fn of_the_up_function(table: &str) -> bool {
+    ["7.5.3.", "7.5.5.", "7.5.7.", "7.5.8."]
+        .iter()
+        .any(|clause| table.starts_with(clause))
 }
 
 /// What a value checks of itself: its flags, its fields and its values. A grouped IE
@@ -485,9 +503,11 @@ impl fmt::Display for Segment<'_> {
     }
 }
 
-/// Check a value of a row of a scope: itself, and its length against Table 8.1.2-1.
+/// Check a value of a row of the table `table` of a scope: itself, in its place, and its
+/// length against Table 8.1.2-1.
 pub(crate) fn check_field<T: crate::ie::Listed + crate::ie::IeType>(
     value: &T,
+    table: &'static str,
     path: &Path<'_>,
     presence: Presence,
     context: Context,
@@ -495,6 +515,7 @@ pub(crate) fn check_field<T: crate::ie::Listed + crate::ie::IeType>(
 ) {
     let from = found.len();
     value.check_in(path, context.within(presence), found);
+    value.check_placed(table, path, found);
     if let Some(fixed) = T::FIXED {
         let length = value.encoded_len();
         if length != usize::from(fixed) {
@@ -584,7 +605,14 @@ pub(crate) fn check_field_values<
             row: row.name,
             nth,
         };
-        check_field(value, &here, presence(row, context), context, found);
+        check_field(
+            value,
+            table.id,
+            &here,
+            presence(row, context),
+            context,
+            found,
+        );
     }
 }
 

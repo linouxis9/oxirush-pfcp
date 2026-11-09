@@ -96,6 +96,10 @@ pfcp_layout! {
             found.push(Deviation::new(path, "8.2.3", DeviationKind::Rule("CH is set, and octets of a TEID or an address follow")));
         }
     }
+    placed(fteid, table, path, found) {
+        // "This bit shall only be set by the CP function", of CH and of CHID.
+        flag_rule((fteid.ch || fteid.chid) && crate::check::of_the_up_function(table), path, "8.2.3", "CH or CHID is set in an IE of the UP function", found);
+    }
 }
 
 pfcp_layout! {
@@ -143,6 +147,15 @@ pfcp_layout! {
         if address.ip6pl && address.ipv6d {
             found.push(Deviation::new(path, "8.2.62", DeviationKind::Rule("IP6PL and IPv6D are both set")));
         }
+    }
+    placed(address, table, path, found) {
+        // S/D "is only applicable to the UE IP Address IE in the PDI IE, Create Traffic
+        // Endpoint IE and Update Traffic Endpoint IE", whose rows have it a source or a
+        // destination, and "shall be set to "0" and ignored by the receiver" in the others.
+        if address.sd && !["7.5.2.2-2", "7.5.2.7-1", "7.5.4.13-1"].contains(&table) {
+            found.push(Deviation::new(path, "8.2.62", DeviationKind::SpareBits));
+        }
+        flag_rule((address.chv4 || address.chv6) && crate::check::of_the_up_function(table), path, "8.2.62", "CHV4 or CHV6 is set in an IE of the UP function", found);
     }
 }
 

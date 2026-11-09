@@ -305,6 +305,13 @@ pfcp_layout! {
         source_specific_ip_multicast_address "Source Specific IP Multicast Address": SsmAddress if ssmi,
         nid "NID": Mac if nidi,
     }
+    check(this, path, found) {
+        // Eleven hexadecimal digits, "and bits 4 to 1 of octets (o+5) shall all be encoded
+        // as 0".
+        if this.nid.is_some_and(|nid| nid[5] & 0x0f != 0) {
+            found.push(Deviation::new(path, "8.2.206", crate::check::DeviationKind::SpareBits));
+        }
+    }
 }
 
 pfcp_layout! {
@@ -317,6 +324,9 @@ pfcp_layout! {
     }
     check(this, path, found) {
         flag_rule(this.v4 == this.v6, path, "8.2.209", "neither or both of V4 and V6 are set", found);
+    }
+    placed(this, table, path, found) {
+        flag_rule(this.ch && crate::check::of_the_up_function(table), path, "8.2.209", "CH is set in an IE of the UP function", found);
     }
 }
 
