@@ -15,7 +15,7 @@
    limitations under the License.
 */
 
-//! What `check()` and `check_on()` find, with the clause and the Cause of each. A module has the
+//! What `check()` and `deviations()` find, with the clause and the Cause of each. A module has the
 //! tests of a subject, and this one the helpers that they share.
 
 use std::net::Ipv4Addr;
