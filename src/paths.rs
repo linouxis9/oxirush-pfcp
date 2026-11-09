@@ -469,27 +469,9 @@ fn below_member(info: &IeTypeInfo, name: &str) -> &'static Below {
 pub(crate) struct Paths;
 
 /// What [`Paths`] knows of a place of the tree of a message: the tables of the IEs that it
-/// holds, or the members of the value that it is, and the row of the IE that it is, or of
-/// the list of them.
+/// holds, or the members of the value that it is.
 #[derive(Clone, Copy, Default)]
-pub(crate) struct Shape(Of, Option<&'static Row>);
-
-impl core::fmt::Debug for Shape {
-    /// What it is of, not its row, which is of a table that it names.
-    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
-        f.debug_tuple("Shape").field(&self.0).finish()
-    }
-}
-
-impl Shape {
-    /// The shape of a place of the plain rule, or of no row.
-    fn of(of: Of) -> Self {
-        Self(of, None)
-    }
-}
-
-#[derive(Clone, Copy, Default)]
-enum Of {
+pub(crate) enum Of {
     /// Nothing: a place of the plain rule.
     #[default]
     Nothing,
@@ -565,12 +547,12 @@ impl Paths {
     /// is none, in the words of [`Message::from_tree`](crate::Message::from_tree).
     fn at_scalar<'v>(
         &self,
-        place: &Place<'v, Shape>,
+        place: &Place<'v, Of>,
         scalar: &Value,
         segment: &str,
-        next: &mut Next<'v, Shape>,
-    ) -> Result<Step<Shape>, tree::Error> {
-        let of = place.shape().0;
+        next: &mut Next<'v, Of>,
+    ) -> Result<Step<Of>, tree::Error> {
+        let of = *place.shape();
         let (is, member) = match of {
             Of::Value(info) => {
                 let known = info
@@ -587,7 +569,7 @@ impl Paths {
             return Err(tree::Error::new(ErrorKind::NoSuchMember, "", reason));
         };
         if is.is_some_and(|is| tree::same_name(is, segment)) {
-            next.stay(place, Shape::of(Of::Below(member)));
+            next.stay(place, Of::Below(member));
         } else if next.edit() == Some(Edit::Open) {
             let mut members = Map::new();
             if let Some(is) = is {
@@ -600,7 +582,7 @@ impl Paths {
 }
 
 impl tree::Family for Paths {
-    type Shape = Shape;
+    type Shape = Of;
 
     fn root(&self) -> Root<'_> {
         Root::new("pfcp", &["ies"], false)
@@ -613,14 +595,14 @@ impl tree::Family for Paths {
     /// it.
     fn step<'v>(
         &self,
-        place: &Place<'v, Shape>,
+        place: &Place<'v, Of>,
         segment: &str,
-        next: &mut Next<'v, Shape>,
-    ) -> Result<Step<Shape>, tree::Error> {
-        let shape = place.shape();
+        next: &mut Next<'v, Of>,
+    ) -> Result<Step<Of>, tree::Error> {
+        let shape = *place.shape();
         let list = place.value().is_some_and(Value::is_array);
         if next.edit() == Some(Edit::Open)
-            && let Some(opened) = room(place.value(), shape.0, list, segment)
+            && let Some(opened) = room(place.value(), shape, list, segment)
         {
             next.open(place, opened);
             return Ok(Step::Taken);
@@ -633,7 +615,7 @@ impl tree::Family for Paths {
                           message lacks is written whole";
             return Err(tree::Error::new(ErrorKind::NothingSelected, "", reason));
         };
-        match shape.0 {
+        match shape {
             // An IE of no row, by its number or the name of its type: each member that
             // names it so, or the name that the tree prints, where `set` adds it.
             Of::Ies(table) if row_named(table, segment).is_none() => {
@@ -645,13 +627,13 @@ impl tree::Family for Paths {
                     if row_named(table, written).is_none()
                         && of_no_row(table, written) == Some(ie_type)
                     {
-                        next.member(written, value, Shape::of(Of::Below(&KEPT)));
+                        next.member(written, value, Of::Below(&KEPT));
                         found = true;
                     }
                 }
                 if !found {
                     let name = crate::tree_name(ie_type, Some(table));
-                    next.absent(&name, Shape::of(Of::Nothing));
+                    next.absent(&name, Of::Nothing);
                 }
                 Ok(Step::Taken)
             }
@@ -664,7 +646,7 @@ impl tree::Family for Paths {
 
     /// The message of the name that the tree says: a message type of no table, which the
     /// tree says by its number, has its IEs as octets.
-    fn start(&self, tree: &Value, _rooted: bool) -> Shape {
+    fn start(&self, tree: &Value, _rooted: bool) -> Of {
         let name = tree
             .as_object()
             .and_then(|members| tree::member(members, "message"))
@@ -674,16 +656,16 @@ impl tree::Family for Paths {
                 .iter()
                 .find(|info| tree::same_name(info.name(), name))
         });
-        Shape::of(info.map_or(Of::Nothing, Of::Message))
+        info.map_or(Of::Nothing, Of::Message)
     }
 
-    fn member(&self, shape: &Shape, name: &str, value: Option<&Value>) -> Shape {
-        if let Of::Ies(table) = shape.0
+    fn member(&self, shape: &Of, name: &str, value: Option<&Value>) -> Of {
+        if let Of::Ies(table) = *shape
             && let Some(row) = row_named(table, name)
         {
-            return Shape(of_row(row, value), Some(row));
+            return of_row(row, value);
         }
-        Shape::of(match shape.0 {
+        match *shape {
             Of::Message(info) if tree::same_name(name, "ies") => Of::Ies(info.table),
             // The other members of the header are scalars.
             Of::Message(_) => Of::Below(&Below::Scalar),
@@ -698,20 +680,20 @@ impl tree::Family for Paths {
             }
             Of::Below(below) => below.member(name).map_or(Of::Nothing, Of::Below),
             _ => Of::Nothing,
-        })
-    }
-
-    fn entry(&self, shape: &Shape, value: Option<&Value>) -> Shape {
-        match shape.0 {
-            Of::List(row) => Shape(of_value(row, value), Some(row)),
-            // An entry of a list of a field is of the kind of the field.
-            Of::Below(below) => Shape::of(Of::Below(below)),
-            _ => Shape::of(Of::Nothing),
         }
     }
 
-    fn absent(&self, shape: &Shape, name: &str) -> Absent<Shape> {
-        let there = match shape.0 {
+    fn entry(&self, shape: &Of, value: Option<&Value>) -> Of {
+        match *shape {
+            Of::List(row) => of_value(row, value),
+            // An entry of a list of a field is of the kind of the field.
+            Of::Below(below) => Of::Below(below),
+            _ => Of::Nothing,
+        }
+    }
+
+    fn absent(&self, shape: &Of, name: &str) -> Absent<Of> {
+        let there = match *shape {
             Of::Message(_) => crate::message::forms::NAMES
                 .iter()
                 .any(|member| tree::same_name(member, name)),
@@ -723,7 +705,7 @@ impl tree::Family for Paths {
             Of::Below(below) => below.member(name).is_some(),
             _ => false,
         };
-        match (there, no_such_member(shape.0, name)) {
+        match (there, no_such_member(*shape, name)) {
             (true, _) => Absent::Optional(self.member(shape, name, None)),
             (false, Some(reason)) => {
                 Absent::Refused(tree::Error::new(ErrorKind::NoSuchMember, "", reason))
@@ -828,9 +810,9 @@ pub fn select<'v>(tree: &'v Value, path: &str) -> Result<Vec<&'v Value>, tree::E
 }
 
 /// The row of a table and the IE type of the IE at `path` in the tree of a message, or of
-/// the list of them that a row is: of the first place that the path selects, which a
-/// message may lack. `None` for a path of the header, of a member of a value, or of an IE
-/// of no row.
+/// the list of them that a row is: the row that the tables of the message name at the
+/// path, which the message may lack, as may the grouped IEs above it. `None` for a path of
+/// the header, of a member of a value, or of an IE of no row.
 ///
 /// ```
 /// use oxirush_pfcp::{paths, tree};
@@ -849,9 +831,36 @@ pub fn row_at(
     tree: &Value,
     path: &str,
 ) -> Result<Option<(&'static Row, &'static IeTypeInfo)>, tree::Error> {
-    let places = tree::places_in(&Paths, tree, path)?;
-    let row = places.first().and_then(|place| place.shape().1);
+    select(tree, path)?;
+    let row = match tree::Family::start(&Paths, tree, true) {
+        Of::Message(info) => row_of_path(info.table, &tree::segments(path)?),
+        _ => None,
+    };
     Ok(row.and_then(|row| Some((row, ie_type_info(row.ie_type)?))))
+}
+
+/// The row that `segments` name from the message of `table`: of the IEs of the message,
+/// `/pfcp` or `/ies`, then a row of each table on the way, an entry of a list or `*` after
+/// a row, and a row of the table of its place after a grouped IE.
+fn row_of_path(mut table: &'static Table, segments: &[String]) -> Option<&'static Row> {
+    let (ies, segments) = segments.split_first()?;
+    if !tree::same_name(ies, "pfcp") && !tree::same_name(ies, "ies") {
+        return None;
+    }
+    let (mut row, mut entry): (Option<&'static Row>, bool) = (None, false);
+    for segment in segments {
+        let entered = segment == "*" || tree::position(segment).is_some();
+        match row {
+            Some(_) if entered && !entry => entry = true,
+            Some(at) => {
+                table = at.content?;
+                row = Some(row_named(table, segment)?);
+                entry = false;
+            }
+            None => row = Some(row_named(table, segment)?),
+        }
+    }
+    row
 }
 
 /// Give the place at `path` the value `value`: a path that [`select`] takes, with the rows
@@ -894,26 +903,26 @@ mod tests {
         let message = Paths.start(&heartbeat, true);
         assert_eq!(
             alloc::format!("{message:?}"),
-            r#"Shape(Message("PFCP Heartbeat Request"))"#
+            r#"Message("PFCP Heartbeat Request")"#
         );
         let ies = Paths.member(&message, "ies", Some(&heartbeat["ies"]));
-        assert_eq!(alloc::format!("{ies:?}"), r#"Shape(Ies("7.4.2.1-1"))"#);
+        assert_eq!(alloc::format!("{ies:?}"), r#"Ies("7.4.2.1-1")"#);
         // The header is no table of IEs: its fields are scalars
         let sequence = Paths.member(&message, "Sequence Number", None);
-        assert_eq!(alloc::format!("{sequence:?}"), "Shape(Below(Scalar))");
+        assert_eq!(alloc::format!("{sequence:?}"), "Below(Scalar)");
         let stamp = &heartbeat["ies"]["Recovery Time Stamp"];
         let value = Paths.member(&ies, "Recovery Time Stamp", Some(stamp));
         assert_eq!(
             alloc::format!("{value:?}"),
-            r#"Shape(Value("Recovery Time Stamp"))"#
+            r#"Value("Recovery Time Stamp")"#
         );
         let empty = Value::Array(Vec::new());
         let addresses = Paths.member(&ies, "Source IP Address", Some(&empty));
         assert_eq!(
             alloc::format!("{addresses:?}"),
-            r#"Shape(List("Source IP Address"))"#
+            r#"List("Source IP Address")"#
         );
         let nothing = Paths.member(&value, "Bogus", None);
-        assert_eq!(alloc::format!("{nothing:?}"), "Shape(Nothing)");
+        assert_eq!(alloc::format!("{nothing:?}"), "Nothing");
     }
 }

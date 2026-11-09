@@ -43,8 +43,9 @@ The first version, of TS 29.244 V19.6.0 (2026-06):
   as other IEs is checked as those, its receiver telling no fault there (§7.6.7).
 - With `tree`, a message as a tree that prints as JSON, on oxirush-utils 0.2, whose
   `tree` the crate exports at its root, and read and edited by path (`paths::select`,
-  `paths::set`), and `paths::row_at` names the row and the IE type of the IE at a path;
-  with `serde`, serialized as its tree. What a message lacks selects nothing, whatever
+  `paths::set`), and `paths::row_at` names the row and the IE type of the IE at a path,
+  which its tables name whether the message has the place or not; with `serde`,
+  serialized as its tree. What a message lacks selects nothing, whatever
   the path names below it: a misspelt name below a value or a field that is not there is
   not told, and `set` writes a value that a message lacks whole. An error of
   `Message::from_tree` is at a path that `paths::select` takes. A tree writes each field

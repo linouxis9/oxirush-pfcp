@@ -1149,8 +1149,8 @@ fn a_grouped_ie_has_the_rows_of_its_place() {
 }
 
 /// `paths::row_at` names the row of a table and the IE type of the IE at a path, or of the
-/// list of them, there or not: none for the header, a member of a value, or an IE of no
-/// row.
+/// list of them, there or not, below grouped IEs that the message lacks too: none for the
+/// header, a member of a value, or an IE of no row.
 #[test]
 fn a_path_is_at_the_row_of_its_ie() {
     let tree = establishment().to_tree();
@@ -1169,7 +1169,24 @@ fn a_path_is_at_the_row_of_its_ie() {
     assert_eq!(at("/pfcp/Create PDR/0/PDR ID/Rule ID"), None);
     assert_eq!(at("/SEID"), None);
     assert_eq!(at("/pfcp/Load Control Information/Sequence Number"), None);
-    assert_eq!(at("/pfcp/Create PDR/7/PDI"), None);
+    assert_eq!(at("/pfcp/Create PDR/7/PDI"), Some(("PDI", 2)));
+    assert_eq!(at("/pfcp/Create PDR/*/PDI"), Some(("PDI", 2)));
+    assert_eq!(at("/pfcp/Create BAR/BAR ID"), Some(("BAR ID", 88)));
+    assert_eq!(
+        at("/pfcp/Create PDR/0/PDI/Ethernet Packet Filter/0/MAC address"),
+        Some(("MAC address", 133))
+    );
+    assert_eq!(at("/ies/Create PDR/0/PDI"), Some(("PDI", 2)));
+    assert_eq!(at("/pfcp/Create PDR/0/1"), None);
+    assert_eq!(at("/pfcp/Create PDR/0/PDI/Local F-TEID/TEID"), None);
+    // A grouped IE of two contents, by the table of its place
+    let report = tree!({"message": "PFCP Session Report Request", "SEID": 1, "Sequence Number": 1,
+        "ies": {"Report Type": {"USAR": true}}});
+    let found = oxirush_pfcp::paths::row_at(&report, "/pfcp/Usage Report/0/Start Time").unwrap();
+    assert_eq!(
+        found.map(|(row, info)| (row.name, info.ie_type)),
+        Some(("Start Time", 75))
+    );
     assert!(oxirush_pfcp::paths::row_at(&tree, "/pfcp/Bogus").is_err());
 }
 
