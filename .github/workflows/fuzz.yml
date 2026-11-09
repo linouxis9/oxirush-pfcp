@@ -47,7 +47,7 @@ env:
 jobs:
   # How long each target runs: four hours on Friday, an hour on the other days
   # but Sunday, with or without a commit. The summary of the run lists the
-  # commits that no run had fuzzed before.
+  # commits that no run had fuzzed before, which the head has.
   plan:
     name: How long
     runs-on: ubuntu-latest
@@ -68,11 +68,11 @@ jobs:
           REPORT: ${{ inputs.weekly }}
         run: |
           # The head of the last run of this workflow on this branch that ended after its
-          # plan, or the empty tree: the commits after it are those that this run fuzzes
-          # first, however late a run starts and however old the date of a commit is. A
-          # run whose plan succeeded and whose fuzzing then failed, for a crash as for a
-          # lost runner, is such a base too: it stays red until someone reads it, and is run
-          # again itself.
+          # plan, or the empty tree: the summary lists the commits after it, which no run
+          # had fuzzed, however late a run starts and however old the date of a commit is;
+          # each job fuzzes the head alone. A run whose plan succeeded and whose fuzzing
+          # then failed, for a crash as for a lost runner, is such a base too: it stays red
+          # until someone reads it, and is run again itself.
           runs=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow fuzz.yml \
             --branch "$GITHUB_REF_NAME" --status completed --limit 100 \
             --json databaseId,conclusion \
@@ -112,11 +112,11 @@ jobs:
             echo "Each target runs $minutes minutes."
             echo
             if [ "$base" = "$(git hash-object -t tree /dev/null)" ]; then
-              echo "No run of this branch ended after its plan: every commit is fuzzed first."
+              echo "No run of this branch ended after its plan: no commit was fuzzed before."
             elif [ "$base" = "$(git rev-parse HEAD)" ]; then
               echo "No commit since the last run, at $base."
             else
-              echo "Fuzzed first, since $base:"
+              echo "Not fuzzed before, since $base:"
               echo
               git log --format='- %h %s' "$base..HEAD"
             fi
