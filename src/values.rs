@@ -431,9 +431,11 @@ impl oxirush_utils::tree::Tree for NodeId {
             }
             return Err(reading.mismatch("an IPv4 or IPv6 address, or {\"FQDN\": name}", value));
         }
+        // A member that is null is one that is not there.
         let fqdn = value
             .as_object()
-            .and_then(|members| oxirush_utils::tree::member(members, "FQDN"));
+            .and_then(|members| oxirush_utils::tree::member(members, "FQDN"))
+            .filter(|(_, fqdn)| !fqdn.is_null());
         if fqdn.is_some() {
             let (_, content) = reading.alternative(value, &Self::MEMBERS[..1])?;
             return reading.within("FQDN", content, |content, reading| {
@@ -447,7 +449,7 @@ impl oxirush_utils::tree::Tree for NodeId {
             });
         }
         // The octets of a Node ID that the text does not give: read as they decode.
-        let read = reading.members(value, &Self::MEMBERS[1..])?;
+        let read = reading.members(value, Self::MEMBERS)?;
         let kind = reading.member(&read, "Node ID Type", |value, reading| {
             reading.unsigned(value, 0, 255)
         })?;

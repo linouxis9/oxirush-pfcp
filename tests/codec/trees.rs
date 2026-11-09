@@ -607,6 +607,9 @@ fn a_node_id_of_other_octets_is_no_ie_kept_as_octets() {
     let other: NodeId =
         tree::from_value(&tree!({"node id type": 4, "node id value": "7f000008"})).unwrap();
     assert_eq!(other, NodeId::Other(4, vec![127, 0, 0, 8].into()));
+    // A member that is null is not there, as in any value
+    let written = tree!({"FQDN": null, "Node ID Type": 4, "Node ID value": "7f000008"});
+    assert_eq!(tree::from_value::<NodeId>(&written).ok(), Some(other));
 }
 
 /// A Network Instance of the labels of a name is that name in a tree, whatever its
