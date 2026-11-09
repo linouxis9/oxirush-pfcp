@@ -275,50 +275,21 @@ impl Row {
     /// each, none where one of them lacks the row, and the fewest IEs that one of them
     /// needs.
     pub fn on(&self, interfaces: Interfaces) -> Option<On> {
-        let roles = self.roles;
-        if !roles.iter().any(|role| role.interfaces.has(interfaces)) {
-            return None;
+        // A row of one role, as most are: its presence where each of the interfaces has it
+        match self.roles {
+            [role] if role.interfaces.has(interfaces) => {
+                let each = role.interfaces.0 & interfaces.0 == interfaces.0;
+                Some(On {
+                    presence: each.then_some(role.presence),
+                    needed: usize::from(each && role.presence == Presence::Mandatory),
+                    most: match role.repeat {
+                        Repeat::AtMost(1) => Repeat::Once,
+                        repeat => repeat,
+                    },
+                })
+            }
+            roles => on_roles(roles, interfaces),
         }
-        let rank = |presence: &Presence| match presence {
-            Presence::Mandatory => 0,
-            Presence::Conditional => 1,
-            Presence::Optional => 2,
-        };
-        // Of each interface: the weakest presence of its roles, and the IEs of its mandatory
-        // roles.
-        let each = (0..5).map(|bit| Interfaces(1 << bit));
-        let each = each.filter(|one| interfaces.has(*one)).map(|one| {
-            let there = roles.iter().filter(move |role| role.interfaces.has(one));
-            let presence = there.clone().map(|role| role.presence).max_by_key(rank);
-            let needed = there.filter(|role| role.presence == Presence::Mandatory);
-            (presence, needed.count())
-        });
-        let (presence, needed) = each
-            .reduce(|(was, before), (presence, needed)| {
-                let weakest = was
-                    .zip(presence)
-                    .map(|(was, presence)| core::cmp::max_by_key(was, presence, rank));
-                (weakest, before.min(needed))
-            })
-            .unwrap_or_default();
-        let most = roles
-            .iter()
-            .filter(|role| role.interfaces.has(interfaces))
-            .try_fold(0usize, |most, role| match role.repeat {
-                Repeat::Once => Some(most + 1),
-                Repeat::AtMost(at) => Some(most + usize::from(at)),
-                Repeat::Any => None,
-            });
-        let most = match most.map(u8::try_from) {
-            Some(Ok(1)) => Repeat::Once,
-            Some(Ok(most)) => Repeat::AtMost(most),
-            _ => Repeat::Any,
-        };
-        Some(On {
-            presence,
-            needed,
-            most,
-        })
     }
 
     /// Whether the row is a list in the tree of its scope: of a role that may be there more
@@ -329,6 +300,53 @@ impl Row {
             _ => true,
         }
     }
+}
+
+/// What rows of `roles` are on `interfaces`, as [`Row::on`] says.
+fn on_roles(roles: &[Role], interfaces: Interfaces) -> Option<On> {
+    if !roles.iter().any(|role| role.interfaces.has(interfaces)) {
+        return None;
+    }
+    let rank = |presence: &Presence| match presence {
+        Presence::Mandatory => 0,
+        Presence::Conditional => 1,
+        Presence::Optional => 2,
+    };
+    // Of each interface: the weakest presence of its roles, and the IEs of its mandatory
+    // roles.
+    let each = (0..5).map(|bit| Interfaces(1 << bit));
+    let each = each.filter(|one| interfaces.has(*one)).map(|one| {
+        let there = roles.iter().filter(move |role| role.interfaces.has(one));
+        let presence = there.clone().map(|role| role.presence).max_by_key(rank);
+        let needed = there.filter(|role| role.presence == Presence::Mandatory);
+        (presence, needed.count())
+    });
+    let (presence, needed) = each
+        .reduce(|(was, before), (presence, needed)| {
+            let weakest = was
+                .zip(presence)
+                .map(|(was, presence)| core::cmp::max_by_key(was, presence, rank));
+            (weakest, before.min(needed))
+        })
+        .unwrap_or_default();
+    let most = roles
+        .iter()
+        .filter(|role| role.interfaces.has(interfaces))
+        .try_fold(0usize, |most, role| match role.repeat {
+            Repeat::Once => Some(most + 1),
+            Repeat::AtMost(at) => Some(most + usize::from(at)),
+            Repeat::Any => None,
+        });
+    let most = match most.map(u8::try_from) {
+        Some(Ok(1)) => Repeat::Once,
+        Some(Ok(most)) => Repeat::AtMost(most),
+        _ => Repeat::Any,
+    };
+    Some(On {
+        presence,
+        needed,
+        most,
+    })
 }
 
 impl Table {
@@ -693,6 +711,33 @@ pub(crate) fn encode_scope<S: Scope>(scope: &S, out: &mut Vec<u8>) -> Result<(),
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A row of one role is on each set of interfaces what the walk of its roles says.
+    #[test]
+    fn a_row_of_one_role_is_on_each_set_of_interfaces_as_its_roles_say() {
+        let mut tables: Vec<&Table> = crate::MESSAGE_TYPES.iter().map(|info| info.table).collect();
+        tables.extend(
+            crate::IE_TYPES
+                .iter()
+                .flat_map(|info| info.tables.iter().copied()),
+        );
+        let mut rows = 0;
+        for table in tables {
+            for row in table.rows.iter().filter(|row| row.roles.len() == 1) {
+                rows += 1;
+                for bits in 1..=Interfaces::ALL.0 {
+                    let interfaces = Interfaces(bits);
+                    assert_eq!(
+                        row.on(interfaces),
+                        on_roles(row.roles, interfaces),
+                        "{}",
+                        row.name
+                    );
+                }
+            }
+        }
+        assert!(rows > 600, "{rows}");
+    }
 
     /// A message read in another order than its table's keeps that order, and one of an IE
     /// of a row kept as octets has it after the values of its row: each is written once,
