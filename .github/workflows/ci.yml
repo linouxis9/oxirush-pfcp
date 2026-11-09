@@ -102,7 +102,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: linouxis9/oxirush-aper
-          ref: 478c2c2f673b374cb15c139c212c0b5a23881f38
+          ref: f0ac242e921289807c1dc64483e4931e0792f0e0
           path: oxirush-aper
       - run: python3 ../oxirush-aper/protocols/tests/readme.py --check
         working-directory: crate
