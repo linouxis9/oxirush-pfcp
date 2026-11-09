@@ -45,10 +45,10 @@ cd compare/go-pfcp && go build -o go-pfcp . && cd ../..
 taskset -c 1 compare/go-pfcp/go-pfcp read 100000 HEX
 ```
 
-## At 2763b01
+## At 637fadf
 
 The time of a round, the median of five runs of about a second, the lower of two series,
-and the allocations of a round, taken on 2026-11-09 at 2763b01 with Rust 1.98.1 and
+and the allocations of a round, taken on 2026-11-09 at 637fadf with Rust 1.98.1 and
 Go 1.27.3, on one core of an AMD Ryzen 7 5700G (Linux 7.0): `measure` of the feature
 `tree` for the times, of `heap,tree` for the allocations, and go-pfcp of the same octets.
 The machine was shared, and the other thread of the core busy at times: the times are
@@ -57,15 +57,15 @@ are exact. A cell is the time of a round, then its allocations.
 
 | Message | | `frame` | `decode` | `read` | `encode` | `check` | `to_tree` | `from_tree` |
 |---|---|---|---|---|---|---|---|---|
-| heartbeat | this crate | 0.03 µs, 0 | 0.05 µs, 1 | 0.04 µs, 1 | 0.04 µs, 1 | 0.09 µs, 0 | 0.36 µs, 16 | 0.52 µs, 13 |
-| | go-pfcp |  | 0.19 µs, 5 | 0.19 µs, 5 | 0.23 µs, 2 |  |  |  |
-| ser-4 | this crate | 0.94 µs, 0 | 2.5 µs, 22 | 2.6 µs, 22 | 1.2 µs, 1 | 7.4 µs, 0 | 13.6 µs, 286 | 20.5 µs, 305 |
-| | go-pfcp |  | 9.0 µs, 128 | 19.1 µs, 292 | 12.8 µs, 2 |  |  |  |
-| ser-16 | this crate | 3.5 µs, 0 | 7.9 µs, 70 | 8.3 µs, 70 | 3.9 µs, 1 | 23.7 µs, 0 | 45.7 µs, 963 | 67.5 µs, 1,055 |
-| | go-pfcp |  | 32.0 µs, 441 | 68.7 µs, 1,043 | 46.9 µs, 2 |  |  |  |
-| go-pfcp-ser | this crate | 2.1 µs, 0 | 5.8 µs, 60 | 5.8 µs, 60 | 3.2 µs, 1 | 56.2 µs, 324 | 41.9 µs, 857 | 55.8 µs, 697 |
-| | go-pfcp |  | 20.2 µs, 261 | 38.6 µs, 526 | 30.0 µs, 2 |  |  |  |
-| the 213 captures | this crate | 20.8 µs, 0 | 66.6 µs, 519 | 69.7 µs, 519 |  |  |  |  |
+| heartbeat | this crate | 0.03 µs, 0 | 0.05 µs, 1 | 0.05 µs, 1 | 0.04 µs, 1 | 0.07 µs, 0 | 0.36 µs, 16 | 0.50 µs, 13 |
+| | go-pfcp |  | 0.19 µs, 5 | 0.18 µs, 5 | 0.23 µs, 2 |  |  |  |
+| ser-4 | this crate | 0.95 µs, 0 | 2.5 µs, 22 | 2.6 µs, 22 | 1.3 µs, 1 | 5.4 µs, 0 | 14.0 µs, 288 | 20.7 µs, 305 |
+| | go-pfcp |  | 8.7 µs, 128 | 18.2 µs, 292 | 12.3 µs, 2 |  |  |  |
+| ser-16 | this crate | 3.5 µs, 0 | 8.2 µs, 70 | 8.6 µs, 70 | 4.1 µs, 1 | 16.6 µs, 0 | 46.4 µs, 965 | 67.8 µs, 1,055 |
+| | go-pfcp |  | 31.4 µs, 441 | 65.8 µs, 1,043 | 46.7 µs, 2 |  |  |  |
+| go-pfcp-ser | this crate | 2.1 µs, 0 | 5.8 µs, 60 | 5.9 µs, 60 | 3.3 µs, 1 | 54.2 µs, 324 | 41.8 µs, 860 | 56.8 µs, 697 |
+| | go-pfcp |  | 20.3 µs, 261 | 37.6 µs, 526 | 29.7 µs, 2 |  |  |  |
+| the 213 captures | this crate | 21.9 µs, 0 | 69.9 µs, 519 | 71.8 µs, 519 |  |  |  |  |
 
 Decoding allocates the box of the message, each row that is a list, of one value too,
 each conditional or optional grouped IE, and each octet string longer than 22 octets.
