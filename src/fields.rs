@@ -552,6 +552,8 @@ pub struct NameLv16(pub Octets);
 macro_rules! length_value {
     ($($ty:ident $length:ty, $tree:ident),*) => {$(
         impl Field for $ty {
+            #[cfg(feature = "tree")]
+            const BELOW: &'static crate::paths::Below = length_value!(@below $tree);
             fn read(octets: &mut &[u8]) -> Option<Self> {
                 let length = usize::from(<$length as Field>::read(octets)?);
                 let (value, rest) = octets.split_at_checked(length)?;
@@ -593,9 +595,11 @@ macro_rules! length_value {
         }
     )*};
     (@to_tree octets $octets:expr) => { oxirush_utils::tree::octets($octets) };
-    (@to_tree name $octets:expr) => { crate::values::name_tree($octets) };
+    (@to_tree name $octets:expr) => { crate::values::name_tree($octets, crate::values::NetworkInstance::FIELDS) };
     (@from_tree octets $value:ident, $reading:ident) => { $reading.octets($value) };
-    (@from_tree name $value:ident, $reading:ident) => { crate::values::name_from_tree($value, $reading) };
+    (@from_tree name $value:ident, $reading:ident) => { crate::values::name_from_tree($value, $reading, crate::values::NetworkInstance::FIELDS) };
+    (@below octets) => { &crate::paths::Below::Scalar };
+    (@below name) => { &crate::paths::Below::Object(None, &[("Network Instance", &crate::paths::Below::Scalar)]) };
 }
 length_value!(Lv8 u8, octets, Lv16 u16, octets, NameLv16 u16, name);
 

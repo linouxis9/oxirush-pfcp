@@ -500,8 +500,9 @@ pub struct NetworkInstance(pub Octets);
 impl NetworkInstance {
     /// The name of its field.
     pub(crate) const FIELDS: &'static [&'static str] = &["Network Instance"];
-    /// None: its tree is its name, or its octets.
-    pub(crate) const MEMBERS: &'static [&'static str] = &[];
+    /// Its field, which its tree is of octets that are no name: its tree is its name
+    /// otherwise.
+    pub(crate) const MEMBERS: &'static [&'static str] = Self::FIELDS;
     /// What the tree of each field may hold below it: nothing, of scalars alone.
     #[cfg(feature = "tree")]
     pub(crate) const MEMBERS_BELOW: &'static [(&'static str, &'static crate::paths::Below)] = &[];
@@ -550,55 +551,54 @@ impl Rules for NetworkInstance {}
 oxirush_utils::impl_serde!(NetworkInstance);
 
 /// The name of the labels of a domain name or an APN, `"internet"` (§8.2.4, TS 23.003
-/// clause 9.1), or the octets in hexadecimal: of other octets, and of a name of hexadecimal
-/// digits, which a tree reads as octets.
+/// clause 9.1), or `{"Network Instance": ...}`, its octets in hexadecimal, of other octets.
 #[cfg(feature = "tree")]
 impl oxirush_utils::tree::Tree for NetworkInstance {
     const NAME: &'static str = "Network Instance";
     fn to_tree(&self) -> oxirush_utils::tree::Value {
-        name_tree(&self.0)
+        name_tree(&self.0, Self::FIELDS)
     }
     fn from_tree(
         value: &oxirush_utils::tree::Value,
         reading: &mut oxirush_utils::tree::Reading,
     ) -> Result<Self, oxirush_utils::tree::Refused> {
-        name_from_tree(value, reading).map(|octets| Self(octets.into()))
+        name_from_tree(value, reading, Self::FIELDS).map(|octets| Self(octets.into()))
     }
 }
 
 /// The tree of the octets of a Network Instance, of an APN/DNN and of the Network Instance
-/// field of Remote GTP-U Peer: the name of their labels, or the octets in hexadecimal.
+/// field of Remote GTP-U Peer: the name of their labels, a text whatever its characters,
+/// or, of other octets, an object of one member, the one name of `field`, of the octets in
+/// hexadecimal. `{"octets": ...}` is an IE kept as octets.
 #[cfg(feature = "tree")]
-pub(crate) fn name_tree(octets: &[u8]) -> oxirush_utils::tree::Value {
-    match fqdn_name(octets).filter(|name| !hexadecimal(name)) {
+pub(crate) fn name_tree(
+    octets: &[u8],
+    field: &'static [&'static str],
+) -> oxirush_utils::tree::Value {
+    match fqdn_name(octets) {
         Some(name) => oxirush_utils::tree::text(&name),
-        None => oxirush_utils::tree::octets(octets),
+        None => oxirush_utils::tree::alternative(field[0], oxirush_utils::tree::octets(octets)),
     }
 }
 
 /// The octets of the tree of a Network Instance, an APN/DNN or the Network Instance field
-/// of Remote GTP-U Peer.
+/// of Remote GTP-U Peer ([`name_tree`]).
 #[cfg(feature = "tree")]
 pub(crate) fn name_from_tree(
     value: &oxirush_utils::tree::Value,
     reading: &mut oxirush_utils::tree::Reading,
+    field: &'static [&'static str],
 ) -> Result<Vec<u8>, oxirush_utils::tree::Refused> {
-    let name = reading.text(value)?;
-    if hexadecimal(name) {
-        return reading.octets(value);
+    if let Some(name) = value.as_str() {
+        return fqdn_of(name).ok_or_else(|| {
+            reading.mismatch(
+                "a name of 253 octets at most, of labels of 1 to 63 octets with dots between them",
+                value,
+            )
+        });
     }
-    fqdn_of(name).ok_or_else(|| {
-        reading.mismatch(
-            "octets in hexadecimal, or a name of labels of 1 to 63 octets",
-            value,
-        )
-    })
-}
-
-/// Whether a text is octets in hexadecimal.
-#[cfg(feature = "tree")]
-fn hexadecimal(text: &str) -> bool {
-    text.len().is_multiple_of(2) && text.bytes().all(|digit| digit.is_ascii_hexdigit())
+    let (_, octets) = reading.alternative(value, field)?;
+    reading.within(field[0], octets, |octets, reading| reading.octets(octets))
 }
 
 pfcp_layout! {
@@ -812,7 +812,7 @@ listed_value!(
 /// A value that is octets that its clause does not split, of the lengths that it gives, if
 /// it gives some; `[secret]` for a key or a password, which `Debug` does not print, nor
 /// an error of its tree: their number alone; `[name]` for the labels of a name, whose tree
-/// is that of a Network Instance.
+/// is that of a Network Instance, with its own field.
 macro_rules! pfcp_octets {
     ($( $(#[$meta:meta])* $ty:ident $name:literal $clause:literal $(lengths $lengths:pat => $rule:literal)? $([$secret:ident])?; )*) => {$(
         $(#[$meta])*
@@ -822,8 +822,9 @@ macro_rules! pfcp_octets {
         impl $ty {
             /// The name of its field.
             pub(crate) const FIELDS: &'static [&'static str] = &[$name];
-            /// None: its tree is its octets, or its name.
-            pub(crate) const MEMBERS: &'static [&'static str] = &[];
+            /// None, as its tree is its octets; or, of the labels of a name, its field,
+            /// which its tree is of octets that are no name.
+            pub(crate) const MEMBERS: &'static [&'static str] = pfcp_octets!(@members $($secret)?);
             /// What the tree of each field may hold below it: nothing, of scalars alone.
             #[cfg(feature = "tree")]
             pub(crate) const MEMBERS_BELOW: &'static [(&'static str, &'static crate::paths::Below)] = &[];
@@ -881,7 +882,7 @@ macro_rules! pfcp_octets {
             const NAME: &'static str = <$ty as crate::ie::IeType>::TYPE_NAME;
             fn to_tree(&self) -> oxirush_utils::tree::Value {
                 match Self::NAME_LABELS {
-                    true => crate::values::name_tree(&self.0),
+                    true => crate::values::name_tree(&self.0, Self::FIELDS),
                     false => oxirush_utils::tree::octets(&self.0),
                 }
             }
@@ -891,7 +892,7 @@ macro_rules! pfcp_octets {
             ) -> Result<Self, oxirush_utils::tree::Refused> {
                 let octets = match (Self::SECRET, Self::NAME_LABELS) {
                     (true, _) => reading.secret(|reading| reading.octets(value))?,
-                    (false, true) => crate::values::name_from_tree(value, reading)?,
+                    (false, true) => crate::values::name_from_tree(value, reading, Self::FIELDS)?,
                     (false, false) => reading.octets(value)?,
                 };
                 Ok(Self(octets.into()))
@@ -906,6 +907,8 @@ macro_rules! pfcp_octets {
     (@name) => { false };
     (@name secret) => { false };
     (@name name) => { true };
+    (@members name) => { Self::FIELDS };
+    (@members $($secret:ident)?) => { &[] };
 }
 
 pub(crate) use {pfcp_field, pfcp_octets};

@@ -609,22 +609,30 @@ fn a_node_id_of_other_octets_is_no_ie_kept_as_octets() {
     assert_eq!(other, NodeId::Other(4, vec![127, 0, 0, 8].into()));
 }
 
-/// A Network Instance of the labels of a name is that name in a tree, but where the name is
-/// of an even number of hexadecimal digits, which a tree reads as octets; other octets, the
-/// text of a name among them, are hexadecimal (§8.2.4). So are an APN/DNN (§8.2.117) and the
+/// A Network Instance of the labels of a name is that name in a tree, whatever its
+/// characters: a text is a name; other octets are `{"Network Instance": ...}`, in
+/// hexadecimal (§8.2.4). So are an APN/DNN (§8.2.117), as `{"APN/DNN": ...}`, and the
 /// Network Instance field of Remote GTP-U Peer (§8.2.70), and `NetworkInstance::from_name`
-/// gives the labels of a name.
+/// gives the labels of a name. A name has labels of 1 to 63 octets, of 253 octets at most.
 #[test]
 fn a_network_instance_of_labels_is_its_name() {
     let instance = |octets: &[u8]| NetworkInstance(octets.to_vec().into());
-    for (octets, written) in [
-        (&b"\x08internet"[..], tree!("internet")),
-        (b"\x03ims\x06mnc093", tree!("ims.mnc093")),
-        (b"internet", tree!("696e7465726e6574")),
-        (b"\x04cafe", tree!("0463616665")),
-        (b"\x03abc", tree!("abc")),
-        (b"", tree!("")),
+    for (octets, name) in [
+        (&b"\x08internet"[..], Some("internet")),
+        (b"\x03ims\x06mnc093", Some("ims.mnc093")),
+        (b"\x04cafe", Some("cafe")),
+        (b"\x041234", Some("1234")),
+        (b"\x03abc", Some("abc")),
+        (b"internet", None),
+        (b"", None),
     ] {
+        let (written, apn_written) = match name {
+            Some(name) => (tree!(name), tree!(name)),
+            None => (
+                tree!({"Network Instance": hex::encode(octets)}),
+                tree!({"APN/DNN": hex::encode(octets)}),
+            ),
+        };
         assert_eq!(
             tree::Tree::to_tree(&instance(octets)),
             written,
@@ -633,27 +641,50 @@ fn a_network_instance_of_labels_is_its_name() {
         let read: NetworkInstance = tree::from_value(&written).unwrap();
         assert_eq!(read, instance(octets), "{written}");
         let apn = ApnDnn(octets.to_vec().into());
-        assert_eq!(tree::Tree::to_tree(&apn), written, "{octets:?}");
-        assert_eq!(tree::from_value::<ApnDnn>(&written).ok(), Some(apn));
+        assert_eq!(tree::Tree::to_tree(&apn), apn_written, "{octets:?}");
+        assert_eq!(tree::from_value::<ApnDnn>(&apn_written).ok(), Some(apn));
     }
-    assert!(tree::from_value::<NetworkInstance>(&tree!("a..b")).is_err());
+    // A DNN of hexadecimal digits in a message is that name
+    let mut message = establishment();
+    let mut written = message.to_tree();
+    written["ies"]["APN/DNN"] = tree!("cafe");
+    let Body::SessionEstablishmentRequest(request) = &mut message.body else {
+        panic!()
+    };
+    request.apn_dnn = Some(ApnDnn(b"\x04cafe".to_vec().into()));
+    assert_eq!(Message::from_tree(&written).unwrap(), message);
+    // Of no name: an empty label, a label of 64 octets, more than 253 octets
+    let long = ["a"; 128].join(".");
+    for name in ["a..b", "", &"a".repeat(64), &long] {
+        let error = tree::from_value::<NetworkInstance>(&tree!(name)).unwrap_err();
+        assert!(error.to_string().contains("253 octets"), "{error}");
+        assert_eq!(NetworkInstance::from_name(name), None, "{name}");
+    }
+    assert!(tree::from_value::<NetworkInstance>(&tree!(["a"; 127].join("."))).is_ok());
+    assert!(tree::from_value::<NetworkInstance>(&tree!({"octets": "08"})).is_err());
     assert_eq!(
         NetworkInstance::from_name("ims.mnc093"),
         Some(instance(b"\x03ims\x06mnc093"))
     );
-    assert_eq!(NetworkInstance::from_name("a..b"), None);
-    let peer = RemoteGtpUPeer {
-        ni: true,
-        network_instance_field: Some(NameLv16(b"\x08internet".to_vec().into())),
-        ..Default::default()
-    };
-    let written = tree::Tree::to_tree(&peer);
-    assert_eq!(
-        written,
-        tree!({"NI": true, "Network Instance field": "internet"})
-    );
-    assert_eq!(
-        tree::from_value::<RemoteGtpUPeer>(&written).ok(),
-        Some(peer)
-    );
+    for (octets, written) in [
+        (
+            &b"\x08internet"[..],
+            tree!({"NI": true, "Network Instance field": "internet"}),
+        ),
+        (
+            b"internet",
+            tree!({"NI": true, "Network Instance field": {"Network Instance": "696e7465726e6574"}}),
+        ),
+    ] {
+        let peer = RemoteGtpUPeer {
+            ni: true,
+            network_instance_field: Some(NameLv16(octets.to_vec().into())),
+            ..Default::default()
+        };
+        assert_eq!(tree::Tree::to_tree(&peer), written);
+        assert_eq!(
+            tree::from_value::<RemoteGtpUPeer>(&written).ok(),
+            Some(peer)
+        );
+    }
 }
