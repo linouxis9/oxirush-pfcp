@@ -1423,12 +1423,16 @@ fn figure_places() {
 /// The conditions of the fields of clause 8.2: each sentence that makes a field there, or
 /// not, as a flag is set or not (`conditions.tsv`) is a term of the condition of the
 /// field in the crate, of the same sense: "If CH is set, the TEID shall not be present"
-/// is `!ch` in the condition of TEID.
+/// is `!ch` in the condition of TEID. Those of the value of a field of bits are checked by
+/// value_conditions().
 #[test]
 fn figure_conditions() {
     let errata = Errata::new();
     let mut sentences: BTreeMap<&str, Vec<(&str, &str, &str, &str)>> = BTreeMap::new();
     for cells in records(include_str!("spec/conditions.tsv")) {
+        if cells[2].starts_with("is ") {
+            continue;
+        }
         sentences
             .entry(cells[0])
             .or_default()
@@ -1507,6 +1511,140 @@ fn figure_conditions() {
     problems.extend(errata.unused(&["condition"]));
     report(problems);
     assert!(checked >= 150, "{checked} conditions checked");
+}
+
+/// The values of a field of bits where a field is there, and those where it is absent.
+type Presences = (BTreeSet<u32>, BTreeSet<u32>);
+
+/// The conditions of the fields of clause 8.2 on the value of a field of bits: each
+/// sentence that makes a field there, or not, as that field has values that it names
+/// (`conditions.tsv`, "is" and the names of the values) is what the reader of the crate
+/// does, for each value of the field of bits, of octets that hold it and zeros after it.
+/// A field that a sentence has absent for some values is there for the others, as its
+/// figure has it; one that sentences have present for some values alone is absent for
+/// the others, as a field present "if" a flag is set is absent where it is not: "The
+/// Reporting Time Info field shall be present if the Reporting Urgency indicates the event
+/// report is delay tolerant". A field or a value that the sentence names otherwise than
+/// the crate is an erratum (`condition-field`, `condition-value`), and so is a relation that
+/// the clause says in no such sentence (`condition-row`).
+#[test]
+fn value_conditions() {
+    let errata = Errata::new();
+    let mut rows: Vec<(&str, &str, &str, &str, &str)> =
+        records(include_str!("spec/conditions.tsv"))
+            .into_iter()
+            .filter_map(|cells| {
+                let values = cells[2].strip_prefix("is ")?;
+                Some((cells[0], cells[1], values, cells[3], cells[4]))
+            })
+            .collect();
+    for (clause, row) in errata.of("condition-row") {
+        let cells: Vec<&str> = row.split(" ; ").collect();
+        let [cell, values, field, there] = cells[..] else {
+            panic!("condition-row {clause}: {row:?} is not of four cells");
+        };
+        rows.push((
+            clause,
+            cell,
+            values.strip_prefix("is ").unwrap(),
+            field,
+            there,
+        ));
+    }
+    let mut names: BTreeMap<(&str, String), Vec<(u32, &str)>> = BTreeMap::new();
+    for cells in records(include_str!("spec/value-tables.tsv")) {
+        let clause = cells[0]
+            .rsplit_once('-')
+            .map_or(cells[0], |(clause, _)| clause);
+        if let Ok(value) = cells[2].parse() {
+            names
+                .entry((clause, key(cells[1])))
+                .or_default()
+                .push((value, cells[3]));
+        }
+    }
+    let mut problems = Vec::new();
+    // The values of each field that the sentences have it there, and absent
+    let mut fields: BTreeMap<(&str, &str, &str), Presences> = BTreeMap::new();
+    for (clause, cell, values, field, there) in &rows {
+        let field = errata.apply("condition-field", clause, field);
+        let Some(table) = names.get(&(*clause, key(cell))) else {
+            problems.push(format!(
+                "clause {clause}: no table of the values of {cell:?}"
+            ));
+            continue;
+        };
+        let entry = fields.entry((*clause, *cell, field)).or_default();
+        for name in values.split(" | ") {
+            let name = errata.apply("condition-value", &format!("{clause}/{cell}"), name);
+            let value = table.iter().find(|(_, known)| key(known) == key(name));
+            let Some((value, _)) = value else {
+                let problem = format!("clause {clause}: {name:?} is no value of {cell:?}");
+                problems.push(problem);
+                continue;
+            };
+            match *there {
+                "present" => entry.0.insert(*value),
+                _ => entry.1.insert(*value),
+            };
+        }
+    }
+    for ((clause, cell, field), (present, absent)) in &fields {
+        let Some(info) = IE_TYPES.iter().find(|info| info.clause == *clause) else {
+            problems.push(format!("clause {clause}: no IE type"));
+            continue;
+        };
+        let Some(layout) = ie_type_layout(info.ie_type).1 else {
+            problems.push(format!("clause {clause}: no layout"));
+            continue;
+        };
+        let Some(bits) = layout.bits.iter().find(|bits| key(bits.name) == key(cell)) else {
+            problems.push(format!(
+                "clause {clause}: {cell:?} is no field of bits of the crate"
+            ));
+            continue;
+        };
+        if !layout
+            .fields
+            .iter()
+            .any(|member| key(member.name) == key(field))
+        {
+            problems.push(format!(
+                "clause {clause}: {field:?} is no field of the crate"
+            ));
+            continue;
+        }
+        if !present.is_disjoint(absent) {
+            problems.push(format!(
+                "clause {clause}: {field:?} is there and absent where {cell} is {:?}",
+                present.intersection(absent).collect::<Vec<_>>()
+            ));
+        }
+        for value in 0..1u32 << bits.width {
+            let expected = match absent.is_empty() {
+                true => present.contains(&value),
+                false => !absent.contains(&value),
+            };
+            let mut octets = vec![0u8; bits.octet + 1 + 64];
+            octets[bits.octet] = (value << (bits.bit - 1)) as u8;
+            let read = (layout.read)(&octets);
+            let there = read
+                .as_ref()
+                .map(|read| read.iter().any(|name| key(name) == key(field)));
+            let word = |there| if there { "there" } else { "absent" };
+            if there != Some(expected) {
+                let read = there.map_or("not read", word);
+                problems.push(format!(
+                    "clause {clause} {}: {field:?} is {read} where {cell} is {value}, and the document has it {}",
+                    info.name,
+                    word(expected)
+                ));
+            }
+        }
+    }
+    problems.extend(errata.unused(&["condition-field", "condition-value"]));
+    report(problems);
+    assert!(fields.len() >= 4, "{} fields checked", fields.len());
 }
 
 /// The errata that no fixture holds as the document has them, each checked for what it

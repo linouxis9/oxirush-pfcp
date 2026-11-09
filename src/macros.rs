@@ -182,6 +182,18 @@ macro_rules! pfcp_layout {
                     width: pfcp_layout!(@bits width [$($width $(as $fkind)?)?]),
                 }),*)?],
                 fields: &[$($(crate::fields::Member { name: $field_name, octets: <$kind $(<$param>)? as crate::fields::Field>::OCTETS, cells: <$kind $(<$param>)? as crate::fields::Field>::CELLS, condition: pfcp_layout!(@condition [$($cond)?]) }),*)?],
+                read: |octets| {
+                    let read = <Self as crate::ie::Codec>::decode(octets)?;
+                    #[allow(unused_mut)]
+                    let mut names = alloc::vec![$($($head_name),*)?];
+                    $($(
+                        if pfcp_layout!(@get [$($cond)?] read.$field).is_some() {
+                            names.push($field_name);
+                        }
+                    )*)?
+                    let _ = read;
+                    Some(names)
+                },
             });
 
             /// The first field of the octet of flags whose value is wider than its bits.
@@ -496,6 +508,7 @@ macro_rules! pfcp_bits {
                     $( crate::fields::Bits { name: $name, ident: stringify!($field), octet: $octet2, bit: $low2, width: $width2 }, )?
                 )*],
                 fields: &[],
+                read: |octets| <Self as crate::ie::Codec>::decode(octets).map(|_| alloc::vec::Vec::new()),
             });
             /// Whether the tree is the value of the field alone: one field, not a flag.
             #[cfg(feature = "tree")]

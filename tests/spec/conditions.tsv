@@ -20,6 +20,12 @@
 8.2.16	TOVOL	set	Total Volume	present
 8.2.16	ULVOL	set	Uplink Volume	present
 8.2.16	DLVOL	set	Downlink Volume	present
+8.2.20	Redirect Address Type	is IPv4 and IPv6 address	Other Redirect Server Address	present
+8.2.20	Redirect Address Type	is IPv4 and IPv6 address	Redirect Server Address	present
+8.2.20	Redirect Address Type	is Port	Redirect Address Server Address	absent
+8.2.20	Redirect Address Type	is IPv4 address and Port | IPv6 address and Port | IPv4 and IPv6 addresses and Port	Redirect Port	present
+8.2.20	Redirect Address Type	is IPv4 address and Port | IPv6 address and Port | IPv4 and IPv6 addresses and Port	Redirect Address Server Address	present
+8.2.20	Redirect Address Type	is IPv4 and IPv6 addresses and Port	Other Redirect Server Address	present
 8.2.27	DLPSI	set	DL Data Packets Size	present
 8.2.37	V6	set	IPv6 address	present
 8.2.37	V4	set	IPv4 address	present
@@ -143,6 +149,7 @@
 8.2.222	DL	set	Lower DL Jitter Measurement	present
 8.2.222	DL	set	DL Periodicity	present
 8.2.226	V4	set	MPQUIC Proxy IPv4 Address	present
+8.2.229	Reporting Urgency value	is delay tolerant	Reporting Time Info	present
 8.2.242	CHV4	set	IPv4 address	absent
 8.2.242	V4	set	IPv4 address	present
 8.2.243	SIPV4	set	Source IPv4 address	present

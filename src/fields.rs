@@ -148,6 +148,9 @@ pub struct Layout {
     pub bits: &'static [Bits],
     /// The fields after them, in order.
     pub fields: &'static [Member],
+    /// The names of the fields that it reads from octets, or `None` where they do not
+    /// decode: the conditions of its fields as its reader takes them.
+    pub read: fn(&[u8]) -> Option<Vec<&'static str>>,
 }
 
 /// A field of bits: where it is.

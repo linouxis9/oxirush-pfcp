@@ -504,6 +504,7 @@ impl NetworkInstance {
             cells: &[],
             condition: "true",
         }],
+        read: |octets| Self::decode(octets).map(|_| alloc::vec!["Network Instance"]),
     });
 }
 
@@ -816,7 +817,12 @@ macro_rules! pfcp_octets {
             /// Its layout.
             #[doc(hidden)]
             #[cfg(feature = "spec")]
-            pub const LAYOUT: Option<&'static Layout> = Some(&Layout { head: &[], bits: &[], fields: &[Member { name: $name, octets: None, cells: &[], condition: "true" }] });
+            pub const LAYOUT: Option<&'static Layout> = Some(&Layout {
+                head: &[],
+                bits: &[],
+                fields: &[Member { name: $name, octets: None, cells: &[], condition: "true" }],
+                read: |octets| <Self as Codec>::decode(octets).map(|_| alloc::vec![$name]),
+            });
             /// Whether its octets are a key or a password.
             const SECRET: bool = pfcp_octets!(@secret $($secret)?);
             /// Whether its octets are the labels of a name.

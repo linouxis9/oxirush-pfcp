@@ -19,7 +19,9 @@ script:
                         row, its lowest bit and how many bits it has
     conditions.tsv      the sentences of clause 8.2 that make a field there or not as a flag
                         is set or not: the flag, whether it is set, the field, whether it is
-                        there
+                        there; and those that make it there or not as a field of bits of
+                        the figure has a value: that field, "is" and the names of the
+                        values, the field, whether it is there
     flag-sentences.tsv  the sentences of clause 8.2 that say which flags of an IE are set
                         together: "at least one", "one and only one", "only one of", "may
                         only be set", "shall be set to "1" if the ... flag is set", "shall
@@ -144,20 +146,21 @@ def main():
     message_types, ie_types, tables, layouts, values, clause6 = [], [], [], [], [], []
     read = []
     figures, conditions, flags = [], [], []
-    # The fields of octets of the figure of the clause, by name and by their octets.
-    fields, labels = [], {}
+    # The fields of octets of the figure of the clause, by name and by their octets, and
+    # its fields of bits of more than one bit.
+    fields, labels, cells = [], {}, []
     for kind, block in blocks(body):
         if kind == 'p':
             style, value = block
             if style.startswith('Heading') or re.match(r'^8\.2\.\d+ [A-Z]', value) and style == '':
                 heading = value
-                fields, labels = [], {}
+                fields, labels, cells = [], {}, []
                 if re.match(r'^6(\.\d+)* ', value):
                     clause6.append(value.split(' ', 1) + [0])
             elif clause6 and re.match(r'^6(\.\d+)* ', heading):
                 clause6[-1][2] += len(requirements(value))
             elif re.match(r'^8\.2\.\d+ ', heading):
-                conditions.extend([heading.split(' ', 1)[0]] + relation for relation in relations(value, fields, labels))
+                conditions.extend([heading.split(' ', 1)[0]] + relation for relation in relations(value, fields, labels, cells))
                 clause = heading.split(' ', 1)[0]
                 for phrase in flag_sentences(value):
                     flags.append([clause, str(sum(row[0] == clause for row in flags) + 1), phrase])
@@ -204,6 +207,7 @@ def main():
                 figures.extend([heading.split(' ', 1)[0]] + place for place in found)
                 fields = [name for _, name, _, bits in found if bits == '8']
                 labels = {re.sub(r'\s+', '', octets): name for octets, name, _, bits in found if bits == '8'}
+                cells = [name for _, name, _, bits in found if 1 < int(bits) < 8]
     write('message-types.tsv', ['value', 'name', 'interfaces'], message_types)
     write('ie-types.tsv', ['type', 'name', 'reference', 'length'], ie_types)
     write('tables.tsv', ['table|row|same', 'table', 'name, or the name of the row', 'heading, or presence', 'IE type, or interfaces', 'IE type', 'once, several, or how many'], tables)
@@ -275,13 +279,15 @@ def places(rows, widths):
     return out
 
 
-def relations(paragraph, fields, labels):
+def relations(paragraph, fields, labels, cells):
     """The relations of a paragraph of clause 8.2 between a flag and a field of its figure:
     each sentence that makes fields there, or not, as a flag is set or not, before its
-    "otherwise". A field goes by its name, the longest first, or by its octets."""
+    "otherwise". A field goes by its name, the longest first, or by its octets. And those
+    between the value of a field of bits and a field (value_relations)."""
     out = []
     bit = re.match(r'^-?\s*Bits? \d+ *[–-] *([A-Za-z0-9/-]+)', paragraph)
     for sentence in re.split(r'(?<=[.;])\s+', paragraph):
+        out.extend(value_relations(sentence, fields, cells))
         sentence = re.split(r'\botherwise\b', sentence)[0]
         found = re.search(r'(.+?)\s*shall (not )?be present', sentence)
         if not found:
@@ -310,6 +316,47 @@ def relations(paragraph, fields, labels):
         for name in named:
             out.extend([flag, state, name, 'absent' if absent else 'present'] for flag, state in flags)
     return out
+
+
+# A value of a field of bits that a sentence of clause 8.2 names: "is set to Port", "is set
+# to "IPv4 address and Port", "IPv6 address and Port", or ...", "indicates the event report
+# is delay tolerant".
+VALUES = r'(?:is set to|indicates (?:that )?(?:the [a-z ]+? is )?)\s*("[^"]+"(?:,? (?:or |and )?"[^"]+")*|[A-Za-z][A-Za-z0-9 -]*?)(?=[,.]|$)'
+
+
+def value_relations(sentence, fields, cells):
+    """The relations of a sentence of clause 8.2 between the value of a field of bits of
+    more than one bit and the fields that it makes there, or not: "If the Redirect Address
+    Type is set to Port, the Redirect Address Server Address shall not be present". The
+    fields are those named where the sentence says they are or are not, before "shall be
+    present" or "shall be included", after "shall include": by their names in the figure,
+    the longest first, and any other name of capitals as the sentence writes it, which
+    errata.tsv maps to a field of the crate."""
+    presence = re.search(r'\bshall (not )?(?:also )?be (?:present|included)\b|\bshall include\b', sentence)
+    if not presence:
+        return []
+    for cell in sorted(cells, key=len, reverse=True):
+        name = re.escape(re.sub(r'\s+value$', '', cell))
+        condition = re.search(r'(?i)\b(?:if|when) (?:the )?' + name + r'(?: value)? ' + VALUES, sentence)
+        if condition:
+            break
+    else:
+        return []
+    values = re.findall(r'"([^"]+)"', condition.group(1)) or [condition.group(1)]
+    if presence.group(0) == 'shall include':
+        named = sentence[presence.end():]
+    else:
+        named = sentence[:presence.start()]
+    named = named.replace(condition.group(0), ' ')
+    found = []
+    for field in sorted(dict.fromkeys(fields), key=len, reverse=True):
+        pattern = r'(?i)(?<![A-Za-z0-9])' + re.escape(field) + r'(?![A-Za-z0-9])'
+        if re.search(pattern, named):
+            found.append(field)
+            named = re.sub(pattern, ' ', named)
+    found.extend(re.findall(r'\b[A-Z][A-Za-z0-9/-]*(?: [A-Z][A-Za-z0-9/-]*)+', named))
+    there = 'absent' if presence.group(1) else 'present'
+    return [[cell, 'is ' + ' | '.join(values), field, there] for field in found]
 
 
 # The words of a sentence of clause 8.2 that says which flags of an IE are set together,
