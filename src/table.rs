@@ -92,10 +92,6 @@ impl Interfaces {
         self.0 & interface.0 != 0
     }
 
-    /// Whether the row has each of `interfaces`.
-    pub const fn has_all(self, interfaces: Self) -> bool {
-        interfaces.0 != 0 && self.0 & interfaces.0 == interfaces.0
-    }
 }
 
 impl core::ops::BitOr for Interfaces {
