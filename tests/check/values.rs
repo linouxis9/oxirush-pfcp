@@ -732,6 +732,12 @@ fn the_spare_bits_of_a_flow_label_and_the_number_of_more_usage_reports() {
         found.contains(&(at, DeviationKind::SpareBits, None)),
         "{found:?}"
     );
+    // A field that its receiver ignores is no spare bit, which the words say
+    let said = Deviation::new("/pfcp", "8.2.91", DeviationKind::SpareBits).to_string();
+    assert_eq!(
+        said,
+        "spare or ignored bits are not zero (TS 29.244 8.2.91), at /pfcp"
+    );
 }
 
 /// §8.2.241: where FI, PSSAI or NPDSI is 0, the Format, PSSA or NPDS field of octet 6 "shall

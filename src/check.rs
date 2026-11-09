@@ -314,7 +314,7 @@ impl fmt::Display for Deviation {
             DeviationKind::VendorId => {
                 write!(f, "a vendor IE without an Enterprise ID of a vendor")
             }
-            DeviationKind::SpareBits => write!(f, "spare bits are not zero"),
+            DeviationKind::SpareBits => write!(f, "spare or ignored bits are not zero"),
             DeviationKind::SpareValue { value } => write!(f, "{value} is a spare value"),
             DeviationKind::ReservedValue { value } => write!(f, "{value} is a reserved value"),
             DeviationKind::ReadAs { value, read } => {
