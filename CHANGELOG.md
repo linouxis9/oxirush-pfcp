@@ -52,7 +52,9 @@ The first version, of TS 29.244 V19.6.0 (2026-06):
   that its value always has; it leaves out a flag that is not set and a field that its
   flags do not have; a value of one field without flags is that field, while it has no
   unknown octets. An IE kept as octets keeps the Length that a tree writes, its
-  own too, as the header keeps its Message Length. A spare octet is written where it is
+  own too, as the header keeps its Message Length; a Node ID of other octets than an
+  address or an FQDN is `{"Node ID Type": ..., "Node ID value": ...}`, apart from
+  `{"octets": ...}`, which an IE kept as octets is. A spare octet is written where it is
   set, and is 0 where a tree leaves it out, as the spare bits of the header and of a value. A Flow Description, an
   IPFilterRule, and the URL and the Domain Name of PFD Contents are their text
   (`TextLv16`), or `{"octets": ...}` for octets that are no UTF-8.

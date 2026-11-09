@@ -310,9 +310,10 @@ impl Rules for NodeId {
 impl NodeId {
     /// The names of its fields.
     pub(crate) const FIELDS: &'static [&'static str] = &["Node ID Type", "Node ID value"];
-    /// The members that its tree may have: the FQDN, or the octets of a Node ID that is no
-    /// text. The tree of an address is the address alone.
-    pub(crate) const MEMBERS: &'static [&'static str] = &["FQDN", "octets"];
+    /// The members that its tree may have: the FQDN, or the Node ID Type and the octets of
+    /// the value of a Node ID that is no text, apart from the form of an IE kept as octets.
+    /// The tree of an address is the address alone.
+    pub(crate) const MEMBERS: &'static [&'static str] = &["FQDN", "Node ID Type", "Node ID value"];
     /// What the tree of each field may hold below it: nothing, of scalars alone.
     #[cfg(feature = "tree")]
     pub(crate) const MEMBERS_BELOW: &'static [(&'static str, &'static crate::paths::Below)] = &[];
@@ -387,8 +388,9 @@ impl NodeId {
 #[cfg(feature = "serde")]
 oxirush_utils::impl_serde!(NodeId);
 
-/// An address as text, or `{"FQDN": "upf.example"}`, or `{"octets": ...}` for another
-/// Node ID, its octets after the Length.
+/// An address as text, or `{"FQDN": "upf.example"}`, or `{"Node ID Type": 5, "Node ID
+/// value": ...}` for another Node ID, its first octet and the octets after it: not
+/// `{"octets": ...}`, which an IE kept as octets is in the tree of its scope.
 #[cfg(feature = "tree")]
 impl oxirush_utils::tree::Tree for NodeId {
     const NAME: &'static str = "Node ID";
@@ -399,7 +401,13 @@ impl oxirush_utils::tree::Tree for NodeId {
             Self::Ipv6(address) => tree::Value::String(alloc::format!("{address}")),
             Self::Fqdn(_) | Self::Other(..) => match self.fqdn() {
                 Some(text) => tree::alternative("FQDN", tree::text(&text)),
-                None => tree::alternative("octets", tree::octets(&self.encoded())),
+                None => {
+                    let octets = self.encoded();
+                    let mut members = tree::Members::new();
+                    members.put("Node ID Type", tree::unsigned(octets[0].into()));
+                    members.put("Node ID value", tree::octets(&octets[1..]));
+                    members.finish()
+                }
             },
         }
     }
@@ -416,9 +424,9 @@ impl oxirush_utils::tree::Tree for NodeId {
             }
             return Err(reading.mismatch("an IPv4 or IPv6 address, or {\"FQDN\": name}", value));
         }
-        let (which, content) = reading.alternative(value, Self::MEMBERS)?;
-        match which {
-            0 => reading.within("FQDN", content, |content, reading| {
+        if value.get("FQDN").is_some() {
+            let (_, content) = reading.alternative(value, &Self::MEMBERS[..1])?;
+            return reading.within("FQDN", content, |content, reading| {
                 let name = reading.text(content)?;
                 Self::from_fqdn(name).ok_or_else(|| {
                     reading.mismatch(
@@ -426,13 +434,18 @@ impl oxirush_utils::tree::Tree for NodeId {
                         content,
                     )
                 })
-            }),
-            // The octets of a Node ID that the text does not give: read as they decode.
-            _ => reading.within("octets", content, |content, reading| {
-                let octets = reading.octets(content)?;
-                Self::decode(&octets).ok_or_else(|| reading.mismatch("one octet at least", content))
-            }),
+            });
         }
+        // The octets of a Node ID that the text does not give: read as they decode.
+        let read = reading.members(value, &Self::MEMBERS[1..])?;
+        let kind = reading.member(&read, "Node ID Type", |value, reading| {
+            reading.unsigned(value, 0, 255)
+        })?;
+        let rest = reading.member(&read, "Node ID value", |value, reading| {
+            reading.octets(value)
+        })?;
+        let octets = [&[kind as u8][..], &rest].concat();
+        Ok(Self::decode(&octets).unwrap_or(Self::Other(kind as u8, rest.into())))
     }
 }
 

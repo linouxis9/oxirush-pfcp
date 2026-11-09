@@ -569,3 +569,28 @@ fn a_message_goes_by_its_name() {
     ));
     assert_eq!(Message::decode(&other.encode().unwrap()).unwrap(), other);
 }
+
+/// A Node ID of other octets than an address or an FQDN is its Node ID Type and its value
+/// in the tree of its message, which loads back to it: `{"octets": ...}` is the form of an
+/// IE kept as octets, which the scope would read.
+#[test]
+fn a_node_id_of_other_octets_is_no_ie_kept_as_octets() {
+    for other in [
+        NodeId::Other(0, vec![].into()),
+        NodeId::Other(4, vec![127, 0, 0, 8].into()),
+    ] {
+        let setup = AssociationSetupRequest::new(other.clone(), RecoveryTimeStamp::new(7));
+        let message = Message::decode(&Message::node(1, setup).encode().unwrap()).unwrap();
+        let tree = message.to_tree();
+        let Body::AssociationSetupRequest(read) = &Message::from_tree(&tree).unwrap().body else {
+            panic!()
+        };
+        assert_eq!(read.node_id.as_ref(), Some(&other), "{tree}");
+        assert!(read.raw.is_empty());
+    }
+    let tree = tree::Tree::to_tree(&NodeId::Other(4, vec![127, 0, 0, 8].into()));
+    assert_eq!(
+        tree,
+        tree!({"Node ID Type": 4, "Node ID value": "7f000008"})
+    );
+}

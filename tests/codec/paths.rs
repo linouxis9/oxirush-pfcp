@@ -203,12 +203,13 @@ fn what_a_value_lacks_selects_nothing() {
     );
     let unknown = select(&more, "/pfcp/UP F-SEID/unknown octets").unwrap();
     assert_eq!(unknown, [&tree!("ff")]);
-    // A Node ID that is an address has no FQDN and no octets, one that is an FQDN no
-    // octets, and their trees no Node ID Type or value, which their form says
+    // A Node ID that is an address has no FQDN and no Node ID Type or value, one that is
+    // an FQDN no Node ID Type or value, and their trees no octets, which an IE kept as
+    // octets has
     nothing(&response, "/pfcp/Node ID/FQDN");
-    nothing(&response, "/pfcp/Node ID/octets");
-    misspelt(&response, "/pfcp/Node ID/Node ID value");
-    misspelt(&response, "/pfcp/Node ID/Node ID Type");
+    nothing(&response, "/pfcp/Node ID/Node ID value");
+    nothing(&response, "/pfcp/Node ID/Node ID Type");
+    misspelt(&response, "/pfcp/Node ID/octets");
     let name = b"\x03upf\x07example".to_vec();
     let setup = Message::node(
         1,
@@ -217,9 +218,9 @@ fn what_a_value_lacks_selects_nothing() {
     let setup = setup.to_tree();
     let fqdn = select(&setup, "/pfcp/Node ID/FQDN").unwrap();
     assert_eq!(fqdn, [&tree!("upf.example")]);
-    nothing(&setup, "/pfcp/Node ID/octets");
-    misspelt(&setup, "/pfcp/Node ID/Node ID value");
-    misspelt(&setup, "/pfcp/Node ID/Node ID Type");
+    nothing(&setup, "/pfcp/Node ID/Node ID value");
+    nothing(&setup, "/pfcp/Node ID/Node ID Type");
+    misspelt(&setup, "/pfcp/Node ID/octets");
     // The header
     nothing(&response, "/Message Priority");
     nothing(&response, "/FO");
@@ -339,12 +340,7 @@ fn set_takes_the_paths_that_select_takes() {
     for (tree, path, kind) in [
         (
             &response,
-            "/pfcp/Node ID/Node ID value",
-            tree::ErrorKind::NoSuchMember,
-        ),
-        (
-            &response,
-            "/pfcp/Node ID/Node ID Type",
+            "/pfcp/Node ID/octets",
             tree::ErrorKind::NoSuchMember,
         ),
         (
