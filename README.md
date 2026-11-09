@@ -361,7 +361,11 @@ cargo +nightly fuzz run tree -- -max_total_time=60
 
 [`tests/README.md`](tests/README.md) says what each test checks against the
 document and the lab captures, and what the crate finds in other
-implementations. Each Rust block of this page is checked with what it prints.
+implementations. Each fuzz target of `fuzz/` says what it holds the crate to:
+`differential` compares it with rs-pfcp 0.5.0, a codec written apart from it, on
+the same octets: the messages that each decodes or refuses, the header, the IEs
+at every level of the grouped IEs, and the values of ten IE types, each
+difference one of the readings of rs-pfcp that the target names. Each Rust block of this page is checked with what it prints.
 A pull request comes with a test for what it changes; sign off your commits
 (`git commit -s`, the [Developer Certificate of
 Origin](https://developercertificate.org/)). [SECURITY.md](SECURITY.md) says how

@@ -170,8 +170,9 @@ jobs:
           path: fuzz/artifacts
 
   # The targets beside those of the codec and the node, in a job of their own: the paths
-  # of a message, the edits of its tree, two endpoints, what check says and the codec
-  # against rs-pfcp, a minute each.
+  # of a message, the edits of its tree, two endpoints, what check says, and the crate
+  # against rs-pfcp: the messages that each decodes or refuses, the header, the IEs at
+  # every level and the values of ten IE types; a minute each.
   fuzz-more:
     name: Fuzz the trees, the endpoint, check and against rs-pfcp (5 minutes)
     runs-on: ubuntu-latest
