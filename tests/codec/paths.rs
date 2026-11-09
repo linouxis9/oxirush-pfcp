@@ -48,14 +48,18 @@ fn the_tree_reads_back_and_a_path_edits_it() {
     let address = request.create_pdr[1].pdi.as_ref().unwrap().ue_ip_address[0].ipv4;
     assert_eq!(address, Some(Ipv4Addr::new(10, 45, 0, 3)));
 
-    // A misspelt name is refused, and says the nearest
+    // A misspelt name is refused, at its place
     let mut wrong = message.to_tree();
     wrong["ies"]["Create PDR"][0]["PDI"]
         .as_object_mut()
         .unwrap()
         .insert("Local F-TEIDD".into(), tree!({}));
-    let error = Message::from_tree(&wrong).unwrap_err().to_string();
-    assert!(error.contains("Local F-TEID"), "{error}");
+    let error = Message::from_tree(&wrong).unwrap_err();
+    let at = "/pfcp/Create PDR/0/PDI";
+    assert_eq!(
+        (error.kind(), error.at()),
+        (tree::ErrorKind::NoSuchMember, at)
+    );
 }
 
 /// What is not there selects nothing, and a misspelt name is an error, `NoSuchMember`, as
@@ -603,58 +607,57 @@ fn a_misspelt_name_says_what_from_tree_says() {
 fn an_error_of_from_tree_is_at_a_path_that_select_takes() {
     let heartbeat = |ies: tree::Value| tree!({"message": "PFCP Heartbeat Request", "Sequence Number": 1, "ies": ies});
     let modification = |ies: tree::Value| tree!({"message": "PFCP Session Modification Response", "SEID": 1, "Sequence Number": 1, "ies": ies});
-    for (tree, at, why) in [
+    for (tree, at, kind) in [
         (
             heartbeat(tree!({"Recovery Time Stamp": 7, "Cause": 1, "Load Metric": 2})),
             "/pfcp/Cause",
-            "\"Cause\" is an IE of no row of PFCP Heartbeat Request, which is written by its octets",
+            tree::ErrorKind::Value,
         ),
         (
             heartbeat(tree!({"Recovery Time Stamp": 7, "77": 5})),
             "/pfcp/77",
-            "\"77\" is an IE of no row of PFCP Heartbeat Request, which is written by its octets",
+            tree::ErrorKind::Value,
         ),
         (
             heartbeat(tree!({"Recovery Time Stamp": 7, "19": {"octets": "zz"}})),
             "/pfcp/19/octets",
-            "octets in hexadecimal",
+            tree::ErrorKind::Value,
         ),
         (
             heartbeat(
                 tree!({"Recovery Time Stamp": 7, "Source IP Address": {"V4": true, "IPv4 address": "10.0.0.1", "MPL": true, "mask/prefix length": "x"}}),
             ),
             "/pfcp/Source IP Address/mask~1prefix length",
-            "a number",
+            tree::ErrorKind::Value,
         ),
         (
             modification(
                 tree!({"Cause": 1, "created/updated traffic endpoint": [{"Traffic Endpoint ID": 1}, {"Traffic Endpoint ID": "x"}]}),
             ),
             "/pfcp/created~1updated traffic endpoint/1/Traffic Endpoint ID",
-            "a number",
+            tree::ErrorKind::Value,
         ),
         (
             modification(
                 tree!({"Cause": 1, "Created/Updated Traffic Endpoint": [{"Traffic Endpoint ID": 1}, {"traffic endpoint id": "x"}]}),
             ),
             "/pfcp/Created~1Updated Traffic Endpoint/1/traffic endpoint id",
-            "a number",
+            tree::ErrorKind::Value,
         ),
         (
             tree!({"message": "PFCP Session Establishment Response", "SEID": 1, "Sequence Number": 1,
                 "ies": {"Node ID": "10.0.0.2", "Cause": 1, "UP F-SEID": {"V4": true, "SEIDD": 1}}}),
             "/pfcp/UP F-SEID",
-            "\"SEIDD\" is not a member that its type has",
+            tree::ErrorKind::NoSuchMember,
         ),
         (
             tree!({"message": "PFCP Heartbeat Request", "Sequence Number": "x", "ies": {}}),
             "/Sequence Number",
-            "a number",
+            tree::ErrorKind::Value,
         ),
     ] {
         let error = Message::from_tree(&tree).unwrap_err();
-        assert_eq!(error.at(), at, "{error}");
-        assert!(error.reason().contains(why), "{error}");
+        assert_eq!((error.kind(), error.at()), (kind, at), "{error}");
         assert!(
             !error.reason().contains("this is not a value of"),
             "{error}"

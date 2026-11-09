@@ -91,7 +91,6 @@ impl Interfaces {
     pub const fn has(self, interface: Self) -> bool {
         self.0 & interface.0 != 0
     }
-
 }
 
 impl core::ops::BitOr for Interfaces {

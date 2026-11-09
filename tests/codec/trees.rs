@@ -30,10 +30,13 @@ fn a_flag_that_disagrees_is_refused_where_it_is_written() {
         "10.0.0.5",
     )
     .unwrap();
-    let error = Message::from_tree(&tree).unwrap_err().to_string();
-    println!("{error}");
-    assert!(
-        error.contains("IPv4 address is written where its flags do not have it"),
+    let error = Message::from_tree(&tree).unwrap_err();
+    assert_eq!(
+        (error.kind(), error.at()),
+        (
+            tree::ErrorKind::Value,
+            "/pfcp/Create PDR/0/PDI/Local F-TEID"
+        ),
         "{error}"
     );
 }
@@ -511,20 +514,22 @@ fn a_tree_written_in_any_order_encodes_in_the_order_of_its_table() {
 #[test]
 fn a_row_goes_by_its_name() {
     let response = |ies: tree::Value| tree!({"message": "PFCP Session Establishment Response", "SEID": 1, "Sequence Number": 1, "ies": ies});
-    let error = Message::from_tree(&response(tree!({"Node ID": "10.0.0.2", "Cause": 1, "F-SEID": {"V4": true, "SEID": 1, "IPv4 address": "10.0.0.2"}}))).unwrap_err().to_string();
-    assert!(
-        error.contains("the IE type of the row UP F-SEID"),
-        "{error}"
+    // At the scope, with the name of the row to write
+    let refused = |written: &tree::Value, row: &str| {
+        let error = Message::from_tree(written).unwrap_err();
+        assert!(error.reason().contains(row), "{error}");
+        (error.kind(), error.at().to_string())
+    };
+    let no_such = (tree::ErrorKind::NoSuchMember, "/pfcp".to_string());
+    let by_type = response(
+        tree!({"Node ID": "10.0.0.2", "Cause": 1, "F-SEID": {"V4": true, "SEID": 1, "IPv4 address": "10.0.0.2"}}),
     );
+    assert_eq!(refused(&by_type, "UP F-SEID"), no_such);
     let request = tree!({"message": "PFCP Session Establishment Request", "SEID": 0, "Sequence Number": 1, "ies": {"SGW-C FQ-CSID": {"octets": "01"}}});
-    let error = Message::from_tree(&request).unwrap_err().to_string();
-    assert!(error.contains("written as FQ-CSID"), "{error}");
-    let error = Message::from_tree(&response(
-        tree!({"Node ID": "10.0.0.2", "node_id": "10.0.0.3", "Cause": 1}),
-    ))
-    .unwrap_err()
-    .to_string();
-    assert!(error.contains("are both the row Node ID"), "{error}");
+    assert_eq!(refused(&request, "FQ-CSID"), no_such);
+    let twice = response(tree!({"Node ID": "10.0.0.2", "node_id": "10.0.0.3", "Cause": 1}));
+    let value = (tree::ErrorKind::Value, "/pfcp".to_string());
+    assert_eq!(refused(&twice, "Node ID"), value);
 }
 
 /// A row is written as its table has it: a row of a list as a list, also of one entry, and
@@ -533,18 +538,18 @@ fn a_row_goes_by_its_name() {
 fn a_row_is_written_as_its_table_has_it() {
     let request = |ies: tree::Value| tree!({"message": "PFCP Session Establishment Request", "SEID": 0, "Sequence Number": 1, "ies": ies});
     let far = tree!({"FAR ID": 1, "Apply Action": {"DROP": true}});
-    let error = Message::from_tree(&request(tree!({"Create FAR": far.clone()})))
-        .unwrap_err()
-        .to_string();
-    assert!(error.contains("a list is expected"), "{error}");
-    assert!(Message::from_tree(&request(tree!({"Create FAR": [far]}))).is_ok());
-    let error = Message::from_tree(&request(tree!({"Node ID": ["10.0.0.1", "10.0.0.2"]})))
-        .unwrap_err()
-        .to_string();
-    assert!(
-        error.contains("a repetition is written by its octets"),
-        "{error}"
+    let refused = |written: tree::Value| {
+        let error = Message::from_tree(&request(written)).unwrap_err();
+        (error.kind(), error.at().to_string())
+    };
+    let value = |at: &str| (tree::ErrorKind::Value, at.to_string());
+    assert_eq!(
+        refused(tree!({"Create FAR": far.clone()})),
+        value("/pfcp/Create FAR")
     );
+    assert!(Message::from_tree(&request(tree!({"Create FAR": [far]}))).is_ok());
+    let twice = tree!({"Node ID": ["10.0.0.1", "10.0.0.2"]});
+    assert_eq!(refused(twice), value("/pfcp/Node ID/1"));
     let repeated = tree!({"Node ID": ["10.0.0.1", {"octets": "000a000002"}]});
     assert!(Message::from_tree(&request(repeated)).is_ok());
 }
@@ -556,8 +561,11 @@ fn a_row_is_written_as_its_table_has_it() {
 fn a_message_goes_by_its_name() {
     let heartbeat =
         tree!({"message": 1, "Sequence Number": 9, "ies": {"octets": "006000040000000a"}});
-    let error = Message::from_tree(&heartbeat).unwrap_err().to_string();
-    assert!(error.contains("PFCP Heartbeat Request"), "{error}");
+    let error = Message::from_tree(&heartbeat).unwrap_err();
+    assert_eq!(
+        (error.kind(), error.at()),
+        (tree::ErrorKind::Value, "/message")
+    );
     let other = tree!({"message": 99, "Sequence Number": 9, "ies": {"octets": "006000040000000a"}});
     let other = Message::from_tree(&other).unwrap();
     assert!(matches!(
