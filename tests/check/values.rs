@@ -1119,3 +1119,47 @@ fn the_identifiers_of_an_fq_csid_in_its_message_and_the_digits_of_a_plmn() {
         );
     }
 }
+
+/// The Additional Monitoring Time of a Create URR has its subsequent event threshold and
+/// quota of the IE types of Event Threshold (149) and Event Quota (148), as Table 7.5.2.4-3
+/// has them, where Create URR and Update URR have rows of the same names of the types 151
+/// and 150, which are of no row of the table.
+#[test]
+fn the_subsequent_event_threshold_and_quota_of_an_additional_monitoring_time() {
+    let urr = |ies: &[Vec<u8>]| {
+        let additional = ie(147, &[&[ie(33, &[0, 0, 0, 1])][..], ies].concat().concat());
+        let urr = [
+            ie(81, &[0, 0, 0, 1]),
+            ie(62, &[4]),
+            ie(37, &[1, 0]),
+            ie(64, &[0, 0, 0, 10]),
+            additional,
+        ];
+        ie(6, &urr.concat())
+    };
+    let node = ie(60, &[0, 10, 0, 0, 1]);
+    let seid = ie(57, &[2, 0, 0, 0, 0, 0, 0, 0, 1, 10, 0, 0, 1]);
+    let [pdr, far] = rules();
+    let kinds = |ies: &[Vec<u8>]| -> Vec<DeviationKind> {
+        let message = session_message(
+            50,
+            0,
+            &[
+                node.clone(),
+                seid.clone(),
+                pdr.clone(),
+                far.clone(),
+                urr(ies),
+            ],
+        );
+        found(&message).into_iter().map(|(kind, ..)| kind).collect()
+    };
+    assert_eq!(kinds(&[ie(149, &[0, 0, 0, 5]), ie(148, &[0, 0, 0, 9])]), []);
+    assert_eq!(
+        kinds(&[ie(151, &[0, 0, 0, 5]), ie(150, &[0, 0, 0, 9])]),
+        [
+            DeviationKind::Unexpected { ie_type: 151 },
+            DeviationKind::Unexpected { ie_type: 150 }
+        ]
+    );
+}

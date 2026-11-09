@@ -1499,7 +1499,11 @@ pfcp_table! {
 }
 
 pfcp_table! {
-    /// Additional Monitoring Time (Table 7.5.2.4-3).
+    /// Additional Monitoring Time (Table 7.5.2.4-3). Its Subsequent Event Threshold and
+    /// Subsequent Event Quota are of the IE types of Event Threshold (149) and Event Quota
+    /// (148), as the table has them, V20.1.0 too, where Create URR and Update URR have rows
+    /// of those names of the types 151 and 150: a row is named by its role, and both types
+    /// are an Unsigned32.
     group AdditionalMonitoringTime = 147, "Additional Monitoring Time", "7.5.2.4-3" {
         monitoring_time: "Monitoring Time" M MonitoringTime [SXA SXB SXC N4],
         subsequent_volume_threshold: "Subsequent Volume Threshold" O SubsequentVolumeThreshold [SXA SXB SXC N4],
