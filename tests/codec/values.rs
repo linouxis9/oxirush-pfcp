@@ -672,3 +672,187 @@ fn the_cause_of_each_response() {
     }
     assert_eq!(with, 11);
 }
+
+/// A value whose octets would read as another value is refused, by `encode()`, by
+/// `Message::from_tree` and as a deviation of `check()`; its octets read back as it where it
+/// is not. A field read where octets remain after those before it is there where a later
+/// one, or unknown octets, are (§8.1.2): the C-TAG and the S-TAG of MAC Addresses Detected
+/// and Removed, whose C-TAG field is of no octets where it is absent before an S-TAG
+/// (§8.2.103), and the Node Type of an FQ-CSID; no unknown octets follow a field that runs
+/// to the end of the IE (Offending IE Information, SMF Set ID, DSCP to PPI Mapping
+/// Information); a field of the length that its flags give has no more octets (Failed
+/// Rule ID); a value of bits has as many of its octets as it may (Apply Action); a Node ID
+/// of other octets is none that a variant is. No tree writes one of them.
+#[test]
+fn a_value_whose_octets_would_read_as_another_is_refused() {
+    fn refused<T: Codec + Check + tree::Tree + PartialEq>(value: T, field: &str) {
+        match value.encode(&mut Vec::new()) {
+            Err(Error::Inconsistent { field: named, .. }) => assert_eq!(named, field),
+            other => panic!("{field}: {other:?}"),
+        }
+        let kinds: Vec<_> = value
+            .deviations()
+            .into_iter()
+            .map(|deviation| deviation.kind)
+            .collect();
+        let told = |kind: &DeviationKind| matches!(kind, DeviationKind::Inconsistent { field: told } if *told == field);
+        assert!(kinds.iter().any(told), "{field}: {kinds:?}");
+        // No tree writes it
+        let written = tree::Tree::to_tree(&value);
+        let read = tree::from_value::<T>(&written).ok();
+        assert!(read.is_none_or(|read| read != value), "{written}");
+    }
+    fn kept<T: Codec + PartialEq + core::fmt::Debug>(value: T) {
+        let mut octets = Vec::new();
+        value.encode(&mut octets).unwrap();
+        assert_eq!(T::decode(&octets).as_ref(), Some(&value));
+    }
+    let mac = MacAddressesDetected {
+        mac_addresses: vec![[2, 0, 0, 0, 0, 1]],
+        ..Default::default()
+    };
+    let unknown = Octets::from(vec![3u8, 0, 0, 0]);
+    let tag = Lv8(Octets::from(vec![1u8, 0, 1]));
+    refused(
+        MacAddressesDetected {
+            extra: unknown.clone(),
+            ..mac.clone()
+        },
+        "C-TAG",
+    );
+    refused(
+        MacAddressesDetected {
+            s_tag: Some(tag.clone()),
+            ..mac.clone()
+        },
+        "C-TAG",
+    );
+    let absent = MacAddressesDetected {
+        c_tag: Some(Lv8::default()),
+        ..mac.clone()
+    };
+    refused(
+        MacAddressesDetected {
+            extra: unknown.clone(),
+            ..absent.clone()
+        },
+        "S-TAG",
+    );
+    kept(MacAddressesDetected {
+        s_tag: Some(tag.clone()),
+        ..absent
+    });
+    kept(MacAddressesRemoved {
+        c_tag: Some(tag.clone()),
+        s_tag: Some(tag),
+        extra: unknown.clone(),
+        mac_addresses: vec![],
+    });
+    let csid = FqCsid {
+        node_id_type: 0,
+        node_address: vec![10, 0, 0, 1].into(),
+        csids: vec![1],
+        ..Default::default()
+    };
+    refused(
+        FqCsid {
+            extra: unknown.clone(),
+            ..csid.clone()
+        },
+        "Node Type",
+    );
+    kept(FqCsid {
+        node_type: Some(Narrow::default()),
+        extra: unknown.clone(),
+        ..csid
+    });
+    let offending = OffendingIeInformation {
+        type_of_the_offending_ie: 19,
+        value_of_the_offending_ie: Rest(vec![1u8].into()),
+        ..Default::default()
+    };
+    kept(offending.clone());
+    refused(
+        OffendingIeInformation {
+            extra: unknown.clone(),
+            ..offending
+        },
+        "unknown octets",
+    );
+    let set = SmfSetId {
+        fqdn: Fqdn(b"\x03smf".to_vec().into()),
+        ..Default::default()
+    };
+    kept(set.clone());
+    refused(
+        SmfSetId {
+            extra: unknown.clone(),
+            ..set
+        },
+        "unknown octets",
+    );
+    refused(
+        DscpToPpiMappingInformation {
+            extra: unknown.clone(),
+            ..Default::default()
+        },
+        "unknown octets",
+    );
+    let rule = |octets: Vec<u8>| FailedRuleId {
+        rule_id_type: RuleIdType::Pdr,
+        rule_id_value: Rest(octets.into()),
+        ..Default::default()
+    };
+    kept(rule(vec![0, 1]));
+    kept(rule(vec![1]));
+    kept(FailedRuleId {
+        extra: unknown,
+        ..rule(vec![0, 1])
+    });
+    refused(rule(vec![0, 1, 2]), "Rule ID value");
+    for present in [0, 3] {
+        refused(
+            ApplyAction {
+                forw: true,
+                present,
+                ..Default::default()
+            },
+            "length",
+        );
+    }
+    kept(ApplyAction {
+        forw: true,
+        present: 1,
+        ..Default::default()
+    });
+    for (node, field) in [
+        (NodeId::Fqdn(Octets::default()), "Node ID value"),
+        (
+            NodeId::Other(0, vec![10u8, 0, 0, 1].into()),
+            "Node ID value",
+        ),
+        (
+            NodeId::Other(2, b"\x03smf".to_vec().into()),
+            "Node ID value",
+        ),
+    ] {
+        match node.encode(&mut Vec::new()) {
+            Err(Error::Inconsistent { field: named, .. }) => assert_eq!(named, field),
+            other => panic!("{node:?}: {other:?}"),
+        }
+        let kinds: Vec<_> = node
+            .deviations()
+            .into_iter()
+            .map(|deviation| deviation.kind)
+            .collect();
+        assert!(
+            kinds.contains(&DeviationKind::Inconsistent {
+                field: "Node ID value"
+            }),
+            "{kinds:?}"
+        );
+    }
+    kept(NodeId::Other(0, vec![10u8, 0, 0].into()));
+    kept(NodeId::Other(2, Octets::default()));
+    kept(NodeId::Other(0x12, vec![10u8, 0, 0, 1].into()));
+}

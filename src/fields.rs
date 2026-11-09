@@ -88,6 +88,36 @@ pub(crate) trait Field: Sized {
     /// scalar.
     #[cfg(feature = "tree")]
     const BELOW: &'static crate::paths::Below = &crate::paths::Below::Scalar;
+    /// Whether it reads the octets up to the end of the IE, which then has no unknown
+    /// octets after it.
+    const TO_THE_END: bool = false;
+}
+
+/// The names of the fields of a value read by hand, `FIELDS`, and the members of its tree,
+/// `MEMBERS`: its fields and its unknown octets.
+macro_rules! names {
+    ($($name:literal),* $(,)?) => {
+        /// The names of its fields.
+        pub(crate) const FIELDS: &'static [&'static str] = &[$($name),*];
+        /// The members that its tree may have: its fields and its unknown octets.
+        pub(crate) const MEMBERS: &'static [&'static str] = &[$($name,)* crate::ie::UNKNOWN_OCTETS];
+    };
+}
+pub(crate) use names;
+
+/// The rule of the fields at the end of a value that are read where octets remain after
+/// those before it, as the fields that a later release adds (§8.1.2): a field is there
+/// where a later one, or unknown octets (`extra`), are, which would read as it. Of
+/// `fields`, each by its name and whether the value has it, the first that is missing so;
+/// `None` for none.
+pub(crate) fn trailing(fields: &[(&'static str, bool)], extra: &[u8]) -> Option<&'static str> {
+    let last = fields.iter().rposition(|(_, there)| *there);
+    let read = match extra.is_empty() {
+        true => last.unwrap_or_default(),
+        false => fields.len(),
+    };
+    let missing = fields[..read].iter().find(|(_, there)| !there);
+    missing.map(|(name, _)| *name)
 }
 
 /// Write `field`, named `name`, of a value of the IE `ie`: refused where its length, its
@@ -563,6 +593,7 @@ length_value!(Lv8 u8, Lv16 u16);
 pub struct Rest(pub Octets);
 
 impl Field for Rest {
+    const TO_THE_END: bool = true;
     fn read(octets: &mut &[u8]) -> Option<Self> {
         let all = core::mem::take(octets);
         Some(Self(Octets::copied(all)))
@@ -751,6 +782,7 @@ impl<T: Field> Field for Counted<T> {
 pub struct Each<T>(pub Vec<T>);
 
 impl<T: Field> Field for Each<T> {
+    const TO_THE_END: bool = true;
     #[cfg(feature = "spec")]
     const CELLS: &'static [NarrowCell] = T::CELLS;
     #[cfg(feature = "tree")]
@@ -1198,6 +1230,7 @@ impl Fqdn {
 }
 
 impl Field for Fqdn {
+    const TO_THE_END: bool = true;
     #[cfg(feature = "tree")]
     const BELOW: &'static crate::paths::Below =
         &crate::paths::Below::Object(None, &[("octets", &crate::paths::Below::Scalar)]);

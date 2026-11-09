@@ -137,7 +137,17 @@ fn the_lengths_of_clause_8_2() {
         rule_id_value: Rest(vec![0, 0, 0, 1].into()),
         ..Default::default()
     };
-    assert_eq!(built.deviations()[0].kind, rule()[0].1);
+    // One longer than its length, whose octets would read as the ID and unknown octets,
+    // which encode() refuses
+    let kinds: Vec<_> = built
+        .deviations()
+        .into_iter()
+        .map(|deviation| deviation.kind)
+        .collect();
+    let longer = DeviationKind::Inconsistent {
+        field: "Rule ID value",
+    };
+    assert_eq!(kinds, [longer, rule()[0].1.clone()]);
     let lns = |octets: &[u8]| rules::<LnsAddress>(octets);
     assert_eq!(lns(&[10, 0, 0, 1]), []);
     assert_eq!(lns(&[0x20; 16]), []);

@@ -187,7 +187,9 @@ pub enum DeviationKind {
         /// The value.
         value: u32,
     },
-    /// A field that is there where the flags of its IE do not have it, or the reverse.
+    /// A field that is there where the flags of its IE do not have it, or the reverse, or
+    /// whose octets would read as another value: one missing where a later field, or
+    /// unknown octets, would read as it.
     Inconsistent {
         /// The field.
         field: &'static str,
@@ -311,7 +313,10 @@ impl fmt::Display for Deviation {
                 write!(f, "{value} is no value to send, and is read as {read}")
             }
             DeviationKind::Inconsistent { field } => {
-                write!(f, "{field} disagrees with the flags of its IE")
+                write!(
+                    f,
+                    "{field} disagrees with the flags or the other fields of its IE"
+                )
             }
             DeviationKind::Rule(rule) => write!(f, "{rule}"),
         }?;

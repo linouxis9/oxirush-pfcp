@@ -13,7 +13,14 @@ The first version, of TS 29.244 V19.6.0 (2026-06):
   the SEID of an F-SEID, and one that its flags have or not an `Option`. `FSeid::ipv4()`
   and `FSeid::ipv6()` build an F-SEID of one address, as `FTeid::ipv4()` and
   `FTeid::ipv6()` an F-TEID, and `FTeid::choose_ipv4()` and `FTeid::choose_ipv6()` one
-  that the UP function chooses.
+  that the UP function chooses. A value whose octets would read as another value is
+  refused by `encode()` and by a tree, and told by `check()` (`Inconsistent`): a field
+  read where octets remain that is missing before a later one or unknown octets (the
+  C-TAG and S-TAG of MAC Addresses Detected and Removed, whose absent C-TAG field before
+  an S-TAG is of no octets, and the Node Type of an FQ-CSID), unknown octets after a
+  field that runs to the end of the IE, a field longer than the length that its flags
+  give, a value of bits of a number of octets that it may not have, and a Node ID of
+  other octets that are an address or an FQDN.
 - `check()`: how a message breaks the tables and clauses on an interface, each deviation
   with its path, its clause and the Cause of the answer; `deviations()` of a value on
   its own. A `Row` is its roles, each with its presence, its interfaces and how many IEs

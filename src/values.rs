@@ -235,6 +235,13 @@ impl Codec for NodeId {
         })
     }
     fn encode(&self, out: &mut Vec<u8>) -> Result<(), Error> {
+        if !self.reads_back() {
+            return Err(Error::Inconsistent {
+                ie: "Node ID",
+                field: "Node ID value",
+                clause: "8.2.38",
+            });
+        }
         match self {
             Self::Ipv4(address) => {
                 out.push(0);
@@ -267,6 +274,14 @@ impl Codec for NodeId {
 
 impl Rules for NodeId {
     fn check(&self, path: &crate::check::Path, found: &mut Vec<Deviation>) {
+        if !self.reads_back() {
+            let field = "Node ID value";
+            found.push(Deviation::new(
+                path,
+                "8.2.38",
+                DeviationKind::Inconsistent { field },
+            ));
+        }
         let rule = |rule| Deviation::new(path, "8.2.38", DeviationKind::Rule(rule));
         let (kind, value) = match self {
             Self::Fqdn(labels) => (2, &labels[..]),
@@ -305,6 +320,16 @@ impl NodeId {
     #[doc(hidden)]
     #[cfg(feature = "spec")]
     pub const LAYOUT: Option<&'static Layout> = None;
+
+    /// Whether its octets read as it: not an FQDN of no octets, nor other octets of a type
+    /// and a length that an address or an FQDN has, which `encode()` refuses.
+    fn reads_back(&self) -> bool {
+        match self {
+            Self::Fqdn(labels) => !labels.is_empty(),
+            Self::Other(first, rest) => !matches!((first, rest.len()), (0, 4) | (1, 16) | (2, 1..)),
+            _ => true,
+        }
+    }
 
     /// The Node ID Type (Table 8.2.38-2).
     pub fn node_id_type(&self) -> NodeIdType {

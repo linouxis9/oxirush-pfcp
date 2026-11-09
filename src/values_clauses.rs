@@ -640,21 +640,12 @@ pub struct FqCsid {
 }
 
 impl FqCsid {
-    /// The names of its fields.
-    pub(crate) const FIELDS: &'static [&'static str] = &[
+    crate::fields::names!(
         "FQ-CSID Node-ID Type",
         "Node-Address",
         "PDN Connection Set Identifiers",
-        "Node Type",
-    ];
-    /// The members that its tree may have: its fields and its unknown octets.
-    pub(crate) const MEMBERS: &'static [&'static str] = &[
-        "FQ-CSID Node-ID Type",
-        "Node-Address",
-        "PDN Connection Set Identifiers",
-        "Node Type",
-        crate::ie::UNKNOWN_OCTETS,
-    ];
+        "Node Type"
+    );
     /// What the tree of each field may hold below it.
     #[cfg(feature = "tree")]
     pub(crate) const MEMBERS_BELOW: &'static [(&'static str, &'static crate::paths::Below)] =
@@ -663,6 +654,12 @@ impl FqCsid {
     #[doc(hidden)]
     #[cfg(feature = "spec")]
     pub const LAYOUT: Option<&'static Layout> = None;
+
+    /// The Node Type, missing before unknown octets, which would read as it
+    /// ([`trailing`](crate::fields::trailing)).
+    fn trailing(&self) -> Option<&'static str> {
+        crate::fields::trailing(&[("Node Type", self.node_type.is_some())], &self.extra)
+    }
 
     /// The length of the Node-Address of a Node-ID Type: `None` for a reserved type.
     fn address_length(node_id_type: u8) -> Option<usize> {
@@ -719,10 +716,10 @@ impl Codec for FqCsid {
         for csid in &self.csids {
             out.extend_from_slice(&csid.to_be_bytes());
         }
-        if self.node_type.is_none() && !self.extra.is_empty() {
+        if let Some(field) = self.trailing() {
             return Err(Error::Inconsistent {
                 ie: "FQ-CSID",
-                field: "Node Type",
+                field,
                 clause: "8.2.43",
             });
         }
@@ -754,6 +751,10 @@ impl Rules for FqCsid {
         }
         if let Some(node_type) = self.node_type {
             Field::check(&node_type, path, "8.2.43", found);
+        }
+        if let Some(field) = self.trailing() {
+            let kind = crate::check::DeviationKind::Inconsistent { field };
+            found.push(Deviation::new(path, "8.2.43", kind));
         }
     }
 }
@@ -840,7 +841,7 @@ impl oxirush_utils::tree::Tree for FqCsid {
             node_type,
             extra: extra.map(Octets::from).unwrap_or_default(),
         };
-        if fq_csid.node_type.is_none() && !fq_csid.extra.is_empty() {
+        if fq_csid.trailing().is_some() {
             return Err(reading.refuse(
                 oxirush_utils::tree::ErrorKind::Value,
                 "unknown octets after a Node Type only (8.2.43)",
@@ -865,19 +866,17 @@ macro_rules! mac_addresses {
         pub struct $ty {
             /// The MAC addresses.
             pub mac_addresses: Vec<Mac>,
-            /// The C-TAG, after its length.
+            /// The C-TAG field, after its length: of no octets where it is absent and an
+            /// S-TAG follows, its length 0.
             pub c_tag: Option<Lv8>,
-            /// The S-TAG, after its length.
+            /// The S-TAG field, after its length.
             pub s_tag: Option<Lv8>,
             /// The octets after them, which a later release adds.
             pub extra: Octets,
         }
 
         impl $ty {
-            /// The names of its fields.
-            pub(crate) const FIELDS: &'static [&'static str] = &["MAC address values", "C-TAG", "S-TAG"];
-            /// The members that its tree may have: its fields and its unknown octets.
-            pub(crate) const MEMBERS: &'static [&'static str] = &["MAC address values", "C-TAG", "S-TAG", crate::ie::UNKNOWN_OCTETS];
+            crate::fields::names!("MAC address values", "C-TAG", "S-TAG");
             /// What the tree of each field may hold below it.
             #[cfg(feature = "tree")]
             pub(crate) const MEMBERS_BELOW: &'static [(&'static str, &'static crate::paths::Below)] = &[];
@@ -885,6 +884,13 @@ macro_rules! mac_addresses {
             #[doc(hidden)]
             #[cfg(feature = "spec")]
             pub const LAYOUT: Option<&'static Layout> = None;
+
+            /// The tag missing before a later one or unknown octets, which would read as it
+            /// ([`trailing`](crate::fields::trailing)).
+            fn trailing(&self) -> Option<&'static str> {
+                let tags = [("C-TAG", self.c_tag.is_some()), ("S-TAG", self.s_tag.is_some())];
+                crate::fields::trailing(&tags, &self.extra)
+            }
         }
 
         impl Codec for $ty {
@@ -899,8 +905,11 @@ macro_rules! mac_addresses {
                 Some(Self { mac_addresses, c_tag, s_tag, extra: Octets::copied(rest) })
             }
             fn encode(&self, out: &mut Vec<u8>) -> Result<(), Error> {
-                if self.mac_addresses.len() > 255 || (self.s_tag.is_some() && self.c_tag.is_none()) {
-                    return Err(Error::Inconsistent { ie: $name, field: "MAC address value", clause: $clause });
+                if self.mac_addresses.len() > 255 {
+                    return Err(Error::FieldLength { ie: $name, field: "MAC address values" });
+                }
+                if let Some(field) = self.trailing() {
+                    return Err(Error::Inconsistent { ie: $name, field, clause: $clause });
                 }
                 out.push(self.mac_addresses.len() as u8);
                 for mac in &self.mac_addresses {
@@ -930,6 +939,9 @@ macro_rules! mac_addresses {
                 }
                 let (c_tag, s_tag) = (self.c_tag.as_ref(), self.s_tag.as_ref());
                 check_tags(c_tag.map(|tag| &tag.0[..]), s_tag.map(|tag| &tag.0[..]), path, $clause, found);
+                if let Some(field) = self.trailing() {
+                    found.push(Deviation::new(path, $clause, crate::check::DeviationKind::Inconsistent { field }));
+                }
             }
         }
 
@@ -959,7 +971,12 @@ macro_rules! mac_addresses {
                 let c_tag = reading.optional(&read, "C-TAG", Lv8::from_tree)?;
                 let s_tag = reading.optional(&read, "S-TAG", Lv8::from_tree)?;
                 let extra = reading.optional(&read, crate::ie::UNKNOWN_OCTETS, |value, reading| reading.octets(value))?;
-                Ok(Self { mac_addresses, c_tag, s_tag, extra: extra.map(Octets::from).unwrap_or_default() })
+                let value = Self { mac_addresses, c_tag, s_tag, extra: extra.map(Octets::from).unwrap_or_default() };
+                if let Some(field) = value.trailing() {
+                    let why = alloc::format!("{field} is missing where a later field or unknown octets would read as it ({})", $clause);
+                    return Err(reading.refuse(oxirush_utils::tree::ErrorKind::Value, why));
+                }
+                Ok(value)
             }
         }
     )*};

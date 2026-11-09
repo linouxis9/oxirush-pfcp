@@ -152,7 +152,9 @@ pub enum Error {
         /// The field.
         field: &'static str,
     },
-    /// A value whose fields disagree with its flags, as its clause has them.
+    /// A value whose fields disagree with its flags, as its clause has them, or whose
+    /// octets would read as another value: a field missing where a later one, or unknown
+    /// octets, would read as it.
     Inconsistent {
         /// The IE type.
         ie: &'static str,
@@ -204,7 +206,7 @@ impl fmt::Display for Error {
             Self::Inconsistent { ie, field, clause } => {
                 write!(
                     f,
-                    "{field} of {ie} disagrees with its flags (TS 29.244 {clause})"
+                    "{field} of {ie} disagrees with its flags or its other fields (TS 29.244 {clause})"
                 )
             }
         }

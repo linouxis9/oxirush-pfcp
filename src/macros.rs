@@ -194,19 +194,32 @@ macro_rules! pfcp_layout {
                 None
             }
 
-            /// Whether each field is there as its flags say: the name of the first that is
-            /// not.
-            #[allow(unused_variables)]
+            /// Whether each field is there as its flags say, and its octets read as it: the
+            /// name of the first that is not. A field of the length that its flags give has
+            /// no more octets, and a field that runs to the end of the IE has no unknown
+            /// octets after it, which would read as part of it.
+            #[allow(unused_variables, unused_mut, unused_assignments)]
             pub(crate) fn inconsistent(&self) -> Option<&'static str> {
+                let mut ends = false;
+                $($( ends = <$hkind as crate::fields::Field>::TO_THE_END; )*)?
                 $(
                     $( let $flag = self.$flag; )*
-                    $($(
-                        if self.$field.is_some() != ($cond) {
-                            return Some($field_name);
-                        }
-                    )?)*
+                    $(
+                        $(
+                            if self.$field.is_some() != ($cond) {
+                                return Some($field_name);
+                            }
+                        )?
+                        let field = pfcp_layout!(@get [$($cond)?] self.$field);
+                        $(
+                            if field.is_some_and(|field| crate::fields::Field::size(field) > $length) {
+                                return Some($field_name);
+                            }
+                        )?
+                        ends = field.is_some() && pfcp_layout!(@ends [$($length)?] $kind $(<$param>)?);
+                    )*
                 )?
-                None
+                (ends && !self.extra.is_empty()).then_some(crate::ie::UNKNOWN_OCTETS)
             }
         }
 
@@ -370,7 +383,7 @@ macro_rules! pfcp_layout {
                     Some(field) => Err(reading.refuse(
                         oxirush_utils::tree::ErrorKind::Value,
                         alloc::format!(
-                            "{field} is written where its flags do not have it, or is missing where they do ({})",
+                            "{field} is written where its flags do not have it, or is missing where they do, or its octets would read as another value ({})",
                             $clause
                         ),
                     )),
@@ -379,6 +392,9 @@ macro_rules! pfcp_layout {
         }
     )*};
     (@spare $fk:ty) => { "Spare" };
+    // Whether a field runs to the end of the IE: one of a length that its flags give does not.
+    (@ends [] $($kind:tt)+) => { <$($kind)+ as crate::fields::Field>::TO_THE_END };
+    (@ends [$length:expr] $($kind:tt)+) => { false };
     // A field after the flags: always there, or there where its condition holds.
     (@type [] $($kind:tt)+) => { $($kind)+ };
     (@type [$cond:expr] $($kind:tt)+) => { Option<$($kind)+> };
@@ -495,15 +511,18 @@ macro_rules! pfcp_bits {
                     *octet = spare & !mask;
                 }
                 $( pfcp_bits!(@store octets, $width [$($kind)? $(+ $octet2 $low2 $width2)?] self.$field, $octet, $low); )*
-                (octets, usize::from(self.present).clamp($min, $n))
+                (octets, usize::from(self.present).min($n))
             }
 
-            /// Whether a field, a spare bit or unknown octets are past the octets that the
-            /// value has, which its length would not write: unknown octets follow all the
-            /// octets of the fields.
+            /// Whether its length is not one that it may have, from `MIN` to `N` octets, or a
+            /// field, a spare bit or unknown octets are past the octets that the value has,
+            /// which its length would not write: unknown octets follow all the octets of the
+            /// fields.
             fn past_length(&self) -> bool {
                 let (octets, used) = self.octets();
-                octets[used..].iter().any(|octet| *octet != 0) || used < $n && !self.extra.is_empty()
+                !($min..=$n).contains(&usize::from(self.present))
+                    || octets[used..].iter().any(|octet| *octet != 0)
+                    || used < $n && !self.extra.is_empty()
             }
         }
 
