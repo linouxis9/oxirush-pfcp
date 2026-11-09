@@ -158,3 +158,57 @@ fn a_false_length_is_told_with_its_ie() {
         ]
     );
 }
+
+/// §7.6.7: an IE whose Length runs past the grouped IE that holds it is told as at the
+/// level of the message, with "Invalid length" in a request and the type of the IE, at the
+/// grouped IE, which its receiver cannot read: a BAR ID of the Length 5 and one octet in a
+/// Create BAR, a vendor IE of the Length 9 and five octets at the end of a Create PDR, and
+/// a Source Interface of the Length 3 in the PDI of a Create PDR, a level below.
+#[test]
+fn an_ie_whose_length_runs_past_its_grouped_ie_is_of_an_invalid_length() {
+    let told = |octets: &[u8]| -> Vec<(String, DeviationKind, Option<CauseValue>, Option<u16>)> {
+        let message = Message::decode(octets).unwrap();
+        let found = message.check(Interfaces::N4).into_iter();
+        let found = found.map(|deviation| {
+            let offending = deviation.offending_ie();
+            (deviation.path, deviation.kind, deviation.cause, offending)
+        });
+        found.collect()
+    };
+    let invalid = |path: &str, ie_type| {
+        let cause = Some(CauseValue::InvalidLength);
+        (
+            path.to_string(),
+            DeviationKind::InvalidLength { ie_type },
+            cause,
+            Some(ie_type),
+        )
+    };
+    let [pdr, far] = rules();
+    let node = ie(60, &[0, 10, 0, 0, 1]);
+    let seid = ie(57, &[2, 0, 0, 0, 0, 0, 0, 0, 1, 10, 0, 0, 1]);
+    let bar = ie(85, &[0, 88, 0, 5, 1]);
+    let octets = session_message(
+        50,
+        0,
+        &[node.clone(), seid.clone(), pdr.clone(), far.clone(), bar],
+    );
+    assert_eq!(told(&octets), [invalid("/pfcp/Create BAR", 88)]);
+    let vendor = [0x80, 0x01, 0, 9, 0x48, 0xf9, 1, 2, 3];
+    let pdr = ie(1, &[&pdr[4..], &vendor[..]].concat());
+    let octets = session_message(50, 0, &[node.clone(), seid.clone(), pdr, far.clone()]);
+    assert_eq!(told(&octets), [invalid("/pfcp/Create PDR/0", 32769)]);
+    let pdi = ie(2, &[0, 20, 0, 3, 0]);
+    let pdr = ie(
+        1,
+        &[
+            ie(56, &[0, 1]),
+            ie(29, &[0, 0, 0, 255]),
+            pdi,
+            ie(108, &[0, 0, 0, 1]),
+        ]
+        .concat(),
+    );
+    let octets = session_message(50, 0, &[node, seid, pdr, far]);
+    assert_eq!(told(&octets), [invalid("/pfcp/Create PDR/0/PDI", 20)]);
+}

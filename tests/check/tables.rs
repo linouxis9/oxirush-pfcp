@@ -225,16 +225,22 @@ fn a_mandatory_ie_that_does_not_decode_is_of_7_6_8() {
         panic!()
     };
     assert_eq!((request.create_pdr.len(), request.raw.len()), (1, 1));
-    // Of a list, the one Create PDR, whose IEs run past it
+    // Of a list, the one Create PDR, whose IEs run past it: of an invalid length (§7.6.7)
     let ies = [
         ie(60, &[0, 10, 0, 0, 1]),
         ie(57, &f_seid),
         ie(1, &[0, 56, 0, 9]),
         far,
     ];
+    let message = Message::decode(&session_message(50, 0, &ies)).unwrap();
+    let found = message.check(Interfaces::N4);
+    let found: Vec<_> = found
+        .iter()
+        .map(|deviation| (&deviation.kind, deviation.clause))
+        .collect();
     assert_eq!(
-        incorrect(&session_message(50, 0, &ies)),
-        [(DeviationKind::MandatoryIncorrect { ie_type: 1 }, "7.6.8")]
+        found,
+        [(&DeviationKind::InvalidLength { ie_type: 56 }, "7.6.7")]
     );
 }
 
@@ -599,7 +605,8 @@ fn a_conditional_ie_that_does_not_decode_is_incorrect() {
             Some(57)
         )]
     );
-    // A second Create PDR, whose IEs do not frame, at its position in the list
+    // A second Create PDR, whose IEs do not frame, at its position in the list: of an
+    // invalid length (§7.6.7)
     let mut message = establishment();
     request_with(&mut message, |request| {
         request.raw.push(cut(1, &[0, 56, 0, 9]));
@@ -608,9 +615,9 @@ fn a_conditional_ie_that_does_not_decode_is_incorrect() {
         checked(&message),
         [(
             "/pfcp/Create PDR/1".to_string(),
-            DeviationKind::MandatoryIncorrect { ie_type: 1 },
-            Some(CauseValue::MandatoryIeIncorrect),
-            Some(1)
+            DeviationKind::InvalidLength { ie_type: 56 },
+            Some(CauseValue::InvalidLength),
+            Some(56)
         )]
     );
     // In an optional Ethernet Packet Filter, an Ethernet Filter ID of two octets

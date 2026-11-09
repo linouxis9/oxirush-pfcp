@@ -126,7 +126,8 @@ pub enum DeviationKind {
     },
     /// An IE whose Length is not the length of its content (§7.6.7, §8.1.1): it does not
     /// frame, nor do the IEs after it, and the receiver of a request answers "Invalid
-    /// length" with its type.
+    /// length" with its type. One that runs past the grouped IE that holds it is told at
+    /// that grouped IE, which its receiver cannot read.
     InvalidLength {
         /// Its IE type.
         ie_type: u16,
@@ -723,8 +724,12 @@ fn mandatory_missing<S: Scope>(
     found: &mut Vec<Deviation>,
 ) {
     let mut kept = scope.raw().iter().filter(|ie| ie.ie_type == row.ie_type);
-    // An IE of the row that does not frame is told as such ([`raw_deviations`]).
-    if kept.clone().any(|ie| !ie.frames()) {
+    // An IE of the row that does not frame, or whose IEs do not, is told as such
+    // ([`raw_deviations`]).
+    if kept
+        .clone()
+        .any(|ie| !ie.frames() || unframed_within(row, &ie.octets).is_some())
+    {
         return;
     }
     let (nulls, incorrect) = match row.is_list() {
@@ -849,6 +854,11 @@ fn raw_deviations<S: Scope>(
             false => alone,
             true => !ie.octets.is_empty() && !scope.decodes(ie.ie_type, &ie.octets),
         };
+        // A grouped IE that its receiver handles, whose IEs run past it (§7.6.7).
+        if let Some(inner) = first.then(|| unframed_within(row, &ie.octets)).flatten() {
+            found.push(invalid_length(here(), inner, context));
+            continue;
+        }
         let deviation = match (first, ie.octets.is_empty()) {
             // A null length says what its row allows it to (§5.6.3).
             (true, true) => continue,
@@ -881,6 +891,18 @@ fn raw_deviations<S: Scope>(
         };
         found.push(deviation);
     }
+}
+
+/// The IE whose Length runs past the grouped IE of `row` whose content is `octets`
+/// (§7.6.7): the first whose Length runs past the others, or the grouped IE itself where
+/// fewer octets than an IE header are left. `None` for an IE of another row, and for IEs
+/// that frame.
+fn unframed_within(row: &Row, octets: &[u8]) -> Option<u16> {
+    row.content?;
+    crate::framing::ies(octets).find_map(|ie| match ie.err()? {
+        crate::ie::IeFault::Length { ie_type, .. } => Some(ie_type),
+        crate::ie::IeFault::HeaderCut { .. } => Some(row.ie_type),
+    })
 }
 
 /// The deviation of an IE at `path` that does not frame, of `ie_type`.
