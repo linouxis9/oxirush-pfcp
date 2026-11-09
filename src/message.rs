@@ -461,9 +461,9 @@ impl Ids {
     }
 }
 
-/// Whether a message type is a request of Table 7.3-1: 1 to 9 odd, then, after 11, Version
-/// Not Supported Response, 12 to 16 even, and 50 to 56 even. A type that the table does
-/// not have is none.
+/// Whether a message type is a request of Table 7.3-1: 1 to 9 odd, 12 to 16 even, and 50 to
+/// 56 even; 11, the Version Not Supported Response, is none. A type that the table does not
+/// have is none either.
 pub fn is_request(message_type: u8) -> bool {
     matches!(
         message_type,

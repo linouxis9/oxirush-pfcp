@@ -246,7 +246,8 @@ pub struct On {
 }
 
 /// How many IEs `roles` allow together, `usize::MAX` for any number: what the field of a
-/// row holds, which the table macro asserts.
+/// row holds, which the table macro asserts. Rust 1.88 counts no use of it in a constant.
+#[allow(dead_code)]
 pub(crate) const fn capacity(roles: &[Role]) -> usize {
     let mut at = 0;
     let mut most = 0usize;
