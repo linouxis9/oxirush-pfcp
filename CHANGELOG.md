@@ -10,7 +10,10 @@ The first version, of TS 29.244 V19.6.0 (2026-06):
   for byte, and built with `new()` and `with_*()`; a message of its body with
   `Message::node` and `Message::session`. `IE_TYPES` and `ie_type_info()` give the clause
   and the members of each IE type. A field that a value always has is a plain field, as
-  the SEID of an F-SEID, and one that its flags have or not an `Option`. `FSeid::ipv4()`
+  the SEID of an F-SEID, and one that its flags, or the value of another field, have or
+  not an `Option`: the Redirect Server Address, which a Port redirect has not (§8.2.20),
+  and the Reporting Time Info, of a delay tolerant Reporting Suggestion Info alone
+  (§8.2.229), whose octets after another value `check()` tells. `FSeid::ipv4()`
   and `FSeid::ipv6()` build an F-SEID of one address, as `FTeid::ipv4()` and
   `FTeid::ipv6()` an F-TEID, and `FTeid::choose_ipv4()` and `FTeid::choose_ipv6()` one
   that the UP function chooses. A value whose octets would read as another value is

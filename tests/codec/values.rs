@@ -900,3 +900,76 @@ fn a_value_whose_octets_would_read_as_another_is_refused() {
     kept(NodeId::Other(2, Octets::default()));
     kept(NodeId::Other(0x12, vec![10u8, 0, 0, 1].into()));
 }
+
+/// A field that the value of another field has or not: the Redirect Server Address of a
+/// Redirect Information, absent where the Redirect Address Type is "Port" (§8.2.20), and
+/// the Reporting Time Info of a Reporting Suggestion Info, present where the Reporting
+/// Urgency is "Delay tolerant" alone (§8.2.229). Their octets read so, and encode back to
+/// them; a value or a tree that has the field where the other's value does not, or lacks
+/// it where it does, is refused, and told by `check()` (`Inconsistent`).
+#[test]
+fn a_field_that_the_value_of_another_has_or_not() {
+    fn refused<T: Codec + Check + tree::Tree + std::fmt::Debug>(value: T, field: &str) {
+        match value.encode(&mut Vec::new()) {
+            Err(Error::Inconsistent { field: named, .. }) => assert_eq!(named, field),
+            other => panic!("{field}: {other:?}"),
+        }
+        let kinds: Vec<_> = value
+            .deviations()
+            .into_iter()
+            .map(|deviation| deviation.kind)
+            .collect();
+        let told = |kind: &DeviationKind| matches!(kind, DeviationKind::Inconsistent { field: told } if *told == field);
+        assert!(kinds.iter().any(told), "{field}: {kinds:?}");
+        let written = tree::Tree::to_tree(&value);
+        let refusal = tree::from_value::<T>(&written).unwrap_err().to_string();
+        assert!(refusal.contains(field), "{refusal}");
+    }
+    // A Port alone: the Redirect Port, port 8080
+    let port: RedirectInformation = read_back("05 1f90");
+    assert_eq!(port.redirect_server_address, None);
+    assert_eq!(port.redirect_port, Some(8080));
+    let address = Some(Lv16(b"abcd".to_vec().into()));
+    let typed = |value, redirect_server_address| RedirectInformation {
+        redirect_address_type: RedirectAddressType::from_value(value),
+        redirect_server_address,
+        other_redirect_server_address: matches!(value, 4 | 8).then(|| Lv16(b"ef".to_vec().into())),
+        redirect_port: (5..=8).contains(&value).then_some(8080),
+        ..Default::default()
+    };
+    refused(typed(5, address.clone()), "Redirect Server Address");
+    for value in [0, 4, 6, 8] {
+        refused(typed(value, None), "Redirect Server Address");
+        let mut octets = Vec::new();
+        typed(value, address.clone()).encode(&mut octets).unwrap();
+        assert_eq!(
+            RedirectInformation::decode(&octets),
+            Some(typed(value, address.clone()))
+        );
+    }
+    let tree = tree!({"Redirect Address Type": "Port", "Redirect Server Address": "", "Redirect Port": 8080});
+    assert!(tree::from_value::<RedirectInformation>(&tree).is_err());
+    let tree = tree!({"Redirect Address Type": "Port", "Redirect Port": 8080});
+    assert_eq!(
+        tree::from_value::<RedirectInformation>(&tree).unwrap(),
+        port
+    );
+    // Non delay tolerant, without a time; delay tolerant, with one
+    let urgent: ReportingSuggestionInfo = read_back("01");
+    assert_eq!(urgent.reporting_time_info, None);
+    let tolerant: ReportingSuggestionInfo = read_back("00 00000005");
+    assert_eq!(tolerant.reporting_time_info, Some(5));
+    assert_eq!(ReportingSuggestionInfo::decode(&[0]), None);
+    let suggestion = |value, reporting_time_info| ReportingSuggestionInfo {
+        reporting_urgency: ReportingUrgencyValue::from_value(value),
+        reporting_time_info,
+        ..Default::default()
+    };
+    refused(suggestion(0, None), "Reporting Time Info");
+    refused(suggestion(1, Some(5)), "Reporting Time Info");
+    refused(suggestion(2, Some(5)), "Reporting Time Info");
+    let tree = tree!({"Reporting Urgency value": "Non delay tolerant", "Reporting Time Info": 5});
+    assert!(tree::from_value::<ReportingSuggestionInfo>(&tree).is_err());
+    let tree = tree!({"Reporting Urgency value": "Delay tolerant"});
+    assert!(tree::from_value::<ReportingSuggestionInfo>(&tree).is_err());
+}

@@ -72,12 +72,19 @@ pfcp_layout! {
 pfcp_layout! {
     /// Redirect Information (§8.2.20): the Redirect Address Type of Table 8.2.20-1 (0 IPv4,
     /// 1 IPv6, 2 URL, 3 SIP URI, 4 IPv4 and IPv6, 5 Port, 6 IPv4 and Port, 7 IPv6 and
-    /// Port, 8 IPv4 and IPv6 and Port), the addresses and the port.
+    /// Port, 8 IPv4 and IPv6 and Port), the addresses and the port. A Port redirect has no
+    /// Redirect Server Address, nor its length.
     pub struct RedirectInformation "8.2.20" {
         flags(u8) { redirect_address_type "Redirect Address Type": 1 / 4 as RedirectAddressType }
-        redirect_server_address "Redirect Server Address": Lv16,
+        redirect_server_address "Redirect Server Address": Lv16 if redirect_address_type.value() != 5,
         other_redirect_server_address "Other Redirect Server Address": Lv16 if matches!(redirect_address_type.value(), 4 | 8),
         redirect_port "Redirect Port": u16 if (5..=8).contains(&redirect_address_type.value()),
+    }
+    check(this, path, found) {
+        // A Port redirect of the octets of a Redirect Server Address, its length and the
+        // port after it: those that its receiver reads as the port and ignores (§8.1.2).
+        let port = this.redirect_port.map_or(0, usize::from);
+        flag_rule(this.redirect_address_type.value() == 5 && this.extra.len() == port + 2, path, "8.2.20", "the Redirect Address Type is Port, and octets of a Redirect Server Address follow", found);
     }
 }
 
@@ -358,11 +365,15 @@ pfcp_layout! {
 }
 
 pfcp_layout! {
-    /// Reporting Suggestion Info (§8.2.229): the Reporting Urgency of Table 8.2.229-1 and
-    /// the time.
+    /// Reporting Suggestion Info (§8.2.229): the Reporting Urgency of Table 8.2.229-1, and
+    /// the time where it is "Delay tolerant".
     pub struct ReportingSuggestionInfo "8.2.229" {
         flags(u8) { reporting_urgency "Reporting Urgency value": 1 / 4 as ReportingUrgencyValue }
-        reporting_time_info "Reporting Time Info": u32,
+        reporting_time_info "Reporting Time Info": u32 if reporting_urgency == ReportingUrgencyValue::DelayTolerant,
+    }
+    check(this, path, found) {
+        // The octets of a time after another urgency, which its receiver ignores (§8.1.2).
+        flag_rule(this.reporting_urgency != ReportingUrgencyValue::DelayTolerant && this.extra.len() == 4, path, "8.2.229", "the Reporting Urgency is not Delay tolerant, and octets of a Reporting Time Info follow", found);
     }
 }
 

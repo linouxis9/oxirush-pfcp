@@ -759,3 +759,72 @@ fn the_fields_of_rtp_header_extension_additional_information_that_a_flag_gives()
     assert_eq!(value_found::<Rtp>("0100"), [spare(0)]);
     assert_eq!(value_found::<Rtp>("0103"), [spare(3)]);
 }
+
+/// §8.2.20 and §8.2.229: a Redirect Information of type "Port" has no Redirect Server
+/// Address, and a Reporting Suggestion Info has a Reporting Time Info where it is "Delay
+/// tolerant" alone. Octets of that field after a value that does not have it are told, as
+/// those of a TEID after an F-TEID's CH are: its receiver ignores them as octets of a
+/// later release (§8.1.2), which other octets are. In a request on N4, its receiver reads
+/// the port of a Port redirect, and the urgency of a suggestion that is not delay tolerant.
+#[test]
+fn a_field_that_the_value_of_another_has_not() {
+    let port = "the Redirect Address Type is Port, and octets of a Redirect Server Address follow";
+    assert_eq!(value_found::<RedirectInformation>("051f90"), []);
+    assert_eq!(value_found::<RedirectInformation>("051f90ab"), []);
+    for octets in ["0500001f90", "050004616263641f90"] {
+        let told = value_found::<RedirectInformation>(octets);
+        assert_eq!(told, [("8.2.20", DeviationKind::Rule(port))], "{octets}");
+    }
+    let time =
+        "the Reporting Urgency is not Delay tolerant, and octets of a Reporting Time Info follow";
+    assert_eq!(value_found::<ReportingSuggestionInfo>("01"), []);
+    assert_eq!(value_found::<ReportingSuggestionInfo>("0000000005"), []);
+    assert_eq!(value_found::<ReportingSuggestionInfo>("0100"), []);
+    let told = value_found::<ReportingSuggestionInfo>("0100000005");
+    assert_eq!(told, [("8.2.229", DeviationKind::Rule(time))]);
+    // In a Session Establishment Request: a Create FAR that redirects, and a Create SRR
+    let node = ie(60, &[0, 10, 0, 0, 1]);
+    let seid = ie(57, &[2, 0, 0, 0, 0, 0, 0, 0, 1, 10, 0, 0, 1]);
+    let [pdr, _] = rules();
+    let redirect = |octets: &str| {
+        let forwarding = [ie(42, &[1]), ie(38, &hex::decode(octets).unwrap())].concat();
+        let far = [ie(108, &[0, 0, 0, 1]), ie(44, &[2, 0]), ie(4, &forwarding)].concat();
+        found(&session_message(
+            50,
+            0,
+            &[node.clone(), seid.clone(), pdr.clone(), ie(3, &far)],
+        ))
+    };
+    assert_eq!(redirect("051f90"), []);
+    let told = (
+        DeviationKind::Rule(port),
+        Some(CauseValue::MandatoryIeIncorrect),
+        Some(38),
+    );
+    for octets in ["0500001f90", "050004616263641f90"] {
+        assert_eq!(redirect(octets), std::slice::from_ref(&told), "{octets}");
+    }
+    let suggestion = |octets: &str| {
+        let control = [
+            ie(124, &[9]),
+            ie(243, &[1]),
+            ie(244, &[2]),
+            ie(64, &[0, 0, 0, 10]),
+            ie(335, &hex::decode(octets).unwrap()),
+        ]
+        .concat();
+        let srr = ie(212, &[ie(215, &[1]), ie(242, &control)].concat());
+        let [pdr, far] = rules();
+        found(&session_message(
+            50,
+            0,
+            &[node.clone(), seid.clone(), pdr, far, srr],
+        ))
+    };
+    assert_eq!(suggestion("01"), []);
+    assert_eq!(suggestion("0000000005"), []);
+    assert_eq!(
+        suggestion("0100000005"),
+        [(DeviationKind::Rule(time), None, None)]
+    );
+}
