@@ -306,10 +306,11 @@ fn held(written: &Value, read: &Value, table: Option<&'static Table>) -> bool {
                     let (written, read) = (entries(value), entries(other));
                     written.len() == read.len()
                         && written.iter().zip(&read).enumerate().all(|(at, (value, other))| {
-                            let values = read[..at].iter().filter(|other| !kept(other)).count();
+                            // The receiver handles the first IEs of the row, whether they
+                            // decode or not, and keeps the others as octets (§7.6.10).
                             kept(value)
                                 || other.get("octets").and_then(Value::as_str) == Some("")
-                                || kept(other) && values >= capacity(row)
+                                || kept(other) && at >= capacity(row)
                                 || match row.content {
                                     Some(content) => held(value, other, Some(content)),
                                     None => value == other,
