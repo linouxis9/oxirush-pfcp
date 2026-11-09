@@ -825,12 +825,12 @@ macro_rules! pfcp_messages {
                 }
             }
 
-            /// Whether its receiver reads as a value an IE that it keeps as octets
-            /// ([`Scope::reads_otherwise`](crate::table::Scope::reads_otherwise)).
-            pub(crate) fn reads_otherwise(&self) -> bool {
+            /// The body as its receiver reads its octets ([`crate::check::as_read`]).
+            pub(crate) fn as_read(&self, context: crate::check::Context, found: &mut alloc::vec::Vec<crate::check::Deviation>) -> Option<Self> {
+                let path = crate::check::Path::Root("/pfcp");
                 match self {
-                    $( Self::$ty(body) => crate::table::Scope::reads_otherwise(&**body), )*
-                    Self::Other { .. } => false,
+                    $( Self::$ty(body) => crate::check::as_read(&**body, &path, context, found).map(Self::from), )*
+                    Self::Other { .. } => None,
                 }
             }
 
@@ -1092,9 +1092,12 @@ macro_rules! pfcp_table {
                 false
             }
 
-            fn reads_otherwise(&self) -> bool {
-                self.raw.iter().any(|ie| crate::table::read_as_value(self, ie))
-                    $( || crate::table::FieldValues::<$vty>::values(&self.$field).iter().any(crate::ie::Listed::reads_otherwise) )*
+            fn plain(&self) -> bool {
+                self.raw.is_empty() $( && pfcp_table!(@plain [$(* $($max)?)?] ($vty) self.$field) )*
+            }
+
+            fn is_empty(&self) -> bool {
+                self.raw.is_empty() $( && crate::table::FieldValues::<$vty>::values(&self.$field).is_empty() )*
             }
 
             fn raw(&self) -> &[crate::ie::RawIe] { &self.raw }
@@ -1260,6 +1263,11 @@ macro_rules! pfcp_table {
     (@held_box ($t:ty) $f:expr) => {
         $f.as_ref().map_or(0, |value| core::mem::size_of::<$t>() + crate::table::Scope::held(&**value))
     };
+    // Whether a field reads as it is: as many values as the row takes, each plain.
+    (@plain [] ($t:ty) $f:expr) => { crate::table::FieldValues::<$t>::values(&$f).iter().all(crate::ie::Listed::plain) };
+    (@plain [* $($max:literal)?] ($t:ty) $f:expr) => { !pfcp_table!(@over [$($max)?] $f) && $f.iter().all(crate::ie::Listed::plain) };
+    (@over [] $f:expr) => { false };
+    (@over [$max:literal] $f:expr) => { $f.len() > $max };
     (@full [] $f:expr) => { false };
     (@full [$max:literal] $f:expr) => { $f.len() >= $max };
 
@@ -1310,22 +1318,21 @@ macro_rules! pfcp_table {
                 crate::check::check_scope(self, path, context, found);
             }
 
-            fn reads_otherwise(&self) -> bool {
-                crate::table::Scope::reads_otherwise(self)
+            /// Of a grouped IE that has an IE: one of a null length reads as none.
+            fn plain(&self) -> bool {
+                crate::table::Scope::plain(self) && !crate::table::Scope::is_empty(self)
             }
         }
 
         impl crate::check::Rules for $ty {
             /// Its table on the interfaces that it has, as the receiver of a response: the
-            /// IEs of any, and those that all need.
-            /// As its receiver reads it ([`crate::table::as_read`]).
+            /// IEs of any, and those that all need; as its receiver reads it
+            /// ([`crate::check::as_read`]).
             fn check(&self, path: &crate::check::Path, found: &mut alloc::vec::Vec<crate::check::Deviation>) {
                 let interfaces = <Self as crate::table::Scope>::table().interfaces();
                 let context = crate::check::Context::on(interfaces);
-                match crate::table::as_read(self) {
-                    Some(read) => crate::check::check_scope(&read, path, context, found),
-                    None => crate::check::check_scope(self, path, context, found),
-                }
+                let read = crate::check::as_read(self, path, context, found);
+                crate::check::check_scope(read.as_ref().unwrap_or(self), path, context, found);
             }
         }
 

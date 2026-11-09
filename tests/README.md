@@ -6,7 +6,7 @@ gives it the layout of each value as the crate reads it.
 | Test | What it checks |
 |---|---|
 | `spec` | The crate against TS 29.244 V19.6.0: every message type and IE type; every row of a table, with its presence, interfaces, IE type and repetition, and its bound; every flag and field of a figure, with its octet, bits, order and width, and the conditions that the sentences of its clause give, but for the four values read by hand, which `codec` compares; the sentences of clause 8.2 on which flags are set, together, with the value of another field or the Cause of the message, or always, each with the rule that checks it (`spec/flag-rules.tsv`); every table of values, and the values that a receiver reads as another; the constructors by interface; and the requirements of clause 6 (`spec/`) |
-| `captures` | The 213 messages of the lab runs (`captures/`): each decodes, encodes back byte for byte, has a tree that reads back, and is checked on its interface; and each of their IEs, at every level, written as its octets, changes nothing of what `check()` finds, as in the messages of a fuzz corpus (`PFCP_CORPUS`, below) |
+| `captures` | The 213 messages of the lab runs (`captures/`): each decodes, encodes back byte for byte, has a tree that reads back, and is checked on its interface; and `check(m)` is `check(Message::decode(m.encode()))` of each, and of each with one of its IEs, at every level, written as its octets, of a null length, or after one of a null length; one written as its octets changes nothing of what `check()` finds; the same of the messages of a fuzz corpus (`PFCP_CORPUS`, below) |
 | `check` | What `check()` finds on each interface, with the clause and the Cause of each, a module of `check/` for each subject: `tables`, the IEs that a scope needs, may have, repeats and keeps as octets; `conditions`, those that the IEs of a scope show; `reading`, a message as its receiver reads its octets; `values`, the fields, flags and values of clause 8.2; `header`, its flags and the SEID; `rejections`, a rejection and the Causes of the answers; `interfaces`, the Appl. columns |
 | `node` | The procedures of clause 6 on a `Node`, a module of `node/` for each clause: `delivery` (§6.4, §7.6), `associations` (§6.2), `controls` (§6.2.3, §6.2.4), `sessions` (§6.3, §5.22) and `bundles` (§6.5); one test for each requirement of `spec/requirements.tsv` that names it |
 | `endpoint` | Two endpoints on the loopback: a setup and a session, both ways at once through a `Handle`, a request sent through `Handle::with`, a probe that answers twice, a request that times out, a queue full of entries or of octets and a full node, an `Incoming` dropped or answered in vain, an answer that does not encode, a heartbeat of never, a request dropped before and after the task takes it, `close()` |
@@ -60,9 +60,10 @@ its addresses and its interface:
 
 ## A corpus of the fuzz targets
 
-`PFCP_CORPUS` names a directory of messages, a corpus of the fuzz targets `decode` or
-`tree`: each IE of each of them, at every level, written as its octets, is checked on
-every interface as `check()` checks its value.
+`PFCP_CORPUS` names a directory of messages, a corpus of the fuzz targets `decode`,
+`tree`, `check` or `differential`: of each of them, and of each with one of its IEs, at
+every level, written as its octets, of a null length, or after one of a null length,
+`check(m)` is `check(Message::decode(m.encode()))` on every interface.
 
 ```sh
 PFCP_CORPUS=fuzz/corpus/decode cargo test --release --all-features --test captures -- --ignored

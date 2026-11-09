@@ -229,16 +229,23 @@ impl Message {
     /// IE is answered "Conditional IE missing" (§7.2.3.2). A message is checked as its
     /// receiver reads it: an IE that it keeps as octets, which the receiver reads as the
     /// value of its row, is checked as that value, and `check(m)` is
-    /// `check(Message::decode(m.encode()))`.
+    /// `check(Message::decode(m.encode()))` where the octets decode. A Length of an IE that
+    /// keeps them from decoding is told, and the message is checked with it cleared; one
+    /// whose octets frame, as other IEs, is checked as they read, its receiver telling no
+    /// fault there (§7.6.7).
     pub fn check(&self, interface: Interfaces) -> Vec<Deviation> {
-        let read = match self.body.reads_otherwise() {
-            true => self
-                .encode()
-                .ok()
-                .and_then(|octets| Self::decode(&octets).ok()),
-            false => None,
+        let message_type = self.body.message_type();
+        let mut found = Vec::new();
+        let context = Context {
+            request: is_request(message_type) && message_type != 1,
+            ..Context::on(interface)
         };
-        read.as_ref().unwrap_or(self).check_read(interface)
+        let read = self.body.as_read(context, &mut found).map(|body| Self {
+            header: self.header,
+            body,
+        });
+        found.extend(read.as_ref().unwrap_or(self).check_read(interface));
+        found
     }
 
     /// The check of a message as it is.

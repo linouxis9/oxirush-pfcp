@@ -88,10 +88,10 @@ pub(crate) trait Listed: Codec + crate::check::Rules {
         self.check(path, found);
     }
 
-    /// Whether its receiver reads as a value an IE that the value keeps as octets: none
-    /// but in a grouped IE.
-    fn reads_otherwise(&self) -> bool {
-        false
+    /// Whether its octets read as the value: of a value that writes some, and of a
+    /// grouped IE as [`Scope::plain`](crate::table::Scope::plain) has it.
+    fn plain(&self) -> bool {
+        self.encoded_len() > 0
     }
 }
 

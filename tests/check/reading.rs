@@ -142,7 +142,6 @@ fn a_false_length_is_told_with_its_ie() {
     assert_eq!(
         told(&heartbeat),
         [
-            ("/Message Length".into(), rule, None, None),
             (
                 "/pfcp/Source IP Address".into(),
                 DeviationKind::InvalidLength { ie_type: 192 },
@@ -155,6 +154,7 @@ fn a_false_length_is_told_with_its_ie() {
                 None,
                 None
             ),
+            ("/Message Length".into(), rule, None, None),
         ]
     );
 }
@@ -211,4 +211,97 @@ fn an_ie_whose_length_runs_past_its_grouped_ie_is_of_an_invalid_length() {
     );
     let octets = session_message(50, 0, &[node, seid, pdr, far]);
     assert_eq!(told(&octets), [invalid("/pfcp/Create PDR/0/PDI", 20)]);
+}
+
+/// What `check()` finds of a message is what it finds of its octets, however the message
+/// holds its IEs: each pair below encodes to the same octets, and is checked alike. (a) A
+/// false Message Length, with the Recovery Time Stamp held as octets or as a value, and an
+/// IE of a false Length at the end of the message; (b) a vendor IE of a false Length in a
+/// Create PDR, with the PDR ID as octets or as a value; (c) a vendor IE held with the
+/// Enterprise ID that its octets begin with, or without; (d) a QER ID of a null length
+/// before its value, as a tree may write it, whose receiver handles the first (§7.6.10).
+#[test]
+fn a_message_is_checked_as_its_octets_whatever_holds_them() {
+    let same = |a: &Message, b: &Message| {
+        assert_eq!(a.encode().unwrap(), b.encode().unwrap());
+        let found = a.check(Interfaces::N4);
+        assert_eq!(found, b.check(Interfaces::N4));
+        found
+            .into_iter()
+            .map(|deviation| deviation.kind)
+            .collect::<Vec<_>>()
+    };
+    // (a)
+    let mut raw = HeartbeatRequest::default();
+    raw.raw.push(RawIe::new(96, vec![0, 0, 0, 7]));
+    let mut octets = Message::node(1, raw);
+    octets.header.length = Some(3);
+    let mut value = Message::node(1, HeartbeatRequest::new(RecoveryTimeStamp::new(7)));
+    value.header.length = Some(3);
+    let rule = DeviationKind::Rule("a Message Length other than the octets after the first four");
+    assert_eq!(same(&octets, &value), [rule]);
+    let mut octets = HeartbeatRequest::default();
+    octets.raw.push(RawIe::new(96, vec![0, 0, 0, 7]));
+    octets.raw.push(RawIe {
+        length: Some(9),
+        ..RawIe::new(192, vec![2, 10, 0, 0, 1])
+    });
+    let mut value = HeartbeatRequest::new(RecoveryTimeStamp::new(7));
+    value.raw.push(octets.raw[1].clone());
+    let (octets, value) = (Message::node(1, octets), Message::node(1, value));
+    assert_eq!(
+        same(&octets, &value),
+        [DeviationKind::InvalidLength { ie_type: 192 }]
+    );
+    // (b)
+    let mut bad = RawIe::new(0x8001, vec![1, 2, 3]);
+    bad.enterprise_id = Some(18681);
+    bad.length = Some(9);
+    let mut by_value = pdr(1);
+    let mut by_octets = by_value.clone();
+    by_octets.pdr_id = None;
+    by_octets.raw.push(RawIe::new(56, vec![0, 1]));
+    by_value.raw.push(bad.clone());
+    by_octets.raw.push(bad);
+    let of = |pdr: CreatePdr| {
+        let seid = FSeid::ipv4(1, SMF);
+        let request = SessionEstablishmentRequest::new_n4(NodeId::Ipv4(SMF), seid, pdr, far(1));
+        Message::session(0, 1, request)
+    };
+    assert_eq!(
+        same(&of(by_octets), &of(by_value)),
+        [DeviationKind::InvalidLength { ie_type: 0x8001 }]
+    );
+    // (c)
+    let mut without = HeartbeatRequest::new(RecoveryTimeStamp::new(7));
+    without.raw.push(RawIe::new(0x8001, vec![0xaa, 0xbb, 0xcc]));
+    let mut with = HeartbeatRequest::new(RecoveryTimeStamp::new(7));
+    with.raw.push(RawIe {
+        enterprise_id: Some(0xaabb),
+        ..RawIe::new(0x8001, vec![0xcc])
+    });
+    assert_eq!(
+        same(&Message::node(1, without), &Message::node(1, with)),
+        []
+    );
+    // (d)
+    #[cfg(feature = "tree")]
+    {
+        let written = oxirush_utils::tree!({"message": "PFCP Session Establishment Request", "SEID": 0,
+        "Sequence Number": 1, "ies": {
+        "Node ID": "10.0.0.1", "CP F-SEID": {"V4": true, "SEID": 1, "IPv4 address": "10.0.0.1"},
+        "Create PDR": [{"PDR ID": 1, "Precedence": 1, "PDI": {"Source Interface": "Core"}, "FAR ID": 1}],
+        "Create FAR": [{"FAR ID": 1, "Apply Action": {"DROP": true}}],
+        "Create QER": [{"QER ID": [{"octets": ""}, 3], "Gate Status": {"UL Gate": "OPEN", "DL Gate": "OPEN"}}]}});
+        let message = Message::from_tree(&written).unwrap();
+        assert_eq!(message.to_tree(), written);
+        let read = Message::decode(&message.encode().unwrap()).unwrap();
+        assert_eq!(
+            same(&message, &read),
+            [
+                DeviationKind::NullLength { ie_type: 109 },
+                DeviationKind::Repeated { ie_type: 109 },
+            ]
+        );
+    }
 }

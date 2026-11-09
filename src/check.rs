@@ -805,14 +805,7 @@ fn raw_deviations<S: Scope>(
     let mut handled: alloc::collections::BTreeSet<u16> = alloc::collections::BTreeSet::new();
     for (at, ie) in raws.iter().enumerate() {
         let Some(row) = table.row_of(ie.ie_type) else {
-            // By its name in the tree, and its position among those of its type there.
-            let name = crate::tree_name(ie.ie_type, Some(table));
-            let same = |other: &&crate::ie::RawIe| other.ie_type == ie.ie_type;
-            let name = Segment(&name);
-            let here = match raws.iter().filter(same).count() {
-                1 => format!("{path}/{name}"),
-                _ => format!("{path}/{name}/{}", raws[..at].iter().filter(same).count()),
-            };
+            let here = kept_path(scope, &positions, at, path);
             if !ie.frames() {
                 found.push(invalid_length(here, ie.ie_type, context));
                 continue;
@@ -903,6 +896,70 @@ fn unframed_within(row: &Row, octets: &[u8]) -> Option<u16> {
         crate::ie::IeFault::Length { ie_type, .. } => Some(ie_type),
         crate::ie::IeFault::HeaderCut { .. } => Some(row.ie_type),
     })
+}
+
+/// The scope as its receiver reads its octets, which `check()` checks: `None` for a scope
+/// that is as they read ([`Scope::plain`]). One whose octets do not decode, as the Length
+/// of an IE that it keeps as octets does not frame, has those Lengths told in `found`
+/// ([`unframed`]), and is read with them cleared. One that does not encode is taken with
+/// them cleared.
+pub(crate) fn as_read<S: Scope + Clone>(
+    scope: &S,
+    path: &Path<'_>,
+    context: Context,
+    found: &mut Vec<Deviation>,
+) -> Option<S> {
+    if scope.plain() {
+        return None;
+    }
+    if let Some(read) = crate::table::reread(scope) {
+        return Some(read);
+    }
+    unframed(scope, path, context, found);
+    let mut cleared = scope.clone();
+    for ie in cleared.raw_mut() {
+        ie.length = None;
+    }
+    Some(crate::table::reread(&cleared).unwrap_or(cleared))
+}
+
+/// The IEs that a scope keeps as octets whose Length is not that of their content, which do
+/// not frame (§7.6.7), each at its path.
+fn unframed<S: Scope>(scope: &S, path: &Path<'_>, context: Context, found: &mut Vec<Deviation>) {
+    let positions = crate::table::kept_positions(scope);
+    for (at, ie) in scope.raw().iter().enumerate() {
+        if !ie.frames() {
+            let here = kept_path(scope, &positions, at, path);
+            found.push(invalid_length(here, ie.ie_type, context));
+        }
+    }
+}
+
+/// The path of the IE `at` that a scope keeps as octets: at the position of its row, or
+/// by its name in the tree and its position among those of its type there.
+fn kept_path<S: Scope>(
+    scope: &S,
+    positions: &[Option<usize>],
+    at: usize,
+    path: &Path<'_>,
+) -> String {
+    let (table, raws) = (S::table(), scope.raw());
+    let ie = &raws[at];
+    if let Some(row) = table.row_of(ie.ie_type) {
+        let here = Path::Row {
+            parent: path,
+            row: row.name,
+            nth: positions[at],
+        };
+        return format!("{here}");
+    }
+    let name = crate::tree_name(ie.ie_type, Some(table));
+    let same = |other: &&crate::ie::RawIe| other.ie_type == ie.ie_type;
+    let name = Segment(&name);
+    match raws.iter().filter(same).count() {
+        1 => format!("{path}/{name}"),
+        _ => format!("{path}/{name}/{}", raws[..at].iter().filter(same).count()),
+    }
 }
 
 /// The deviation of an IE at `path` that does not frame, of `ie_type`.

@@ -154,10 +154,18 @@ fn the_absence_rules_that_their_scope_shows() {
     };
     let instance = NetworkInstance(b"internet".to_vec().into());
     let filter = SdfFilter::default();
-    let ethernet = EthernetPacketFilter::default();
+    let ethernet =
+        EthernetPacketFilter::default().with_ethernet_filter_id(EthernetFilterId::new(1));
     let forwarding =
         || ForwardingParameters::new(DestinationInterface::new(DestinationInterfaceValue::Core));
     let marking = || TransportLevelMarking::new(0x00fc);
+    let extended = ExtendedTransportLevelMarking::new(
+        marking(),
+        PduSetImportance {
+            psi0: true,
+            ..Default::default()
+        },
+    );
     let mar = |functionality| {
         CreateMar::new(
             MarId::new(1),
@@ -167,94 +175,91 @@ fn the_absence_rules_that_their_scope_shows() {
     };
     let mode = || TransportMode::new(TransportModeValue::DatagramMode1);
     let cases: Vec<(Vec<String>, &[&str])> = vec![
-            // Table 7.5.2.2-2: of a Traffic Endpoint ID, none of the four
-            (
-                paths(&pdi().with_traffic_endpoint_id(endpoint.clone()), excluded),
-                &[],
+        // Table 7.5.2.2-2: of a Traffic Endpoint ID, none of the four
+        (
+            paths(&pdi().with_traffic_endpoint_id(endpoint.clone()), excluded),
+            &[],
+        ),
+        (
+            paths(&pdi().with_local_f_teid(FTeid::choose_ipv4()), excluded),
+            &[],
+        ),
+        (
+            paths(
+                &pdi()
+                    .with_local_f_teid(FTeid::choose_ipv4())
+                    .with_local_ingress_tunnel(LocalIngressTunnel::default())
+                    .with_network_instance(instance.clone())
+                    .with_ue_ip_address(ue.clone())
+                    .with_traffic_endpoint_id(endpoint.clone()),
+                excluded,
             ),
-            (
-                paths(&pdi().with_local_f_teid(FTeid::choose_ipv4()), excluded),
-                &[],
+            &[
+                "Local F-TEID",
+                "Local Ingress Tunnel",
+                "Network Instance",
+                "UE IP address",
+            ],
+        ),
+        // NOTE 3: no SDF Filter beside an Ethernet Packet Filter
+        (paths(&pdi().with_sdf_filter(filter.clone()), excluded), &[]),
+        (
+            paths(
+                &pdi()
+                    .with_sdf_filter(filter)
+                    .with_ethernet_packet_filter(ethernet),
+                excluded,
             ),
-            (
-                paths(
-                    &pdi()
-                        .with_local_f_teid(FTeid::choose_ipv4())
-                        .with_local_ingress_tunnel(LocalIngressTunnel::default())
-                        .with_network_instance(instance.clone())
-                        .with_ue_ip_address(ue.clone())
-                        .with_traffic_endpoint_id(endpoint.clone()),
-                    excluded,
-                ),
-                &[
-                    "Local F-TEID",
-                    "Local Ingress Tunnel",
-                    "Network Instance",
-                    "UE IP address",
-                ],
+            &["SDF Filter"],
+        ),
+        // Table 7.5.2.3-2: no Transport Level Marking beside an Extended one
+        (
+            paths(
+                &forwarding().with_transport_level_marking(marking()),
+                excluded,
             ),
-            // NOTE 3: no SDF Filter beside an Ethernet Packet Filter
-            (paths(&pdi().with_sdf_filter(filter.clone()), excluded), &[]),
-            (
-                paths(
-                    &pdi()
-                        .with_sdf_filter(filter)
-                        .with_ethernet_packet_filter(ethernet),
-                    excluded,
-                ),
-                &["SDF Filter"],
+            &[],
+        ),
+        (
+            paths(
+                &forwarding()
+                    .with_transport_level_marking(marking())
+                    .with_extended_transport_level_marking(extended.clone()),
+                excluded,
             ),
-            // Table 7.5.2.3-2: no Transport Level Marking beside an Extended one
-            (
-                paths(
-                    &forwarding().with_transport_level_marking(marking()),
-                    excluded,
-                ),
-                &[],
+            &["Transport Level Marking"],
+        ),
+        // Table 7.5.2.8-1: a Transport Mode of MPQUIC alone, and NOTE 2
+        (
+            paths(
+                &mar(SteeringFunctionalityValue::MpquicUdp).with_transport_mode(mode()),
+                excluded,
             ),
-            (
-                paths(
-                    &forwarding()
-                        .with_transport_level_marking(marking())
-                        .with_extended_transport_level_marking(
-                            ExtendedTransportLevelMarking::default(),
-                        ),
-                    excluded,
-                ),
-                &["Transport Level Marking"],
+            &[],
+        ),
+        (
+            paths(
+                &mar(SteeringFunctionalityValue::AtsssLl).with_transport_mode(mode()),
+                excluded,
             ),
-            // Table 7.5.2.8-1: a Transport Mode of MPQUIC alone, and NOTE 2
-            (
-                paths(
-                    &mar(SteeringFunctionalityValue::MpquicUdp).with_transport_mode(mode()),
-                    excluded,
-                ),
-                &[],
+            &["Transport Mode"],
+        ),
+        (
+            paths(
+                &mar(SteeringFunctionalityValue::AtsssLl)
+                    .with_threshold_values(Thresholds::default())
+                    .with_steering_mode_indicator(SteeringModeIndicator::default()),
+                excluded,
             ),
-            (
-                paths(
-                    &mar(SteeringFunctionalityValue::AtsssLl).with_transport_mode(mode()),
-                    excluded,
-                ),
-                &["Transport Mode"],
-            ),
-            (
-                paths(
-                    &mar(SteeringFunctionalityValue::AtsssLl)
-                        .with_threshold_values(Thresholds::default())
-                        .with_steering_mode_indicator(SteeringModeIndicator::default()),
-                    excluded,
-                ),
-                &["Steering Mode Indicator"],
-            ),
-        ];
+            &["Steering Mode Indicator"],
+        ),
+    ];
     for (found, expected) in cases {
         assert_eq!(found, expected);
     }
     // A Transport Level Marking that the scope keeps as octets is there; an IE of
     // another type is not it
-    let mut kept = forwarding()
-        .with_extended_transport_level_marking(ExtendedTransportLevelMarking::default());
+    let mut kept = forwarding().with_extended_transport_level_marking(extended);
     kept.raw.push(RawIe::new(116, vec![1]));
     assert_eq!(paths(&kept, excluded), Vec::<String>::new());
     kept.raw.push(RawIe::new(30, vec![0xfc]));
@@ -496,7 +501,8 @@ fn the_conditions_that_the_ies_of_a_rule_show() {
             "Header Handling Condition",
         ],
     );
-    handling.header_handling_control_reference = Some(HeaderHandlingControlReference::default());
+    handling.header_handling_control_reference =
+        Some(HeaderHandlingControlReference(b"reference".to_vec().into()));
     shown(&handling, &[]);
     // Table 7.5.2.8-1: an MPQUIC steering functionality has its transport mode
     let mar = |value| CreateMar {
@@ -733,7 +739,9 @@ fn a_condition_reads_the_rows_of_the_interface_alone() {
     };
     let pdi = Pdi::new(SourceInterface::new(SourceInterfaceValue::Core))
         .with_sdf_filter(sdf)
-        .with_ethernet_packet_filter(EthernetPacketFilter::default());
+        .with_ethernet_packet_filter(
+            EthernetPacketFilter::default().with_ethernet_filter_id(EthernetFilterId::new(1)),
+        );
     let pdr = |pdi: Pdi| {
         CreatePdr::new_n4(PdrId::new(1), Precedence::new(1), pdi).with_far_id(FarId::new(1))
     };

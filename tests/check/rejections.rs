@@ -21,12 +21,15 @@ use super::*;
 
 /// §7.2.3.2: the mandatory IE of a mandatory grouped IE is answered with "Mandatory IE
 /// missing", that of a conditional one with "Conditional IE missing", and that of an
-/// optional one not at all; nor is any of a response.
+/// optional one not at all; nor is any of a response. Each grouped IE has another IE, as
+/// one of none has a null length.
 #[test]
 fn the_cause_follows_the_presence_of_the_grouped_ie() {
     let mut message = establishment();
     request_with(&mut message, |request| {
-        request.create_pdr[0].pdi.as_mut().unwrap().source_interface = None
+        let pdi = request.create_pdr[0].pdi.as_mut().unwrap();
+        pdi.source_interface = None;
+        pdi.network_instance = Some(NetworkInstance(b"internet".to_vec().into()));
     });
     let found = message.check(Interfaces::N4);
     assert_eq!(
@@ -49,7 +52,10 @@ fn the_cause_follows_the_presence_of_the_grouped_ie() {
 
     let mut establishment = establishment();
     request_with(&mut establishment, |request| {
-        request.create_bar = Some(Box::default());
+        request.create_bar = Some(Box::new(CreateBar {
+            suggested_buffering_packets_count: Some(SuggestedBufferingPacketsCount::new(1)),
+            ..Default::default()
+        }));
     });
     let found = establishment.check(Interfaces::N4);
     assert_eq!(

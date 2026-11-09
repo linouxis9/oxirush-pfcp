@@ -27,11 +27,13 @@ The first version, of TS 29.244 V19.6.0 (2026-06):
   as that IE: the Destination Interface of a Remote GTP-U Peer, the C-TAG and S-TAG of
   Outer Header Creation and of MAC Addresses Detected and Removed, and the QFIs of a PMF
   Control Information, which are `SixBits` as a QFI is. A message is checked as its
-  receiver reads it: an IE that a scope keeps as octets, which the receiver reads as the
-  value of its row, is checked as that value. A Message Length or an IE Length that is
+  receiver reads its octets: `check(m)` is `check(Message::decode(m.encode()))` where they
+  decode, however the message holds its IEs, as values or as octets; a Length of an IE
+  that keeps them from decoding is told, and the rest checked with it cleared. A Message Length or an IE Length that is
   not the length of what it counts is told, with "Invalid length" in a request and the
   IE that does not frame (§7.6.3, §7.6.7), at any depth: one that runs past its grouped
-  IE at that grouped IE, which its receiver cannot read.
+  IE at that grouped IE, which its receiver cannot read. A false Length whose octets frame
+  as other IEs is checked as those, its receiver telling no fault there (§7.6.7).
 - With `tree`, a message as a tree that prints as JSON, on oxirush-utils 0.2, whose
   `tree` the crate exports at its root, and read and edited by path (`paths::select`,
   `paths::set`), and `paths::row_at` names the row and the IE type of the IE at a path;
