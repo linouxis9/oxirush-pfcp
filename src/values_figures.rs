@@ -640,7 +640,16 @@ pfcp_bits! {
 pfcp_bits! {
     /// RTP Header Extension Additional Information (§8.2.241).
     pub struct RtpHeaderExtensionAdditionalInformation "8.2.241" octets 2 min 2 {
-        npdsi "NPDSI": 0 3 1, pssai "PSSAI": 0 2 1, fi "FI": 0 1 1, npds "NPDS": 1 4 1, pssa "PSSA": 1 3 1, format "Format": 1 1 2 as FormatField,
+        npdsi "NPDSI": 0 3 1, pssai "PSSAI": 0 2 1, fi "FI": 0 1 1, npds "NPDS": 1 4 1, pssa "PSSA": 1 3 1, format "Format": 1 1 2 as FormatField if fi,
+    }
+    check(this, path, found) {
+        // Where its flag is 0, the field "shall be coded as all "0" and be ignored by the
+        // receiver", as a spare bit is.
+        for ignored in [!this.fi && this.format.value() != 0, !this.pssai && this.pssa, !this.npdsi && this.npds] {
+            if ignored {
+                found.push(crate::check::Deviation::new(path, "8.2.241", crate::check::DeviationKind::SpareBits));
+            }
+        }
     }
 }
 

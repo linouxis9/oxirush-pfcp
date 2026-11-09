@@ -733,3 +733,29 @@ fn the_spare_bits_of_a_flow_label_and_the_number_of_more_usage_reports() {
         "{found:?}"
     );
 }
+
+/// §8.2.241: where FI, PSSAI or NPDSI is 0, the Format, PSSA or NPDS field of octet 6 "shall
+/// be coded as all "0" and be ignored by the receiver": one set is told as a spare bit is,
+/// and a Format of 0 is no spare value where FI is 0.
+#[test]
+fn the_fields_of_rtp_header_extension_additional_information_that_a_flag_gives() {
+    type Rtp = RtpHeaderExtensionAdditionalInformation;
+    let ignored = || ("8.2.241", DeviationKind::SpareBits);
+    // FI 0, Format 0; FI, Format 1; PSSAI, PSSA; NPDSI, NPDS; PSSAI and NPDSI without them
+    for octets in ["0000", "0101", "0204", "0408", "0600"] {
+        assert_eq!(value_found::<Rtp>(octets), [], "{octets}");
+    }
+    // FI 0, Format 1; PSSAI 0, PSSA; NPDSI 0, NPDS; FI 0, Format 3, PSSA and NPDS
+    for (octets, found) in [
+        ("0001", vec![ignored()]),
+        ("0105", vec![ignored()]),
+        ("0008", vec![ignored()]),
+        ("000f", vec![ignored(), ignored(), ignored()]),
+    ] {
+        assert_eq!(value_found::<Rtp>(octets), found, "{octets}");
+    }
+    // FI with a Format of Table 8.2.241-1's spare values
+    let spare = |value| ("8.2.241", DeviationKind::SpareValue { value });
+    assert_eq!(value_found::<Rtp>("0100"), [spare(0)]);
+    assert_eq!(value_found::<Rtp>("0103"), [spare(3)]);
+}

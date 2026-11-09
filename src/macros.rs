@@ -434,8 +434,9 @@ macro_rules! pfcp_layout {
 /// A value of octets of bits: flags of one bit and fields of a few, each at its octet
 /// (from 0), its lowest bit (from 1) and its width, in at most `N` octets of which the
 /// first `MIN` are always there; then the octets that a later release adds. The other
-/// bits are spare and kept, and so is how many of the `N` octets a decoded value had. The
-/// rules of its clause on which flags go together follow it.
+/// bits are spare and kept, and so is how many of the `N` octets a decoded value had. A
+/// value of a table that only a flag gives meaning to, `if flag`, is checked where the
+/// flag is set. The rules of its clause on which flags go together follow it.
 ///
 /// ```text
 /// pub struct ApplyAction "8.2.26" octets 2 min 1 {
@@ -447,7 +448,7 @@ macro_rules! pfcp_bits {
     (
         $(#[$meta:meta])*
         pub struct $ty:ident $clause:literal octets $n:literal min $min:literal {
-            $( $field:ident $name:literal : $octet:literal $low:literal $width:tt $(+ $octet2:literal $low2:literal $width2:tt)? $(as $kind:ident)? ),* $(,)?
+            $( $field:ident $name:literal : $octet:literal $low:literal $width:tt $(+ $octet2:literal $low2:literal $width2:tt)? $(as $kind:ident)? $(if $flag:ident)? ),* $(,)?
         }
         $( check($this:ident, $path:ident, $found:ident) $rules:block )?
     ) => {
@@ -598,7 +599,7 @@ macro_rules! pfcp_bits {
                 if self.spare.iter().any(|spare| *spare != 0) {
                     found.push(crate::check::Deviation::new(path, "8.1.2", crate::check::DeviationKind::SpareBits));
                 }
-                $( pfcp_bits!(@check $width [$($kind)? $(+ $octet2 $low2 $width2)?] self.$field, path, found, $clause); )*
+                $( pfcp_bits!(@when [$(self.$flag)?] pfcp_bits!(@check $width [$($kind)? $(+ $octet2 $low2 $width2)?] self.$field, path, found, $clause)); )*
                 $(
                     let ($this, $path, $found) = (self, path, found);
                     $rules
@@ -722,6 +723,8 @@ macro_rules! pfcp_bits {
     (@write 1 [] $int:ty, $value:expr, $low:expr) => { <$int>::from($value) << ($low - 1) };
     (@write $width:tt [] $int:ty, $value:expr, $low:expr) => { (<$int>::from($value) & (((1u32 << $width) - 1) as $int)) << ($low - 1) };
     (@write $width:tt [$kind:ident] $int:ty, $value:expr, $low:expr) => { pfcp_bits!(@write $width [] $int, $value.value(), $low) };
+    (@when [] $($check:tt)*) => { $($check)*; };
+    (@when [$flag:expr] $($check:tt)*) => { if $flag { $($check)*; } };
     (@check $width:tt [+ $($part:tt)*] $value:expr, $path:ident, $found:ident, $clause:literal) => {};
     (@check $width:tt [] $value:expr, $path:ident, $found:ident, $clause:literal) => {};
     (@check $width:tt [$kind:ident] $value:expr, $path:ident, $found:ident, $clause:literal) => {

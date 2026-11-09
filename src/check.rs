@@ -167,7 +167,8 @@ pub enum DeviationKind {
     VendorId,
     /// Spare bits that are not zero (§8.1.2), and a reserved bit or a field that its clause
     /// has the sender set to 0 and the receiver ignore, as bit 3 of Reporting Frequency
-    /// (§8.2.168) and the Number of Additional Usage Reports with AURI (§8.2.91).
+    /// (§8.2.168), the Number of Additional Usage Reports with AURI (§8.2.91) and a field of
+    /// RTP Header Extension Additional Information whose flag is 0 (§8.2.241).
     SpareBits,
     /// A value that its table has as spare, or does not have: the receiver ignores it
     /// (§7.6.8).
