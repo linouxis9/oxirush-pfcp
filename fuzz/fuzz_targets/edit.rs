@@ -15,9 +15,9 @@
    limitations under the License.
 */
 
-//! A captured message edited through its tree, as a user edits one: values at the paths
-//! of its tree, from the fuzzer or from the trees of the other captures, with one of their
-//! leaves changed or not, or the octets of an IE. `Message::from_tree` writes a message
+//! A message, captured or of an IE of any row ([`pool::Base`]), edited through its tree, as
+//! a user edits one: values at the paths of its tree, from the fuzzer or from the trees of
+//! the captures, with one of their leaves changed or not, or the octets of an IE. `Message::from_tree` writes a message
 //! from the tree that a user wrote, where the `tree` target reads back only the trees that
 //! a decode wrote.
 //!
@@ -33,11 +33,11 @@ use libfuzzer_sys::arbitrary::{self, Arbitrary};
 use libfuzzer_sys::fuzz_target;
 use oxirush_pfcp::tree;
 use oxirush_pfcp::{Message, paths};
-use pool::{Leaf, POOL, change};
+use pool::{Base, Leaf, POOL, change};
 
 #[derive(Arbitrary, Debug)]
 struct Edits {
-    base: u16,
+    base: Base,
     edits: Vec<Edit>,
 }
 
@@ -71,7 +71,9 @@ fn row(path: &str) -> Option<String> {
 }
 
 fuzz_target!(|input: Edits| {
-    let message = POOL.message(input.base);
+    let Some(message) = input.base.message() else {
+        return;
+    };
     let before = message.to_tree();
     let known = tree::paths(&before);
     if known.is_empty() {

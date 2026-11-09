@@ -15,8 +15,8 @@
    limitations under the License.
 */
 
-//! A path that the fuzzer writes, on the tree of a captured message: `paths::select` and
-//! `paths::set`. The path starts as one that the tree has, cut anywhere, and goes on with
+//! A path that the fuzzer writes, on the tree of a message, captured or of an IE of any row
+//! ([`pool::Base`]): `paths::select` and `paths::set`. The path starts as one that the tree has, cut anywhere, and goes on with
 //! the fuzzer's text: escapes (`~1`), names of rows in any case, positions past the end
 //! of a list, the header, `octets` under an IE.
 //!
@@ -32,11 +32,11 @@ use libfuzzer_sys::arbitrary::{self, Arbitrary};
 use libfuzzer_sys::fuzz_target;
 use oxirush_pfcp::tree::{self, Value};
 use oxirush_pfcp::{Message, paths};
-use pool::POOL;
+use pool::Base;
 
 #[derive(Arbitrary, Debug)]
 struct Call {
-    base: u16,
+    base: Base,
     set: bool,
     /// A path that the tree has, cut after `cut` characters
     pick: u16,
@@ -59,7 +59,9 @@ fn has_a_star(tree: &Value) -> bool {
 }
 
 fuzz_target!(|call: Call| {
-    let message = POOL.message(call.base);
+    let Some(message) = call.base.message() else {
+        return;
+    };
     let tree = message.to_tree();
     let plain = !has_a_star(&tree);
 

@@ -15,14 +15,18 @@
    limitations under the License.
 */
 
-//! What the targets that edit trees share: the messages of tests/captures, which they
-//! start from, the values that their trees have, and a value of the fuzzer.
+//! What the targets that edit trees share: the messages that they start from, of
+//! tests/captures or of one IE of any row ([`Base`]), the values that the trees of the
+//! captures have, and a value of the fuzzer.
 
 #![allow(dead_code)]
 
 use libfuzzer_sys::arbitrary::{self, Arbitrary};
-use oxirush_pfcp::{DeviationKind, Interfaces, Message};
 use oxirush_pfcp::tree::{self, Value};
+use oxirush_pfcp::{
+    DeviationKind, Interfaces, MESSAGE_TYPES, Message, Repeat, Row, Table, is_node_related,
+    message_type_info,
+};
 use std::collections::BTreeMap;
 use std::sync::LazyLock;
 
@@ -72,6 +76,48 @@ impl Pool {
     /// The message that `number` picks.
     pub fn message(&self, number: u16) -> &Message {
         &self.messages[usize::from(number) % self.messages.len()]
+    }
+}
+
+/// The message that a target starts from: a captured one, or one of an IE of any row of
+/// any message type, as deep in the grouped IEs as `rows` goes, the last of the fuzzer's
+/// octets, which a capture may not have.
+#[derive(Arbitrary, Debug)]
+pub enum Base {
+    Captured(u16),
+    Made { message: u8, rows: Vec<u16>, octets: Vec<u8> },
+}
+
+impl Base {
+    /// The message, if the octets made decode.
+    pub fn message(&self) -> Option<Message> {
+        let (message, rows, octets) = match self {
+            Base::Captured(number) => return Some(POOL.message(*number).clone()),
+            Base::Made { message, rows, octets } => (message, rows, octets),
+        };
+        let info = &MESSAGE_TYPES[usize::from(*message) % MESSAGE_TYPES.len()];
+        let (mut table, mut types) = (info.table, Vec::new());
+        for row in rows.iter().take(4) {
+            let Some(row) = table.rows.get(usize::from(*row) % table.rows.len().max(1)) else {
+                break;
+            };
+            types.push(row.ie_type);
+            match row.content {
+                Some(content) => table = content,
+                None => break,
+            }
+        }
+        let mut content = octets.clone();
+        for ie_type in types.iter().rev() {
+            let length = u16::try_from(content.len()).ok()?;
+            content = [&ie_type.to_be_bytes()[..], &length.to_be_bytes(), &content].concat();
+        }
+        let session = !is_node_related(info.message_type);
+        let header: &[u8] = if session { &[0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 7, 0] } else { &[0, 0, 7, 0] };
+        let length = u16::try_from(header.len() + content.len()).ok()?;
+        let first = if session { 0x21 } else { 0x20 };
+        let octets = [&[first, info.message_type][..], &length.to_be_bytes(), header, &content].concat();
+        Message::decode(&octets).ok()
     }
 }
 
@@ -178,10 +224,11 @@ fn cleared(value: &mut Value) {
 
 /// What holds of a message that the crate wrote from a tree: it encodes, and its tree
 /// loads back to it. Its octets decode to a message that encodes to them, whose tree loads
-/// back to it, and in which `check()` finds what it finds in the message, on every
-/// interface: `check(m)` is `check(Message::decode(m.encode()))`. A tree may write a false
-/// Length or Message Length, for a test tool, which keeps the octets from decoding: then
-/// `check()` tells it, and the message without the Lengths that the tree writes decodes.
+/// back to it, which has each value of the message as it is ([`held`]), and in which
+/// `check()` finds what it finds in the message, on every interface: `check(m)` is
+/// `check(Message::decode(m.encode()))`. A tree may write a false Length or Message Length,
+/// for a test tool, which keeps the octets from decoding: then `check()` tells it, and the
+/// message without the Lengths that the tree writes decodes.
 pub fn written(message: &Message) {
     let octets = match message.encode() {
         Ok(octets) => octets,
@@ -212,6 +259,14 @@ pub fn written(message: &Message) {
     };
     assert_eq!(read.encode().as_ref(), Ok(&octets), "{}", hex(&octets));
     let read_tree = read.to_tree();
+    // The Message Length that a tree writes is no value, which a receiver does not keep
+    let table = message_type_info(read.body.message_type()).map(|info| info.table);
+    let mut values = tree.clone();
+    cleared(&mut values);
+    assert!(
+        held(&values, &read_tree, table),
+        "a value of a message reads as another: {tree} reads as {read_tree}"
+    );
     assert_eq!(
         Message::from_tree(&read_tree).as_ref(),
         Ok(&read),
@@ -225,4 +280,52 @@ pub fn written(message: &Message) {
             hex(&octets)
         );
     }
+}
+
+/// Whether each value that the tree of a message, or of a grouped IE of `table`, holds is in
+/// the tree of its octets `read` as it is, in its place: but an IE that the message keeps as
+/// octets, which its receiver may read as a value, and a value of no octets, or past the
+/// IEs that its row takes, which its receiver keeps as octets (§7.6.10).
+fn held(written: &Value, read: &Value, table: Option<&'static Table>) -> bool {
+    let (Value::Object(written), Value::Object(read)) = (written, read) else {
+        return written == read;
+    };
+    let kept = |value: &Value| value.get("octets").is_some();
+    let entries = |value: &Value| match value {
+        Value::Array(entries) => entries.clone(),
+        value => vec![value.clone()],
+    };
+    written.len() == read.len()
+        && written.iter().all(|(name, value)| {
+            let Some(other) = read.get(name) else { return false };
+            let row = table.and_then(|table| table.rows.iter().find(|row| row.name == name));
+            match (name.as_str(), row) {
+                ("ies", _) => held(value, other, table),
+                (_, None) => value == other || kept(value),
+                (_, Some(row)) => {
+                    let (written, read) = (entries(value), entries(other));
+                    written.len() == read.len()
+                        && written.iter().zip(&read).enumerate().all(|(at, (value, other))| {
+                            let values = read[..at].iter().filter(|other| !kept(other)).count();
+                            kept(value)
+                                || other.get("octets").and_then(Value::as_str) == Some("")
+                                || kept(other) && values >= capacity(row)
+                                || match row.content {
+                                    Some(content) => held(value, other, Some(content)),
+                                    None => value == other,
+                                }
+                        })
+                }
+            }
+        })
+}
+
+/// How many IEs the field of a row holds: as many as its roles allow together.
+fn capacity(row: &Row) -> usize {
+    let each = |repeat: Repeat| match repeat {
+        Repeat::Once => 1,
+        Repeat::AtMost(most) => usize::from(most),
+        Repeat::Any => usize::MAX,
+    };
+    row.roles.iter().map(|role| each(role.repeat)).fold(0, usize::saturating_add)
 }
