@@ -149,40 +149,39 @@ pub fn change(value: &mut Value, walk: &[u16], leaf: Value) {
     }
 }
 
-/// Whether an IE is kept as its octets.
-fn octets(value: &Value) -> bool {
-    matches!(value, Value::Object(members) if members.len() == 1 && members.contains_key("octets"))
-}
+/// The interfaces of `check()`, one by one and together.
+const INTERFACES: [Interfaces; 7] = [
+    Interfaces::SXA,
+    Interfaces::SXB,
+    Interfaces::SXC,
+    Interfaces::N4,
+    Interfaces::N4MB,
+    Interfaces::SXA_SXB,
+    Interfaces::ALL,
+];
 
-/// Whether `read`, the tree of the octets of a message, is `written`, the tree of the
-/// message that the crate wrote, but where one of them keeps an IE as its octets: an IE
-/// written as octets that decode as a value of its type, or a value of a null length,
-/// which the decoder keeps as octets.
-fn same(written: &Value, read: &Value) -> bool {
-    match (written, read) {
-        _ if octets(written) || octets(read) => true,
-        (Value::Object(written), Value::Object(read)) => {
-            written.len() == read.len()
-                && written
-                    .iter()
-                    .all(|(name, value)| read.get(name).is_some_and(|other| same(value, other)))
+/// The tree without the Lengths that it writes: the Message Length, and that of each IE
+/// kept as octets.
+fn cleared(value: &mut Value) {
+    match value {
+        Value::Object(members) => {
+            members.shift_remove("Message Length");
+            if members.contains_key("octets") {
+                members.shift_remove("length");
+            }
+            members.values_mut().for_each(cleared);
         }
-        (Value::Array(written), Value::Array(read)) => {
-            written.len() == read.len()
-                && written
-                    .iter()
-                    .zip(read)
-                    .all(|(value, other)| same(value, other))
-        }
-        _ => written == read,
+        Value::Array(entries) => entries.iter_mut().for_each(cleared),
+        _ => {}
     }
 }
 
-/// What holds of a message that the crate wrote from a tree: it encodes, its octets decode
-/// to a message that encodes to the same octets and whose tree is that of the message, but
-/// for the IEs that one of them keeps as octets, and its tree writes it again. A tree may
-/// write a false Length or Message Length, for a test tool: the octets of such a message
-/// do not decode, and `check()` says so.
+/// What holds of a message that the crate wrote from a tree: it encodes, and its tree
+/// loads back to it. Its octets decode to a message that encodes to them, whose tree loads
+/// back to it, and in which `check()` finds what it finds in the message, on every
+/// interface: `check(m)` is `check(Message::decode(m.encode()))`. A tree may write a false
+/// Length or Message Length, for a test tool, which keeps the octets from decoding: then
+/// `check()` tells it, and the message without the Lengths that the tree writes decodes.
 pub fn written(message: &Message) {
     let octets = match message.encode() {
         Ok(octets) => octets,
@@ -191,30 +190,39 @@ pub fn written(message: &Message) {
         }
     };
     let tree = message.to_tree();
+    match Message::from_tree(&tree) {
+        Ok(again) => assert_eq!(&again, message, "the tree of a message loads to another: {tree}"),
+        Err(error) => panic!("the tree of a message is refused: {error}: {tree}"),
+    }
     let read = match Message::decode(&octets) {
         Ok(read) => read,
         Err(error) => {
-            let unframed = message.check(Interfaces::ALL).into_iter().any(|deviation| {
+            let told = message.check(Interfaces::ALL).into_iter().any(|deviation| {
                 matches!(deviation.kind, DeviationKind::InvalidLength { .. })
                     || deviation.path == "/Message Length"
             });
-            assert!(
-                unframed,
-                "a message that the crate wrote does not decode: {error}: {}",
-                hex(&octets)
-            );
+            assert!(told, "check() does not tell why the octets do not decode: {error}: {}", hex(&octets));
+            let mut tree = tree;
+            cleared(&mut tree);
+            let cleared = Message::from_tree(&tree).and_then(|message| Ok(message.encode()));
+            let decodes = cleared.is_ok_and(|octets| octets.is_ok_and(|octets| Message::decode(&octets).is_ok()));
+            assert!(decodes, "a message of no false Length does not decode: {error}: {tree}");
             return;
         }
     };
     assert_eq!(read.encode().as_ref(), Ok(&octets), "{}", hex(&octets));
     let read_tree = read.to_tree();
-    assert!(
-        same(&tree, &read_tree),
-        "the tree of a message that the crate wrote is not that of its octets {}:\n{tree}\n{read_tree}",
-        hex(&octets)
+    assert_eq!(
+        Message::from_tree(&read_tree).as_ref(),
+        Ok(&read),
+        "the tree of a decoded message loads to another: {read_tree}"
     );
-    match Message::from_tree(&tree) {
-        Ok(again) => assert_eq!(again.to_tree(), tree),
-        Err(error) => panic!("the tree of a message is refused: {error}: {tree}"),
+    for interface in INTERFACES {
+        assert_eq!(
+            message.check(interface),
+            read.check(interface),
+            "check() of a message is not that of its octets {} on {interface:?}: {tree}",
+            hex(&octets)
+        );
     }
 }
