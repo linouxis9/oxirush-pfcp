@@ -602,3 +602,27 @@ fn a_node_id_of_other_octets_is_no_ie_kept_as_octets() {
         tree!({"Node ID Type": 4, "Node ID value": "7f000008"})
     );
 }
+
+/// A Network Instance of the labels of a name is that name in a tree, but where the name is
+/// of hexadecimal digits, which a tree reads as octets; other octets, the text of a name
+/// among them, are hexadecimal (§8.2.4).
+#[test]
+fn a_network_instance_of_labels_is_its_name() {
+    let instance = |octets: &[u8]| NetworkInstance(octets.to_vec().into());
+    for (octets, written) in [
+        (&b"\x08internet"[..], tree!("internet")),
+        (b"\x03ims\x06mnc093", tree!("ims.mnc093")),
+        (b"internet", tree!("696e7465726e6574")),
+        (b"\x04cafe", tree!("0463616665")),
+        (b"", tree!("")),
+    ] {
+        assert_eq!(
+            tree::Tree::to_tree(&instance(octets)),
+            written,
+            "{octets:?}"
+        );
+        let read: NetworkInstance = tree::from_value(&written).unwrap();
+        assert_eq!(read, instance(octets), "{written}");
+    }
+    assert!(tree::from_value::<NetworkInstance>(&tree!("a..b")).is_err());
+}

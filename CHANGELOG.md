@@ -57,7 +57,9 @@ The first version, of TS 29.244 V19.6.0 (2026-06):
   `{"octets": ...}`, which an IE kept as octets is. A spare octet is written where it is
   set, and is 0 where a tree leaves it out, as the spare bits of the header and of a value. A Flow Description, an
   IPFilterRule, and the URL and the Domain Name of PFD Contents are their text
-  (`TextLv16`), or `{"octets": ...}` for octets that are no UTF-8.
+  (`TextLv16`), or `{"octets": ...}` for octets that are no UTF-8; a Network Instance of
+  the labels of a name is that name, and its octets in hexadecimal otherwise, and where
+  the name is of hexadecimal digits.
 - With `node`, `Node`, a PFCP entity without I/O: delivery and retransmission (§6.4),
   heartbeat, associations, sessions, load and overload control, and bundles (§6.5). A
   request that names another's session or association, as another SMF of a set sends

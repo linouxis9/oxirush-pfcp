@@ -528,18 +528,40 @@ impl Rules for NetworkInstance {}
 #[cfg(feature = "serde")]
 oxirush_utils::impl_serde!(NetworkInstance);
 
+/// The name of the labels of a domain name or an APN, `"internet"` (§8.2.4, TS 23.003
+/// clause 9.1), or the octets in hexadecimal: of other octets, and of a name of hexadecimal
+/// digits, which a tree reads as octets.
 #[cfg(feature = "tree")]
 impl oxirush_utils::tree::Tree for NetworkInstance {
     const NAME: &'static str = "Network Instance";
     fn to_tree(&self) -> oxirush_utils::tree::Value {
-        oxirush_utils::tree::octets(&self.0)
+        match fqdn_name(&self.0).filter(|name| !hexadecimal(name)) {
+            Some(name) => oxirush_utils::tree::text(&name),
+            None => oxirush_utils::tree::octets(&self.0),
+        }
     }
     fn from_tree(
         value: &oxirush_utils::tree::Value,
         reading: &mut oxirush_utils::tree::Reading,
     ) -> Result<Self, oxirush_utils::tree::Refused> {
-        reading.octets(value).map(|octets| Self(octets.into()))
+        let name = reading.text(value)?;
+        if hexadecimal(name) {
+            return reading.octets(value).map(|octets| Self(octets.into()));
+        }
+        let labels = fqdn_of(name).ok_or_else(|| {
+            reading.mismatch(
+                "octets in hexadecimal, or a name of labels of 1 to 63 octets",
+                value,
+            )
+        })?;
+        Ok(Self(labels.into()))
     }
+}
+
+/// Whether a text is octets in hexadecimal.
+#[cfg(feature = "tree")]
+fn hexadecimal(text: &str) -> bool {
+    text.len().is_multiple_of(2) && text.bytes().all(|digit| digit.is_ascii_hexdigit())
 }
 
 pfcp_layout! {
