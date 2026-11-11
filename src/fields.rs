@@ -1231,6 +1231,40 @@ fn fqdn_labels(mut octets: &[u8]) -> Option<Vec<&[u8]>> {
     (octets.is_empty() && !labels.is_empty()).then_some(labels)
 }
 
+/// Whether octets are base64-encoded characters, as the `byte` format of OpenAPI that TS
+/// 29.571 clause 5.5.2 names has them (IETF RFC 4648 clause 4): groups of four characters
+/// of the alphabet, the last with one or two `=` of padding where the octets end short of
+/// three.
+pub(crate) fn base64(octets: &[u8]) -> bool {
+    let padding = octets
+        .iter()
+        .rev()
+        .take(2)
+        .take_while(|octet| **octet == b'=');
+    let characters = &octets[..octets.len() - padding.count()];
+    octets.len().is_multiple_of(4)
+        && characters
+            .iter()
+            .all(|octet| octet.is_ascii_alphanumeric() || matches!(octet, b'+' | b'/'))
+}
+
+/// Whether octets are a field name of HTTP, a token (IETF RFC 9110 clauses 5.1 and 5.6.2):
+/// one or more letters, digits and ``!#$%&'*+-.^_`|~``.
+pub(crate) fn http_field_name(octets: &[u8]) -> bool {
+    let token = |octet: &u8| octet.is_ascii_alphanumeric() || b"!#$%&'*+-.^_`|~".contains(octet);
+    !octets.is_empty() && octets.iter().all(token)
+}
+
+/// Whether octets are a field value of HTTP (IETF RFC 9110 clause 5.5): visible characters
+/// and the octets above them, with spaces and tabs between them, and none before or after.
+pub(crate) fn http_field_value(octets: &[u8]) -> bool {
+    let blank = |octet: &u8| matches!(octet, b' ' | b'\t');
+    let content = |octet: &u8| blank(octet) || matches!(octet, 0x21..=0x7e | 0x80..);
+    octets.iter().all(content)
+        && !octets.first().is_some_and(blank)
+        && !octets.last().is_some_and(blank)
+}
+
 /// Whether labels are a full APN or DNN, of a Network Identifier and an Operator
 /// Identifier (TS 23.003 clauses 9.1.1 and 9.1.2): the Operator Identifier "is composed of
 /// three labels. The last label (or domain) shall be "gprs"", in letters of any case,

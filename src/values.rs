@@ -889,7 +889,6 @@ macro_rules! pfcp_octets {
             #[cfg(feature = "tree")]
             const NAME_LABELS: bool = pfcp_octets!(@name $($secret)?);
             /// Whether its octets are a text, a UTF8String.
-            #[cfg(feature = "tree")]
             const TEXT: bool = pfcp_octets!(@text $($secret)?);
         }
 
@@ -919,6 +918,9 @@ macro_rules! pfcp_octets {
             #[allow(unused_variables)]
             fn check(&self, path: &crate::check::Path, found: &mut alloc::vec::Vec<crate::check::Deviation>) {
                 $( crate::fields::flag_rule(!matches!(self.0.len(), $lengths), path, $clause, $rule, found); )?
+                // A value "encoded in UTF8String format".
+                let text = !Self::TEXT || core::str::from_utf8(&self.0).is_ok();
+                crate::fields::flag_rule(!text, path, $clause, concat!("a ", $name, " that is not UTF-8"), found);
                 $(
                     let ($this, $path, $found) = (self, path, found);
                     $rules

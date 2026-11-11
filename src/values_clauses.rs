@@ -138,6 +138,24 @@ pfcp_layout! {
         // port after it: those that its receiver reads as the port and ignores (§8.1.2).
         let port = this.redirect_port.map_or(0, usize::from);
         flag_rule(this.redirect_address_type.value() == 5 && this.extra.len() == port + 2, path, "8.2.20", "the Redirect Address Type is Port, and octets of a Redirect Server Address follow", found);
+        // The addresses are "encoded in UTF8String format", and of their type, as IETF
+        // RFC 4006 has the Redirect-Server-Address of a Redirect-Address-Type: the text of
+        // an IPv4 address, or of an IPv6 address; and of "IPv4 and IPv6 address", "an IPv4
+        // address and an IPv6 address in the Redirect Server Address IE and Other
+        // Redirect Server Address", in either order.
+        let (first, other) = (this.redirect_server_address.as_ref(), this.other_redirect_server_address.as_ref());
+        let text = [first, other].into_iter().flatten().all(|address| address.text().is_some());
+        flag_rule(!text, path, "8.2.20", "a Redirect Server Address that is not UTF-8", found);
+        let v4 = |address: &TextLv16| address.text().is_some_and(|text| text.parse::<Ipv4Addr>().is_ok());
+        let v6 = |address: &TextLv16| address.text().is_some_and(|text| text.parse::<Ipv6Addr>().is_ok());
+        let (one, two) = match (this.redirect_address_type.value(), first, other) {
+            (0 | 6, Some(first), _) => (!v4(first), false),
+            (1 | 7, Some(first), _) => (!v6(first), false),
+            (4 | 8, Some(first), Some(other)) => (false, !(v4(first) && v6(other) || v6(first) && v4(other))),
+            _ => (false, false),
+        };
+        flag_rule(text && one, path, "8.2.20", "a Redirect Server Address that is not the IPv4 or IPv6 address of its Redirect Address Type, in text", found);
+        flag_rule(text && two, path, "8.2.20", "a Redirect Server Address and an Other Redirect Server Address that are not an IPv4 address and an IPv6 address, in text", found);
     }
 }
 
@@ -218,6 +236,14 @@ pfcp_layout! {
         flags(u8) { header_type "Header Type": 1 / 5 as HeaderType }
         header_field_name "Header Field Name": Lv8,
         header_field_value "Header Field Value": Lv8,
+    }
+    check(this, path, found) {
+        // "For a HTTP Header Type, the contents of the Header Field Name and Header Field
+        // Value shall comply with the HTTP header field format (see clause 5 of IETF RFC
+        // 9110)".
+        let http = this.header_type == HeaderType::Http;
+        flag_rule(http && !http_field_name(&this.header_field_name.0), path, "8.2.67", "a Header Field Name that is no field name of HTTP", found);
+        flag_rule(http && !http_field_value(&this.header_field_value.0), path, "8.2.67", "a Header Field Value that is no field value of HTTP", found);
     }
 }
 
@@ -654,6 +680,11 @@ pfcp_layout! {
     }
     check(this, path, found) {
         flag_rule(this.key_id.0.len() > 80, path, "8.2.276", "a Key ID of more than 80 octets", found);
+        // Each "shall be encoded in UTF8String format", the Key ID "without padding with
+        // zero octets".
+        flag_rule(this.key_id.text().is_none(), path, "8.2.276", "a Key ID that is not UTF-8", found);
+        flag_rule(this.key_id.0.last() == Some(&0), path, "8.2.276", "a Key ID padded with zero octets", found);
+        flag_rule(core::str::from_utf8(&this.shared_secret.0).is_err(), path, "8.2.276", "a Shared Secret that is not UTF-8", found);
     }
 }
 

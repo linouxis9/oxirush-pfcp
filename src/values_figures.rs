@@ -123,8 +123,13 @@ pfcp_field! {
     MinimumWaitTime(u32) "Minimum Wait Time" "8.2.170";
     /// DL Data Packets Size (§8.2.173).
     DlDataPacketsSize(u16) "DL Data Packets Size" "8.2.173";
-    /// NF Instance ID (§8.2.175).
-    NfInstanceId(OctetArray16) "NF Instance ID" "8.2.175";
+    /// NF Instance ID (§8.2.175): "a Universally Unique Identifier (UUID) version 4, as
+    /// specified in IETF RFC 9562", whose version is the four high bits of its seventh
+    /// octet, and whose variant, of two bits, the high bits of its ninth, 10.
+    NfInstanceId(OctetArray16) "NF Instance ID" "8.2.175" check(this, path, found) {
+        let version_4 = this.value[6] >> 4 == 4 && this.value[8] >> 6 == 0b10;
+        flag_rule(!version_4, path, "8.2.175", "an NF Instance ID that is no UUID of version 4", found);
+    };
     /// Validity Timer (§8.2.184).
     ValidityTimer(u16) "Validity Timer" "8.2.184";
     /// Tunnel Preference (§8.2.189).
@@ -830,8 +835,11 @@ pfcp_octets! {
     NotificationCorrelationId "Notification Correlation ID" "8.2.203";
     /// Predefined Rules Name (§8.2.205).
     PredefinedRulesName "Predefined Rules Name" "8.2.205";
-    /// Metadata (§8.2.219).
-    Metadata "Metadata" "8.2.219";
+    /// Metadata (§8.2.219): "an octet string set to base64-encoded characters as
+    /// specified in clause 5.5.2 of TS 29.571".
+    Metadata "Metadata" "8.2.219" check(this, path, found) {
+        flag_rule(!base64(&this.0), path, "8.2.219", "a Metadata that is not base64-encoded characters", found);
+    };
     /// TL-Container (§8.2.230).
     TlContainer "TL-Container Information" "8.2.230";
     /// URI (§8.2.244).

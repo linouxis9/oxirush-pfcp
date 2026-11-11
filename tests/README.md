@@ -151,6 +151,10 @@ test `codec` expects them (`other_vectors_round_trip`, with `--ignored` and
   Application ID, Provide ATSSS Control Information and Created Bridge/Router Info where
   they are, and IE type 116, which no table of Release 19 has.
 - Access Type 3, which Table 8.2.153-1 has as spare.
+- The UPF Instance ID of the Association Setup Request and Response is
+  `11111111-2222-2222-3333-333344444444`, a UUID of version 2, where §8.2.175 has "a
+  Universally Unique Identifier (UUID) version 4" (`ie.NewNFInstanceID(...)` in
+  `message/association-setup-request_test.go`).
 - Transport Level Marking of 0x1111, whose mask, the second octet, §8.2.12 has "set to
   "0xFC"" (`ie.NewTransportLevelMarking(0x1111)` in the tests of `message/`), in
   Forwarding Parameters, Duplicating Parameters and their updates, and as the DSCP of

@@ -863,6 +863,231 @@ fn an_apn_dnn_has_its_operator_identifier() {
     );
 }
 
+/// The formats that clause 8.2 gives a value with "shall": an NF Instance ID, "a
+/// Universally Unique Identifier (UUID) version 4" (§8.2.175); a Metadata, "base64-encoded
+/// characters" (§8.2.219); a Calling Number, a Called Number, a Tunnel Password, and the
+/// Key ID and the Shared Secret of a Key ID and Shared Secret, "encoded in UTF8String
+/// format", the Key ID "without padding with zero octets" (§8.2.190, §8.2.191, §8.2.212,
+/// §8.2.276). A value of another format is told.
+#[test]
+fn the_formats_of_the_values_of_clause_8_2() {
+    fn told<T: Codec + Check>(
+        clause: &'static str,
+        rule: &'static str,
+        other: &[&str],
+        kept: &[&str],
+    ) {
+        for octets in other {
+            let octets = octets.replace(' ', "");
+            let expected = [(clause, DeviationKind::Rule(rule))];
+            assert_eq!(value_found::<T>(&octets), expected, "{octets}");
+        }
+        for octets in kept {
+            let octets = octets.replace(' ', "");
+            assert_eq!(value_found::<T>(&octets), [], "{octets}");
+        }
+    }
+    // Of every bit set, of no bit set, of version 1, of version 4 and another variant; of
+    // version 4, 550e8400-e29b-41d4-a716-446655440000, and of each variant of RFC 9562
+    told::<NfInstanceId>(
+        "8.2.175",
+        "an NF Instance ID that is no UUID of version 4",
+        &[
+            "ffffffffffffffffffffffffffffffff",
+            "00000000000000000000000000000000",
+            "550e8400e29b11d4a716446655440000",
+            "550e8400e29b41d4c716446655440000",
+            "550e8400e29b41d42716446655440000",
+        ],
+        &[
+            "550e8400e29b41d4a716446655440000",
+            "550e8400e29b41d48716446655440000",
+            "550e8400e29b4fffbfffffffffffffff",
+        ],
+    );
+    // Octets that are no characters; three characters; a padding within; the alphabet of
+    // URLs; a space. "abc", "ab" and "a" as base64, and every character of the alphabet
+    let hex = |text: &str| hex::encode(text);
+    told::<Metadata>(
+        "8.2.219",
+        "a Metadata that is not base64-encoded characters",
+        &[
+            "00ff2a",
+            &hex("YWJ"),
+            &hex("YQ=a"),
+            &hex("Y==="),
+            &hex("YW-_"),
+            &hex("YW J"),
+            &hex("YWJj\n"),
+        ],
+        &[&hex("YWJj"), &hex("YWI="), &hex("YQ=="), &hex("AZaz09+/")],
+    );
+    told::<CallingNumber>(
+        "8.2.190",
+        "a Calling Number value that is not UTF-8",
+        &["fffe", "33c3"],
+        &[&hex("33612345678"), &hex("é")],
+    );
+    told::<CalledNumber>(
+        "8.2.191",
+        "a Called Number value that is not UTF-8",
+        &["fffe"],
+        &[&hex("internet")],
+    );
+    told::<TunnelPassword>(
+        "8.2.212",
+        "a Tunnel Password value that is not UTF-8",
+        &["fffe"],
+        &[&hex("secret")],
+    );
+    told::<KeyIdAndSharedSecret>(
+        "8.2.276",
+        "a Key ID that is not UTF-8",
+        &["02 fffe 01 61"],
+        &["02 6162 01 61", "00 01 61"],
+    );
+    told::<KeyIdAndSharedSecret>(
+        "8.2.276",
+        "a Key ID padded with zero octets",
+        &["03 616200 01 61", "01 00 01 61"],
+        &["03 610062 01 61"],
+    );
+    told::<KeyIdAndSharedSecret>(
+        "8.2.276",
+        "a Shared Secret that is not UTF-8",
+        &["01 61 02 fffe"],
+        &["01 61 02 c3a9"],
+    );
+    // No refusal prints the password or the passphrase
+    let secret = KeyIdAndSharedSecret::decode(&[1, b'k', 2, 0xff, 0xfe]).unwrap();
+    let said = format!("{:?}", secret.deviations());
+    assert!(
+        !said.contains("fffe") && !said.contains("255, 254"),
+        "{said}"
+    );
+}
+
+/// §8.2.20: the Redirect Server Address "shall be encoded in UTF8String format", and is
+/// the address that the Redirect Address Type says, as IETF RFC 4006 has the
+/// Redirect-Server-Address of a Redirect-Address-Type: an IPv4 address in text, or an IPv6
+/// address; and "If the Redirect Address type is set to "IPv4 and IPv6 address", the
+/// Redirect Information IE shall include an IPv4 address and an IPv6 address in the
+/// Redirect Server Address IE and Other Redirect Server Address", in either order. A URL
+/// and a SIP URI are any text.
+#[test]
+fn the_addresses_of_a_redirect_information_are_those_of_its_type() {
+    // A Redirect Information of the type, its addresses and, of a type with one, a port
+    let found = |kind: u8, addresses: &[&[u8]]| {
+        let mut octets = vec![kind];
+        for address in addresses {
+            octets.extend((address.len() as u16).to_be_bytes());
+            octets.extend(*address);
+        }
+        if (5..=8).contains(&kind) {
+            octets.extend(8080u16.to_be_bytes());
+        }
+        value_found::<RedirectInformation>(&hex::encode(octets))
+    };
+    let rule = |rule| [("8.2.20", DeviationKind::Rule(rule))];
+    let text = "a Redirect Server Address that is not UTF-8";
+    let one = "a Redirect Server Address that is not the IPv4 or IPv6 address of its Redirect Address Type, in text";
+    let two = "a Redirect Server Address and an Other Redirect Server Address that are not an IPv4 address and an IPv6 address, in text";
+    let (v4, v6): (&[u8], &[u8]) = (b"192.0.2.1", b"2001:db8::1");
+    for (kind, address, other) in [(0, v4, v6), (6, v4, v6), (1, v6, v4), (7, v6, v4)] {
+        assert_eq!(found(kind, &[address]), [], "{kind}");
+        for wrong in [
+            other,
+            b"http://example.com/",
+            b"",
+            b"192.0.2",
+            b"0xc0000201",
+        ] {
+            assert_eq!(found(kind, &[wrong]), rule(one), "{kind} {wrong:?}");
+        }
+        assert_eq!(found(kind, &[&[0xff]]), rule(text), "{kind}");
+    }
+    assert_eq!(found(1, &[b"2001:0db8:0000:0000:0000:0000:0000:0001"]), []);
+    assert_eq!(found(1, &[b"::ffff:192.0.2.1"]), []);
+    for kind in [4, 8] {
+        assert_eq!(found(kind, &[v4, v6]), [], "{kind}");
+        assert_eq!(found(kind, &[v6, v4]), [], "{kind}");
+        for (first, second) in [
+            (v4, v4),
+            (v6, v6),
+            (v4, &b"example.com"[..]),
+            (&b""[..], v6),
+        ] {
+            assert_eq!(found(kind, &[first, second]), rule(two), "{kind}");
+        }
+        assert_eq!(found(kind, &[v4, &[0xff]]), rule(text), "{kind}");
+        assert_eq!(found(kind, &[&[0xff], v6]), rule(text), "{kind}");
+    }
+    // A URL and a SIP URI
+    for kind in [2, 3] {
+        assert_eq!(found(kind, &[b"http://example.com/"]), [], "{kind}");
+        assert_eq!(found(kind, &[b"sip:alice@example.com"]), [], "{kind}");
+        assert_eq!(found(kind, &[v4]), [], "{kind}");
+        assert_eq!(found(kind, &[&[0xff]]), rule(text), "{kind}");
+    }
+    // A Port alone has no address
+    assert_eq!(found(5, &[]), []);
+}
+
+/// §8.2.67: "For a HTTP Header Type, the contents of the Header Field Name and Header
+/// Field Value shall comply with the HTTP header field format (see clause 5 of IETF RFC
+/// 9110)": the name is a token, and the value field content, of visible characters, of
+/// spaces and tabs between them, and of the octets above them, with no whitespace before
+/// or after it.
+#[test]
+fn the_header_field_of_a_header_enrichment_is_one_of_http() {
+    let found = |kind: u8, name: &[u8], value: &[u8]| {
+        let octets = [
+            &[kind, name.len() as u8][..],
+            name,
+            &[value.len() as u8],
+            value,
+        ]
+        .concat();
+        value_found::<HeaderEnrichment>(&hex::encode(octets))
+    };
+    let rule = |rule| [("8.2.67", DeviationKind::Rule(rule))];
+    let named = "a Header Field Name that is no field name of HTTP";
+    let valued = "a Header Field Value that is no field value of HTTP";
+    for (name, value) in [
+        (&b"X-Test"[..], &b"abc"[..]),
+        (b"x", b""),
+        (b"!#$%&'*+-.^_`|~09AZaz", b"a b\tc \xe9!"),
+        (b"Host", b"example.com:8080"),
+    ] {
+        assert_eq!(found(0, name, value), [], "{name:?} {value:?}");
+    }
+    for name in [
+        &b""[..],
+        b"X Test",
+        b"X:Test",
+        b"X-Test:",
+        b"X\xe9",
+        b"(x)",
+        b"a\0",
+    ] {
+        assert_eq!(found(0, name, b"abc"), rule(named), "{name:?}");
+    }
+    for value in [
+        &b" abc"[..],
+        b"abc ",
+        b"\tabc",
+        b"a\r\nb",
+        b"a\0b",
+        b"a\x7fb",
+        b"\n",
+    ] {
+        assert_eq!(found(0, b"X-Test", value), rule(valued), "{value:?}");
+    }
+    // Of another Header Type, which Table 8.2.67-1 has as spare: of no format
+    let spare = [("8.2.67", DeviationKind::SpareValue { value: 1 })];
+    assert_eq!(found(1, b"X Test", b" abc"), spare);
+}
+
 /// §8.2.39, bit 5: with DNP, "the Length of Domain Name and the Domain Name fields shall
 /// also be present", which DN has there: a Domain Name Protocol is of a Domain Name.
 #[test]
