@@ -398,7 +398,7 @@ fn the_bridge_information_that_a_request_asks_for() {
             tree!({"Created Bridge/Router Info": info}),
         )
     };
-    let node = tree!({"octets": "000102"});
+    let node = tree!({"BID": true, "User Plane Node ID value": 7});
     // An IE of no length reads as an IE that is absent (§8.1.2)
     assert_eq!(
         more(&created(tree!({})), &known),
@@ -421,6 +421,10 @@ fn the_bridge_information_that_a_request_asks_for() {
     );
     let whole = created(tree!({"Port Number": 7, "5GS User Plane Node ID": node.clone()}));
     assert_eq!(more(&whole, &known), []);
+    // One that keeps an IE as octets is taken as complete: its paths are not those of
+    // its tree
+    let kept = created(tree!({"5GS User Plane Node ID": {"octets": "00"}}));
+    assert_eq!(more(&kept, &known), []);
     let wide = created(tree!({"Port Number": 0x1_0000, "5GS User Plane Node ID": node}));
     let rule = DeviationKind::Rule("the Port Number of a bridge is more than 16 bits");
     assert_eq!(
@@ -665,4 +669,21 @@ fn what_a_later_message_of_the_session_holds() {
             "Excluded { ie_type: 124 }"
         )]
     );
+}
+
+/// A rule of a list that has an entry kept as octets before it is at its position in the
+/// tree, which `paths::select` takes; an entry kept as octets is not checked.
+#[test]
+fn a_rule_after_an_entry_kept_as_octets() {
+    let far = super::ie(108, &[0, 0, 0, 1]);
+    let octets = super::session_message(52, 0x2001, &[super::ie(10, &[0, 1]), super::ie(10, &far)]);
+    let message = Message::decode(&octets).unwrap();
+    let rules = SessionRules::new();
+    let found = with_rules(&message, &rules);
+    let path = "/pfcp/Update FAR/1/FAR ID";
+    assert_eq!(
+        found,
+        [deviation(path, "the session has no FAR with this ID")]
+    );
+    assert_eq!(paths::select(&message.to_tree(), path).unwrap().len(), 1);
 }

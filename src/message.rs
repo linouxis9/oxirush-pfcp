@@ -376,6 +376,14 @@ impl Message {
             body,
         });
         found.extend(read.as_ref().unwrap_or(self).check_read(interface, known));
+        // The request and the session are compared with the IEs that the message decodes,
+        // so that each deviation is at a path of its tree.
+        if let Some(request) = known.request {
+            crate::known::against(self, request, interface, &mut found);
+        }
+        if let Some(session) = known.session {
+            crate::session::check(self, session, known.request, &mut found);
+        }
         found
     }
 
@@ -438,12 +446,6 @@ impl Message {
                 clause,
                 DeviationKind::RuleChangedTwice { rule, id },
             ));
-        }
-        if let Some(request) = known.request {
-            crate::known::against(self, request, interface, &mut found);
-        }
-        if let Some(session) = known.session {
-            crate::session::check(self, session, known.request, &mut found);
         }
         found
     }

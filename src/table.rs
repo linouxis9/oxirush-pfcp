@@ -593,6 +593,16 @@ pub(crate) fn each_entry<S: Scope>(scope: &S, ie_type: u16, mut each: impl FnMut
 
 /// The position of each value of `row` in the list of the row in the tree of the scope,
 /// which keeps IEs of the row as octets: the tree lists the values and those IEs.
+/// The position in the tree of `scope` of its value `nth` of the IE type `ie_type`: an
+/// IE kept as octets has a position of its own before or between the values.
+pub(crate) fn place<S: Scope>(scope: &S, ie_type: u16, nth: usize) -> usize {
+    let kept = scope.raw().iter().any(|ie| ie.ie_type == ie_type);
+    match S::table().row_of(ie_type).filter(|_| kept) {
+        Some(row) => value_positions(scope, row).get(nth).copied().unwrap_or(nth),
+        None => nth,
+    }
+}
+
 pub(crate) fn value_positions<S: Scope>(scope: &S, row: &Row) -> Vec<usize> {
     let mut positions = Vec::new();
     positions_of(scope, row, |entry, position| {

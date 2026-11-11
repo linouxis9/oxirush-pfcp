@@ -24,7 +24,9 @@ use alloc::string::String;
 use alloc::vec::Vec;
 
 use crate::check::{Deviation, DeviationKind};
+use crate::ie::IeType;
 use crate::message::{Body, Message};
+use crate::table::{Scope, place};
 use crate::{CreatePdr, Pdi, UpdatePdr};
 
 /// The kinds of rules and other objects that a session creates by ID.
@@ -169,6 +171,9 @@ impl Request {
 
     /// The SDF Filter IDs and the QFIs of the PDI of PDR `pdr`, at `at`.
     fn pdi(&mut self, pdr: Option<u16>, pdi: &Pdi, at: &str) {
+        if !pdi.raw().is_empty() {
+            return;
+        }
         let clause = Pdi::table().id;
         for (nth, endpoint) in pdi.traffic_endpoint_id.iter().enumerate() {
             let here = format!("{at}/Traffic Endpoint ID/{nth}");
@@ -211,8 +216,8 @@ impl Request {
             &at,
             clause,
             pdr.far_id.as_ref().map(|id| id.value),
-            &pdr.urr_id,
-            &pdr.qer_id,
+            pdr.urr_id.iter(),
+            pdr.qer_id.iter(),
         );
         let mar = pdr.mar_id.as_ref().map(|id| u32::from(id.value));
         self.reference(Kind::Mar, mar, format!("{at}/MAR ID"), clause);
@@ -236,8 +241,8 @@ impl Request {
             &at,
             clause,
             pdr.far_id.as_ref().map(|id| id.value),
-            &pdr.urr_id,
-            &pdr.qer_id,
+            pdr.urr_id.iter(),
+            pdr.qer_id.iter(),
         );
         if let Some(pdi) = &pdr.pdi {
             self.pdi(id, pdi, &format!("{at}/PDI"));
@@ -245,16 +250,16 @@ impl Request {
     }
 
     /// The FAR ID, URR IDs and QER IDs of a PDR at `at`.
-    fn rule_refs(
+    fn rule_refs<'a>(
         &mut self,
         at: &str,
         clause: &'static str,
         far: Option<u32>,
-        urrs: &[crate::UrrId],
-        qers: &[crate::QerId],
+        urrs: impl Iterator<Item = &'a crate::UrrId>,
+        qers: impl Iterator<Item = &'a crate::QerId>,
     ) {
         self.reference(Kind::Far, far, format!("{at}/FAR ID"), clause);
-        for (nth, urr) in urrs.iter().enumerate() {
+        for (nth, urr) in urrs.enumerate() {
             self.reference(
                 Kind::Urr,
                 Some(urr.value),
@@ -262,7 +267,7 @@ impl Request {
                 clause,
             );
         }
-        for (nth, qer) in qers.iter().enumerate() {
+        for (nth, qer) in qers.enumerate() {
             self.reference(
                 Kind::Qer,
                 Some(qer.value),
@@ -279,7 +284,7 @@ fn request_of(body: &Body) -> Option<Request> {
     // The rules of a list of `$list`, of `$kind`, by the ID field `$id`
     macro_rules! ops {
         ($body:ident, $change:expr, $( $list:ident $row:literal $kind:ident $id:ident ),* $(,)?) => {$(
-            for (nth, rule) in $body.$list.iter().enumerate() {
+            for (nth, rule) in entries(&**$body, &$body.$list) {
                 let id = rule.$id.as_ref().map(|id| u32::from(id.value));
                 let at = format!("/pfcp/{}/{nth}/{} ID", $row, Kind::$kind.name());
                 let clause = match $change {
@@ -292,7 +297,12 @@ fn request_of(body: &Body) -> Option<Request> {
     }
     macro_rules! bar {
         ($body:ident, $field:ident, $row:literal, $change:expr) => {
-            if let Some(rule) = &$body.$field {
+            // A BAR kept as octets, or one beside another kept as octets, has no path
+            let whole = $body.$field.as_ref().filter(|rule| {
+                let ie_type = rule_ie_type(&***rule);
+                rule.raw().is_empty() && !$body.raw().iter().any(|ie| ie.ie_type == ie_type)
+            });
+            if let Some(rule) = whole {
                 let id = rule.bar_id.as_ref().map(|id| u32::from(id.value));
                 let clause = if $change == Change::Create {
                     "5.2.1"
@@ -311,7 +321,7 @@ fn request_of(body: &Body) -> Option<Request> {
     }
     match body {
         Body::SessionEstablishmentRequest(body) => {
-            for (nth, pdr) in body.create_pdr.iter().enumerate() {
+            for (nth, pdr) in entries(&**body, &body.create_pdr) {
                 request.create_pdr(nth, pdr);
             }
             ops!(body, Change::Create,
@@ -324,9 +334,17 @@ fn request_of(body: &Body) -> Option<Request> {
                 .create_bridge_router_info
                 .as_ref()
                 .is_some_and(|info| info.bii);
-            far_refs(&mut request, &body.create_far, "Create FAR");
-            urr_refs(&mut request, &body.create_urr, "Create URR");
-            mar_refs(&mut request, &body.create_mar);
+            far_refs(
+                &mut request,
+                entries(&**body, &body.create_far),
+                "Create FAR",
+            );
+            urr_refs(
+                &mut request,
+                entries(&**body, &body.create_urr),
+                "Create URR",
+            );
+            mar_refs(&mut request, entries(&**body, &body.create_mar));
             endpoints(
                 &mut request,
                 body.create_traffic_endpoint
@@ -335,10 +353,10 @@ fn request_of(body: &Body) -> Option<Request> {
             );
         }
         Body::SessionModificationRequest(body) => {
-            for (nth, pdr) in body.create_pdr.iter().enumerate() {
+            for (nth, pdr) in entries(&**body, &body.create_pdr) {
                 request.create_pdr(nth, pdr);
             }
-            for (nth, pdr) in body.update_pdr.iter().enumerate() {
+            for (nth, pdr) in entries(&**body, &body.update_pdr) {
                 request.update_pdr(nth, pdr);
             }
             ops!(body, Change::Create,
@@ -360,11 +378,27 @@ fn request_of(body: &Body) -> Option<Request> {
             bar!(body, create_bar, "Create BAR", Change::Create);
             bar!(body, update_bar, "Update BAR", Change::Update);
             bar!(body, remove_bar, "Remove BAR", Change::Remove);
-            far_refs(&mut request, &body.create_far, "Create FAR");
-            far_refs(&mut request, &body.update_far, "Update FAR");
-            urr_refs(&mut request, &body.create_urr, "Create URR");
-            urr_refs(&mut request, &body.update_urr, "Update URR");
-            mar_refs(&mut request, &body.create_mar);
+            far_refs(
+                &mut request,
+                entries(&**body, &body.create_far),
+                "Create FAR",
+            );
+            far_refs(
+                &mut request,
+                entries(&**body, &body.update_far),
+                "Update FAR",
+            );
+            urr_refs(
+                &mut request,
+                entries(&**body, &body.create_urr),
+                "Create URR",
+            );
+            urr_refs(
+                &mut request,
+                entries(&**body, &body.update_urr),
+                "Update URR",
+            );
+            mar_refs(&mut request, entries(&**body, &body.create_mar));
             endpoints(
                 &mut request,
                 body.create_traffic_endpoint
@@ -384,22 +418,49 @@ fn request_of(body: &Body) -> Option<Request> {
     Some(request)
 }
 
+/// The entries of `list`, a list of the scope `scope`, with the position of each in the
+/// tree of the scope. An entry that keeps IEs as octets is left out: the paths below it
+/// would not be those of its tree.
+fn entries<'a, S: Scope, T: Scope + IeType>(
+    scope: &'a S,
+    list: &'a [T],
+) -> impl Iterator<Item = (usize, &'a T)> + 'a {
+    let whole = list
+        .iter()
+        .enumerate()
+        .filter(|(_, entry)| entry.raw().is_empty());
+    whole.map(move |(nth, entry)| (place(scope, T::IE_TYPE, nth), entry))
+}
+
+/// The IE type of a rule's group.
+fn rule_ie_type<T: IeType>(_: &T) -> u16 {
+    T::IE_TYPE
+}
+
 /// The clause of the table of a rule's group.
 fn rule_table<T: crate::table::Scope>(_: &T) -> &'static str {
     T::table().id
 }
 
 /// The BAR ID of each FAR of a list.
-fn far_refs<T: FarLike>(request: &mut Request, fars: &[T], row: &str) {
-    for (nth, far) in fars.iter().enumerate() {
+fn far_refs<'a, T: FarLike + 'a>(
+    request: &mut Request,
+    fars: impl Iterator<Item = (usize, &'a T)>,
+    row: &str,
+) {
+    for (nth, far) in fars {
         let at = format!("/pfcp/{row}/{nth}/BAR ID");
         request.reference(Kind::Bar, far.bar(), at, T::clause());
     }
 }
 
 /// The Linked URR IDs and the FAR ID for Quota Action of each URR of a list.
-fn urr_refs<T: UrrLike>(request: &mut Request, urrs: &[T], row: &str) {
-    for (nth, urr) in urrs.iter().enumerate() {
+fn urr_refs<'a, T: UrrLike + 'a>(
+    request: &mut Request,
+    urrs: impl Iterator<Item = (usize, &'a T)>,
+    row: &str,
+) {
+    for (nth, urr) in urrs {
         for (inner, linked) in urr.linked().iter().enumerate() {
             let at = format!("/pfcp/{row}/{nth}/Linked URR ID/{inner}");
             request.reference(Kind::Urr, Some(linked.value), at, T::clause());
@@ -410,20 +471,22 @@ fn urr_refs<T: UrrLike>(request: &mut Request, urrs: &[T], row: &str) {
 }
 
 /// The FAR IDs of the access forwarding action information of each Create MAR.
-fn mar_refs(request: &mut Request, mars: &[crate::CreateMar]) {
+fn mar_refs<'a>(request: &mut Request, mars: impl Iterator<Item = (usize, &'a crate::CreateMar)>) {
     let clause = crate::CreateMar::table().id;
-    for (nth, mar) in mars.iter().enumerate() {
+    for (nth, mar) in mars {
         let accesses = [
             (
                 "3GPP Access Forwarding Action Information",
                 mar.n3gpp_access_forwarding_action_information
-                    .as_ref()
+                    .as_deref()
+                    .filter(|access| access.raw().is_empty())
                     .and_then(|access| access.far_id.as_ref()),
             ),
             (
                 "Non-3GPP Access Forwarding Action Information",
                 mar.non_3gpp_access_forwarding_action_information
-                    .as_ref()
+                    .as_deref()
+                    .filter(|access| access.raw().is_empty())
                     .and_then(|access| access.far_id.as_ref()),
             ),
         ];
@@ -617,25 +680,40 @@ pub(crate) fn check(
     }
     // "if the BII flag was set to 1 in the Create Bridge/Router Info IE ... Octets 5 and
     // 6 shall be set to all zeros" (§8.2.142).
-    let ports: Vec<Option<u32>> = match &message.body {
+    let ports: Vec<(usize, Option<u32>)> = match &message.body {
         Body::SessionModificationRequest(body) => body
             .tsc_management_information
             .iter()
-            .map(|tsc| tsc.nw_tt_port_number.as_ref().map(|port| port.value))
+            .enumerate()
+            .filter(|(_, tsc)| tsc.raw().is_empty())
+            .map(|(nth, tsc)| {
+                let nth = place(&**body, rule_ie_type(tsc), nth);
+                (nth, tsc.nw_tt_port_number.as_ref().map(|port| port.value))
+            })
             .collect(),
         Body::SessionModificationResponse(body) => body
             .tsc_management_information
             .iter()
-            .map(|tsc| tsc.nw_tt_port_number.as_ref().map(|port| port.value))
+            .enumerate()
+            .filter(|(_, tsc)| tsc.raw().is_empty())
+            .map(|(nth, tsc)| {
+                let nth = place(&**body, rule_ie_type(tsc), nth);
+                (nth, tsc.nw_tt_port_number.as_ref().map(|port| port.value))
+            })
             .collect(),
         Body::SessionReportRequest(body) => body
             .tsc_management_information
             .iter()
-            .map(|tsc| tsc.nw_tt_port_number.as_ref().map(|port| port.value))
+            .enumerate()
+            .filter(|(_, tsc)| tsc.raw().is_empty())
+            .map(|(nth, tsc)| {
+                let nth = place(&**body, rule_ie_type(tsc), nth);
+                (nth, tsc.nw_tt_port_number.as_ref().map(|port| port.value))
+            })
             .collect(),
         _ => Vec::new(),
     };
-    for (nth, port) in ports.iter().enumerate() {
+    for (nth, port) in ports {
         if rules.bridge && port.is_some_and(|port| port > 0xffff) {
             let at = format!("/pfcp/TSC Management Information/{nth}/NW-TT Port Number");
             found.push(Deviation::new(
@@ -658,12 +736,15 @@ pub(crate) fn check(
                 .collect()
         })
         .unwrap_or_default();
-    let reports: Vec<(Option<u32>, &'static str)> = match &message.body {
+    let reports: Vec<(usize, Option<u32>, &'static str)> = match &message.body {
         Body::SessionModificationResponse(body) => body
             .usage_report
             .iter()
-            .map(|report| {
+            .enumerate()
+            .filter(|(_, report)| report.raw().is_empty())
+            .map(|(nth, report)| {
                 (
+                    place(&**body, rule_ie_type(report), nth),
                     report.urr_id.as_ref().map(|id| id.value),
                     crate::UsageReportModification::table().id,
                 )
@@ -672,8 +753,11 @@ pub(crate) fn check(
         Body::SessionDeletionResponse(body) => body
             .usage_report
             .iter()
-            .map(|report| {
+            .enumerate()
+            .filter(|(_, report)| report.raw().is_empty())
+            .map(|(nth, report)| {
                 (
+                    place(&**body, rule_ie_type(report), nth),
                     report.urr_id.as_ref().map(|id| id.value),
                     crate::UsageReportDeletion::table().id,
                 )
@@ -682,8 +766,11 @@ pub(crate) fn check(
         Body::SessionReportRequest(body) => body
             .usage_report
             .iter()
-            .map(|report| {
+            .enumerate()
+            .filter(|(_, report)| report.raw().is_empty())
+            .map(|(nth, report)| {
                 (
+                    place(&**body, rule_ie_type(report), nth),
                     report.urr_id.as_ref().map(|id| id.value),
                     crate::UsageReport::table().id,
                 )
@@ -691,8 +778,8 @@ pub(crate) fn check(
             .collect(),
         _ => Vec::new(),
     };
-    for (nth, (urr, clause)) in reports.iter().enumerate() {
-        let Some(urr) = *urr else { continue };
+    for (nth, urr, clause) in reports {
+        let Some(urr) = urr else { continue };
         if !rules.has(Kind::Urr, urr) && !created.contains(&urr) && !Kind::Urr.predefined(urr) {
             let at = format!("/pfcp/Usage Report/{nth}/URR ID");
             found.push(Deviation::new(

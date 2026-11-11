@@ -289,10 +289,13 @@ fn asked_endpoints(endpoints: &[CreateTrafficEndpoint]) -> Vec<(Option<u32>, All
 /// What each Created PDR returns, with its PDR ID.
 fn returned_pdrs(pdrs: &[CreatedPdr]) -> Vec<(Option<u32>, Allocated)> {
     let returned = |pdr: &CreatedPdr| {
+        // An entry that keeps IEs as octets is taken as complete: its paths would not
+        // be those of its tree.
+        let kept = !crate::table::Scope::raw(pdr).is_empty();
         let has = [
-            !pdr.f_teid.is_empty(),
-            !pdr.ue_ip_address.is_empty(),
-            pdr.mapped_n6_ip_address.is_some(),
+            kept || !pdr.f_teid.is_empty(),
+            kept || !pdr.ue_ip_address.is_empty(),
+            kept || pdr.mapped_n6_ip_address.is_some(),
         ];
         (pdr.pdr_id.as_ref().map(|id| id.value.into()), has)
     };
@@ -302,10 +305,11 @@ fn returned_pdrs(pdrs: &[CreatedPdr]) -> Vec<(Option<u32>, Allocated)> {
 /// What each Created Traffic Endpoint returns, with its Traffic Endpoint ID.
 fn returned_endpoints(endpoints: &[CreatedTrafficEndpoint]) -> Vec<(Option<u32>, Allocated)> {
     let returned = |endpoint: &CreatedTrafficEndpoint| {
+        let kept = !crate::table::Scope::raw(endpoint).is_empty();
         let has = [
-            !endpoint.f_teid.is_empty(),
-            !endpoint.ue_ip_address.is_empty(),
-            endpoint.mapped_n6_ip_address.is_some(),
+            kept || !endpoint.f_teid.is_empty(),
+            kept || !endpoint.ue_ip_address.is_empty(),
+            kept || endpoint.mapped_n6_ip_address.is_some(),
         ];
         let id = endpoint.traffic_endpoint_id.as_ref();
         (id.map(|id| id.value.into()), has)
@@ -327,6 +331,7 @@ fn at<'a>(parent: &'a Path<'a>, row: &'static str, nth: Option<usize>) -> Path<'
 fn allocated(
     asked: &[(Option<u32>, Allocated)],
     returned: &[(Option<u32>, Allocated)],
+    positions: impl Fn(usize) -> usize,
     row: &Row,
     table: &'static str,
     found: &mut Vec<Deviation>,
@@ -340,7 +345,7 @@ fn allocated(
             found.push(Deviation::new(here, table, missing(row.ie_type)));
             continue;
         };
-        let here = at(&root, row.name, Some(nth));
+        let here = at(&root, row.name, Some(positions(nth)));
         let rows = asked.iter().zip(returned[nth].1).zip(ALLOCATED);
         for ((asked, returned), (name, ie_type)) in rows {
             if *asked && !returned {
@@ -407,12 +412,15 @@ pub(crate) fn against(
                     asked_pdrs(&request.create_pdr),
                     returned_pdrs(&answer.created_pdr),
                 );
-                allocated(&asked, &returned, row, table, found);
+                let positions = |nth| crate::table::place(&**answer, CreatedPdr::IE_TYPE, nth);
+                allocated(&asked, &returned, positions, row, table, found);
             }
             if let Some(row) = row(CreatedTrafficEndpoint::IE_TYPE) {
                 let asked = asked_endpoints(&request.create_traffic_endpoint);
                 let returned = returned_endpoints(&answer.created_traffic_endpoint);
-                allocated(&asked, &returned, row, table, found);
+                let positions =
+                    |nth| crate::table::place(&**answer, CreatedTrafficEndpoint::IE_TYPE, nth);
+                allocated(&asked, &returned, positions, row, table, found);
             }
             // A Created Bridge/Router Info "shall be present if the UPF was requested to
             // provide Bridge/Router information", and its two IEs "If the BII bit or the
@@ -424,10 +432,17 @@ pub(crate) fn against(
                 let root = Path::Root("/pfcp");
                 let here = at(&root, row.name, None);
                 let missing = |ie_type| DeviationKind::ConditionalMissing { ie_type };
-                let Some(info) = &answer.created_bridge_router_info else {
+                // An IE of no length is read as absent (§8.1.2).
+                let info = answer.created_bridge_router_info.as_deref();
+                let Some(info) = info.filter(|info| crate::ie::Codec::encoded_len(*info) > 0)
+                else {
                     found.push(Deviation::new(here, table, missing(row.ie_type)));
                     return;
                 };
+                // One that keeps IEs as octets is taken as complete.
+                if !crate::table::Scope::raw(info).is_empty() {
+                    return;
+                }
                 let port = at(&here, "Port Number", None);
                 if info.port_number.is_none() {
                     let kind = missing(PortNumber::IE_TYPE);
@@ -457,7 +472,8 @@ pub(crate) fn against(
                     asked_pdrs(&request.create_pdr),
                     returned_pdrs(&answer.created_pdr),
                 );
-                allocated(&asked, &returned, row, table, found);
+                let positions = |nth| crate::table::place(&**answer, CreatedPdr::IE_TYPE, nth);
+                allocated(&asked, &returned, positions, row, table, found);
             }
             if let Some(row) = row(CreatedTrafficEndpoint::IE_TYPE) {
                 let mut asked = asked_endpoints(&request.create_traffic_endpoint);
@@ -467,7 +483,9 @@ pub(crate) fn against(
                     (id.map(|id| u32::from(id.value)), asked)
                 }));
                 let returned = returned_endpoints(&answer.created_updated_traffic_endpoint);
-                allocated(&asked, &returned, row, table, found);
+                let positions =
+                    |nth| crate::table::place(&**answer, CreatedTrafficEndpoint::IE_TYPE, nth);
+                allocated(&asked, &returned, positions, row, table, found);
             }
             // An Updated PDR "shall be present if a Update PDR is present in the
             // corresponding PFCP Session Modification Request and UP function is
@@ -481,12 +499,14 @@ pub(crate) fn against(
                     (pdr.pdr_id.as_ref().map(|id| id.value.into()), pdi)
                 };
                 let returned = |pdr: &UpdatedPdr| {
-                    let has = [true, !pdr.ue_ip_address.is_empty(), true];
+                    let kept = !crate::table::Scope::raw(pdr).is_empty();
+                    let has = [true, kept || !pdr.ue_ip_address.is_empty(), true];
                     (pdr.pdr_id.as_ref().map(|id| id.value.into()), has)
                 };
                 let asked: Vec<_> = request.update_pdr.iter().map(asked).collect();
                 let returned: Vec<_> = answer.updated_pdr.iter().map(returned).collect();
-                allocated(&asked, &returned, row, table, found);
+                let positions = |nth| crate::table::place(&**answer, UpdatedPdr::IE_TYPE, nth);
+                allocated(&asked, &returned, positions, row, table, found);
             }
         }
         _ => {}
