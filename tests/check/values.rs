@@ -574,6 +574,100 @@ fn the_media_identifications_of_an_sdf_filter() {
     }
 }
 
+/// Figure 8.2.5-2: the fields of an (S)RTP Multiplexed Media Identification Information
+/// after its flags, each where its flag has it, in the order of the figure: the SSRC, of
+/// four octets, the Payload Type, the Media Identification Tag after its length, the RTP
+/// SDES Header Extension ID for MID and the RTCP Packet Type, of one octet each; the octets
+/// after them are a later release's. One that lacks octets of a field that its flags
+/// announce is told, and so are a Payload Type that is not "between (and including) 0
+/// and 127" and an RTP SDES Header Extension ID for MID that is not "in the range 1 to
+/// 255".
+#[test]
+fn the_fields_of_a_media_identification_of_an_sdf_filter() {
+    let cut = "a media identification without the octets of a field that its flags announce";
+    let high = "a Payload Type of a media identification above 127";
+    let zero = "an RTP SDES Header Extension ID for MID of a media identification of 0";
+    // An SDF Filter of SMMII and one media identification of `entry`
+    let found = |entry: &str| {
+        let entry = hex::decode(entry).unwrap();
+        let length = (entry.len() as u16).to_be_bytes();
+        let octets = [&[0x20, 0, 1][..], &length, &entry].concat();
+        value_found::<SdfFilter>(&hex::encode(octets))
+    };
+    let rule = |rule| [("8.2.5", DeviationKind::Rule(rule))];
+    // Every field, each of octets that another place would read amiss: an SSRC and a tag
+    // of a Payload Type above 127, and of 0
+    let all = "1f000000c87f02c80001c8";
+    assert_eq!(found(all), []);
+    // And octets of a later release after them
+    assert_eq!(found(&format!("{all}0000ff")), []);
+    assert_eq!(found("0100000001020304"), []);
+    // Cut in each field: the SSRC, the Payload Type, the length of the tag, the tag, the
+    // RTP SDES Header Extension ID for MID, the RTCP Packet Type
+    for octets in [2, 8, 10, 12, 14, 18, 20] {
+        assert_eq!(found(&all[..octets]), rule(cut), "{}", &all[..octets]);
+    }
+    // The Payload Type and the RTP SDES Header Extension ID for MID, at their places
+    assert_eq!(found("1f000000c88002c80001c8"), rule(high));
+    assert_eq!(found("1f000000c87f02c80000c8"), rule(zero));
+    // Each field alone, of its octets and of one fewer: the SSRC; the Payload Type; the
+    // Media Identification Tag, of an RTCP Packet Type; the RTP SDES Header Extension ID
+    // for MID, of an SSRC
+    for (entry, short) in [
+        ("0100000001", "01000000"),
+        ("0200", "02"),
+        ("14026162c8", "14026162"),
+        ("09000000017f", "0900000001"),
+    ] {
+        assert_eq!(found(entry), [], "{entry}");
+        assert_eq!(found(short), rule(cut), "{short}");
+    }
+    // The inputs of a media identification of SSRCPI without an SSRC, of a Payload Type
+    // of 200, of a tag of Length 5 that holds one octet, and of an ID of 0
+    assert_eq!(found("01"), rule(cut));
+    assert_eq!(found("02c8"), rule(high));
+    assert_eq!(found("0c05ab"), rule(cut));
+    assert_eq!(found("0c016100"), rule(zero));
+}
+
+/// Figures 8.2.39-2, 8.2.39-3 and 8.2.39-4: the Additional Flow Description and the
+/// Additional URL of PFD Contents are Flow Descriptions and URLs, each after its length of
+/// two octets, and the Additional Domain Name and Domain Name Protocol are Domain Names,
+/// each with its Domain Name Protocol after it. A field that its entries do not fill, each
+/// with its length, is told, and so is a Domain Name without its protocol.
+#[test]
+fn the_additional_fields_of_pfd_contents() {
+    let rule = |rule| [("8.2.39", DeviationKind::Rule(rule))];
+    let flows =
+        "an Additional Flow Description that is not Flow Descriptions, each after its length";
+    let urls = "an Additional URL that is not URLs, each after its length";
+    let names = "an Additional Domain Name and Domain Name Protocol that is not Domain Names and Domain Name Protocols, each after its length";
+    let odd = "an additional Domain Name without its Domain Name Protocol";
+    for (flag, broken) in [("20", flows), ("40", urls), ("80", names)] {
+        // "abc", and "abc" then "de"
+        for kept in ["00050003616263", "0009000361626300026465"] {
+            let octets = format!("{flag}00{kept}");
+            let expected = match (flag, kept.len()) {
+                ("80", 14) => rule(odd).to_vec(),
+                _ => Vec::new(),
+            };
+            assert_eq!(value_found::<PfdContents>(&octets), expected, "{octets}");
+        }
+        // A Length of 5 that holds one octet; an octet after "abc"; a Length cut
+        for cut in ["0003000561", "0006000361626300", "000100"] {
+            let octets = format!("{flag}00{cut}");
+            assert_eq!(
+                value_found::<PfdContents>(&octets),
+                rule(broken),
+                "{octets}"
+            );
+        }
+    }
+    // One entry of no octets is one, and a field of no entry has nothing to tell
+    assert_eq!(value_found::<PfdContents>("200000020000"), []);
+    assert_eq!(value_found::<PfdContents>("20000000"), []);
+}
+
 /// §8.2.39, bit 5: with DNP, "the Length of Domain Name and the Domain Name fields shall
 /// also be present", which DN has there: a Domain Name Protocol is of a Domain Name.
 #[test]

@@ -34,7 +34,8 @@ use crate::values::*;
 
 pfcp_layout! {
     /// SDF Filter (§8.2.5). The (S)RTP Multiplexed Media Identification Information,
-    /// which SMMII announces, is kept as its octets.
+    /// which SMMII announces, is kept as its octets, which `check()` reads as Figure
+    /// 8.2.5-2 lays them out.
     pub struct SdfFilter "8.2.5" {
         flags(u8) { smmii "SMMII": 6, bid "BID": 5, fl "FL": 4, spi "SPI": 3, ttc "TTC": 2, fd "FD": 1 }
         spare_octet "Spare octet": Spare,
@@ -54,11 +55,6 @@ pfcp_layout! {
         // SSRCPI, PTPI, MIDPI, RHIDMPI and RPTPI, bits 1 to 5. One of the RTCP Packet Type is
         // of (S)RTCP traffic only, one of the Payload Type of (S)RTP only, and one of neither
         // of both (NOTE 4). One without octets has no flag.
-        const SSRCPI: u8 = 0x01;
-        const PTPI: u8 = 0x02;
-        const MIDPI: u8 = 0x04;
-        const RHIDMPI: u8 = 0x08;
-        const RPTPI: u8 = 0x10;
         let media = this.rtp_multiplexed_media.as_ref().map_or(&[][..], |media| &media.0[..]);
         let any = |rule: fn(u8) -> bool| media.iter().any(|media| rule(media.0.first().copied().unwrap_or(0)));
         // Their bits 6 to 8 "are spare and reserved for future use, shall be set to "0" by
@@ -71,7 +67,59 @@ pfcp_layout! {
         flag_rule(any(|flags| flags & (MIDPI | RHIDMPI | RPTPI) == MIDPI), path, "8.2.5", "a media identification has MIDPI, and neither RPTPI nor RHIDMPI", found);
         flag_rule(any(|flags| flags & (SSRCPI | MIDPI | RPTPI) == RPTPI), path, "8.2.5", "an (S)RTCP media identification has neither SSRC nor a Media Identification Tag", found);
         flag_rule(any(|flags| flags & (SSRCPI | PTPI | MIDPI | RPTPI) == 0), path, "8.2.5", "an (S)RTP and (S)RTCP media identification has neither SSRC nor a Media Identification Tag", found);
+        // The fields after the flags (Figure 8.2.5-2): each that its flag announces has
+        // its octets, the Payload Type is "between (and including) 0 and 127", and the
+        // RTP SDES Header Extension ID for MID "in the range 1 to 255".
+        let fields = || media.iter().filter_map(|media| media.0.split_first()).map(|(flags, rest)| media_fields(*flags, rest));
+        flag_rule(fields().any(|fields| fields.is_none()), path, "8.2.5", "a media identification without the octets of a field that its flags announce", found);
+        flag_rule(fields().flatten().any(|(payload_type, _)| payload_type.is_some_and(|value| value > 127)), path, "8.2.5", "a Payload Type of a media identification above 127", found);
+        flag_rule(fields().flatten().any(|(_, id)| id == Some(0)), path, "8.2.5", "an RTP SDES Header Extension ID for MID of a media identification of 0", found);
     }
+}
+
+/// The flags of an (S)RTP Multiplexed Media Identification Information, bits 1 to 5 of its
+/// first octet (Figure 8.2.5-2).
+const SSRCPI: u8 = 0x01;
+const PTPI: u8 = 0x02;
+const MIDPI: u8 = 0x04;
+const RHIDMPI: u8 = 0x08;
+const RPTPI: u8 = 0x10;
+
+/// The fields of an (S)RTP Multiplexed Media Identification Information of `flags`, read
+/// from the octets after them as Figure 8.2.5-2 lays them out: the SSRC, the Payload
+/// Type, the Media Identification Tag after its length, the RTP SDES Header Extension ID
+/// for MID and the RTCP Packet Type, each where its flag announces it. The Payload Type
+/// and the RTP SDES Header Extension ID for MID that it has, whose values the clause
+/// bounds, or `None` where the octets end before a field does. The octets after the fields
+/// are a later release's.
+fn media_fields(flags: u8, mut rest: &[u8]) -> Option<(Option<u8>, Option<u8>)> {
+    let octet = |flag: u8, rest: &mut &[u8]| match flags & flag != 0 {
+        true => u8::read(rest).map(Some),
+        false => Some(None),
+    };
+    if flags & SSRCPI != 0 {
+        u32::read(&mut rest)?;
+    }
+    let payload_type = octet(PTPI, &mut rest)?;
+    if flags & MIDPI != 0 {
+        Lv8::read(&mut rest)?;
+    }
+    let extension_id = octet(RHIDMPI, &mut rest)?;
+    octet(RPTPI, &mut rest)?;
+    Some((payload_type, extension_id))
+}
+
+/// Whether `octets` are entries, each after its length of two octets, as the Additional
+/// Flow Description, the Additional URL and the Additional Domain Name and Domain Name
+/// Protocol of PFD Contents are (Figures 8.2.39-2, 8.2.39-3 and 8.2.39-4): how many, or
+/// `None` where a length is cut, or runs past them.
+fn entries(mut octets: &[u8]) -> Option<usize> {
+    let mut count = 0;
+    while !octets.is_empty() {
+        Lv16::read(&mut octets)?;
+        count += 1;
+    }
+    Some(count)
 }
 
 pfcp_layout! {
@@ -106,7 +154,8 @@ pfcp_layout! {
 
 pfcp_layout! {
     /// PFD contents (§8.2.39). The additional flow descriptions, URLs and domain names are
-    /// kept as the octets of their lists.
+    /// kept as the octets of their lists, which `check()` reads as Figures 8.2.39-2,
+    /// 8.2.39-3 and 8.2.39-4 lay them out.
     pub struct PfdContents "8.2.39" {
         flags(u8) { adnp "ADNP": 8, aurl "AURL": 7, afd "AFD": 6, dnp "DNP": 5, cp "CP": 4, dn "DN": 3, url "URL": 2, fd "FD": 1 }
         spare_octet "Spare octet": Spare,
@@ -123,6 +172,15 @@ pfcp_layout! {
         // With DNP, "the Length of Domain Name and the Domain Name fields shall also be
         // present", which DN has there.
         flag_rule(this.dnp && !this.dn, path, "8.2.39", "DNP is set and DN is not", found);
+        // The additional fields are entries "the same as" the Flow Description, the URL,
+        // and the Domain Name and the Domain Name Protocol, each after its length, a
+        // Domain Name with its Domain Name Protocol after it.
+        let count = |field: &Option<Lv16>| field.as_ref().map(|field| entries(&field.0));
+        flag_rule(count(&this.additional_flow_description) == Some(None), path, "8.2.39", "an Additional Flow Description that is not Flow Descriptions, each after its length", found);
+        flag_rule(count(&this.additional_url) == Some(None), path, "8.2.39", "an Additional URL that is not URLs, each after its length", found);
+        let names = count(&this.additional_domain_name_and_protocol);
+        flag_rule(names == Some(None), path, "8.2.39", "an Additional Domain Name and Domain Name Protocol that is not Domain Names and Domain Name Protocols, each after its length", found);
+        flag_rule(names.flatten().is_some_and(|count| count % 2 == 1), path, "8.2.39", "an additional Domain Name without its Domain Name Protocol", found);
     }
 }
 
