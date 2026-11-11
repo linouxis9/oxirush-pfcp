@@ -24,15 +24,17 @@
 //! them alike.
 //!
 //! `check_with` is run with context too: no feature announced, and, as the request, the
-//! same octets decoded with the message type before theirs. One input then holds a
-//! request and its response, as the IE types of the two differ. `check_with` reports
-//! everything that `check` reports, and each of its paths is one that `paths::select`
-//! takes.
+//! same octets decoded with the message type before theirs, which also gives the state
+//! of the session. One input then holds a request and its response, as the IE types of
+//! the two differ. `check_with` reports everything that `check` reports, and each of its
+//! paths is one that `paths::select` takes.
 #![no_main]
 
 use libfuzzer_sys::fuzz_target;
 use oxirush_pfcp::DeviationKind::*;
-use oxirush_pfcp::{CpFunctionFeatures, Interfaces, Known, Message, UpFunctionFeatures, paths};
+use oxirush_pfcp::{
+    CpFunctionFeatures, Interfaces, Known, Message, SessionRules, UpFunctionFeatures, paths,
+};
 
 const INTERFACES: [Interfaces; 7] = [
     Interfaces::N4,
@@ -54,9 +56,13 @@ fuzz_target!(|octets: &[u8]| {
     asked[1] = asked[1].wrapping_sub(1);
     let request = Message::decode(&asked).ok();
     let (up, cp) = (UpFunctionFeatures::default(), CpFunctionFeatures::default());
+    let mut rules = SessionRules::new();
+    if let Some(request) = &request {
+        rules.apply(request, &message);
+    }
     let mut known = Known::default().with_up_features(&up).with_cp_features(&cp);
     if let Some(request) = &request {
-        known = known.with_request(request);
+        known = known.with_request(request).with_session(&rules);
     }
     for interface in INTERFACES {
         let deviations = message.check(interface);

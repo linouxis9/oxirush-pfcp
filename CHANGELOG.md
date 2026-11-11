@@ -11,8 +11,9 @@ The first version. It implements TS 29.244 V19.6.0 (2026-06):
 - `check()` validates one message against the IE tables of clause 7 and the
   values of clause 8.2 on an interface. Each deviation has its path, its clause
   and the Cause to answer with.
-- `check_with()` also validates a response against its request, and a message
-  against the features that the two functions announced.
+- `check_with()` also validates a response against its request, a message
+  against the features that the two functions announced, and a message against
+  the state of its session (`SessionRules`).
 - With `tree`, a message converts to a tree that prints as JSON and can be read
   and edited by path. With `serde`, it is serialized as that tree.
 - With `node`, `Node` is a PFCP node without I/O: delivery and retransmission,

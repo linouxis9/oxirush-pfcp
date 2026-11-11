@@ -431,3 +431,238 @@ fn the_bridge_information_that_a_request_asks_for() {
     let router = request("RII");
     assert_eq!(more(&wide, &Known::default().with_request(&router)), []);
 }
+
+/// The state of a session after an establishment of `ies` that was accepted.
+fn established(ies: tree::Value) -> SessionRules {
+    let request = establishment_with(ies);
+    let mut rules = SessionRules::new();
+    rules.apply(&request, &response_with(ESTABLISHED, ACCEPTED, tree!({})));
+    rules
+}
+
+/// A modification of `ies`.
+fn modification_of(ies: tree::Value) -> Message {
+    message_of(
+        MODIFICATION,
+        tree!({"SEID": 0x2001, "Sequence Number": 8}),
+        ies,
+    )
+}
+
+/// What `check_with()` reports with `rules` that `check()` does not: the path and the
+/// text of each deviation.
+fn with_rules(message: &Message, rules: &SessionRules) -> Vec<(String, String)> {
+    let found = more(message, &Known::default().with_session(rules)).into_iter();
+    let text = |kind: DeviationKind| match kind {
+        DeviationKind::Rule(rule) => rule.to_string(),
+        other => format!("{other:?}"),
+    };
+    found.map(|(path, _, kind)| (path, text(kind))).collect()
+}
+
+fn deviation(path: &str, text: &str) -> (String, String) {
+    (path.to_string(), text.to_string())
+}
+
+/// A PDR, an uplink one with FAR 1, and `pdi` added to its PDI.
+fn pdr_with(id: u16, pdi: tree::Value) -> tree::Value {
+    let mut pdr =
+        tree!({"PDR ID": id, "Precedence": 1, "FAR ID": 1, "PDI": {"Source Interface": "Access"}});
+    for (name, value) in pdi.as_object().unwrap() {
+        pdr["PDI"][name.as_str()] = value.clone();
+    }
+    pdr
+}
+
+fn far_with(id: u32) -> tree::Value {
+    tree!({"FAR ID": id, "Apply Action": {"FORW": true}})
+}
+
+/// A rule ID "shall uniquely identify" its rule in the session (§5.2.1): a rule that a
+/// request updates or removes exists, and one that it creates does not. The state
+/// changes only with a request that the response accepts.
+#[test]
+fn a_rule_that_a_request_updates_exists() {
+    let mut rules =
+        established(tree!({"Create PDR": [pdr_with(1, tree!({}))], "Create FAR": [far_with(1)]}));
+    let update =
+        modification_of(tree!({"Update FAR": [{"FAR ID": 1}], "Remove PDR": [{"PDR ID": 1}]}));
+    assert_eq!(with_rules(&update, &rules), []);
+    let wrong = modification_of(
+        tree!({"Update FAR": [{"FAR ID": 2}], "Create FAR": [far_with(1)], "Remove QER": [{"QER ID": 4}]}),
+    );
+    assert_eq!(
+        with_rules(&wrong, &rules),
+        [
+            deviation(
+                "/pfcp/Create FAR/0/FAR ID",
+                "the session already has a FAR with this ID"
+            ),
+            deviation(
+                "/pfcp/Update FAR/0/FAR ID",
+                "the session has no FAR with this ID"
+            ),
+            deviation(
+                "/pfcp/Remove QER/0/QER ID",
+                "the session has no QER with this ID"
+            ),
+        ]
+    );
+    // A rejected modification changes nothing; an accepted one removes PDR 1
+    rules.apply(&update, &response_with(MODIFIED, REJECTED, tree!({})));
+    let again = modification_of(tree!({"Remove PDR": [{"PDR ID": 1}]}));
+    assert_eq!(with_rules(&again, &rules), []);
+    rules.apply(&update, &response_with(MODIFIED, ACCEPTED, tree!({})));
+    assert_eq!(
+        with_rules(&again, &rules),
+        [deviation(
+            "/pfcp/Remove PDR/0/PDR ID",
+            "the session has no PDR with this ID"
+        )]
+    );
+}
+
+/// An ID that a rule names is the ID of a rule of the session or of the message: the FAR
+/// ID of a PDR, the BAR ID of a FAR, the Linked URR ID of a URR, the FAR IDs of a MAR. A
+/// predefined rule (the high bit of a FAR ID, §8.2.74) is configured in the UP function,
+/// and is not reported.
+#[test]
+fn an_id_that_a_rule_names_exists() {
+    let rules =
+        established(tree!({"Create PDR": [pdr_with(1, tree!({}))], "Create FAR": [far_with(1)]}));
+    let mut pdr = pdr_with(2, tree!({}));
+    pdr["FAR ID"] = tree!(5);
+    let unknown = modification_of(
+        tree!({"Create PDR": [pdr.clone()], "Update FAR": [{"FAR ID": 1, "BAR ID": 3}]}),
+    );
+    assert_eq!(
+        with_rules(&unknown, &rules),
+        [
+            deviation(
+                "/pfcp/Create PDR/0/FAR ID",
+                "the ID refers to no FAR of the session"
+            ),
+            deviation(
+                "/pfcp/Update FAR/0/BAR ID",
+                "the ID refers to no BAR of the session"
+            ),
+        ]
+    );
+    let created =
+        modification_of(tree!({"Create PDR": [pdr.clone()], "Create FAR": [far_with(5)]}));
+    assert_eq!(with_rules(&created, &rules), []);
+    pdr["FAR ID"] = tree!(1);
+    let removed =
+        modification_of(tree!({"Create PDR": [pdr.clone()], "Remove FAR": [{"FAR ID": 1}]}));
+    assert_eq!(
+        with_rules(&removed, &rules),
+        [deviation(
+            "/pfcp/Create PDR/0/FAR ID",
+            "the ID refers to no FAR of the session"
+        )]
+    );
+    pdr["FAR ID"] = tree!(0x8000_0001u32);
+    assert_eq!(
+        with_rules(&modification_of(tree!({"Create PDR": [pdr]})), &rules),
+        []
+    );
+    let linked = modification_of(tree!({"Create URR": [{
+        "URR ID": 2, "Measurement Method": {"VOLUM": true}, "Reporting Triggers": {"PERIO": true},
+        "Measurement Period": 60, "Linked URR ID": [9],
+    }]}));
+    assert_eq!(
+        with_rules(&linked, &rules),
+        [deviation(
+            "/pfcp/Create URR/0/Linked URR ID/0",
+            "the ID refers to no URR of the session"
+        )]
+    );
+}
+
+/// "It shall uniquely identify an SDF Filter among all the SDF Filters provisioned for a
+/// given PFCP Session" (§8.2.5): another PDR may not have the SDF Filter ID of a PDR of
+/// the session, unless the message removes that PDR or replaces its PDI.
+#[test]
+fn an_sdf_filter_id_is_unique_in_its_session() {
+    let filter = tree!({"SDF Filter": [{"BID": true, "SDF Filter ID": 9}]});
+    let rules = established(
+        tree!({"Create PDR": [pdr_with(1, filter.clone())], "Create FAR": [far_with(1)]}),
+    );
+    let other = modification_of(tree!({"Create PDR": [pdr_with(2, filter.clone())]}));
+    let text = "another PDR of the session has this SDF Filter ID";
+    assert_eq!(
+        with_rules(&other, &rules),
+        [deviation(
+            "/pfcp/Create PDR/0/PDI/SDF Filter/0/SDF Filter ID",
+            text
+        )]
+    );
+    let removed = modification_of(
+        tree!({"Create PDR": [pdr_with(2, filter.clone())], "Remove PDR": [{"PDR ID": 1}]}),
+    );
+    assert_eq!(with_rules(&removed, &rules), []);
+    let same = modification_of(
+        tree!({"Update PDR": [{"PDR ID": 1, "PDI": {"Source Interface": "Access", "SDF Filter": [{"BID": true, "SDF Filter ID": 9}]}}]}),
+    );
+    assert_eq!(with_rules(&same, &rules), []);
+}
+
+/// "if the BII flag was set to 1 in the Create Bridge/Router Info IE ... Octets 5 and 6
+/// shall be set to all zeros" (§8.2.142): the NW-TT Port Number of a later message of a
+/// bridge has 16 bits. A usage report is for a URR of the session. A PDI has no QFI when
+/// a traffic endpoint created earlier has QFIs (Table 7.5.2.2-2).
+#[test]
+fn what_a_later_message_of_the_session_holds() {
+    let rules = |bridge: bool| {
+        let mut ies = tree!({
+            "Create PDR": [pdr_with(1, tree!({}))], "Create FAR": [far_with(1)],
+            "Create URR": [{"URR ID": 1, "Measurement Method": {"VOLUM": true}, "Reporting Triggers": {"PERIO": true}, "Measurement Period": 60}],
+            "Create Traffic Endpoint": [{"Traffic Endpoint ID": 4, "QFI": [5]}],
+        });
+        if bridge {
+            ies["Create Bridge/Router Info"] = tree!({"BII": true});
+        }
+        established(ies)
+    };
+    let port = |value: u32| {
+        modification_of(
+            tree!({"TSC Management Information": [{"Port Management Information Container": "00", "NW-TT Port Number": value}]}),
+        )
+    };
+    let at = "/pfcp/TSC Management Information/0/NW-TT Port Number";
+    assert_eq!(
+        with_rules(&port(0x1_0000), &rules(true)),
+        [deviation(
+            at,
+            "the NW-TT Port Number of a bridge is more than 16 bits"
+        )]
+    );
+    assert_eq!(with_rules(&port(7), &rules(true)), []);
+    assert_eq!(with_rules(&port(0x1_0000), &rules(false)), []);
+
+    let report = |urr: u32| {
+        message_of(
+            "PFCP Session Report Request",
+            tree!({"SEID": 0x1001, "Sequence Number": 3}),
+            tree!({"Report Type": {"USAR": true}, "Usage Report": [{"URR ID": urr, "UR-SEQN": 0, "Usage Report Trigger": {"PERIO": true}}]}),
+        )
+    };
+    assert_eq!(with_rules(&report(1), &rules(false)), []);
+    assert_eq!(
+        with_rules(&report(3), &rules(false)),
+        [deviation(
+            "/pfcp/Usage Report/0/URR ID",
+            "the usage report is for no URR of the session"
+        )]
+    );
+
+    let pdi = tree!({"Traffic Endpoint ID": [4], "QFI": [5]});
+    let later = modification_of(tree!({"Create PDR": [pdr_with(2, pdi)]}));
+    assert_eq!(
+        with_rules(&later, &rules(false)),
+        [deviation(
+            "/pfcp/Create PDR/0/PDI/QFI",
+            "Excluded { ie_type: 124 }"
+        )]
+    );
+}

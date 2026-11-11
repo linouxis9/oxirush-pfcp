@@ -51,6 +51,8 @@ use crate::{
 pub struct Known<'a> {
     /// The request that the message answers, when the message is a response.
     pub request: Option<&'a Message>,
+    /// The state of the session of the message, before the message.
+    pub session: Option<&'a crate::SessionRules>,
     /// The UP Function Features that the UP function announced in the association setup
     /// or in its last association update. Pass the default value for a UP function that
     /// sent no UP Function Features IE.
@@ -66,6 +68,14 @@ impl<'a> Known<'a> {
     pub fn with_request(self, request: &'a Message) -> Self {
         Self {
             request: Some(request),
+            ..self
+        }
+    }
+
+    /// Sets the state of the session of the message, before the message.
+    pub fn with_session(self, session: &'a crate::SessionRules) -> Self {
+        Self {
+            session: Some(session),
             ..self
         }
     }

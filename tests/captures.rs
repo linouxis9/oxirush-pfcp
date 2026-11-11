@@ -339,8 +339,9 @@ fn each_captured_message_is_read_written_and_checked() {
 const EXPECTED_WITH_CONTEXT: &[(&str, &str, &str, &str, DeviationKind)] = &[];
 
 /// Each captured message is checked with its context: a response against the request of
-/// the same sequence number that its receiver sent, and every message of an association
-/// against the UP and CP Function Features of its setup.
+/// the same sequence number that its receiver sent, every message of an association
+/// against the UP and CP Function Features of its setup, and every message of a session
+/// against the state that the accepted requests before it left.
 #[test]
 fn each_captured_message_is_checked_with_its_context() {
     use std::collections::HashMap;
@@ -352,6 +353,11 @@ fn each_captured_message_is_checked_with_its_context() {
     let mut features: HashMap<(&str, [&str; 2]), (UpFunctionFeatures, CpFunctionFeatures)> =
         HashMap::new();
     let (mut found, mut answered, mut associated) = (Vec::new(), 0, 0);
+    // The state of each session by its CP SEID, and the CP SEID of each UP SEID, of the
+    // two addresses of a run
+    let mut sessions: HashMap<(&str, [&str; 2], u64), SessionRules> = HashMap::new();
+    let mut cp_seids: HashMap<(&str, [&str; 2], u64), u64> = HashMap::new();
+    let mut with_state = 0;
     for line in lines {
         let cells: Vec<&str> = line.split('\t').collect();
         let (run, number, from, to) = (cells[0], cells[1], cells[2], cells[3]);
@@ -395,6 +401,19 @@ fn each_captured_message_is_checked_with_its_context() {
             known = known.with_request(request);
             answered += 1;
         }
+        // The CP SEID of the session: the SEID of what goes to the CP function, or the one
+        // of the UP SEID of what goes to the UP function
+        let seid = message.header.seid.unwrap_or_default();
+        let cp_seid = match message.body.message_type() {
+            51 | 53 | 55 | 56 => Some(seid),
+            52 | 54 => cp_seids.get(&(run, pair, seid)).copied(),
+            _ => None,
+        };
+        let session = cp_seid.and_then(|cp_seid| sessions.get(&(run, pair, cp_seid)));
+        if let Some(session) = session {
+            known = known.with_session(session);
+            with_state += 1;
+        }
         let alone = message.check(interface);
         for deviation in message.check_with(interface, &known) {
             if !alone.contains(&deviation) {
@@ -407,12 +426,26 @@ fn each_captured_message_is_checked_with_its_context() {
                 ));
             }
         }
+        // The session after a request that the response accepts
+        if let (Some(_), Body::SessionEstablishmentResponse(response)) =
+            (request.as_ref(), &message.body)
+            && let (Some(up), Some(cp_seid)) = (&response.up_f_seid, cp_seid)
+        {
+            cp_seids.insert((run, pair, up.seid), cp_seid);
+            sessions.insert((run, pair, cp_seid), SessionRules::new());
+        }
+        if let (Some(request), Some(cp_seid)) = (request.as_ref(), cp_seid)
+            && let Some(session) = sessions.get_mut(&(run, pair, cp_seid))
+        {
+            session.apply(request, &message);
+        }
         if is_request(message.body.message_type()) {
             requests.insert((run, from, to, sequence), message);
         }
     }
-    // How many responses had their request, and how many messages their features
-    assert_eq!((answered, associated), (100, 187));
+    // How many responses had their request, how many messages their features, and how
+    // many the state of their session
+    assert_eq!((answered, associated, with_state), (100, 187, 104));
     let expected: Vec<_> = EXPECTED_WITH_CONTEXT
         .iter()
         .map(|(run, number, path, clause, kind)| {

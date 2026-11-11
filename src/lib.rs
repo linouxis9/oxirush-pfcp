@@ -25,8 +25,9 @@
 //! - [`Message::check`] validates one message against TS 29.244 on an interface: the
 //!   IE tables of clause 7 and the values of clause 8.2. It returns each deviation with
 //!   its clause and the Cause of the answer. [`Message::check_with`] also validates a
-//!   response against its request, and a message against the features that the two
-//!   functions announced. Their documentation lists what is and is not checked.
+//!   response against its request, a message against the features that the two
+//!   functions announced, and a message against the state of its session
+//!   ([`SessionRules`]). Their documentation lists what is and is not checked.
 //! - With the `tree` feature, a message converts to and from a tree that prints as JSON
 //!   ([`tree`](mod@tree)), and [`paths`] reads and edits the tree by path. With `serde`,
 //!   a message is serialized as that tree.
@@ -65,6 +66,7 @@ mod octets;
 #[cfg_attr(docsrs, doc(cfg(feature = "tree")))]
 pub mod paths;
 mod registry;
+mod session;
 mod table;
 mod values;
 mod values_clauses;
@@ -87,6 +89,7 @@ pub use message::{
 };
 pub use octets::Octets;
 pub use registry::*;
+pub use session::SessionRules;
 pub use table::{Interfaces, On, Presence, Repeat, Role, Row, Table};
 pub use values::*;
 pub use values_clauses::*;

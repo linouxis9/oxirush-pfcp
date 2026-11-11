@@ -288,10 +288,9 @@ impl Message {
     ///
     /// A message without deviations is not proven conformant. `check()` does not cover:
     ///
-    /// - **Session state.** Whether a rule that is updated or removed exists, whether an
-    ///   ID refers to a rule of an earlier message, whether an SDF Filter ID is unique in
-    ///   its session, and whether the NW-TT Port Number matches the BII flag that created
-    ///   the bridge.
+    /// - **Session state**, which [`check_with`](Self::check_with) validates with
+    ///   [`SessionRules`](crate::SessionRules). Even then, the order of UR-SEQN values is
+    ///   not checked, because usage reports can arrive out of order.
     /// - **What only the sender knows.** Conditions on intent or on other interfaces: "if
     ///   the SMF wants to", "if the UE supports", the IMSI that the SMF received in a
     ///   SUPI, how a bidirectional SDF filter was written. Requirements written with
@@ -324,6 +323,17 @@ impl Message {
     ///   F-TEID or a UE IP address (CH, CHV4, CHV6), a missing allocation inside it, and
     ///   a missing or incomplete Created Bridge/Router Info (Tables 7.5.3.1-1, 7.5.3.6-1
     ///   and 7.5.5.1-1, §8.2.141).
+    /// - **The state of the session**, as a [`SessionRules`](crate::SessionRules) records
+    ///   it. Reports a rule that a request updates or removes but the session does not
+    ///   have, a rule that it creates but the session already has (§5.2.1), an ID that
+    ///   refers to no rule of the session or of the message (the FAR, URR, QER and MAR
+    ///   IDs of a PDR, the BAR ID of a FAR, the Linked URR ID and FAR ID for Quota Action
+    ///   of a URR, the FAR IDs of a MAR, the Traffic Endpoint IDs of a PDI), an SDF Filter
+    ///   ID that another PDR of the session uses (§8.2.5), a QFI in a PDI whose traffic
+    ///   endpoint has QFIs (Table 7.5.2.2-2), an NW-TT Port Number above 16 bits in a
+    ///   bridge (§8.2.142), and a usage report for no URR of the session. Predefined
+    ///   rules (§8.2.54, §8.2.74, §8.2.75) are configured in the UP function and are not
+    ///   reported.
     /// - **Announced features.** Reports an IE that requires a feature which the UP or CP
     ///   function did not announce: for example a Number of Reports in a Create URR when
     ///   the UP function did not announce NORP. This covers 35 rows of clause 7. The
@@ -431,6 +441,9 @@ impl Message {
         }
         if let Some(request) = known.request {
             crate::known::against(self, request, interface, &mut found);
+        }
+        if let Some(session) = known.session {
+            crate::session::check(self, session, known.request, &mut found);
         }
         found
     }

@@ -214,8 +214,9 @@ decoding a message and encoding it again returns the same bytes.
 `check()` validates one message against TS 29.244 on an interface, or on a set
 of interfaces. Each deviation has the path of the IE, the clause that is broken
 and the Cause to answer with. `check_with()` also validates a response against
-its request, and a message against the features that the two functions
-announced. [Limits](#limits) says what they do not cover.
+its request, a message against the features that the two functions announced
+(`Node::known()` gives them), and a message against the state of its session.
+[Limits](#limits) says what they do not cover.
 
 When the mandatory IEs of a table differ between interfaces, the struct has one
 constructor for each, such as `CreatePdr::new_sxa()` and `new_n4()`.
@@ -344,10 +345,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 `check()` validates one message against TS 29.244 V19.6.0: its header, its
 framing, the IE tables of clause 7 and the values of clause 8.2.
-`check_with()` adds the request that a response answers and the features that
-the two functions announced. Their rustdoc lists every check. They do not cover:
+`check_with()` adds the request that a response answers, the features that the
+two functions announced, and the state of the session (`SessionRules`). Their
+rustdoc lists every check. They do not cover:
 
-- Session state: an ID that refers to a rule of an earlier message.
+- Whether UR-SEQN values increase: usage reports can arrive out of order.
 - What only the sender knows: its intent, or what the UE supports.
 - A SEID of 0 where the sender might not know the SEID of its peer yet.
 - The JSON of a DNS Query/Response Filter, and the content of containers.
