@@ -241,6 +241,15 @@ impl Message {
     /// Like [`check`](Self::check), and also validates the message against the context
     /// in `known`. Each part of [`Known`] that is `None` is skipped.
     ///
+    /// - **The request**, when the message is a response. Reports a response whose
+    ///   message type or Sequence Number does not match the request (Table 7.3-1, §6.4),
+    ///   and a Session Establishment Response whose SEID is not the SEID of the CP F-SEID
+    ///   of the request (§7.2.2.4.1). When the response accepts the request, it also
+    ///   reports a missing Created PDR, Created Traffic Endpoint, Created/Updated Traffic
+    ///   Endpoint or Updated PDR for each rule that asked the UP function to allocate an
+    ///   F-TEID or a UE IP address (CH, CHV4, CHV6), a missing allocation inside it, and
+    ///   a missing or incomplete Created Bridge/Router Info (Tables 7.5.3.1-1, 7.5.3.6-1
+    ///   and 7.5.5.1-1, §8.2.141).
     /// - **Announced features.** Reports an IE that requires a feature which the UP or CP
     ///   function did not announce: for example a Number of Reports in a Create URR when
     ///   the UP function did not announce NORP. This covers 35 rows of clause 7. The
@@ -345,6 +354,9 @@ impl Message {
                 clause,
                 DeviationKind::RuleChangedTwice { rule, id },
             ));
+        }
+        if let Some(request) = known.request {
+            crate::known::against(self, request, interface, &mut found);
         }
         found
     }

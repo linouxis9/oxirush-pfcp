@@ -332,6 +332,96 @@ fn each_captured_message_is_read_written_and_checked() {
     assert_eq!(found, expected);
 }
 
+/// What `check_with()` reports in the captures and `check()` does not, with the request
+/// that each response answers and the features that the two functions announced when
+/// they set up their association: the run, the number of the message, and the path, the
+/// clause and the kind of the deviation.
+const EXPECTED_WITH_CONTEXT: &[(&str, &str, &str, &str, DeviationKind)] = &[];
+
+/// Each captured message is checked with its context: a response against the request of
+/// the same sequence number that its receiver sent, and every message of an association
+/// against the UP and CP Function Features of its setup.
+#[test]
+fn each_captured_message_is_checked_with_its_context() {
+    use std::collections::HashMap;
+    let lines = include_str!("captures/messages.tsv").lines();
+    let lines = lines.filter(|line| !line.starts_with('#'));
+    // The requests of a run by their sender, their receiver and their sequence number, and
+    // the features of an association by its two addresses
+    let mut requests: HashMap<(&str, &str, &str, u32), Message> = HashMap::new();
+    let mut features: HashMap<(&str, [&str; 2]), (UpFunctionFeatures, CpFunctionFeatures)> =
+        HashMap::new();
+    let (mut found, mut answered, mut associated) = (Vec::new(), 0, 0);
+    for line in lines {
+        let cells: Vec<&str> = line.split('\t').collect();
+        let (run, number, from, to) = (cells[0], cells[1], cells[2], cells[3]);
+        let message = Message::decode(&hex::decode(cells[5]).unwrap()).unwrap();
+        let interface = match cells[4] {
+            "Sxa" => Interfaces::SXA,
+            "Sxb" => Interfaces::SXB,
+            _ => Interfaces::N4,
+        };
+        let mut pair = [from, to];
+        pair.sort_unstable();
+        // A setup announces the features of its sender: none without the IE
+        let announced = match &message.body {
+            Body::AssociationSetupRequest(setup) => {
+                features.remove(&(run, pair));
+                Some((&setup.up_function_features, &setup.cp_function_features))
+            }
+            Body::AssociationSetupResponse(setup) => {
+                Some((&setup.up_function_features, &setup.cp_function_features))
+            }
+            _ => None,
+        };
+        if let Some((up, cp)) = announced {
+            let of = features.entry((run, pair)).or_default();
+            of.0 = up.clone().unwrap_or(of.0.clone());
+            of.1 = cp.clone().unwrap_or(of.1.clone());
+        }
+        let mut known = Known::default();
+        let of = features.get(&(run, pair));
+        // The features are whole once the setup is answered
+        if let Some((up, cp)) = of.filter(|_| !matches!(message.body.message_type(), 5 | 6)) {
+            known = known.with_up_features(up).with_cp_features(cp);
+            associated += 1;
+        }
+        let sequence = message.header.sequence;
+        let request = requests.remove(&(run, to, from, sequence));
+        if let Some(request) = request
+            .as_ref()
+            .filter(|_| !is_request(message.body.message_type()))
+        {
+            known = known.with_request(request);
+            answered += 1;
+        }
+        let alone = message.check(interface);
+        for deviation in message.check_with(interface, &known) {
+            if !alone.contains(&deviation) {
+                found.push((
+                    run,
+                    number,
+                    deviation.path,
+                    deviation.clause,
+                    deviation.kind,
+                ));
+            }
+        }
+        if is_request(message.body.message_type()) {
+            requests.insert((run, from, to, sequence), message);
+        }
+    }
+    // How many responses had their request, and how many messages their features
+    assert_eq!((answered, associated), (100, 187));
+    let expected: Vec<_> = EXPECTED_WITH_CONTEXT
+        .iter()
+        .map(|(run, number, path, clause, kind)| {
+            (*run, *number, path.to_string(), *clause, kind.clone())
+        })
+        .collect();
+    assert_eq!(found, expected);
+}
+
 /// Each deviation is at a path that `paths::select` takes on the tree of its message: of
 /// the captures on every interface, and of rows and IE types whose names have a "/",
 /// which a path writes "~1".

@@ -16,14 +16,20 @@
 */
 
 //! Context for [`Message::check_with`](crate::Message::check_with): what the sender and
-//! the receiver of a message know and the message does not carry.
+//! the receiver of a message know and the message does not carry. The request that a
+//! response answers, and the features that the two functions announced.
 
 use alloc::vec::Vec;
 
 use crate::check::{Deviation, DeviationKind, Path};
-use crate::message::Body;
-use crate::table::Row;
-use crate::{CpFunctionFeatures, UpFunctionFeatures};
+use crate::ie::IeType;
+use crate::message::{Body, Message, is_request};
+use crate::table::{Interfaces, Row};
+use crate::{
+    CpFunctionFeatures, CreatePdr, CreateTrafficEndpoint, CreatedBridgeRouterInfo, CreatedPdr,
+    CreatedTrafficEndpoint, FTeid, FiveGsUserPlaneNodeId, MappedN6IpAddress, Pdi, PortNumber,
+    UeIpAddress, UpFunctionFeatures, UpdatedPdr,
+};
 
 /// Context that one message does not carry, for
 /// [`Message::check_with`](crate::Message::check_with). Every part is optional: a part
@@ -38,11 +44,13 @@ use crate::{CpFunctionFeatures, UpFunctionFeatures};
 ///     ..Default::default()
 /// };
 /// let known = Known::default().with_up_features(&features);
-/// assert!(known.up_features.is_some() && known.cp_features.is_none());
+/// assert!(known.up_features.is_some() && known.request.is_none());
 /// ```
 #[derive(Debug, Clone, Copy, Default)]
 #[non_exhaustive]
 pub struct Known<'a> {
+    /// The request that the message answers, when the message is a response.
+    pub request: Option<&'a Message>,
     /// The UP Function Features that the UP function announced in the association setup
     /// or in its last association update. Pass the default value for a UP function that
     /// sent no UP Function Features IE.
@@ -54,6 +62,14 @@ pub struct Known<'a> {
 }
 
 impl<'a> Known<'a> {
+    /// Sets the request that the message answers.
+    pub fn with_request(self, request: &'a Message) -> Self {
+        Self {
+            request: Some(request),
+            ..self
+        }
+    }
+
     /// Sets the features that the UP function announced.
     pub fn with_up_features(self, features: &'a UpFunctionFeatures) -> Self {
         Self {
@@ -205,5 +221,264 @@ pub(crate) fn check_row(
             };
             found.push(Deviation::new(here, table, kind));
         }
+    }
+}
+
+/// What a request asks the UP function to allocate for a PDR or a traffic endpoint, or
+/// what a response returns for one: a local F-TEID, a UE IP address or prefix, a mapped
+/// N6 IP address.
+type Allocated = [bool; 3];
+
+/// The rows of a Created PDR, a Created Traffic Endpoint and an Updated PDR that return
+/// an allocation, in the order of [`Allocated`]: the name and the IE type of each.
+const ALLOCATED: [(&str, u16); 3] = [
+    ("F-TEID", FTeid::IE_TYPE),
+    ("UE IP Address", UeIpAddress::IE_TYPE),
+    ("Mapped N6 IP Address", MappedN6IpAddress::IE_TYPE),
+];
+
+/// Returns what a PDI or a traffic endpoint asks the UP function to allocate: CH in its
+/// F-TEID, CHV4 or CHV6 in a UE IP address, CHV4 in its mapped N6 IP address.
+fn asks(
+    teid: &Option<FTeid>,
+    addresses: &[UeIpAddress],
+    mapped: Option<&MappedN6IpAddress>,
+) -> Allocated {
+    [
+        teid.as_ref().is_some_and(|teid| teid.ch),
+        addresses.iter().any(|address| address.chv4 || address.chv6),
+        mapped.is_some_and(|mapped| mapped.chv4),
+    ]
+}
+
+/// What each Create PDR asks, with its PDR ID.
+fn asked_pdrs(pdrs: &[CreatePdr]) -> Vec<(Option<u32>, Allocated)> {
+    let asked = |pdr: &CreatePdr| {
+        let pdi = pdr.pdi.as_ref().map(asked_pdi).unwrap_or_default();
+        (pdr.pdr_id.as_ref().map(|id| id.value.into()), pdi)
+    };
+    pdrs.iter().map(asked).collect()
+}
+
+fn asked_pdi(pdi: &Pdi) -> Allocated {
+    let mapped = pdi.mapped_n6_ip_address.as_ref();
+    asks(&pdi.local_f_teid, &pdi.ue_ip_address, mapped)
+}
+
+/// What each Create Traffic Endpoint asks, with its Traffic Endpoint ID.
+fn asked_endpoints(endpoints: &[CreateTrafficEndpoint]) -> Vec<(Option<u32>, Allocated)> {
+    let asked = |endpoint: &CreateTrafficEndpoint| {
+        let id = endpoint.traffic_endpoint_id.as_ref();
+        let mapped = endpoint.mapped_n6_ip_address.as_ref();
+        let asked = asks(&endpoint.local_f_teid, &endpoint.ue_ip_address, mapped);
+        (id.map(|id| id.value.into()), asked)
+    };
+    endpoints.iter().map(asked).collect()
+}
+
+/// What each Created PDR returns, with its PDR ID.
+fn returned_pdrs(pdrs: &[CreatedPdr]) -> Vec<(Option<u32>, Allocated)> {
+    let returned = |pdr: &CreatedPdr| {
+        let has = [
+            !pdr.f_teid.is_empty(),
+            !pdr.ue_ip_address.is_empty(),
+            pdr.mapped_n6_ip_address.is_some(),
+        ];
+        (pdr.pdr_id.as_ref().map(|id| id.value.into()), has)
+    };
+    pdrs.iter().map(returned).collect()
+}
+
+/// What each Created Traffic Endpoint returns, with its Traffic Endpoint ID.
+fn returned_endpoints(endpoints: &[CreatedTrafficEndpoint]) -> Vec<(Option<u32>, Allocated)> {
+    let returned = |endpoint: &CreatedTrafficEndpoint| {
+        let has = [
+            !endpoint.f_teid.is_empty(),
+            !endpoint.ue_ip_address.is_empty(),
+            endpoint.mapped_n6_ip_address.is_some(),
+        ];
+        let id = endpoint.traffic_endpoint_id.as_ref();
+        (id.map(|id| id.value.into()), has)
+    };
+    endpoints.iter().map(returned).collect()
+}
+
+fn at<'a>(parent: &'a Path<'a>, row: &'static str, nth: Option<usize>) -> Path<'a> {
+    Path::Row { parent, row, nth }
+}
+
+/// Reports each PDR or traffic endpoint of `asked` that the response returns nothing
+/// for: no IE of `row` with its ID among `returned`, or an IE without the allocation that
+/// was asked. The IE of `row` "shall be present if the cause is set to "success" and the
+/// UP function was requested to allocate a local F-TEID or a UE IP address/prefix or a
+/// Mapped N6 IP address" (Tables 7.5.3.1-1 and 7.5.5.1-1), and inside it "If the UP
+/// function allocates the F-TEID, this IE shall be present" (Tables 7.5.3.2-1, 7.5.3.5-1
+/// and 7.5.5.5-1).
+fn allocated(
+    asked: &[(Option<u32>, Allocated)],
+    returned: &[(Option<u32>, Allocated)],
+    row: &Row,
+    table: &'static str,
+    found: &mut Vec<Deviation>,
+) {
+    let inside = row.content.map_or(table, |content| content.id);
+    let root = Path::Root("/pfcp");
+    let missing = |ie_type| DeviationKind::ConditionalMissing { ie_type };
+    for (id, asked) in asked.iter().filter(|(_, asked)| asked.contains(&true)) {
+        let Some(nth) = returned.iter().position(|returned| returned.0 == *id) else {
+            let here = at(&root, row.name, None);
+            found.push(Deviation::new(here, table, missing(row.ie_type)));
+            continue;
+        };
+        let here = at(&root, row.name, Some(nth));
+        let rows = asked.iter().zip(returned[nth].1).zip(ALLOCATED);
+        for ((asked, returned), (name, ie_type)) in rows {
+            if *asked && !returned {
+                found.push(Deviation::new(
+                    at(&here, name, None),
+                    inside,
+                    missing(ie_type),
+                ));
+            }
+        }
+    }
+}
+
+/// Reports what a response breaks with respect to the request that it answers, on
+/// `interface`: its message type, its Sequence Number, the SEID of a Session
+/// Establishment Response and, when the response accepts the request, the IEs that return
+/// what the request asked the UP function to allocate.
+pub(crate) fn against(
+    response: &Message,
+    request: &Message,
+    interface: Interfaces,
+    found: &mut Vec<Deviation>,
+) {
+    use DeviationKind::Rule;
+    let (asked, answers) = (request.body.message_type(), response.body.message_type());
+    // A Version Not Supported Response answers a request of any type (§7.4.4.7).
+    if !is_request(asked) || answers != asked + 1 && answers != 11 {
+        let rule = Rule("the message is not the response to this request");
+        found.push(Deviation::new("/message", "7.3", rule));
+        return;
+    }
+    if response.header.sequence != request.header.sequence {
+        let rule = Rule("the Sequence Number is not the one of the request");
+        found.push(Deviation::new("/header/Sequence Number", "6.4", rule));
+    }
+    let cause = response.body.cause();
+    let accepted = cause.is_some_and(|cause| cause.effective().value() == 1);
+    // The row of an IE type in the response, when the interface has it.
+    let table = response.body.table();
+    let row = |ie_type: u16| {
+        let row = table.and_then(|table| table.row_of(ie_type));
+        row.filter(|row| row.on(interface).is_some())
+    };
+    match (&request.body, &response.body) {
+        (
+            Body::SessionEstablishmentRequest(request),
+            Body::SessionEstablishmentResponse(answer),
+        ) => {
+            // "The Session Endpoint Identifier is set by the sending entity ... to the
+            // SEID value provided by the corresponding receiving entity": the SEID of
+            // the CP F-SEID. A response that rejects the request may use 0 (§7.2.2.4.2).
+            let seid = request.cp_f_seid.as_ref().map(|seid| seid.seid);
+            let zero = !accepted && response.header.seid == Some(0);
+            if seid.is_some() && response.header.seid != seid && !zero {
+                let rule = Rule("the SEID is not the one of the CP F-SEID of the request");
+                found.push(Deviation::new("/header/SEID", "7.2.2.4.1", rule));
+            }
+            if !accepted {
+                return;
+            }
+            let table = "7.5.3.1-1";
+            if let Some(row) = row(CreatedPdr::IE_TYPE) {
+                let (asked, returned) = (
+                    asked_pdrs(&request.create_pdr),
+                    returned_pdrs(&answer.created_pdr),
+                );
+                allocated(&asked, &returned, row, table, found);
+            }
+            if let Some(row) = row(CreatedTrafficEndpoint::IE_TYPE) {
+                let asked = asked_endpoints(&request.create_traffic_endpoint);
+                let returned = returned_endpoints(&answer.created_traffic_endpoint);
+                allocated(&asked, &returned, row, table, found);
+            }
+            // A Created Bridge/Router Info "shall be present if the UPF was requested to
+            // provide Bridge/Router information", and its two IEs "If the BII bit or the
+            // RII bit was set to "1" in the Create Bridge/Router Info IE" (Tables
+            // 7.5.3.1-1 and 7.5.3.6-1).
+            let bridge = request.create_bridge_router_info.as_ref();
+            let bridge = bridge.filter(|info| info.bii || info.rii);
+            if let (Some(asked), Some(row)) = (bridge, row(CreatedBridgeRouterInfo::IE_TYPE)) {
+                let root = Path::Root("/pfcp");
+                let here = at(&root, row.name, None);
+                let missing = |ie_type| DeviationKind::ConditionalMissing { ie_type };
+                let Some(info) = &answer.created_bridge_router_info else {
+                    found.push(Deviation::new(here, table, missing(row.ie_type)));
+                    return;
+                };
+                let port = at(&here, "Port Number", None);
+                if info.port_number.is_none() {
+                    let kind = missing(PortNumber::IE_TYPE);
+                    found.push(Deviation::new(port, "7.5.3.6-1", kind));
+                }
+                if info.n5gs_user_plane_node_id.is_none() {
+                    let node = at(&here, "5GS User Plane Node ID", None);
+                    let kind = missing(FiveGsUserPlaneNodeId::IE_TYPE);
+                    found.push(Deviation::new(node, "7.5.3.6-1", kind));
+                }
+                // "if the BII flag was set to 1 in the Create Bridge/Router Info IE ... it
+                // shall be encoded as an Unsigned16 binary integer value in octets 7 and
+                // 8. Octets 5 and 6 shall be set to all zeros" (§8.2.141).
+                let port_number = info.port_number.as_ref();
+                if asked.bii && port_number.is_some_and(|port| port.value > 0xffff) {
+                    let rule = Rule("the Port Number of a bridge is more than 16 bits");
+                    found.push(Deviation::new(port, "8.2.141", rule));
+                }
+            }
+        }
+        (Body::SessionModificationRequest(request), Body::SessionModificationResponse(answer))
+            if accepted =>
+        {
+            let table = "7.5.5.1-1";
+            if let Some(row) = row(CreatedPdr::IE_TYPE) {
+                let (asked, returned) = (
+                    asked_pdrs(&request.create_pdr),
+                    returned_pdrs(&answer.created_pdr),
+                );
+                allocated(&asked, &returned, row, table, found);
+            }
+            if let Some(row) = row(CreatedTrafficEndpoint::IE_TYPE) {
+                let mut asked = asked_endpoints(&request.create_traffic_endpoint);
+                asked.extend(request.update_traffic_endpoint.iter().map(|endpoint| {
+                    let id = endpoint.traffic_endpoint_id.as_ref();
+                    let asked = asks(&endpoint.local_f_teid, &endpoint.ue_ip_address, None);
+                    (id.map(|id| u32::from(id.value)), asked)
+                }));
+                let returned = returned_endpoints(&answer.created_updated_traffic_endpoint);
+                allocated(&asked, &returned, row, table, found);
+            }
+            // An Updated PDR "shall be present if a Update PDR is present in the
+            // corresponding PFCP Session Modification Request and UP function is
+            // requested to allocate a new F-TEID ... or the UP function is requested to
+            // assign additional UE IP Address or Prefix". Which of its two F-TEID rows
+            // returns the F-TEID depends on why it was asked, so only the Updated PDR
+            // and its UE IP Address are checked.
+            if let Some(row) = row(UpdatedPdr::IE_TYPE) {
+                let asked = |pdr: &crate::UpdatePdr| {
+                    let pdi = pdr.pdi.as_deref().map(asked_pdi).unwrap_or_default();
+                    (pdr.pdr_id.as_ref().map(|id| id.value.into()), pdi)
+                };
+                let returned = |pdr: &UpdatedPdr| {
+                    let has = [true, !pdr.ue_ip_address.is_empty(), true];
+                    (pdr.pdr_id.as_ref().map(|id| id.value.into()), has)
+                };
+                let asked: Vec<_> = request.update_pdr.iter().map(asked).collect();
+                let returned: Vec<_> = answer.updated_pdr.iter().map(returned).collect();
+                allocated(&asked, &returned, row, table, found);
+            }
+        }
+        _ => {}
     }
 }
