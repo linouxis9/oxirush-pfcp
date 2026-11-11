@@ -839,6 +839,117 @@ impl<T: Field> Field for Each<T> {
     }
 }
 
+/// A length of two octets, then entries up to it, each after the other: the additional
+/// flow descriptions, URLs and domain names of PFD Contents (Figures 8.2.39-2, 8.2.39-3
+/// and 8.2.39-4). Its tree is the list of them.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Entries16<T>(pub Vec<T>);
+
+impl<T: Field> Field for Entries16<T> {
+    #[cfg(feature = "tree")]
+    const BELOW: &'static crate::paths::Below = T::BELOW;
+    fn read(octets: &mut &[u8]) -> Option<Self> {
+        let length = usize::from(u16::read(octets)?);
+        let (mut within, rest) = octets.split_at_checked(length)?;
+        *octets = rest;
+        let mut entries = Vec::new();
+        while !within.is_empty() {
+            entries.push(T::read(&mut within)?);
+        }
+        Some(Self(entries))
+    }
+    fn write(&self, out: &mut Vec<u8>) {
+        // put() refuses entries longer than their length can say.
+        let length = self.size() - 2;
+        out.extend_from_slice(&u16::try_from(length).unwrap_or(u16::MAX).to_be_bytes());
+        for entry in &self.0 {
+            entry.write(out);
+        }
+    }
+    fn size(&self) -> usize {
+        2 + self.0.iter().map(Field::size).sum::<usize>()
+    }
+    fn fits(&self) -> bool {
+        self.size() - 2 <= usize::from(u16::MAX) && self.0.iter().all(Field::fits)
+    }
+    fn check(&self, path: &crate::check::Path, clause: &'static str, found: &mut Vec<Deviation>) {
+        if !self.fits() {
+            let rule = DeviationKind::Rule("more octets than their length can say");
+            found.push(Deviation::new(path, clause, rule));
+        }
+        for entry in &self.0 {
+            entry.check(path, clause, found);
+        }
+    }
+    #[cfg(feature = "tree")]
+    fn to_tree(&self) -> oxirush_utils::tree::Value {
+        oxirush_utils::tree::Value::Array(self.0.iter().map(Field::to_tree).collect())
+    }
+    #[cfg(feature = "tree")]
+    fn from_tree(
+        value: &oxirush_utils::tree::Value,
+        reading: &mut oxirush_utils::tree::Reading,
+    ) -> Result<Self, oxirush_utils::tree::Refused> {
+        reading.list(value, T::from_tree).map(Self)
+    }
+}
+
+/// An additional Domain Name of PFD Contents with its Domain Name Protocol, each after
+/// its length of two octets (Figure 8.2.39-4), "the same as the Domain Name field and
+/// Domain Name Protocol field".
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct DomainNameAndProtocol {
+    /// The Domain Name.
+    pub domain_name: TextLv16,
+    /// The Domain Name Protocol.
+    pub domain_name_protocol: Lv16,
+}
+
+impl Field for DomainNameAndProtocol {
+    #[cfg(feature = "tree")]
+    const BELOW: &'static crate::paths::Below = &crate::paths::Below::Object(
+        None,
+        &[
+            ("Domain Name", TextLv16::BELOW),
+            ("Domain Name Protocol", &crate::paths::Below::Scalar),
+        ],
+    );
+    fn read(octets: &mut &[u8]) -> Option<Self> {
+        Some(Self {
+            domain_name: TextLv16::read(octets)?,
+            domain_name_protocol: Lv16::read(octets)?,
+        })
+    }
+    fn write(&self, out: &mut Vec<u8>) {
+        self.domain_name.write(out);
+        self.domain_name_protocol.write(out);
+    }
+    fn size(&self) -> usize {
+        self.domain_name.size() + self.domain_name_protocol.size()
+    }
+    fn fits(&self) -> bool {
+        self.domain_name.fits() && self.domain_name_protocol.fits()
+    }
+    #[cfg(feature = "tree")]
+    fn to_tree(&self) -> oxirush_utils::tree::Value {
+        let mut members = oxirush_utils::tree::Members::new();
+        members.put("Domain Name", self.domain_name.to_tree());
+        members.put("Domain Name Protocol", self.domain_name_protocol.to_tree());
+        members.finish()
+    }
+    #[cfg(feature = "tree")]
+    fn from_tree(
+        value: &oxirush_utils::tree::Value,
+        reading: &mut oxirush_utils::tree::Reading,
+    ) -> Result<Self, oxirush_utils::tree::Refused> {
+        let read = reading.members(value, &["Domain Name", "Domain Name Protocol"])?;
+        Ok(Self {
+            domain_name: reading.member(&read, "Domain Name", TextLv16::from_tree)?,
+            domain_name_protocol: reading.member(&read, "Domain Name Protocol", Lv16::from_tree)?,
+        })
+    }
+}
+
 /// A PLMN of three octets, the MCC and the MNC in the order of TS 24.008 clause 10.5.1.3:
 /// `"208-93"` in a tree, or the octets of digits that are not decimal.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]

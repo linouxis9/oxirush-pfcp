@@ -1596,9 +1596,8 @@ fn figure_places() {
 /// a row of `flag-rules.tsv` of the clause, "also present", checks. A sentence whose flag
 /// or field the crate does not have fails the test: one that names it otherwise than the
 /// figure is an erratum (`sentence-flag`, `sentence-field`). The sentences of the flags of
-/// the second figure of clause 8.2.5, of a media identification that `check()` reads by
-/// hand, are checked with its reader: the field is read with its flag alone, and not
-/// without it. Those of the value of a field of bits are checked by value_conditions().
+/// the second figure of clause 8.2.5 are of the layout of a media identification, a part
+/// of an SDF Filter. Those of the value of a field of bits are checked by value_conditions().
 #[test]
 fn figure_conditions() {
     let errata = Errata::new();
@@ -1641,30 +1640,21 @@ fn figure_conditions() {
             let flag = errata.apply("sentence-flag", info.clause, flag);
             let field = errata.apply("sentence-field", info.clause, field);
             let (flag, field) = (&flag, &field);
-            let Some(bits) = layout.bits.iter().find(|bits| key(bits.name) == key(flag)) else {
-                let media = MEDIA_IDENTIFICATION_FLAGS
-                    .iter()
-                    .find(|(name, _)| info.clause == "8.2.5" && name == flag);
-                let Some((_, bit)) = media else {
-                    problems.push(format!(
-                        "clause {} {}: {flag:?}, which a sentence has {set}, is no flag of the crate",
-                        info.clause, info.name
-                    ));
-                    continue;
-                };
-                // The fields that the reader of Figure 8.2.5-2 reads of octets of `flags`
-                // and zeros after them: the sentence names one of them.
-                let reads = |flags: u8| {
-                    let octets = [&[flags][..], &[0; 16]].concat();
-                    let read = media_identification_fields(&octets).unwrap_or_default();
-                    read.iter().any(|name| key(field).contains(&key(name)))
-                };
-                checked += 1;
-                if (*set, *there) != ("set", "present") || !reads(*bit) || reads(0) {
-                    problems.push(format!("clause {} {}: a media identification has {field:?} {there} where {flag} is {set} in the document", info.clause, info.name));
-                }
+            // The layout of the sentence: that of the IE, or that of a part of it, of the
+            // second figure of its clause
+            let part = (info.clause == "8.2.5")
+                .then_some(MediaIdentification::LAYOUT)
+                .flatten();
+            let has = |layout: &&Layout| layout.bits.iter().any(|bits| key(bits.name) == key(flag));
+            let Some(layout) = [Some(layout), part].into_iter().flatten().find(has) else {
+                problems.push(format!(
+                    "clause {} {}: {flag:?}, which a sentence has {set}, is no flag of the crate",
+                    info.clause, info.name
+                ));
                 continue;
             };
+            let bits = layout.bits.iter().find(|bits| key(bits.name) == key(flag));
+            let bits = bits.expect("a flag of the layout");
             // The field by its name, by the name in brackets of its octets, by the label of
             // its octets, or by a name of the figure that it stands for
             let named = field
@@ -1684,7 +1674,7 @@ fn figure_conditions() {
                     .find(|(name, _)| *name == member.name)
                     .map(|(_, names)| names.clone())
                     .unwrap_or_default();
-                [named, by_label.unwrap_or("\0")].iter().any(|name| {
+                [field, named, by_label.unwrap_or("\0")].iter().any(|name| {
                     key(member.name) == key(name)
                         || names.iter().any(|known| key(known) == key(name))
                 })

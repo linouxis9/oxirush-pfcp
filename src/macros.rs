@@ -103,7 +103,9 @@ macro_rules! pfcp_ies {
 /// keeps. A value of fields alone has no flags, and the tree of a value of one field
 /// alone is that field while it has no unknown octets. A field of a length that the flags
 /// give, `[length]` after its kind, is read from that many octets. Each field is written
-/// by [`put`](crate::fields::put), which refuses one that its bits cannot say. A `check`
+/// by [`put`](crate::fields::put), which refuses one that its bits cannot say. A layout
+/// that is a part of a value, of a second figure of its clause, and no IE, says `part` and
+/// its name: it is a field of that value after its length of two octets. A `check`
 /// block adds the rules of its clause, and a `placed` block those that its place in a
 /// table gives ([`Rules::check_placed`](crate::check::Rules::check_placed)).
 ///
@@ -118,7 +120,7 @@ macro_rules! pfcp_ies {
 macro_rules! pfcp_layout {
     ($(
         $(#[$meta:meta])*
-        pub struct $ty:ident $clause:literal {
+        pub struct $ty:ident $clause:literal $(part $part:literal)? {
             $( fields { $( $head:ident $head_name:literal : $hkind:ty ),* $(,)? } )?
             $(
                 flags($fk:ty) { $( $flag:ident $flag_name:literal : $bit:literal $(/ $width:literal $(as $fkind:ident)?)? ),* $(,)? }
@@ -153,17 +155,35 @@ macro_rules! pfcp_layout {
         }
 
         impl $ty {
+            /// Its name in an error and in a refusal of its tree: that of its IE type, or
+            /// of the part of a value that it is.
+            const NAMED: &'static str = pfcp_layout!(@named [$($part)?] $ty);
+            /// What its tree may hold: each member, with what it may hold below it.
+            #[cfg(feature = "tree")]
+            #[allow(dead_code)]
+            const BELOW_ALL: &'static [(&'static str, &'static crate::paths::Below)] = &[
+                $($( ($head_name, <$hkind as crate::fields::Field>::BELOW), )*)?
+                $(
+                    $( ($flag_name, &crate::paths::Below::Scalar), )*
+                    (pfcp_layout!(@spare $fk), &crate::paths::Below::Scalar),
+                    $( ($field_name, <$kind $(<$param>)? as crate::fields::Field>::BELOW), )*
+                )?
+                (crate::ie::UNKNOWN_OCTETS, &crate::paths::Below::Scalar),
+            ];
             $(
                 /// The bits of the octet of flags that are flags.
                 const FLAGS: $fk = 0 $( | pfcp_layout!(@bits ones [$($width $(as $fkind)?)?] $bit) as $fk )*;
             )?
             /// The names of its fields and flags.
+            #[allow(dead_code)]
             pub(crate) const FIELDS: &'static [&'static str] = &[$($($head_name,)*)? $($($flag_name,)* $($field_name,)*)?];
             /// The members that its tree may have: its fields and flags, the spare bits of its
             /// flags and its unknown octets.
+            #[allow(dead_code)]
             pub(crate) const MEMBERS: &'static [&'static str] = &[$($($head_name,)*)? $($($flag_name,)* pfcp_layout!(@spare $fk), $($field_name,)*)? crate::ie::UNKNOWN_OCTETS];
             /// What the tree of each field may hold below it.
             #[cfg(feature = "tree")]
+            #[allow(dead_code)]
             pub(crate) const MEMBERS_BELOW: &'static [(&'static str, &'static crate::paths::Below)] = &[
                 $($( ($head_name, <$hkind as crate::fields::Field>::BELOW), )*)?
                 $($( ($field_name, <$kind $(<$param>)? as crate::fields::Field>::BELOW), )*)?
@@ -270,12 +290,12 @@ macro_rules! pfcp_layout {
             fn encode(&self, out: &mut alloc::vec::Vec<u8>) -> Result<(), crate::Error> {
                 if let Some(field) = self.inconsistent() {
                     return Err(crate::Error::Inconsistent {
-                        ie: <Self as crate::ie::IeType>::TYPE_NAME,
+                        ie: Self::NAMED,
                         field,
                         clause: $clause,
                     });
                 }
-                let ie = <Self as crate::ie::IeType>::TYPE_NAME;
+                let ie = Self::NAMED;
                 if let Some(field) = self.wide() {
                     return Err(crate::Error::FieldLength { ie, field });
                 }
@@ -340,9 +360,11 @@ macro_rules! pfcp_layout {
         #[cfg(feature = "serde")]
         oxirush_utils::impl_serde!($ty);
 
+        $( pfcp_layout!(@part $ty $part); )?
+
         #[cfg(feature = "tree")]
         impl oxirush_utils::tree::Tree for $ty {
-            const NAME: &'static str = <Self as crate::ie::IeType>::TYPE_NAME;
+            const NAME: &'static str = Self::NAMED;
 
             fn to_tree(&self) -> oxirush_utils::tree::Value {
                 // A value of one field, without flags, is that field, while it has no
@@ -424,6 +446,49 @@ macro_rules! pfcp_layout {
         }
     )*};
     (@spare $fk:ty) => { "Spare" };
+    (@named [] $ty:ident) => { <$ty as crate::ie::IeType>::TYPE_NAME };
+    (@named [$part:literal] $ty:ident) => { $part };
+    // A part of a value, which no IE is: a field of that value after its length of two
+    // octets, an entry of a list of them. Its value checks each at its place in the list.
+    (@part $ty:ident $part:literal) => {
+        impl crate::fields::Field for $ty {
+            #[cfg(feature = "tree")]
+            const BELOW: &'static crate::paths::Below = &crate::paths::Below::Object(None, Self::BELOW_ALL);
+            fn read(octets: &mut &[u8]) -> Option<Self> {
+                let length = usize::from(<u16 as crate::fields::Field>::read(octets)?);
+                let (within, rest) = octets.split_at_checked(length)?;
+                *octets = rest;
+                <Self as crate::ie::Codec>::decode(within)
+            }
+            fn write(&self, out: &mut alloc::vec::Vec<u8>) {
+                // put() refuses one that does not encode, or is longer than its length says.
+                let mut within = alloc::vec::Vec::new();
+                if <Self as crate::ie::Codec>::encode(self, &mut within).is_ok() {
+                    out.extend_from_slice(&(within.len() as u16).to_be_bytes());
+                    out.extend_from_slice(&within);
+                }
+            }
+            fn size(&self) -> usize {
+                2 + <Self as crate::ie::Codec>::encoded_len(self)
+            }
+            fn fits(&self) -> bool {
+                let length = <Self as crate::ie::Codec>::encoded_len(self);
+                length <= usize::from(u16::MAX)
+                    && <Self as crate::ie::Codec>::encode(self, &mut alloc::vec::Vec::new()).is_ok()
+            }
+            #[cfg(feature = "tree")]
+            fn to_tree(&self) -> oxirush_utils::tree::Value {
+                oxirush_utils::tree::Tree::to_tree(self)
+            }
+            #[cfg(feature = "tree")]
+            fn from_tree(
+                value: &oxirush_utils::tree::Value,
+                reading: &mut oxirush_utils::tree::Reading,
+            ) -> Result<Self, oxirush_utils::tree::Refused> {
+                <Self as oxirush_utils::tree::Tree>::from_tree(value, reading)
+            }
+        }
+    };
     // Whether a field runs to the end of the IE: one of a length that its flags give does not.
     (@ends [] $($kind:tt)+) => { <$($kind)+ as crate::fields::Field>::TO_THE_END };
     (@ends [$length:expr] $($kind:tt)+) => { false };

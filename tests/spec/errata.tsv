@@ -89,3 +89,4 @@ downlink-congestion-information-threshold	sentence-field	8.2.240	Downlink Conges
 uplink-congestion-information-threshold	sentence-field	8.2.240	Uplink Congestion Information threshold	UL Congestion information threshold
 downlink-data-rate-threshold	sentence-field	8.2.240	Downlink Data Rate threshold	DL Data Rate threshold
 uplink-data-rate-threshold	sentence-field	8.2.240	Uplink Data Rate threshold	UL Data Rate threshold
+media-identification-tag	sentence-field	8.2.5	Length of the Media Identification Tag field and the Media Identification Tag	Media Identification Tag

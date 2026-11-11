@@ -697,22 +697,20 @@ fn value_found<T: Codec + Check>(octets: &str) -> Vec<(&'static str, DeviationKi
 
 /// §8.2.5: an SDF Filter of SMMII has at least one (S)RTP Multiplexed Media Identification
 /// Information, and one of neither the Payload Type nor the RTCP Packet Type, which is of
-/// both RTP and RTCP (NOTE 4), has the SSRC or the Media Identification Tag.
+/// both RTP and RTCP (NOTE 4), has the SSRC or the Media Identification Tag. One of no
+/// octets has no flags to read, and the SDF Filter does not decode.
 #[test]
 fn the_media_identifications_of_an_sdf_filter() {
     let none = "SMMII is set with no (S)RTP Multiplexed Media Identification Information";
     let empty = "an (S)RTP and (S)RTCP media identification has neither SSRC nor a Media Identification Tag";
-    for (octets, rule) in [
-        ("200000", none),
-        ("200001000100", empty),
-        ("2000010000", empty),
-    ] {
+    for (octets, rule) in [("200000", none), ("200001000100", empty)] {
         assert_eq!(
             value_found::<SdfFilter>(octets),
             [("8.2.5", DeviationKind::Rule(rule))],
             "{octets}"
         );
     }
+    assert_eq!(SdfFilter::decode(&hex::decode("2000010000").unwrap()), None);
     // An SSRC, of RTP and RTCP; a Payload Type, of RTP alone; two media identifications
     for octets in [
         "20000100050100000001",
@@ -724,7 +722,7 @@ fn the_media_identifications_of_an_sdf_filter() {
     // Bits 6 to 8 of the flags of a media identification "are spare and reserved for future
     // use, shall be set to "0" by the sender and discarded by the receiver"
     for octets in ["20000100052100000001", "200002000501000000010002827f"] {
-        let spare = ("8.2.5", DeviationKind::SpareBits);
+        let spare = ("8.1.2", DeviationKind::SpareBits);
         assert_eq!(value_found::<SdfFilter>(octets), [spare], "{octets}");
     }
 }
@@ -734,33 +732,53 @@ fn the_media_identifications_of_an_sdf_filter() {
 /// four octets, the Payload Type, the Media Identification Tag after its length, the RTP
 /// SDES Header Extension ID for MID and the RTCP Packet Type, of one octet each; the octets
 /// after them are a later release's. One that lacks octets of a field that its flags
-/// announce is told, and so are a Payload Type that is not "between (and including) 0
-/// and 127" and an RTP SDES Header Extension ID for MID that is not "in the range 1 to
-/// 255".
+/// announce does not decode, nor does its SDF Filter; a Payload Type that is not "between
+/// (and including) 0 and 127" and an RTP SDES Header Extension ID for MID that is not "in
+/// the range 1 to 255" are told, at the place of the media identification in its list.
+#[cfg(feature = "tree")]
 #[test]
 fn the_fields_of_a_media_identification_of_an_sdf_filter() {
-    let cut = "a media identification without the octets of a field that its flags announce";
     let high = "a Payload Type of a media identification above 127";
     let zero = "an RTP SDES Header Extension ID for MID of a media identification of 0";
     // An SDF Filter of SMMII and one media identification of `entry`
-    let found = |entry: &str| {
+    let octets = |entry: &str| {
         let entry = hex::decode(entry).unwrap();
         let length = (entry.len() as u16).to_be_bytes();
-        let octets = [&[0x20, 0, 1][..], &length, &entry].concat();
-        value_found::<SdfFilter>(&hex::encode(octets))
+        [&[0x20, 0, 1][..], &length, &entry].concat()
     };
+    let found = |entry: &str| value_found::<SdfFilter>(&hex::encode(octets(entry)));
     let rule = |rule| [("8.2.5", DeviationKind::Rule(rule))];
     // Every field, each of octets that another place would read amiss: an SSRC and a tag
     // of a Payload Type above 127, and of 0
     let all = "1f000000c87f02c80001c8";
     assert_eq!(found(all), []);
+    let filter = SdfFilter::decode(&octets(all)).unwrap();
+    let media = &filter.rtp_multiplexed_media.as_ref().unwrap().0[0];
+    assert_eq!(
+        (
+            media.ssrc,
+            media.payload_type,
+            media.rtp_sdes_header_extension_id,
+            media.rtcp_packet_type
+        ),
+        (Some(0xc8), Some(0x7f), Some(1), Some(0xc8))
+    );
+    assert_eq!(
+        media.media_identification_tag,
+        Some(Lv8(vec![0xc8, 0].into()))
+    );
     // And octets of a later release after them
     assert_eq!(found(&format!("{all}0000ff")), []);
     assert_eq!(found("0100000001020304"), []);
     // Cut in each field: the SSRC, the Payload Type, the length of the tag, the tag, the
     // RTP SDES Header Extension ID for MID, the RTCP Packet Type
-    for octets in [2, 8, 10, 12, 14, 18, 20] {
-        assert_eq!(found(&all[..octets]), rule(cut), "{}", &all[..octets]);
+    for cut in [2, 8, 10, 12, 14, 18, 20] {
+        assert_eq!(
+            SdfFilter::decode(&octets(&all[..cut])),
+            None,
+            "{}",
+            &all[..cut]
+        );
     }
     // The Payload Type and the RTP SDES Header Extension ID for MID, at their places
     assert_eq!(found("1f000000c88002c80001c8"), rule(high));
@@ -775,52 +793,96 @@ fn the_fields_of_a_media_identification_of_an_sdf_filter() {
         ("09000000017f", "0900000001"),
     ] {
         assert_eq!(found(entry), [], "{entry}");
-        assert_eq!(found(short), rule(cut), "{short}");
+        assert_eq!(SdfFilter::decode(&octets(short)), None, "{short}");
     }
-    // The inputs of a media identification of SSRCPI without an SSRC, of a Payload Type
-    // of 200, of a tag of Length 5 that holds one octet, and of an ID of 0
-    assert_eq!(found("01"), rule(cut));
+    // A media identification of SSRCPI without an SSRC, and of a tag of Length 5 that
+    // holds one octet, do not decode; of a Payload Type of 200 and of an ID of 0
+    assert_eq!(SdfFilter::decode(&octets("01")), None);
+    assert_eq!(SdfFilter::decode(&octets("0c05ab")), None);
     assert_eq!(found("02c8"), rule(high));
-    assert_eq!(found("0c05ab"), rule(cut));
     assert_eq!(found("0c016100"), rule(zero));
+    // In a tree, a media identification is its flags and its fields; a deviation is at its
+    // place in the list, and has the Cause of its SDF Filter
+    let second =
+        SdfFilter::decode(&hex::decode("2000020002027f0002".to_owned() + "02c8").unwrap()).unwrap();
+    let name = "(S)RTP Multiplexed Media Identification Information";
+    assert_eq!(
+        tree::Tree::to_tree(&second)[name],
+        tree!([{"PTPI": true, "Payload Type (PT)": 127}, {"PTPI": true, "Payload Type (PT)": 200}])
+    );
+    assert_eq!(
+        tree::from_value::<SdfFilter>(&tree::Tree::to_tree(&second)).ok(),
+        Some(second.clone())
+    );
+    let told = second.deviations();
+    assert_eq!(told.len(), 1, "{told:?}");
+    assert_eq!(told[0].path, format!("/{name}/1"));
+    let mut message = establishment();
+    request_with(&mut message, |request| {
+        let filter = EthernetPacketFilter {
+            sdf_filter: vec![second.clone()],
+            ..Default::default()
+        };
+        request.create_pdr[0]
+            .pdi
+            .as_mut()
+            .unwrap()
+            .ethernet_packet_filter = vec![filter];
+    });
+    let told = message.check(Interfaces::N4);
+    assert_eq!(told.len(), 1, "{told:?}");
+    assert_eq!(
+        told[0].path,
+        format!("/pfcp/Create PDR/0/PDI/Ethernet Packet Filter/0/SDF Filter/0/{name}/1")
+    );
+    assert_eq!(told[0].kind, DeviationKind::Rule(high));
+    assert!(paths::select(&message.to_tree(), &told[0].path).is_ok_and(|at| at.len() == 1));
 }
 
 /// Figures 8.2.39-2, 8.2.39-3 and 8.2.39-4: the Additional Flow Description and the
-/// Additional URL of PFD Contents are Flow Descriptions and URLs, each after its length of
-/// two octets, and the Additional Domain Name and Domain Name Protocol are Domain Names,
-/// each with its Domain Name Protocol after it. A field that its entries do not fill, each
-/// with its length, is told, and so is a Domain Name without its protocol.
+/// Additional URL of PFD Contents are Flow Descriptions and URLs, each a text after its
+/// length of two octets, and the Additional Domain Name and Domain Name Protocol are
+/// Domain Names, each with its Domain Name Protocol after it. A field that its entries
+/// do not fill, each with its length, does not decode, nor does a Domain Name without its
+/// protocol.
+#[cfg(feature = "tree")]
 #[test]
 fn the_additional_fields_of_pfd_contents() {
-    let rule = |rule| [("8.2.39", DeviationKind::Rule(rule))];
-    let flows =
-        "an Additional Flow Description that is not Flow Descriptions, each after its length";
-    let urls = "an Additional URL that is not URLs, each after its length";
-    let names = "an Additional Domain Name and Domain Name Protocol that is not Domain Names and Domain Name Protocols, each after its length";
-    let odd = "an additional Domain Name without its Domain Name Protocol";
-    for (flag, broken) in [("20", flows), ("40", urls), ("80", names)] {
-        // "abc", and "abc" then "de"
-        for kept in ["00050003616263", "0009000361626300026465"] {
-            let octets = format!("{flag}00{kept}");
-            let expected = match (flag, kept.len()) {
-                ("80", 14) => rule(odd).to_vec(),
-                _ => Vec::new(),
-            };
-            assert_eq!(value_found::<PfdContents>(&octets), expected, "{octets}");
-        }
+    let decoded = |octets: &str| PfdContents::decode(&hex::decode(octets).unwrap());
+    for flag in ["20", "40", "80"] {
+        // "abc" then "de": two flow descriptions or URLs, or a domain name and its protocol
+        let two = format!("{flag}000009000361626300026465");
+        assert_eq!(value_found::<PfdContents>(&two), [], "{two}");
+        // "abc" alone: one flow description or URL; a domain name without its protocol
+        let one = format!("{flag}0000050003616263");
+        assert_eq!(decoded(&one).is_some(), flag != "80", "{one}");
         // A Length of 5 that holds one octet; an octet after "abc"; a Length cut
         for cut in ["0003000561", "0006000361626300", "000100"] {
-            let octets = format!("{flag}00{cut}");
-            assert_eq!(
-                value_found::<PfdContents>(&octets),
-                rule(broken),
-                "{octets}"
-            );
+            assert_eq!(decoded(&format!("{flag}00{cut}")), None, "{flag} {cut}");
         }
+        // A field of no entry
+        assert_eq!(value_found::<PfdContents>(&format!("{flag}000000")), []);
     }
-    // One entry of no octets is one, and a field of no entry has nothing to tell
-    assert_eq!(value_found::<PfdContents>("200000020000"), []);
-    assert_eq!(value_found::<PfdContents>("20000000"), []);
+    // In a tree, each is the list of its entries
+    let contents =
+        decoded("e0000009000361626300026465000500036768690009000361626300026465").unwrap();
+    let written = tree!({
+        "ADNP": true, "AURL": true, "AFD": true,
+        "Additional Flow Description": ["abc", "de"],
+        "Additional URL": ["ghi"],
+        "Additional Domain Name and Domain Name Protocol": [{"Domain Name": "abc", "Domain Name Protocol": "6465"}],
+    });
+    assert_eq!(tree::Tree::to_tree(&contents), written);
+    assert_eq!(
+        tree::from_value::<PfdContents>(&written).ok(),
+        Some(contents.clone())
+    );
+    let names = contents
+        .additional_domain_name_and_protocol
+        .as_ref()
+        .unwrap();
+    assert_eq!(names.0[0].domain_name.text(), Some("abc"));
+    assert_eq!(&names.0[0].domain_name_protocol.0[..], b"de");
 }
 
 /// The values that their clauses bound: the Downlink and the Uplink Congestion information

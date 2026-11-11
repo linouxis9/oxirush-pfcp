@@ -508,7 +508,7 @@ impl fmt::Display for Segment<'_> {
 
 /// Check a value of a row of the table `table` of a scope: itself, in its place, and its
 /// length against Table 8.1.2-1.
-pub(crate) fn check_field<T: crate::ie::Listed + crate::ie::IeType>(
+pub(crate) fn check_field<T: crate::ie::Listed + crate::ie::IeType + crate::table::Content>(
     value: &T,
     table: &'static str,
     path: &Path<'_>,
@@ -533,12 +533,21 @@ pub(crate) fn check_field<T: crate::ie::Listed + crate::ie::IeType>(
         }
     }
     if found.len() > from {
-        value_deviations(&mut found[from..], path, T::IE_TYPE, presence, context);
+        let grouped = T::TABLE.is_some();
+        value_deviations(
+            &mut found[from..],
+            path,
+            grouped,
+            T::IE_TYPE,
+            presence,
+            context,
+        );
     }
 }
 
-/// The deviations of the value of an IE itself, not those of the IEs of a grouped one,
-/// which their own rows answer: each gets the IE type, and a value that is semantically
+/// The deviations of the value of an IE itself, those of a part of it at its place below
+/// it too, not those of the IEs of a grouped one, which their own rows answer: each gets
+/// the IE type, and a value that is semantically
 /// invalid (a reserved value, a length, fields that disagree with their flags, a rule of
 /// its clause) the Cause of a mandatory or verifiable conditional IE (§7.6.8). A spare
 /// value or spare bits are ignored.
@@ -547,12 +556,17 @@ pub(crate) fn check_field<T: crate::ie::Listed + crate::ie::IeType>(
 fn value_deviations(
     found: &mut [Deviation],
     path: &Path<'_>,
+    grouped: bool,
     ie_type: u16,
     presence: Presence,
     context: Context,
 ) {
     let here = format!("{path}");
-    for deviation in found.iter_mut().filter(|deviation| deviation.path == here) {
+    let own = |at: &str| {
+        let below = at.strip_prefix(&here[..]);
+        below.is_some_and(|below| below.is_empty() || !grouped && below.starts_with('/'))
+    };
+    for deviation in found.iter_mut().filter(|deviation| own(&deviation.path)) {
         deviation.ie_type = Some(ie_type);
         let invalid = matches!(
             deviation.kind,
@@ -571,7 +585,7 @@ fn value_deviations(
 /// position in the tree, which the IEs of the row that the scope keeps as octets share.
 #[inline(always)]
 pub(crate) fn check_field_values<
-    T: crate::ie::Listed + crate::ie::IeType,
+    T: crate::ie::Listed + crate::ie::IeType + crate::table::Content,
     F: crate::table::FieldValues<T>,
     S: Scope,
 >(
