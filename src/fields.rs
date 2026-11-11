@@ -1536,8 +1536,10 @@ impl TextLv8 {
 }
 
 /// Text after a length of two octets: a Flow Description, an IPFilterRule of TS 29.212
-/// clause 5.4.2, and the URL and the Domain Name of PFD Contents (§8.2.39). Its tree is
-/// the text, or `{"octets": ...}` for octets that are no UTF-8.
+/// clause 5.4.2, the URL and the Domain Name of PFD Contents (§8.2.39), and the Redirect
+/// Server Address and the Other Redirect Server Address of a Redirect Information, a
+/// UTF8String (§8.2.20). Its tree is the text, or `{"octets": ...}` for octets that are
+/// no UTF-8.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct TextLv16(pub Octets);
 

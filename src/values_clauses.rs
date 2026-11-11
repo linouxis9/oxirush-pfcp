@@ -125,12 +125,12 @@ fn entries(mut octets: &[u8]) -> Option<usize> {
 pfcp_layout! {
     /// Redirect Information (§8.2.20): the Redirect Address Type of Table 8.2.20-1 (0 IPv4,
     /// 1 IPv6, 2 URL, 3 SIP URI, 4 IPv4 and IPv6, 5 Port, 6 IPv4 and Port, 7 IPv6 and
-    /// Port, 8 IPv4 and IPv6 and Port), the addresses and the port. A Port redirect has no
-    /// Redirect Server Address, nor its length.
+    /// Port, 8 IPv4 and IPv6 and Port), the addresses, text of UTF-8, and the port. A Port
+    /// redirect has no Redirect Server Address, nor its length.
     pub struct RedirectInformation "8.2.20" {
         flags(u8) { redirect_address_type "Redirect Address Type": 1 / 4 as RedirectAddressType }
-        redirect_server_address "Redirect Server Address": Lv16 if redirect_address_type.value() != 5,
-        other_redirect_server_address "Other Redirect Server Address": Lv16 if matches!(redirect_address_type.value(), 4 | 8),
+        redirect_server_address "Redirect Server Address": TextLv16 if redirect_address_type.value() != 5,
+        other_redirect_server_address "Other Redirect Server Address": TextLv16 if matches!(redirect_address_type.value(), 4 | 8),
         redirect_port "Redirect Port": u16 if (5..=8).contains(&redirect_address_type.value()),
     }
     check(this, path, found) {

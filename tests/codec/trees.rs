@@ -341,6 +341,41 @@ fn a_flow_description_is_its_text() {
     assert_eq!(tree::Tree::to_tree(&read), contents);
 }
 
+/// §8.2.20: the Redirect Server Address and the Other Redirect Server Address "shall be
+/// encoded in UTF8String format": they are their text in a tree, or `{"octets": ...}` for
+/// octets that are no UTF-8.
+#[test]
+fn a_redirect_server_address_is_its_text() {
+    let redirect =
+        tree!({"Redirect Address Type": "IPv4 address", "Redirect Server Address": "1.2.3.4"});
+    let read = tree::from_value::<RedirectInformation>(&redirect).unwrap();
+    assert_eq!(
+        read.redirect_server_address
+            .as_ref()
+            .and_then(TextLv16::text),
+        Some("1.2.3.4")
+    );
+    assert_eq!(tree::Tree::to_tree(&read), redirect);
+    let mut octets = Vec::new();
+    read.encode(&mut octets).unwrap();
+    assert_eq!(hex::encode(&octets), "000007312e322e332e34");
+    let both = tree!({
+        "Redirect Address Type": "IPv4 and IPv6 addresses",
+        "Redirect Server Address": "1.2.3.4",
+        "Other Redirect Server Address": "2001:db8::1",
+    });
+    let read = tree::from_value::<RedirectInformation>(&both).unwrap();
+    assert_eq!(tree::Tree::to_tree(&read), both);
+    let other =
+        tree!({"Redirect Address Type": "URL", "Redirect Server Address": {"octets": "ff"}});
+    let read = tree::from_value::<RedirectInformation>(&other).unwrap();
+    assert_eq!(
+        read.redirect_server_address,
+        Some(TextLv16(Octets::copied(&[0xff])))
+    );
+    assert_eq!(tree::Tree::to_tree(&read), other);
+}
+
 /// The octets after the fields of an IE, of a later release, are "the unknown octets" of
 /// §8.1.2 in a tree. A value of one field, without flags, is that field alone without
 /// them: a number, and the octets after their length of a Forwarding Policy.

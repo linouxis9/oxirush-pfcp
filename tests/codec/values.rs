@@ -929,11 +929,11 @@ fn a_field_that_the_value_of_another_has_or_not() {
     let port: RedirectInformation = read_back("05 1f90");
     assert_eq!(port.redirect_server_address, None);
     assert_eq!(port.redirect_port, Some(8080));
-    let address = Some(Lv16(b"abcd".to_vec().into()));
+    let address = Some(TextLv16::from("abcd"));
     let typed = |value, redirect_server_address| RedirectInformation {
         redirect_address_type: RedirectAddressType::from_value(value),
         redirect_server_address,
-        other_redirect_server_address: matches!(value, 4 | 8).then(|| Lv16(b"ef".to_vec().into())),
+        other_redirect_server_address: matches!(value, 4 | 8).then(|| TextLv16::from("ef")),
         redirect_port: (5..=8).contains(&value).then_some(8080),
         ..Default::default()
     };

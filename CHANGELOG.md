@@ -61,8 +61,10 @@ The first version, of TS 29.244 V19.6.0 (2026-06):
   address or an FQDN is `{"Node ID Type": ..., "Node ID value": ...}`, apart from
   `{"octets": ...}`, which an IE kept as octets is. A spare octet is written where it is
   set, and is 0 where a tree leaves it out, as the spare bits of the header and of a value. A Flow Description, an
-  IPFilterRule, and the URL and the Domain Name of PFD Contents are their text
-  (`TextLv16`), or `{"octets": ...}` for octets that are no UTF-8; a Network Instance of
+  IPFilterRule, the URL and the Domain Name of PFD Contents, and the Redirect Server
+  Address and the Other Redirect Server Address of a Redirect Information, a UTF8String
+  (§8.2.20), are their text (`TextLv16`), or `{"octets": ...}` for octets that are no
+  UTF-8; a Network Instance of
   the labels of a name is that name, a text whatever its characters (`"cafe"`), and
   `{"Network Instance": ...}`, its octets in hexadecimal, otherwise, as are an APN/DNN,
   `{"APN/DNN": ...}`, and the Network Instance field of Remote GTP-U Peer (`NameLv16`);
