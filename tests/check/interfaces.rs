@@ -49,6 +49,41 @@ fn check_on_takes_the_rows_of_the_interface() {
 /// The check of a grouped IE on its own is on the interfaces of its table: the IEs that
 /// each of them needs are missing from an empty one.
 #[test]
+fn the_conditions_read_each_row_that_the_interface_has() {
+    // A Create PDR of an Outer Header Removal, which Sxc does not have, then of Activate
+    // Predefined Rules, without a FAR ID: the row after the one that the interface
+    // discards is read, and has the FAR ID not needed (Table 7.5.2.2-1)
+    let node = ie(60, &[0, 10, 0, 0, 1]);
+    let seid = ie(57, &[2, 0, 0, 0, 0, 0, 0, 0, 1, 10, 0, 0, 1]);
+    let pdr = ie(
+        1,
+        &[
+            ie(56, &[0, 1]),
+            ie(29, &[0, 0, 0, 1]),
+            ie(2, &ie(20, &[0])),
+            ie(95, &[0]),
+            ie(106, b"rule"),
+        ]
+        .concat(),
+    );
+    let far = ie(3, &[ie(108, &[0, 0, 0, 1]), ie(44, &[1, 0])].concat());
+    let message = Message::decode(&session_message(50, 0, &[node, seid, pdr, far])).unwrap();
+    let on = |interface| -> Vec<(String, DeviationKind)> {
+        let found = message.check(interface).into_iter();
+        found.map(|found| (found.path, found.kind)).collect()
+    };
+    assert_eq!(
+        on(Interfaces::SXC),
+        [(
+            "/pfcp/Create PDR/0/Outer Header Removal".to_string(),
+            DeviationKind::NotOnInterface { ie_type: 95 }
+        )]
+    );
+    assert_eq!(on(Interfaces::N4), []);
+}
+
+/// A grouped IE on its own is checked on the interfaces of its table.
+#[test]
 fn a_grouped_ie_on_its_own_needs_what_its_interfaces_need() {
     let found = CreateMar::default().deviations();
     let missing: Vec<DeviationKind> = found.into_iter().map(|deviation| deviation.kind).collect();

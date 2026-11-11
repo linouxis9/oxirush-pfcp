@@ -712,6 +712,99 @@ pub(crate) fn encode_scope<S: Scope>(scope: &S, out: &mut Vec<u8>) -> Result<(),
 mod tests {
     use super::*;
 
+    /// How many IEs the roles of a row allow together: one of a role that is there once,
+    /// as many as a role says, any number of a role of any, and their sum.
+    #[test]
+    fn the_roles_of_a_row_allow_their_sum() {
+        let role = |repeat| Role {
+            name: "Row",
+            presence: Presence::Optional,
+            repeat,
+            interfaces: Interfaces::N4,
+        };
+        assert_eq!(capacity(&[]), 0);
+        assert_eq!(capacity(&[role(Repeat::Once)]), 1);
+        assert_eq!(capacity(&[role(Repeat::AtMost(3))]), 3);
+        assert_eq!(capacity(&[role(Repeat::Any)]), usize::MAX);
+        assert_eq!(capacity(&[role(Repeat::Once), role(Repeat::AtMost(3))]), 4);
+        assert_eq!(
+            capacity(&[
+                role(Repeat::AtMost(2)),
+                role(Repeat::Once),
+                role(Repeat::Once)
+            ]),
+            4
+        );
+        assert_eq!(
+            capacity(&[role(Repeat::Any), role(Repeat::Once)]),
+            usize::MAX
+        );
+    }
+
+    /// The entries of a row, as the tree of its scope lists them: its values and the IEs
+    /// that the scope keeps of it, in the order of the wire as far as the scope keeps one,
+    /// which may name more values than the row has, and other rows; then the values and
+    /// the kept IEs that the order does not have.
+    #[test]
+    fn the_entries_of_a_row_are_its_values_and_its_kept_ies() {
+        use crate::{CreatePdr, RawIe, SessionEstablishmentRequest};
+        let entries = |scope: &SessionEstablishmentRequest| {
+            let mut entries = Vec::new();
+            each_entry(scope, 1, |entry| entries.push(entry));
+            entries
+        };
+        let mut request = SessionEstablishmentRequest {
+            create_pdr: alloc::vec![CreatePdr::default(), CreatePdr::default()],
+            raw: alloc::vec![
+                RawIe::new(3, [1u8]),
+                RawIe::new(1, [1u8]),
+                RawIe::new(1, [2u8])
+            ],
+            ..Default::default()
+        };
+        // A Create FAR and a Create PDR kept, a value, a row of another type, a value, a
+        // value that the row no longer has; then the Create PDR kept that the order lacks
+        request.order = alloc::vec![
+            Placed::Raw,
+            Placed::Raw,
+            Placed::Field(1),
+            Placed::Field(3),
+            Placed::Field(1),
+            Placed::Field(1),
+        ];
+        assert_eq!(
+            entries(&request),
+            [
+                Entry::Kept(1),
+                Entry::Value(0),
+                Entry::Value(1),
+                Entry::Kept(2)
+            ]
+        );
+        // Without an order: the values, then the kept IEs of the row
+        request.order.clear();
+        assert_eq!(
+            entries(&request),
+            [
+                Entry::Value(0),
+                Entry::Value(1),
+                Entry::Kept(1),
+                Entry::Kept(2)
+            ]
+        );
+        // An order of fewer values than the row has: the others after them
+        request.order = alloc::vec![Placed::Field(1)];
+        assert_eq!(
+            entries(&request),
+            [
+                Entry::Value(0),
+                Entry::Value(1),
+                Entry::Kept(1),
+                Entry::Kept(2)
+            ]
+        );
+    }
+
     /// A row of one role is on each set of interfaces what the walk of its roles says.
     #[test]
     fn a_row_of_one_role_is_on_each_set_of_interfaces_as_its_roles_say() {

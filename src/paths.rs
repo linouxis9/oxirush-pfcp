@@ -949,5 +949,22 @@ mod tests {
         );
         let nothing = Paths.member(&value, "Bogus", None);
         assert_eq!(alloc::format!("{nothing:?}"), "Nothing");
+        // The name of a message is a scalar, and no header
+        let name = Paths.member(&message, "message", Some(&heartbeat["message"]));
+        assert_eq!(alloc::format!("{name:?}"), "Below(Scalar)");
+        // A member of the IEs that is no row is an IE kept as octets, or nothing yet
+        let kept = Paths.member(&ies, "Bogus", None);
+        assert_eq!(
+            alloc::format!("{kept:?}"),
+            alloc::format!("{:?}", Of::Below(&KEPT))
+        );
+        // An entry of a list of IEs is of the IE of the row, and one of a list of a field
+        // of the kind of the field
+        let entry = Paths.entry(&addresses, None);
+        assert_eq!(alloc::format!("{entry:?}"), r#"Value("Source IP Address")"#);
+        let entry = Paths.entry(&Of::Below(&Below::Scalar), None);
+        assert_eq!(alloc::format!("{entry:?}"), "Below(Scalar)");
+        let entry = Paths.entry(&Of::Nothing, None);
+        assert_eq!(alloc::format!("{entry:?}"), "Nothing");
     }
 }

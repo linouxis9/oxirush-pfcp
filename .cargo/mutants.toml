@@ -39,4 +39,19 @@ exclude_re = [
     # without the guard on macOS, and on Linux under a shim that refuses an IPv4 address on
     # a socket of IPv6 as macOS does.
     'src/endpoint\.rs:\d+:\d+: replace match guard self\.ipv6 with false in Task::flush$',
+    # The rules of a value in its table that has none, the default of the trait: its body
+    # does nothing already.
+    'src/check\.rs:\d+:\d+: replace Rules::check_placed with \(\)$',
+    # A row of one role, as most are, is answered by its role alone, the short way: without
+    # the arm, the walk of the roles of any row gives the same of one role, which the test
+    # a_row_of_one_role_is_on_each_set_of_interfaces_as_its_roles_say compares.
+    'src/table\.rs:\d+:\d+: replace match guard role\.interfaces\.has\(interfaces\) with false in Row::on$',
+    # The sets of interfaces `SXA_SXB` and `ALL` are of interfaces of one bit each, which
+    # | and ^ join alike: a constant, of no function.
+    'src/table\.rs:\d+:\d+: replace \| with \^$',
+    # A row there once whose first IE is its value is noted as one whose first IE is kept
+    # as octets: the next IE of the row is then repeated without asking the scope, which
+    # has the value and answers that it is repeated too. An IE of no row is of no row
+    # there once, and one repeated is of a row noted or filled already.
+    'src/table\.rs:\d+:\d+: replace unread -> bool with true$',
 ]

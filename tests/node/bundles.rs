@@ -565,12 +565,21 @@ fn an_answer_changes_the_node_as_its_peer_reads_its_bundle() {
         .unwrap();
     pass(&mut upf, &mut smf, SMF, at(0));
     assert!(upf.association(SMF).is_some() && smf.association(UPF).is_some());
-    // A deletion answered so, with BUNDL on both sides or not
-    for agreed in [true, false] {
-        let (mut smf, mut upf) = match agreed {
-            true => bundling(at(0)),
-            false => associated(at(0)),
+    // A deletion answered so, with BUNDL on both sides, on neither, and on one alone
+    for (smf_bundles, upf_bundles) in [(true, true), (false, false), (true, false), (false, true)] {
+        let agreed = smf_bundles && upf_bundles;
+        let (mut smf, mut upf) = (node(SMF, Function::Cp), node(UPF, Function::Up));
+        let cp = CpFunctionFeatures {
+            bundl: smf_bundles,
+            ..cp_features()
         };
+        let up = UpFunctionFeatures {
+            bundl: upf_bundles,
+            ..up_features()
+        };
+        set_up(&mut smf, &mut upf, at(0), cp, up);
+        events(&mut smf);
+        events(&mut upf);
         let (cp_seid, up_seid) = established(&mut smf, &mut upf, at(0));
         smf.session_request(at(1), cp_seid, SessionDeletionRequest::default())
             .unwrap();

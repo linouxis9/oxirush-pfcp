@@ -1534,16 +1534,20 @@ fn a_probe_answer_that_the_peer_cannot_read_changes_nothing() {
             .unwrap();
         upf.association(SMF).is_some()
     };
-    let unsupported = Some(VersionNotSupportedResponse::default().into());
-    assert!(!answer_by(&|_| {}, unsupported));
+    let unsupported: Option<Body> = Some(VersionNotSupportedResponse::default().into());
+    assert!(!answer_by(&|_| {}, unsupported.clone()));
     assert!(!answer_by(&|message| message.header.version = 2, None));
     let other = |message: &mut Message| {
         message.header.version = 2;
         message.header.sequence += 1;
     };
     assert!(answer_by(&other, None));
-    let heartbeat = Some(HeartbeatRequest::new(RecoveryTimeStamp::new(5)).into());
-    assert!(answer_by(&|_| {}, heartbeat));
+    let heartbeat: Option<Body> = Some(HeartbeatRequest::new(RecoveryTimeStamp::new(5)).into());
+    assert!(answer_by(&|_| {}, heartbeat.clone()));
+    // Of another version: a Version Not Supported Response ends the request whatever its
+    // sequence number, and a request of the request's sequence number ends nothing
+    assert!(!answer_by(&other, unsupported));
+    assert!(answer_by(&|message| message.header.version = 2, heartbeat));
     // A message type of no table is discarded, and the answer after it taken
     let mut smf = node(SMF, Function::Cp);
     let mut upf = node(UPF, Function::Up);

@@ -88,29 +88,30 @@ fn check_names_the_clause() {
         "{}",
         found[1]
     );
-    // A vendor IE of a false Length, and an IE of a type that no release has
-    let mut heartbeat = HeartbeatRequest::new(RecoveryTimeStamp::new(7));
-    for ie_type in [32767, 0x8001] {
+    // A vendor IE of a false Length, and an IE of a type that no release has, each named
+    // for its own type: the last type of 3GPP, and the first of a vendor and the one after
+    for (ie_type, named) in [
+        (32767, "an IE of no release has a Length"),
+        (0x8000, "a vendor IE has a Length"),
+        (0x8001, "a vendor IE has a Length"),
+    ] {
+        let mut heartbeat = HeartbeatRequest::new(RecoveryTimeStamp::new(7));
         heartbeat.raw.push(RawIe {
             length: Some(9),
             ..RawIe::new(ie_type, vec![0, 1, 2])
         });
+        let found = Message::node(1, heartbeat).check(Interfaces::N4);
+        let said: Vec<String> = found
+            .iter()
+            .filter(|found| found.kind == DeviationKind::InvalidLength { ie_type })
+            .map(ToString::to_string)
+            .collect();
+        assert_eq!(said.len(), 1, "{found:?}");
+        assert!(said[0].starts_with(named), "{ie_type}: {said:?}");
     }
-    let said: Vec<String> = Message::node(1, heartbeat)
-        .check(Interfaces::N4)
-        .iter()
-        .map(ToString::to_string)
-        .collect();
-    assert!(
-        said.iter()
-            .any(|said| said.starts_with("an IE of no release has a Length")),
-        "{said:?}"
-    );
-    assert!(
-        said.iter()
-            .any(|said| said.starts_with("a vendor IE has a Length")),
-        "{said:?}"
-    );
+    // A text is its octets
+    assert_eq!(&TextLv16::from("abcd").0[..], b"abcd");
+    assert_eq!(&TextLv8::from("owamp").0[..], b"owamp");
 }
 
 /// The four values that the crate reads by hand, whose figures the test `spec` does not

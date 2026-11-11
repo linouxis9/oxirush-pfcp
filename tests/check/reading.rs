@@ -20,6 +20,32 @@
 
 use super::*;
 
+/// A value of no octets, which a caller builds, writes an IE of a null length: `check()`
+/// reads the message as its receiver does, and tells a mandatory one so, where the value
+/// alone would count as the IE that its table needs (§8.1.2).
+#[test]
+fn a_built_value_of_no_octets_is_an_ie_of_a_null_length() {
+    let pfds = |application: &[u8]| {
+        let pfds = ApplicationIDsPFDs {
+            application_id: Some(ApplicationId(application.to_vec().into())),
+            ..Default::default()
+        };
+        let request = PfdManagementRequest {
+            application_ids_pfds: vec![pfds],
+            ..Default::default()
+        };
+        Message::node(1, request).check(Interfaces::N4)
+    };
+    assert_eq!(pfds(b"app"), []);
+    let found = pfds(b"");
+    assert_eq!(found.len(), 1, "{found:?}");
+    assert_eq!(found[0].kind, DeviationKind::NullLength { ie_type: 24 });
+    assert_eq!(
+        found[0].path,
+        "/pfcp/Application ID's PFDs/0/Application ID"
+    );
+}
+
 /// An IE that a scope keeps as octets, which its receiver reads as the value of its row,
 /// is checked as that value: `check(m)` is `check(Message::decode(m.encode()))`. A
 /// mandatory Recovery Time Stamp, an optional Source IP Address, and a Create MAR of a
