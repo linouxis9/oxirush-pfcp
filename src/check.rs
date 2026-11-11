@@ -268,7 +268,7 @@ impl fmt::Display for Deviation {
             ),
             DeviationKind::Repeated { ie_type } => write!(
                 f,
-                "{} is there more times than its table allows",
+                "{} is present more times than its table allows",
                 name(*ie_type)
             ),
             DeviationKind::Unexpected { ie_type } => {
@@ -280,7 +280,7 @@ impl fmt::Display for Deviation {
             DeviationKind::Excluded { ie_type } => {
                 write!(
                     f,
-                    "{} is there where its condition has it absent",
+                    "{} is present but its condition is not met",
                     name(*ie_type)
                 )
             }

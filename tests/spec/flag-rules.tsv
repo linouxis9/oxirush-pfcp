@@ -22,7 +22,7 @@
 # clause	n	phrase	rule	breaks	keeps
 8.2.3	1	may only be set	CHID is set and CH is not	09000000010a00000107	0d07
 8.2.3	2	at least one	neither V4 nor V6 is set	0000000001	01000000010a000001
-8.2.5	1	shall be set if	a media identification has MIDPI, and neither RPTPI nor RHIDMPI	2000010003040161	20000100040c016105 2000010004140161c8
+8.2.5	1	shall be set if	a media identification has MIDPI but neither RPTPI nor RHIDMPI	2000010003040161	20000100040c016105 2000010004140161c8
 8.2.5	2	at least one	an (S)RTCP media identification has neither SSRC nor a Media Identification Tag	200001000210c8	20000100061100000001c8
 8.2.13	1	at least one	no bit is set	00	010000000000000400
 8.2.16	1	at least one	no bit is set	00	010000000000000400

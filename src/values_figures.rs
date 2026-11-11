@@ -1101,9 +1101,9 @@ pfcp_layout! {
         let digits = |field: &Option<DigitsLv8>, of: core::ops::RangeInclusive<usize>| {
             field.as_ref().is_some_and(|field| !field.decimal().is_some_and(|digits| of.contains(&digits)))
         };
-        flag_rule(digits(&this.imsi, 6..=15), path, "8.2.101", "an IMSI that is not 6 to 15 decimal digits", found);
-        flag_rule(digits(&this.imei, 15..=16), path, "8.2.101", "an IMEI that is not 15 or 16 decimal digits", found);
-        flag_rule(digits(&this.msisdn, 1..=15), path, "8.2.101", "an MSISDN that is not 1 to 15 decimal digits", found);
+        flag_rule(digits(&this.imsi, 6..=15), path, "8.2.101", "the IMSI is not 6 to 15 decimal digits", found);
+        flag_rule(digits(&this.imei, 15..=16), path, "8.2.101", "the IMEI is not 15 or 16 decimal digits", found);
+        flag_rule(digits(&this.msisdn, 1..=15), path, "8.2.101", "the MSISDN is not 1 to 15 decimal digits", found);
     }
 }
 

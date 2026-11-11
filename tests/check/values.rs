@@ -738,8 +738,8 @@ fn the_media_identifications_of_an_sdf_filter() {
 #[cfg(feature = "tree")]
 #[test]
 fn the_fields_of_a_media_identification_of_an_sdf_filter() {
-    let high = "a Payload Type of a media identification above 127";
-    let zero = "an RTP SDES Header Extension ID for MID of a media identification of 0";
+    let high = "the Payload Type of a media identification is above 127";
+    let zero = "the RTP SDES Header Extension ID for MID of a media identification is 0";
     // An SDF Filter of SMMII and one media identification of `entry`
     let octets = |entry: &str| {
         let entry = hex::decode(entry).unwrap();
@@ -1154,7 +1154,7 @@ fn the_addresses_of_a_redirect_information_are_those_of_its_type() {
     };
     let rule = |rule| [("8.2.20", DeviationKind::Rule(rule))];
     let text = "a Redirect Server Address that is not UTF-8";
-    let one = "a Redirect Server Address that is not of its Redirect Address Type: an IPv4 or an IPv6 address in text, a URL or a SIP URI";
+    let one = "the Redirect Server Address does not match its Redirect Address Type: an IPv4 or IPv6 address in text, a URL or a SIP URI";
     let two = "a Redirect Server Address and an Other Redirect Server Address that are not an IPv4 address and an IPv6 address, in text";
     let (v4, v6): (&[u8], &[u8]) = (b"192.0.2.1", b"2001:db8::1");
     for (kind, address, other) in [(0, v4, v6), (6, v4, v6), (1, v6, v4), (7, v6, v4)] {
@@ -1242,9 +1242,9 @@ fn the_formats_of_other_documents_that_a_clause_cites() {
         let octets = hex::decode(digits).unwrap();
         value_found::<UserId>(&format!("{flag:02x}{:02x}{digits}", octets.len()))
     };
-    let imsi = "an IMSI that is not 6 to 15 decimal digits";
-    let imei = "an IMEI that is not 15 or 16 decimal digits";
-    let msisdn = "an MSISDN that is not 1 to 15 decimal digits";
+    let imsi = "the IMSI is not 6 to 15 decimal digits";
+    let imei = "the IMEI is not 15 or 16 decimal digits";
+    let msisdn = "the MSISDN is not 1 to 15 decimal digits";
     for (flag, kept, others, told) in [
         (
             1,
@@ -1273,7 +1273,7 @@ fn the_formats_of_other_documents_that_a_clause_cites() {
         }
     }
     // FD and its Flow Description; a Flow Information of the Flow Direction "Downlink"
-    let told = "a Flow Description that is no IPFilterRule of TS 29.212 clause 5.4.2";
+    let told = "the Flow Description is not an IPFilterRule (TS 29.212 clause 5.4.2)";
     let filter = |text: &str| {
         let length = (text.len() as u16).to_be_bytes();
         value_found::<SdfFilter>(&hex::encode(

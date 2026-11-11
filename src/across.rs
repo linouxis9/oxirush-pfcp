@@ -209,7 +209,7 @@ pub(crate) fn create_mar(
                     row: "Priority",
                     nth: None,
                 };
-                let rule = "a Priority value that is not one of the Steering Mode of its MAR";
+                let rule = "the Priority value is not allowed with the Steering Mode of its MAR";
                 let mut deviation = Deviation::new(at, "7.5.2.8-2", DeviationKind::Rule(rule));
                 deviation.cause = context.cause(false);
                 deviation.ie_type = Some(crate::Priority::IE_TYPE);

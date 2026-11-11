@@ -974,7 +974,7 @@ fn a_row_by_the_ies_of_a_scope_above_it() {
             (
                 format!("{second}/Priority"),
                 DeviationKind::Rule(
-                    "a Priority value that is not one of the Steering Mode of its MAR"
+                    "the Priority value is not allowed with the Steering Mode of its MAR"
                 )
             ),
         ]

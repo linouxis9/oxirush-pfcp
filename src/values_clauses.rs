@@ -51,7 +51,7 @@ pfcp_layout! {
             found.push(Deviation::new(path, "8.2.5", crate::check::DeviationKind::SpareBits));
         }
         // "encoded as an OctetString as specified in clause 5.4.2 of TS 29.212".
-        flag_rule(this.flow_description.as_ref().is_some_and(|flow| !ip_filter_rule(&flow.0)), path, "8.2.5", "a Flow Description that is no IPFilterRule of TS 29.212 clause 5.4.2", found);
+        flag_rule(this.flow_description.as_ref().is_some_and(|flow| !ip_filter_rule(&flow.0)), path, "8.2.5", "the Flow Description is not an IPFilterRule (TS 29.212 clause 5.4.2)", found);
         // Their number is "greater or equal to 1", and each is checked at its place.
         let media = this.rtp_multiplexed_media.as_ref().map_or(&[][..], |media| &media.0[..]);
         flag_rule(this.rtp_multiplexed_media.is_some() && media.is_empty(), path, "8.2.5", "SMMII is set with no (S)RTP Multiplexed Media Identification Information", found);
@@ -76,13 +76,13 @@ pfcp_layout! {
         rtcp_packet_type "RTCP Packet Type": u8 if rptpi,
     }
     check(this, path, found) {
-        flag_rule(this.midpi && !this.rptpi && !this.rhidmpi, path, "8.2.5", "a media identification has MIDPI, and neither RPTPI nor RHIDMPI", found);
+        flag_rule(this.midpi && !this.rptpi && !this.rhidmpi, path, "8.2.5", "a media identification has MIDPI but neither RPTPI nor RHIDMPI", found);
         flag_rule(this.rptpi && !this.ssrcpi && !this.midpi, path, "8.2.5", "an (S)RTCP media identification has neither SSRC nor a Media Identification Tag", found);
         flag_rule(!(this.ssrcpi || this.ptpi || this.midpi || this.rptpi), path, "8.2.5", "an (S)RTP and (S)RTCP media identification has neither SSRC nor a Media Identification Tag", found);
         // The Payload Type is "between (and including) 0 and 127", and the RTP SDES Header
         // Extension ID for MID "in the range 1 to 255".
-        flag_rule(this.payload_type.is_some_and(|payload_type| payload_type > 127), path, "8.2.5", "a Payload Type of a media identification above 127", found);
-        flag_rule(this.rtp_sdes_header_extension_id == Some(0), path, "8.2.5", "an RTP SDES Header Extension ID for MID of a media identification of 0", found);
+        flag_rule(this.payload_type.is_some_and(|payload_type| payload_type > 127), path, "8.2.5", "the Payload Type of a media identification is above 127", found);
+        flag_rule(this.rtp_sdes_header_extension_id == Some(0), path, "8.2.5", "the RTP SDES Header Extension ID for MID of a media identification is 0", found);
     }
 }
 
@@ -121,7 +121,7 @@ pfcp_layout! {
             (4 | 8, Some(first), Some(other)) => (false, !(v4(first) && v6(other) || v6(first) && v4(other))),
             _ => (false, false),
         };
-        flag_rule(text && one, path, "8.2.20", "a Redirect Server Address that is not of its Redirect Address Type: an IPv4 or an IPv6 address in text, a URL or a SIP URI", found);
+        flag_rule(text && one, path, "8.2.20", "the Redirect Server Address does not match its Redirect Address Type: an IPv4 or IPv6 address in text, a URL or a SIP URI", found);
         flag_rule(text && two, path, "8.2.20", "a Redirect Server Address and an Other Redirect Server Address that are not an IPv4 address and an IPv6 address, in text", found);
     }
 }
@@ -168,7 +168,7 @@ pfcp_layout! {
     }
     check(this, path, found) {
         // "encoded as an OctetString as specified in clause 5.4.2 of TS 29.212".
-        flag_rule(!ip_filter_rule(&this.flow_description.0), path, "8.2.61", "a Flow Description that is no IPFilterRule of TS 29.212 clause 5.4.2", found);
+        flag_rule(!ip_filter_rule(&this.flow_description.0), path, "8.2.61", "the Flow Description is not an IPFilterRule (TS 29.212 clause 5.4.2)", found);
     }
 }
 
