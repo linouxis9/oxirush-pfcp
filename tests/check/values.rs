@@ -806,6 +806,63 @@ fn an_ie_of_an_address_has_an_address() {
     assert_eq!(value_found::<AlternativeSmfIpAddress>("060a000001"), []);
 }
 
+/// §8.2.117: "The content of the APN/DNN field shall be the full APN/DNN with both the
+/// APN/DNN Network Identifier and APN/DNN Operator Identifier being present as specified
+/// in TS 23.003 clauses 9.1.1 and 9.1.2": the Operator Identifier "is composed of three
+/// labels. The last label (or domain) shall be "gprs"", after the Network Identifier, of
+/// "at least one label". The case of the letters "is not significant".
+#[test]
+fn an_apn_dnn_has_its_operator_identifier() {
+    let rule = "an APN/DNN without its Operator Identifier, three labels that end with gprs, after its Network Identifier";
+    let found = |name: &str| {
+        let labels = NetworkInstance::from_name(name).unwrap().0;
+        value_found::<ApnDnn>(&hex::encode(&labels[..]))
+    };
+    for full in [
+        "internet.mnc093.mcc208.gprs",
+        "ims.MNC001.MCC001.GPRS",
+        "a.b.example.mnc012.mcc345.gprs",
+        "internet.nid000007ed9d5.mnc093.mcc208.gprs",
+        "internet.operator-name.operator-group.gprs",
+    ] {
+        assert_eq!(found(full), [], "{full}");
+    }
+    for other in [
+        "internet",
+        "mnc093.mcc208.gprs",
+        "internet.mnc093.mcc208",
+        "internet.mnc093.mcc208.gprs.example",
+        "gprs",
+    ] {
+        assert_eq!(
+            found(other),
+            [("8.2.117", DeviationKind::Rule(rule))],
+            "{other}"
+        );
+    }
+    // Octets that are no labels: a dotted string, which "is not" how the field is encoded
+    let dotted = hex::encode("internet.mnc093.mcc208.gprs");
+    assert_eq!(
+        value_found::<ApnDnn>(&dotted),
+        [("8.2.117", DeviationKind::Rule(rule))]
+    );
+    // In a Session Establishment Request, where it is optional: of no Cause
+    let mut message = establishment();
+    request_with(&mut message, |request| {
+        request.apn_dnn = Some(ApnDnn(b"\x08internet".to_vec().into()))
+    });
+    let found = message.check(Interfaces::N4);
+    assert_eq!(found.len(), 1, "{found:?}");
+    assert_eq!(
+        (
+            found[0].path.as_str(),
+            found[0].kind.clone(),
+            found[0].cause
+        ),
+        ("/pfcp/APN~1DNN", DeviationKind::Rule(rule), None)
+    );
+}
+
 /// §8.2.39, bit 5: with DNP, "the Length of Domain Name and the Domain Name fields shall
 /// also be present", which DN has there: a Domain Name Protocol is of a Domain Name.
 #[test]

@@ -1231,6 +1231,19 @@ fn fqdn_labels(mut octets: &[u8]) -> Option<Vec<&[u8]>> {
     (octets.is_empty() && !labels.is_empty()).then_some(labels)
 }
 
+/// Whether labels are a full APN or DNN, of a Network Identifier and an Operator
+/// Identifier (TS 23.003 clauses 9.1.1 and 9.1.2): the Operator Identifier "is composed of
+/// three labels. The last label (or domain) shall be "gprs"", in letters of any case,
+/// after the "at least one label" of the Network Identifier.
+pub(crate) fn full_apn(octets: &[u8]) -> bool {
+    fqdn_labels(octets).is_some_and(|labels| {
+        labels.len() >= 4
+            && labels
+                .last()
+                .is_some_and(|last| last.eq_ignore_ascii_case(b"gprs"))
+    })
+}
+
 /// The labels of `name`, each after its length: `None` for an empty label, a label of
 /// more than 63 octets, or more than [`FQDN_OCTETS`] of labels.
 pub(crate) fn fqdn_of(name: &str) -> Option<Vec<u8>> {

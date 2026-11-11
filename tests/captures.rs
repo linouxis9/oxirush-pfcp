@@ -37,6 +37,11 @@ type Found = (
 /// The Start Time that the deviations below are of.
 const START_TIME: DeviationKind = DeviationKind::ConditionalMissing { ie_type: 75 };
 
+/// The APN/DNN of a Network Identifier alone that the deviations below are of.
+const OPERATOR_IDENTIFIER: DeviationKind = DeviationKind::Rule(
+    "an APN/DNN without its Operator Identifier, three labels that end with gprs, after its Network Identifier",
+);
+
 const EXPECTED: &[Found] = &[
     // Open5GS 157f611a: the UPF's first usage report of a URR without ISTM, here of the
     // deletion (TERMR), has no Start Time, which Table 7.5.7.2-1 has but of the start or
@@ -119,6 +124,90 @@ const EXPECTED: &[Found] = &[
         DeviationKind::NotOnInterface { ie_type: 85 },
         None,
     ),
+    // Open5GS 157f611a: the APN/DNN of each Session Establishment Request, of the SMF and
+    // of the SMF as PGW-C, is the labels of the name of the session alone, "internet", its
+    // Network Identifier, where §8.2.117 has "the full APN/DNN with both the APN/DNN
+    // Network Identifier and APN/DNN Operator Identifier" (src/smf/n4-build.c).
+    (
+        "open5gs-5gs-handover",
+        "7",
+        "/pfcp/APN~1DNN",
+        "8.2.117",
+        OPERATOR_IDENTIFIER,
+        None,
+    ),
+    (
+        "open5gs-5gs-lifecycle",
+        "7",
+        "/pfcp/APN~1DNN",
+        "8.2.117",
+        OPERATOR_IDENTIFIER,
+        None,
+    ),
+    (
+        "open5gs-5gs-lifecycle",
+        "11",
+        "/pfcp/APN~1DNN",
+        "8.2.117",
+        OPERATOR_IDENTIFIER,
+        None,
+    ),
+    (
+        "open5gs-5gs-lifecycle",
+        "15",
+        "/pfcp/APN~1DNN",
+        "8.2.117",
+        OPERATOR_IDENTIFIER,
+        None,
+    ),
+    (
+        "open5gs-5gs-upf-restart",
+        "7",
+        "/pfcp/APN~1DNN",
+        "8.2.117",
+        OPERATOR_IDENTIFIER,
+        None,
+    ),
+    (
+        "open5gs-5gs-upf-restart",
+        "11",
+        "/pfcp/APN~1DNN",
+        "8.2.117",
+        OPERATOR_IDENTIFIER,
+        None,
+    ),
+    (
+        "open5gs-5gs-upf-restart",
+        "15",
+        "/pfcp/APN~1DNN",
+        "8.2.117",
+        OPERATOR_IDENTIFIER,
+        None,
+    ),
+    (
+        "open5gs-5gs-upf-restart",
+        "43",
+        "/pfcp/APN~1DNN",
+        "8.2.117",
+        OPERATOR_IDENTIFIER,
+        None,
+    ),
+    (
+        "open5gs-eps-handover",
+        "17",
+        "/pfcp/APN~1DNN",
+        "8.2.117",
+        OPERATOR_IDENTIFIER,
+        None,
+    ),
+    (
+        "open5gs-eps-lifecycle",
+        "17",
+        "/pfcp/APN~1DNN",
+        "8.2.117",
+        OPERATOR_IDENTIFIER,
+        None,
+    ),
 ];
 
 #[test]
@@ -170,13 +259,16 @@ fn each_captured_message_is_read_written_and_checked() {
         count += 1;
     }
     assert_eq!(count, 213);
-    let expected: Vec<_> = EXPECTED
+    let mut expected: Vec<_> = EXPECTED
         .iter()
         .map(|(run, number, path, clause, kind, cause)| {
             let (run, number, path) = (run.to_string(), number.to_string(), path.to_string());
             (run, number, path, *clause, kind.clone(), *cause)
         })
         .collect();
+    // By run, message and path, as `EXPECTED` has them by what they are of
+    found.sort_by(|a, b| (&a.0, &a.1, &a.2).cmp(&(&b.0, &b.1, &b.2)));
+    expected.sort_by(|a, b| (&a.0, &a.1, &a.2).cmp(&(&b.0, &b.1, &b.2)));
     assert_eq!(found, expected);
 }
 

@@ -102,7 +102,12 @@ have but of the start or stop of traffic and of MAC addresses: the time that a U
 is set by `upf_sess_urr_acc_timers_setup()` (`src/upf/context.c`), which
 `upf_n4_handle_create_urr()` (`src/upf/n4-handler.c`) calls for a URR of ISTM alone, and
 `ogs_pfcp_build_session_deletion_response()` (`lib/pfcp/build.c`) leaves a start time of
-0 out. The test `captures` expects the three.
+0 out. The APN/DNN of each Session Establishment Request, on N4 and on Sxb, is the labels
+of the Network Identifier alone, `internet`, where §8.2.117 has "the full APN/DNN with
+both the APN/DNN Network Identifier and APN/DNN Operator Identifier" (TS 23.003 clauses
+9.1.1 and 9.1.2, `internet.mnc070.mcc999.gprs`): `smf_n4_build_session_establishment_request()`
+(`src/smf/n4-build.c`) builds it from `sess->session.name`, with `ogs_fqdn_build()`. The
+test `captures` expects the four.
 
 **go-pfcp v0.0.24**, in its test vectors, which `go-pfcp-deviations.tsv` lists as the
 test `codec` expects them (`other_vectors_round_trip`, with `--ignored` and
@@ -152,6 +157,9 @@ test `codec` expects them (`other_vectors_round_trip`, with `--ignored` and
   GTP-U Path QoS Control Information and of QoS Information.
 - Session Establishment Requests with a SEID other than 0 in their header, where the
   peer's SEID is not known yet (§7.2.2.4.2).
+- Their APN/DNN is `some.apn.example`, a Network Identifier without the Operator
+  Identifier that §8.2.117 has with it (`ie.NewAPNDNN("some.apn.example")` in
+  `message/session-establishment-request_test.go`).
 - Session Report Requests with a SEID other than 0 in their header and an Old CP F-SEID,
   which §7.2.2.4.2 and Table 7.5.8.1-1 have only when the SEID is 0, to move the session
   to another SMF of the set.

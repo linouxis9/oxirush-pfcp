@@ -807,8 +807,11 @@ pfcp_octets! {
     /// Framed-IPv6-Route (§8.2.111).
     FramedIPv6Route "Framed-IPv6-Route" "8.2.111";
     /// APN/DNN (§8.2.117): the labels of an APN or a DNN (TS 23.003 clause 9.1), whose tree
-    /// is that of a Network Instance.
-    ApnDnn "APN/DNN" "8.2.117" [name];
+    /// is that of a Network Instance: "the full APN/DNN with both the APN/DNN Network
+    /// Identifier and APN/DNN Operator Identifier".
+    ApnDnn "APN/DNN" "8.2.117" [name] check(this, path, found) {
+        flag_rule(!full_apn(&this.0), path, "8.2.117", "an APN/DNN without its Operator Identifier, three labels that end with gprs, after its Network Identifier", found);
+    };
     /// Port Management Information Container (§8.2.144).
     PortManagementInformationContainer "Port Management Information" "8.2.144";
     /// Data Network Access Identifier (§8.2.161).

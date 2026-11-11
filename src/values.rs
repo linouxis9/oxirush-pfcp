@@ -853,13 +853,14 @@ listed_value!(
 );
 
 /// A value that is octets that its clause does not split, of the lengths that it gives, if
-/// it gives some; `[secret]` for a key, which `Debug` does not print, nor an error of its
+/// it gives some, and with the rules of its clause in a `check` block; `[secret]` for a
+/// key, which `Debug` does not print, nor an error of its
 /// tree: their number alone; `[name]` for the labels of a name, whose tree is that of a
 /// Network Instance, with its own field; `[text]` for a UTF8String, whose tree is its
 /// text, or its octets in an object of its field ([`text_tree`]), and `[password]` for one
 /// that is a secret.
 macro_rules! pfcp_octets {
-    ($( $(#[$meta:meta])* $ty:ident $name:literal $clause:literal $(lengths $lengths:pat => $rule:literal)? $([$secret:ident])?; )*) => {$(
+    ($( $(#[$meta:meta])* $ty:ident $name:literal $clause:literal $(lengths $lengths:pat => $rule:literal)? $([$secret:ident])? $(check($this:ident, $path:ident, $found:ident) $rules:block)?; )*) => {$(
         $(#[$meta])*
         #[derive(Clone, Default, PartialEq, Eq)]
         pub struct $ty(pub Octets);
@@ -915,11 +916,14 @@ macro_rules! pfcp_octets {
         }
 
         impl Rules for $ty {
-            $(
-                fn check(&self, path: &crate::check::Path, found: &mut alloc::vec::Vec<crate::check::Deviation>) {
-                    crate::fields::flag_rule(!matches!(self.0.len(), $lengths), path, $clause, $rule, found);
-                }
-            )?
+            #[allow(unused_variables)]
+            fn check(&self, path: &crate::check::Path, found: &mut alloc::vec::Vec<crate::check::Deviation>) {
+                $( crate::fields::flag_rule(!matches!(self.0.len(), $lengths), path, $clause, $rule, found); )?
+                $(
+                    let ($this, $path, $found) = (self, path, found);
+                    $rules
+                )?
+            }
         }
 
         #[cfg(feature = "serde")]
