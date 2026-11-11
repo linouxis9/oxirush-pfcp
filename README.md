@@ -3,10 +3,11 @@
 [![CI](https://github.com/linouxis9/oxirush-pfcp/actions/workflows/ci.yml/badge.svg)](https://github.com/linouxis9/oxirush-pfcp/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
-PFCP, the protocol between the control plane and the user plane of 5G and 4G
-networks (3GPP TS 29.244), in Rust: every message and IE of N4, N4mb, Sxa, Sxb
-and Sxc, decoded, built, checked and edited as JSON, and a PFCP entity to run
-on your own socket or on Tokio's. `no_std`.
+A Rust implementation of PFCP (3GPP TS 29.244), the protocol between the
+control plane and the user plane of 5G and 4G core networks. It decodes, builds
+and validates every message and IE of N4, N4mb, Sxa, Sxb and Sxc, converts them
+to and from JSON, and includes a PFCP node that runs on your own socket or on
+Tokio. `no_std`.
 
 ```rust
 use std::net::Ipv4Addr;
@@ -14,9 +15,9 @@ use std::net::Ipv4Addr;
 use oxirush_pfcp::*;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // An SMF's Session Establishment Request: one uplink PDR, whose F-TEID the UPF
-    // chooses, and its FAR. `new()` takes the mandatory IEs, and `new_n4()` those of N4
-    // where an interface has others; `with_*()` adds the others
+    // An SMF builds a Session Establishment Request with one uplink PDR and its FAR.
+    // The UPF chooses the F-TEID. `new()` takes the mandatory IEs (`new_n4()` when they
+    // differ between interfaces) and `with_*()` adds the optional ones
     let smf = Ipv4Addr::new(10, 0, 0, 1);
     let pdi = Pdi::new(SourceInterface::new(SourceInterfaceValue::Access)).with_local_f_teid(FTeid::choose_ipv4());
     let pdr = CreatePdr::new_n4(PdrId::new(1), Precedence::new(255), pdi).with_far_id(FarId::new(1));
@@ -27,7 +28,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let octets = Message::session(0, 7, request).encode()?;
     println!("{}", hex::encode(&octets));
 
-    // The UPF decodes it, and reads its IEs as typed fields
+    // The UPF decodes it and reads its IEs as typed fields
     let message = Message::decode(&octets)?;
     if let Body::SessionEstablishmentRequest(request) = &message.body {
         let pdi = request.create_pdr[0].pdi.as_ref().ok_or("no PDI")?;
@@ -35,7 +36,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("{message}: {} PDR, from {}", request.create_pdr.len(), from.interface_value);
     }
 
-    // check() finds nothing in it on N4; Sxa has no Precedence in a Create PDR
+    // check() reports nothing on N4. On Sxa, a Create PDR has no Precedence
     println!("{} deviations on N4", message.check(Interfaces::N4).len());
     for deviation in message.check(Interfaces::SXA) {
         println!("on Sxa: {deviation}");
@@ -51,37 +52,39 @@ PFCP Session Establishment Request (SEID 0x0, sequence 7): 1 PDR, from Access
 on Sxa: Precedence is not on this interface (TS 29.244 7.5.2.2-1), at /pfcp/Create PDR/0/Precedence
 ```
 
-Each example is followed by its output.
+Every example on this page is followed by its output.
 
 ## Installation
 
-The crate is not on crates.io yet: take it from GitHub.
+The crate is not on crates.io yet. Use the Git repository:
 
 ```toml
 [dependencies]
 oxirush-pfcp = { git = "https://github.com/linouxis9/oxirush-pfcp" }
-hex = "0.4" # for the examples of this page
-# With JSON, and the PFCP entity on a Tokio socket:
+hex = "0.4" # only for the examples on this page
+# With JSON and the Tokio endpoint:
 # oxirush-pfcp = { git = "https://github.com/linouxis9/oxirush-pfcp", features = ["serde", "endpoint"] }
 ```
 
 | Feature | Adds | Needs |
 | ------- | ---- | ----- |
-| `tree` | a message and its IEs as trees, read and edited by path | `oxirush-utils` with `tree` |
-| `serde` | `Serialize` and `Deserialize`, through the trees | `oxirush-utils` with `tree` |
-| `node` | `Node`, a PFCP entity without I/O | no dependency |
+| `tree` | messages and IEs as JSON trees, with reads and edits by path | `oxirush-utils` with `tree` |
+| `serde` | `Serialize` and `Deserialize`, using the same trees | `oxirush-utils` with `tree` |
+| `node` | `Node`, a PFCP node without I/O | nothing |
 | `endpoint` | `Endpoint`, a `Node` on a UDP socket | a Tokio runtime |
 
-The crate is `no_std` with an allocator, but for `endpoint`. Rust 1.88 or later.
+The crate is `no_std` and needs an allocator. Only `endpoint` needs `std`.
+It requires Rust 1.88 or later.
 
-## Set up an association, from the SMF to the UPF
+## Set up an association between an SMF and a UPF
 
-A `Node` is a PFCP entity without I/O: datagrams and time go in; datagrams,
-events and the next timer come out. It numbers and retransmits requests, matches
-responses, answers heartbeats and retransmitted requests, takes bundles (§6.5),
-and keeps associations, sessions and the load of each peer. It rejects the
-requests that the clauses tell it to reject, as a session request without an
-association; every other request is an event that you answer with `respond()`.
+A `Node` is a PFCP node without I/O. You give it datagrams and the current
+time, and it gives you datagrams to send, events and the next timer. It assigns
+sequence numbers, retransmits requests, matches responses, answers heartbeats
+and retransmitted requests, handles bundled messages (§6.5), and tracks
+associations, sessions and the load of each peer. It rejects the requests that
+the specification says to reject, such as a session request without an
+association. Every other request is an event that you answer with `respond()`.
 
 ```rust
 use std::net::{Ipv4Addr, SocketAddr};
@@ -98,13 +101,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut upf = Node::new(NodeConfig::new(upf_id.clone(), Function::Up, 3_900_000_000));
     let now = Duration::ZERO;
 
-    // The SMF sets up an association: the node numbers the request, and arms T1
+    // The SMF sets up an association. The node assigns the sequence number and starts T1
     let setup = AssociationSetupRequest::new(smf_id, RecoveryTimeStamp::new(3_900_000_000));
     smf.request(now, upf_address, Message::node(0, setup))?;
     let datagram = smf.poll_transmit().ok_or("nothing to send")?;
     println!("to {}: {} octets, again at {:?}", datagram.to, datagram.octets.len(), smf.poll_timeout());
 
-    // The UPF takes the datagram, and its caller answers the request
+    // The UPF receives the datagram, and the application answers the request
     upf.handle_datagram(now, smf_address, &datagram.octets);
     while let Some(event) = upf.poll_event() {
         if let Event::Request { request, message } = event {
@@ -114,7 +117,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    // The SMF takes the answer: the request is done, and the association is there
+    // The SMF receives the response. The request is complete and the association exists
     let answer = upf.poll_transmit().ok_or("no answer")?;
     smf.handle_datagram(now, upf_address, &answer.octets);
     while let Some(event) = smf.poll_event() {
@@ -137,15 +140,16 @@ the SMF: PFCP Association Setup Response (sequence 1)
 no more timer: Some(60s)
 ```
 
-The next timer is the first heartbeat to the UPF. What a peer does wrong is
-an event too.
+The remaining timer is the first heartbeat to the UPF. Protocol errors of a
+peer are reported as events too.
 
 ## Run a node on a socket
 
-An `Endpoint` runs a node on a UDP socket, in a task of its own: the peers'
-requests come through `incoming()`. A `Handle`, which clones, sends the node's
-requests and reaches its state (`with`) from any task. A node sends its requests
-to port 8805; with `request_port: None`, to the port that its peer sent from.
+An `Endpoint` runs a node on a UDP socket in its own task. Requests from peers
+arrive through `incoming()`. A `Handle` is cheap to clone: use it from any task
+to send requests and to read the state of the node (`with`). A node sends its
+requests to port 8805, or to the source port of its peer when `request_port` is
+`None`.
 
 ```rust
 use std::net::Ipv4Addr;
@@ -161,7 +165,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let smf = Endpoint::bind("127.0.0.1:0".parse()?, config(Function::Cp)).await?;
         let upf = Endpoint::bind("127.0.0.1:0".parse()?, config(Function::Up)).await?;
 
-        // The UPF's node answers a heartbeat itself
+        // The node of the UPF answers a heartbeat by itself
         let heartbeat = HeartbeatRequest::new(RecoveryTimeStamp::new(3_900_000_000));
         let message = Message::node(0, heartbeat);
         let response = smf.handle().request(upf.handle().local_addr(), message).await?;
@@ -177,14 +181,15 @@ PFCP Heartbeat Response (sequence 1)
 
 ## Decode a message and read its IEs
 
-A message is its header and its body: a struct for each message type, with a
-field for each row of its table, each IE of its own type.
+A message has a header and a body. The body is a struct for each message type,
+with one field for each row of its table in the specification. Each IE has its
+own type.
 
 ```rust
 use oxirush_pfcp::*;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // A UPF answers: the Cause, its Node ID, and the F-SEID that it chose
+    // The response of a UPF: its Node ID, the Cause and the F-SEID that it chose
     let octets = hex::decode("2133002b000000000000100100000700003c0005000a00000200130001010039000d0200000000000020010a000002")?;
     let message = Message::decode(&octets)?;
     let Body::SessionEstablishmentResponse(response) = &message.body else { return Err("another message".into()) };
@@ -201,8 +206,8 @@ PFCP Session Establishment Response (SEID 0x1001, sequence 7): Request accepted 
 accepted: true
 ```
 
-An IE that the crate cannot read stays as octets, in its place: decoding then
-encoding gives the octets back, byte for byte.
+An IE that the crate cannot decode is kept as raw octets in its position, so
+decoding a message and encoding it again returns the same bytes.
 
 ## Validate a message and answer a faulty one
 
@@ -221,7 +226,8 @@ use std::net::Ipv4Addr;
 use oxirush_pfcp::*;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // A modification that creates PDR 3 and removes it, and a Create PDR without its PDR ID
+    // A modification that creates PDR 3 and also removes it, and a second Create PDR
+    // without its PDR ID
     let mut pdr = CreatePdr::new_n4(PdrId::new(3), Precedence::new(32), Pdi::new(SourceInterface::new(SourceInterfaceValue::Core)))
         .with_far_id(FarId::new(3));
     let modification = SessionModificationRequest::default()
@@ -233,7 +239,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("{deviation}");
     }
 
-    // The answer to the first deviation that has a Cause
+    // Build the response from the first deviation that has a Cause
     let deviation = request.check(Interfaces::N4).into_iter().find(|deviation| deviation.cause.is_some()).ok_or("none")?;
     let response = SessionModificationResponse {
         cause: deviation.cause.map(Cause::new),
@@ -256,9 +262,10 @@ PFCP Session Modification Response (SEID 0x1001, sequence 8): 213500170000000000
 
 ## A message as JSON
 
-With `tree`, a message is a tree that prints as JSON, with the names of the
-specification, and reads back. The tree carries keys and passwords, as the
-Tunnel Password, which `Debug` and the errors of a tree hide: do not log it.
+With the `tree` feature, a message converts to a tree that prints as JSON and
+uses the names of the specification, and a tree converts back to a message.
+The tree contains keys and passwords, such as the Tunnel Password. `Debug` and
+the tree errors hide them, but the tree itself does not: do not log it.
 
 ```rust
 use oxirush_pfcp::Message;
@@ -269,7 +276,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let tree = Message::decode(&octets)?.to_tree();
     println!("{tree:#}");
 
-    // A tree written by hand, with names in any case and spelling
+    // A tree written by hand: names match without case or punctuation
     let written = tree!({
         "message": "PFCP Heartbeat Request",
         "header": {"Sequence Number": 9},
@@ -304,14 +311,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 PFCP Heartbeat Request (sequence 9): 2001000c0000090000600004e8754700
 ```
 
-A tree lists the IEs in the order of the tables; the octets keep the order of
-the wire.
+A tree lists the IEs in the order of the tables of the specification. The
+encoded message keeps the order in which the IEs were received.
 
 ## Read and edit by path
 
-`paths::select` and `paths::set` take the same paths on the tree of a message,
-in any case: `/pfcp` stands for its IEs, a list has the positions of its
-entries, and `*` stands for each. The documentation of `paths` has their rules.
+`paths::select` and `paths::set` read and change the tree of a message by path.
+`/pfcp` is the list of IEs, a repeated IE is addressed by its position, and `*`
+matches every entry. Names are not case sensitive. The documentation of `paths`
+describes the syntax.
 
 ```rust
 use oxirush_pfcp::*;
@@ -353,8 +361,8 @@ passed to the application as `Received::stranger`.
 ## Performance
 
 [`benches/`](https://github.com/linouxis9/oxirush-pfcp/blob/main/benches/README.md)
-measures each workload, its time and its allocations, beside go-pfcp v0.0.24, with
-the revision that its figures are of and how to take them.
+has the benchmarks: the time and the allocations of each workload, compared
+with go-pfcp v0.0.24, and how to reproduce them.
 
 ## Tests
 
@@ -363,29 +371,29 @@ cargo test --all-features
 cargo +nightly fuzz run tree -- -max_total_time=60
 ```
 
-[`tests/README.md`](tests/README.md) says what each test checks against the
-document and the lab captures, and what the crate finds in other
-implementations. Each fuzz target of `fuzz/` says what it holds the crate to:
-`differential` compares it with rs-pfcp 0.5.0, a codec written apart from it, on
-the same octets: the messages that each decodes or refuses, the header, the IEs
-at every level of the grouped IEs, and the values of ten IE types, each
-difference one of the readings of rs-pfcp that the target names. Each Rust block of this page is checked with what it prints.
-A pull request comes with a test for what it changes; sign off your commits
-(`git commit -s`, the [Developer Certificate of
-Origin](https://developercertificate.org/)). [SECURITY.md](SECURITY.md) says how
-to report a vulnerability.
+[`tests/README.md`](tests/README.md) describes what each test checks against
+the specification and against lab captures, and what the crate reports in
+other implementations. The fuzz targets are in `fuzz/`. One of them,
+`differential`, compares the crate with rs-pfcp 0.5.0, an independent codec, on
+the same input. Every Rust example on this page is compiled and run by the
+tests, and its output is compared.
+
+Pull requests are welcome. Add a test for what you change and sign off your
+commits (`git commit -s`, the [Developer Certificate of
+Origin](https://developercertificate.org/)). [SECURITY.md](SECURITY.md)
+explains how to report a vulnerability.
 
 ## The OxiRush family
 
-- [oxirush-utils](https://github.com/linouxis9/oxirush-utils): the 3GPP identities, and the JSON tree with its paths that the others share.
+- [oxirush-utils](https://github.com/linouxis9/oxirush-utils): the 3GPP identities, and the JSON tree and paths that the other crates share.
 - [oxirush-aper](https://github.com/linouxis9/oxirush-aper): aligned PER, the runtime of the NGAP and S1AP codecs.
 - [oxirush-nas](https://github.com/linouxis9/oxirush-nas): the NAS messages of 5GS and EPS.
-- [oxirush-security](https://github.com/linouxis9/oxirush-security): NAS security, AKA and the derivation of keys.
+- [oxirush-security](https://github.com/linouxis9/oxirush-security): NAS security, AKA and key derivation.
 - [oxirush-ngap](https://github.com/linouxis9/oxirush-ngap): NGAP, between a gNB and an AMF.
 - [oxirush-s1ap](https://github.com/linouxis9/oxirush-s1ap): S1AP, between an eNB and an MME.
 - [oxirush-gtp-u](https://github.com/linouxis9/oxirush-gtp-u): GTP-U tunnels, with a test UPF.
 - [oxirush-pfcp](https://github.com/linouxis9/oxirush-pfcp): PFCP, between the control plane and the user plane.
-- [oxirush-sctp](https://github.com/linouxis9/oxirush-sctp): SCTP sockets, which carry NGAP and S1AP.
+- [oxirush-sctp](https://github.com/linouxis9/oxirush-sctp): SCTP sockets, the transport of NGAP and S1AP.
 
 ## License
 

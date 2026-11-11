@@ -102,9 +102,9 @@ fn block_1() {
     use oxirush_pfcp::*;
 
     fn main() -> Result<(), Box<dyn std::error::Error>> {
-        // An SMF's Session Establishment Request: one uplink PDR, whose F-TEID the UPF
-        // chooses, and its FAR. `new()` takes the mandatory IEs, and `new_n4()` those of N4
-        // where an interface has others; `with_*()` adds the others
+        // An SMF builds a Session Establishment Request with one uplink PDR and its FAR.
+        // The UPF chooses the F-TEID. `new()` takes the mandatory IEs (`new_n4()` when they
+        // differ between interfaces) and `with_*()` adds the optional ones
         let smf = Ipv4Addr::new(10, 0, 0, 1);
         let pdi = Pdi::new(SourceInterface::new(SourceInterfaceValue::Access)).with_local_f_teid(FTeid::choose_ipv4());
         let pdr = CreatePdr::new_n4(PdrId::new(1), Precedence::new(255), pdi).with_far_id(FarId::new(1));
@@ -115,7 +115,7 @@ fn block_1() {
         let octets = Message::session(0, 7, request).encode()?;
         println!("{}", hex::encode(&octets));
 
-        // The UPF decodes it, and reads its IEs as typed fields
+        // The UPF decodes it and reads its IEs as typed fields
         let message = Message::decode(&octets)?;
         if let Body::SessionEstablishmentRequest(request) = &message.body {
             let pdi = request.create_pdr[0].pdi.as_ref().ok_or("no PDI")?;
@@ -123,7 +123,7 @@ fn block_1() {
             println!("{message}: {} PDR, from {}", request.create_pdr.len(), from.interface_value);
         }
 
-        // check() finds nothing in it on N4; Sxa has no Precedence in a Create PDR
+        // check() reports nothing on N4. On Sxa, a Create PDR has no Precedence
         println!("{} deviations on N4", message.check(Interfaces::N4).len());
         for deviation in message.check(Interfaces::SXA) {
             println!("on Sxa: {deviation}");
@@ -151,13 +151,13 @@ fn block_2() {
         let mut upf = Node::new(NodeConfig::new(upf_id.clone(), Function::Up, 3_900_000_000));
         let now = Duration::ZERO;
 
-        // The SMF sets up an association: the node numbers the request, and arms T1
+        // The SMF sets up an association. The node assigns the sequence number and starts T1
         let setup = AssociationSetupRequest::new(smf_id, RecoveryTimeStamp::new(3_900_000_000));
         smf.request(now, upf_address, Message::node(0, setup))?;
         let datagram = smf.poll_transmit().ok_or("nothing to send")?;
         println!("to {}: {} octets, again at {:?}", datagram.to, datagram.octets.len(), smf.poll_timeout());
 
-        // The UPF takes the datagram, and its caller answers the request
+        // The UPF receives the datagram, and the application answers the request
         upf.handle_datagram(now, smf_address, &datagram.octets);
         while let Some(event) = upf.poll_event() {
             if let Event::Request { request, message } = event {
@@ -167,7 +167,7 @@ fn block_2() {
             }
         }
 
-        // The SMF takes the answer: the request is done, and the association is there
+        // The SMF receives the response. The request is complete and the association exists
         let answer = upf.poll_transmit().ok_or("no answer")?;
         smf.handle_datagram(now, upf_address, &answer.octets);
         while let Some(event) = smf.poll_event() {
@@ -200,7 +200,7 @@ fn block_3() {
             let smf = Endpoint::bind("127.0.0.1:0".parse()?, config(Function::Cp)).await?;
             let upf = Endpoint::bind("127.0.0.1:0".parse()?, config(Function::Up)).await?;
 
-            // The UPF's node answers a heartbeat itself
+            // The node of the UPF answers a heartbeat by itself
             let heartbeat = HeartbeatRequest::new(RecoveryTimeStamp::new(3_900_000_000));
             let message = Message::node(0, heartbeat);
             let response = smf.handle().request(upf.handle().local_addr(), message).await?;
@@ -218,7 +218,7 @@ fn block_4() {
     use oxirush_pfcp::*;
 
     fn main() -> Result<(), Box<dyn std::error::Error>> {
-        // A UPF answers: the Cause, its Node ID, and the F-SEID that it chose
+        // The response of a UPF: its Node ID, the Cause and the F-SEID that it chose
         let octets = hex::decode("2133002b000000000000100100000700003c0005000a00000200130001010039000d0200000000000020010a000002")?;
         let message = Message::decode(&octets)?;
         let Body::SessionEstablishmentResponse(response) = &message.body else { return Err("another message".into()) };
@@ -240,7 +240,8 @@ fn block_5() {
     use oxirush_pfcp::*;
 
     fn main() -> Result<(), Box<dyn std::error::Error>> {
-        // A modification that creates PDR 3 and removes it, and a Create PDR without its PDR ID
+        // A modification that creates PDR 3 and also removes it, and a second Create PDR
+        // without its PDR ID
         let mut pdr = CreatePdr::new_n4(PdrId::new(3), Precedence::new(32), Pdi::new(SourceInterface::new(SourceInterfaceValue::Core)))
             .with_far_id(FarId::new(3));
         let modification = SessionModificationRequest::default()
@@ -252,7 +253,7 @@ fn block_5() {
             println!("{deviation}");
         }
 
-        // The answer to the first deviation that has a Cause
+        // Build the response from the first deviation that has a Cause
         let deviation = request.check(Interfaces::N4).into_iter().find(|deviation| deviation.cause.is_some()).ok_or("none")?;
         let response = SessionModificationResponse {
             cause: deviation.cause.map(Cause::new),
@@ -279,7 +280,7 @@ fn block_6() {
         let tree = Message::decode(&octets)?.to_tree();
         println!("{tree:#}");
 
-        // A tree written by hand, with names in any case and spelling
+        // A tree written by hand: names match without case or punctuation
         let written = tree!({
             "message": "PFCP Heartbeat Request",
             "header": {"Sequence Number": 9},
