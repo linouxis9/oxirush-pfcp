@@ -68,7 +68,8 @@ The first version, of TS 29.244 V19.6.0 (2026-06):
   the labels of a name is that name, a text whatever its characters (`"cafe"`), and
   `{"Network Instance": ...}`, its octets in hexadecimal, otherwise, as are an APN/DNN,
   `{"APN/DNN": ...}`, and the Network Instance field of Remote GTP-U Peer (`NameLv16`);
-  a name has labels of 1 to 63 octets, of 253 octets at most;
+  a name has labels of 1 to 63 octets, of 253 octets at most; a DNS Server Address and
+  an NBNS Server Address are their IPv4 address (`Ipv4Address`), `"10.0.0.1"`;
   `NetworkInstance::from_name()` builds one of a name. The members of a Node ID, as of
   any value, go by their names in any case: `{"fqdn": ...}`.
 - With `node`, `Node`, a PFCP entity without I/O: delivery and retransmission (§6.4),

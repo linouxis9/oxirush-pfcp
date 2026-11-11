@@ -1142,6 +1142,48 @@ macro_rules! address_field {
 }
 address_field!(Ipv4Addr, 4; Ipv6Addr, 16);
 
+/// An IPv4 address that a value always has: the DNS Server Address and the NBNS Server
+/// Address (§8.2.193, §8.2.194), `0.0.0.0` by default. Its tree is the address, as text.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Ipv4Address(pub Ipv4Addr);
+
+impl Default for Ipv4Address {
+    fn default() -> Self {
+        Self(Ipv4Addr::UNSPECIFIED)
+    }
+}
+
+impl From<Ipv4Addr> for Ipv4Address {
+    fn from(address: Ipv4Addr) -> Self {
+        Self(address)
+    }
+}
+
+impl Field for Ipv4Address {
+    #[cfg(feature = "spec")]
+    const OCTETS: Option<usize> = Some(4);
+    fn read(octets: &mut &[u8]) -> Option<Self> {
+        Ipv4Addr::read(octets).map(Self)
+    }
+    fn write(&self, out: &mut Vec<u8>) {
+        self.0.write(out);
+    }
+    fn size(&self) -> usize {
+        4
+    }
+    #[cfg(feature = "tree")]
+    fn to_tree(&self) -> oxirush_utils::tree::Value {
+        self.0.to_tree()
+    }
+    #[cfg(feature = "tree")]
+    fn from_tree(
+        value: &oxirush_utils::tree::Value,
+        reading: &mut oxirush_utils::tree::Reading,
+    ) -> Result<Self, oxirush_utils::tree::Refused> {
+        Ipv4Addr::from_tree(value, reading).map(Self)
+    }
+}
+
 /// What the labels of an FQDN break of RFC 1035, as §8.2.38 and §8.2.131 have them
 /// written: `None` for labels of 1 to 63 octets, each after its length.
 pub(crate) fn fqdn_broken(labels: &[u8]) -> Option<&'static str> {

@@ -129,10 +129,10 @@ pfcp_field! {
     ValidityTimer(u16) "Validity Timer" "8.2.184";
     /// Tunnel Preference (§8.2.189).
     TunnelPreference(U24) "Tunnel Preference value" "8.2.189";
-    /// DNS Server Address (§8.2.193).
-    DnsServerAddress(u32) "DNS Server Address value" "8.2.193";
-    /// NBNS Server Address (§8.2.194).
-    NbnsServerAddress(u32) "NBNS Server Address value" "8.2.194";
+    /// DNS Server Address (§8.2.193): an IPv4 address.
+    DnsServerAddress(Ipv4Address) "DNS Server Address value" "8.2.193";
+    /// NBNS Server Address (§8.2.194): an IPv4 address.
+    NbnsServerAddress(Ipv4Address) "NBNS Server Address value" "8.2.194";
     /// Maximum Receive Unit (§8.2.195).
     MaximumReceiveUnit(u16) "Maximum Receive Unit value" "8.2.195";
     /// MBS Unicast Parameters ID (§8.2.210).

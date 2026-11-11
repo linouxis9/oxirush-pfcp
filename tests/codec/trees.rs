@@ -376,6 +376,38 @@ fn a_redirect_server_address_is_its_text() {
     assert_eq!(tree::Tree::to_tree(&read), other);
 }
 
+/// §8.2.193 and §8.2.194: the DNS Server Address and the NBNS Server Address "shall contain
+/// an IPv4 address", which they are in a tree, and no number.
+#[test]
+fn a_dns_server_address_is_an_address() {
+    let address = Ipv4Addr::new(10, 0, 0, 1);
+    let dns = DnsServerAddress::new(address.into());
+    assert_eq!(dns.value.0, address);
+    assert_eq!(tree::Tree::to_tree(&dns), tree!("10.0.0.1"));
+    assert_eq!(
+        tree::from_value::<DnsServerAddress>(&tree!("10.0.0.1")).ok(),
+        Some(dns.clone())
+    );
+    let mut octets = Vec::new();
+    dns.encode(&mut octets).unwrap();
+    assert_eq!(octets, [10, 0, 0, 1]);
+    assert_eq!(DnsServerAddress::decode(&octets), Some(dns));
+    let nbns = NbnsServerAddress::decode(&[192, 168, 0, 1, 0xab]).unwrap();
+    let written = tree!({"NBNS Server Address value": "192.168.0.1", "unknown octets": "ab"});
+    assert_eq!(tree::Tree::to_tree(&nbns), written);
+    assert_eq!(
+        tree::from_value::<NbnsServerAddress>(&written).ok(),
+        Some(nbns)
+    );
+    for other in [tree!(167772161), tree!("0a000001"), tree!("::1")] {
+        assert!(
+            tree::from_value::<DnsServerAddress>(&other).is_err(),
+            "{other}"
+        );
+    }
+    assert_eq!(Ipv4Address::default().0, Ipv4Addr::UNSPECIFIED);
+}
+
 /// The octets after the fields of an IE, of a later release, are "the unknown octets" of
 /// §8.1.2 in a tree. A value of one field, without flags, is that field alone without
 /// them: a number, and the octets after their length of a Forwarding Policy.
