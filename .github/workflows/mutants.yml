@@ -2,22 +2,16 @@ name: Mutants
 
 # cargo-mutants changes the code of the crate at one place at a time, a mutant, and runs
 # the tests on each: a mutant that every test passes is code that no test checks.
-# .cargo/mutants.toml says what it leaves alone, and why. Every mutant runs each Sunday,
-# the day of the week without fuzzing, and when the run is started by hand with `full`;
-# on the other nights, and when it is started by hand without `full`, the mutants of the
-# code that the commits since the last run changed, and none without such a commit;
-# started by hand with `recheck`, the mutants that a file of the repository names, as a
-# missed.txt has them, again at the head. Each job keeps its mutants.out, with the
-# commit that it ran at, and a missed mutant fails it. The crates of the family
-# start at times of their own, and few jobs of each run at once, to leave runners to the
-# other CI: two shards at a time on Sunday, and one shard at a time when the run is
-# started by hand, unless `parallel` says how many. A shard takes every n-th mutant, so
-# that the shards of a job last alike, and they are as many as keep each to 2 hours or
+# .cargo/mutants.toml says what it leaves alone, and why. The workflow is run by hand
+# before a release: with `full`, every mutant; without it, the mutants of the code that
+# the commits since the last run changed, and none without such a commit; with
+# `recheck`, the mutants that a file of the repository names, as a missed.txt has them,
+# again at the head. Each job keeps its mutants.out, with the commit that it ran at, and
+# a missed mutant fails it. Few jobs run at once, to leave runners to the other CI:
+# one shard at a time, unless `parallel` says how many. A shard takes every n-th mutant,
+# so that the shards of a job last alike, and they are as many as keep each to 2 hours or
 # less.
 on:
-  schedule:
-    - cron: "53 23 * * 0"
-    - cron: "3 5 * * 1-6"
   workflow_dispatch:
     inputs:
       full:
@@ -25,7 +19,7 @@ on:
         type: boolean
         default: false
       parallel:
-        description: The shards of each job that run at once, rather than the weekly number
+        description: The shards of each job that run at once, rather than one
         type: string
         default: ""
       recheck:
@@ -64,8 +58,6 @@ jobs:
       - id: plan
         env:
           GH_TOKEN: ${{ github.token }}
-          WEEKLY: "53 23 * * 0"
-          SCHEDULE: ${{ github.event.schedule }}
           FULL: ${{ inputs.full }}
           RECHECK: ${{ inputs.recheck }}
         run: |
@@ -94,7 +86,7 @@ jobs:
           fi
           if [ -n "$RECHECK" ]; then
             mode=recheck
-          elif [ "$SCHEDULE" = "$WEEKLY" ] || [ "$FULL" = true ]; then
+          elif [ "$FULL" = true ]; then
             mode=full
           elif [ "$base" != "$(git rev-parse HEAD)" ]; then
             mode=diff
@@ -143,7 +135,7 @@ jobs:
     timeout-minutes: 300
     strategy:
       fail-fast: false
-      max-parallel: ${{ fromJSON(inputs.parallel || (github.event_name == 'schedule' && '2' || '1')) }}
+      max-parallel: ${{ fromJSON(inputs.parallel || '1') }}
       matrix:
         shard: [0, 1, 2, 3]
     steps:
