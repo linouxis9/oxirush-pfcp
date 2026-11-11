@@ -4,16 +4,18 @@ All notable changes to `oxirush-pfcp` are recorded here.
 
 ## 0.1.0 - unreleased
 
-The first version, of TS 29.244 V19.6.0 (2026-06):
+The first version. It implements TS 29.244 V19.6.0 (2026-06):
 
-- Every message and IE type of N4, N4mb, Sxa, Sxb and Sxc, decoded and encoded
-  back byte for byte, and built with `new()` and `with_*()`.
-- `check()`: what one message breaks of the tables of clause 7 and of the values
-  of clause 8.2 on an interface, each deviation with its path, its clause and
-  the Cause of the answer.
-- With `tree`, a message as a tree that prints as JSON, read and edited by path;
-  with `serde`, serialized as its tree.
-- With `node`, `Node`, a PFCP entity without I/O: delivery and retransmission,
-  heartbeat, associations, sessions, load and overload control, and bundles.
-- With `endpoint`, `Endpoint`, a node on a Tokio UDP socket.
-- `no_std` with an allocator, but for `endpoint`; Rust 1.88.
+- Decodes and encodes every message and IE type of N4, N4mb, Sxa, Sxb and Sxc,
+  byte for byte, and builds them with `new()` and `with_*()`.
+- `check()` validates one message against the IE tables of clause 7 and the
+  values of clause 8.2 on an interface. Each deviation has its path, its clause
+  and the Cause to answer with.
+- `check_with()` also validates a response against its request, and a message
+  against the features that the two functions announced.
+- With `tree`, a message converts to a tree that prints as JSON and can be read
+  and edited by path. With `serde`, it is serialized as that tree.
+- With `node`, `Node` is a PFCP node without I/O: delivery and retransmission,
+  heartbeats, associations, sessions, load and overload control, and bundles.
+- With `endpoint`, `Endpoint` runs a node on a Tokio UDP socket.
+- `no_std` with an allocator, except for `endpoint`. Rust 1.88 or later.
