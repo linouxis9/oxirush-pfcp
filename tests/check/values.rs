@@ -1092,7 +1092,7 @@ fn the_addresses_of_a_redirect_information_are_those_of_its_type() {
     };
     let rule = |rule| [("8.2.20", DeviationKind::Rule(rule))];
     let text = "a Redirect Server Address that is not UTF-8";
-    let one = "a Redirect Server Address that is not the IPv4 or IPv6 address of its Redirect Address Type, in text";
+    let one = "a Redirect Server Address that is not of its Redirect Address Type: an IPv4 or an IPv6 address in text, a URL or a SIP URI";
     let two = "a Redirect Server Address and an Other Redirect Server Address that are not an IPv4 address and an IPv6 address, in text";
     let (v4, v6): (&[u8], &[u8]) = (b"192.0.2.1", b"2001:db8::1");
     for (kind, address, other) in [(0, v4, v6), (6, v4, v6), (1, v6, v4), (7, v6, v4)] {
@@ -1124,15 +1124,133 @@ fn the_addresses_of_a_redirect_information_are_those_of_its_type() {
         assert_eq!(found(kind, &[v4, &[0xff]]), rule(text), "{kind}");
         assert_eq!(found(kind, &[&[0xff], v6]), rule(text), "{kind}");
     }
-    // A URL and a SIP URI
+    // A URL, of a scheme and what follows it (IETF RFC 3986), and a SIP URI, `sip:` or
+    // `sips:` (IETF RFC 3261)
+    for url in [
+        &b"http://example.com/"[..],
+        b"sip:alice@example.com",
+        b"a+b.c-1:x",
+    ] {
+        assert_eq!(found(2, &[url]), [], "{url:?}");
+    }
+    for other in [
+        v4,
+        b"example.com",
+        b"http:",
+        b"://example.com",
+        b"1http://x",
+        b"http://a b/",
+    ] {
+        assert_eq!(found(2, &[other]), rule(one), "{other:?}");
+    }
+    for uri in [
+        &b"sip:alice@example.com"[..],
+        b"sips:example.com",
+        b"SIP:alice@example.com:5060",
+    ] {
+        assert_eq!(found(3, &[uri]), [], "{uri:?}");
+    }
+    for other in [
+        &b"http://example.com/"[..],
+        b"alice@example.com",
+        b"sip:",
+        b"sip:a b",
+    ] {
+        assert_eq!(found(3, &[other]), rule(one), "{other:?}");
+    }
     for kind in [2, 3] {
-        assert_eq!(found(kind, &[b"http://example.com/"]), [], "{kind}");
-        assert_eq!(found(kind, &[b"sip:alice@example.com"]), [], "{kind}");
-        assert_eq!(found(kind, &[v4]), [], "{kind}");
         assert_eq!(found(kind, &[&[0xff]]), rule(text), "{kind}");
     }
     // A Port alone has no address
     assert_eq!(found(5, &[]), []);
+}
+
+/// The formats of other documents that a clause cites: the digits of the IMSI, the IMEI
+/// and the MSISDN of a User ID, TBCD digits as TS 29.274 clauses 8.3, 8.10 and 8.11 have
+/// them, of the numbers of TS 23.003 (an IMSI of at most 15 digits, an IMEI of 15 or an
+/// IMEISV of 16, an MSISDN of at most 15); and the Flow Description of an SDF Filter and
+/// of a Flow Information, an IPFilterRule as TS 29.212 clause 5.4.2 restricts it: `permit
+/// out`, a protocol number or `ip`, `from` an address `to` an address, each with its
+/// ports, no option and no `!`.
+#[test]
+fn the_formats_of_other_documents_that_a_clause_cites() {
+    let rule = |clause, rule| [(clause, DeviationKind::Rule(rule))];
+    // IMSIF, IMEIF and MSISDNF, each with its digits
+    let user = |flag: u8, digits: &str| {
+        let octets = hex::decode(digits).unwrap();
+        value_found::<UserId>(&format!("{flag:02x}{:02x}{digits}", octets.len()))
+    };
+    let imsi = "an IMSI that is not 6 to 15 decimal digits";
+    let imei = "an IMEI that is not 15 or 16 decimal digits";
+    let msisdn = "an MSISDN that is not 1 to 15 decimal digits";
+    for (flag, kept, others, told) in [
+        (
+            1,
+            &["029803", "02980300000000f1"][..],
+            &["0298f3", "0a9803", "0298030000000010", ""][..],
+            imsi,
+        ),
+        (
+            2,
+            &["1032547698103254", "10325476981032f4"],
+            &["1032547698", "103254769810325476", "1a325476981032f4"],
+            imei,
+        ),
+        (
+            4,
+            &["33", "33163254769810f2", "f3"],
+            &["", "3316325476981032", "3b"],
+            msisdn,
+        ),
+    ] {
+        for digits in kept {
+            assert_eq!(user(flag, digits), [], "{flag} {digits}");
+        }
+        for digits in others {
+            assert_eq!(user(flag, digits), rule("8.2.101", told), "{flag} {digits}");
+        }
+    }
+    // FD and its Flow Description; a Flow Information of the Flow Direction "Downlink"
+    let told = "a Flow Description that is no IPFilterRule of TS 29.212 clause 5.4.2";
+    let filter = |text: &str| {
+        let length = (text.len() as u16).to_be_bytes();
+        value_found::<SdfFilter>(&hex::encode(
+            [&[1, 0][..], &length, text.as_bytes()].concat(),
+        ))
+    };
+    let flow = |text: &str| {
+        let length = (text.len() as u16).to_be_bytes();
+        value_found::<FlowInformation>(&hex::encode([&[1][..], &length, text.as_bytes()].concat()))
+    };
+    for kept in [
+        "permit out ip from any to assigned",
+        "permit out 58 from ff02::2/128 to assigned",
+        "permit out 17 from 192.0.2.0/24 5000-5010 to assigned 4000",
+        "permit out 6 from 2001:db8::1 80,443 to 10.45.0.2/32",
+        "permit out ip from any to any",
+    ] {
+        assert_eq!(filter(kept), [], "{kept}");
+        assert_eq!(flow(kept), [], "{kept}");
+    }
+    for other in [
+        "",
+        "deny out ip from any to assigned",
+        "permit in ip from any to assigned",
+        "permit out tcp from any to assigned",
+        "permit out 256 from any to assigned",
+        "permit out ip from !192.0.2.1 to assigned",
+        "permit out ip from 192.0.2.0/33 to assigned",
+        "permit out ip from any 70000 to assigned",
+        "permit out ip from any 20-10 to assigned",
+        "permit out ip from any to assigned frag",
+        "permit out ip to assigned from any",
+        "permit out ip from any",
+        "permit  out ip from any to assigned",
+    ] {
+        assert_eq!(filter(other), rule("8.2.5", told), "{other}");
+        assert_eq!(flow(other), rule("8.2.61", told), "{other}");
+    }
+    assert_eq!(value_found::<SdfFilter>("01000001ff"), rule("8.2.5", told));
 }
 
 /// §8.2.67: "For a HTTP Header Type, the contents of the Header Field Name and Header

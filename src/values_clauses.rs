@@ -71,6 +71,8 @@ pfcp_layout! {
         // its octets, the Payload Type is "between (and including) 0 and 127", and the
         // RTP SDES Header Extension ID for MID "in the range 1 to 255".
         let fields = || media.iter().filter_map(|media| media.0.split_first()).map(|(flags, rest)| media_fields(*flags, rest));
+        // "encoded as an OctetString as specified in clause 5.4.2 of TS 29.212".
+        flag_rule(this.flow_description.as_ref().is_some_and(|flow| !ip_filter_rule(&flow.0)), path, "8.2.5", "a Flow Description that is no IPFilterRule of TS 29.212 clause 5.4.2", found);
         flag_rule(fields().any(|fields| fields.is_none()), path, "8.2.5", "a media identification without the octets of a field that its flags announce", found);
         // The first octet of the field of `name` of each media identification that has it
         let of = |name: &'static str| fields().flatten().filter_map(move |fields| fields.iter().find(|(field, _)| *field == name).and_then(|(_, octets)| octets.first().copied()));
@@ -172,7 +174,8 @@ pfcp_layout! {
         flag_rule(this.redirect_address_type.value() == 5 && this.extra.len() == port + 2, path, "8.2.20", "the Redirect Address Type is Port, and octets of a Redirect Server Address follow", found);
         // The addresses are "encoded in UTF8String format", and of their type, as IETF
         // RFC 4006 has the Redirect-Server-Address of a Redirect-Address-Type: the text of
-        // an IPv4 address, or of an IPv6 address; and of "IPv4 and IPv6 address", "an IPv4
+        // an IPv4 address, or of an IPv6 address, a URL by its generic syntax, a SIP URI
+        // by its scheme; and of "IPv4 and IPv6 address", "an IPv4
         // address and an IPv6 address in the Redirect Server Address IE and Other
         // Redirect Server Address", in either order.
         let (first, other) = (this.redirect_server_address.as_ref(), this.other_redirect_server_address.as_ref());
@@ -183,10 +186,12 @@ pfcp_layout! {
         let (one, two) = match (this.redirect_address_type.value(), first, other) {
             (0 | 6, Some(first), _) => (!v4(first), false),
             (1 | 7, Some(first), _) => (!v6(first), false),
+            (2, Some(first), _) => (!first.text().is_some_and(url), false),
+            (3, Some(first), _) => (!first.text().is_some_and(sip_uri), false),
             (4 | 8, Some(first), Some(other)) => (false, !(v4(first) && v6(other) || v6(first) && v4(other))),
             _ => (false, false),
         };
-        flag_rule(text && one, path, "8.2.20", "a Redirect Server Address that is not the IPv4 or IPv6 address of its Redirect Address Type, in text", found);
+        flag_rule(text && one, path, "8.2.20", "a Redirect Server Address that is not of its Redirect Address Type: an IPv4 or an IPv6 address in text, a URL or a SIP URI", found);
         flag_rule(text && two, path, "8.2.20", "a Redirect Server Address and an Other Redirect Server Address that are not an IPv4 address and an IPv6 address, in text", found);
     }
 }
@@ -239,6 +244,10 @@ pfcp_layout! {
     pub struct FlowInformation "8.2.61" {
         flags(u8) { flow_direction "Flow Direction": 1 / 3 as FlowDirection }
         flow_description "Flow Description": TextLv16,
+    }
+    check(this, path, found) {
+        // "encoded as an OctetString as specified in clause 5.4.2 of TS 29.212".
+        flag_rule(!ip_filter_rule(&this.flow_description.0), path, "8.2.61", "a Flow Description that is no IPFilterRule of TS 29.212 clause 5.4.2", found);
     }
 }
 

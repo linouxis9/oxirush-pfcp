@@ -1094,6 +1094,17 @@ pfcp_layout! {
         gpsi "GPSI": TextLv8 if gpsif,
         pei "PEI": TextLv8 if peif,
     }
+    check(this, path, found) {
+        // The IMSI, the MEI and the MSISDN of TS 29.274 clauses 8.3, 8.10 and 8.11, TBCD
+        // digits, of the numbers of TS 23.003: an IMSI of at most 15 digits, of an MCC, an
+        // MNC and an MSIN; an IMEI of 15, or an IMEISV of 16; an MSISDN of at most 15.
+        let digits = |field: &Option<DigitsLv8>, of: core::ops::RangeInclusive<usize>| {
+            field.as_ref().is_some_and(|field| !field.decimal().is_some_and(|digits| of.contains(&digits)))
+        };
+        flag_rule(digits(&this.imsi, 6..=15), path, "8.2.101", "an IMSI that is not 6 to 15 decimal digits", found);
+        flag_rule(digits(&this.imei, 15..=16), path, "8.2.101", "an IMEI that is not 15 or 16 decimal digits", found);
+        flag_rule(digits(&this.msisdn, 1..=15), path, "8.2.101", "an MSISDN that is not 1 to 15 decimal digits", found);
+    }
 }
 
 pfcp_layout! {

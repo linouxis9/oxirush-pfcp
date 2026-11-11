@@ -86,18 +86,22 @@ session-establishment-request_test.go	Multiple IEs	/pfcp/Create FAR/0/Forwarding
 session-establishment-request_test.go	Multiple IEs	/pfcp/Create FAR/0/Redundant Transmission Parameters	7.6.9	Unexpected { ie_type: 255 }	-
 session-establishment-request_test.go	Multiple IEs	/pfcp/Create MAR/0	7.5.2.8-2	Rule("the two accesses of a MAR have the same Priority value")	MandatoryIeIncorrect
 session-establishment-request_test.go	Multiple IEs	/pfcp/Create PDR/0/Outer Header Removal	8.1.2	SpareBits	-
+session-establishment-request_test.go	Multiple IEs	/pfcp/Create PDR/0/PDI/Ethernet Packet Filter/0/SDF Filter/0	8.2.5	Rule("a Flow Description that is no IPFilterRule of TS 29.212 clause 5.4.2")	-
 session-establishment-request_test.go	Multiple IEs	/pfcp/Create PDR/0/PDI/Ethernet Packet Filter/0/SDF Filter/0	8.2.5	SpareBits	-
 session-establishment-request_test.go	Multiple IEs	/pfcp/Create PDR/0/PDI/Local F-TEID	7.5.2.2-2	Excluded { ie_type: 21 }	-
 session-establishment-request_test.go	Multiple IEs	/pfcp/Create PDR/0/PDI/Network Instance	7.5.2.2-2	Excluded { ie_type: 22 }	-
 session-establishment-request_test.go	Multiple IEs	/pfcp/Create PDR/0/PDI/SDF Filter	7.5.2.2-2	Excluded { ie_type: 23 }	-
+session-establishment-request_test.go	Multiple IEs	/pfcp/Create PDR/0/PDI/SDF Filter/0	8.2.5	Rule("a Flow Description that is no IPFilterRule of TS 29.212 clause 5.4.2")	-
 session-establishment-request_test.go	Multiple IEs	/pfcp/Create PDR/0/PDI/SDF Filter/0	8.2.5	SpareBits	-
 session-establishment-request_test.go	Multiple IEs	/pfcp/Create PDR/0/PDI/UE IP address	7.5.2.2-2	Excluded { ie_type: 93 }	-
 session-establishment-request_test.go	Multiple IEs	/pfcp/Create PDR/0/UE IP address Pool Identity/0	7.6.8	Incorrect { ie_type: 177 }	-
 session-establishment-request_test.go	Multiple IEs	/pfcp/Create PDR/1/Outer Header Removal	8.1.2	SpareBits	-
+session-establishment-request_test.go	Multiple IEs	/pfcp/Create PDR/1/PDI/Ethernet Packet Filter/0/SDF Filter/0	8.2.5	Rule("a Flow Description that is no IPFilterRule of TS 29.212 clause 5.4.2")	-
 session-establishment-request_test.go	Multiple IEs	/pfcp/Create PDR/1/PDI/Ethernet Packet Filter/0/SDF Filter/0	8.2.5	SpareBits	-
 session-establishment-request_test.go	Multiple IEs	/pfcp/Create PDR/1/PDI/Local F-TEID	7.5.2.2-2	Excluded { ie_type: 21 }	-
 session-establishment-request_test.go	Multiple IEs	/pfcp/Create PDR/1/PDI/Network Instance	7.5.2.2-2	Excluded { ie_type: 22 }	-
 session-establishment-request_test.go	Multiple IEs	/pfcp/Create PDR/1/PDI/SDF Filter	7.5.2.2-2	Excluded { ie_type: 23 }	-
+session-establishment-request_test.go	Multiple IEs	/pfcp/Create PDR/1/PDI/SDF Filter/0	8.2.5	Rule("a Flow Description that is no IPFilterRule of TS 29.212 clause 5.4.2")	-
 session-establishment-request_test.go	Multiple IEs	/pfcp/Create PDR/1/PDI/SDF Filter/0	8.2.5	SpareBits	-
 session-establishment-request_test.go	Multiple IEs	/pfcp/Create PDR/1/PDI/UE IP address	7.5.2.2-2	Excluded { ie_type: 93 }	-
 session-establishment-request_test.go	Multiple IEs	/pfcp/Create PDR/1/UE IP address Pool Identity/0	7.6.8	Incorrect { ie_type: 177 }	-
@@ -109,10 +113,12 @@ session-establishment-request_test.go	Single IE	/pfcp/Create FAR/0/Forwarding Pa
 session-establishment-request_test.go	Single IE	/pfcp/Create FAR/0/Redundant Transmission Parameters	7.6.9	Unexpected { ie_type: 255 }	-
 session-establishment-request_test.go	Single IE	/pfcp/Create MAR/0	7.5.2.8-2	Rule("the two accesses of a MAR have the same Priority value")	MandatoryIeIncorrect
 session-establishment-request_test.go	Single IE	/pfcp/Create PDR/0/Outer Header Removal	8.1.2	SpareBits	-
+session-establishment-request_test.go	Single IE	/pfcp/Create PDR/0/PDI/Ethernet Packet Filter/0/SDF Filter/0	8.2.5	Rule("a Flow Description that is no IPFilterRule of TS 29.212 clause 5.4.2")	-
 session-establishment-request_test.go	Single IE	/pfcp/Create PDR/0/PDI/Ethernet Packet Filter/0/SDF Filter/0	8.2.5	SpareBits	-
 session-establishment-request_test.go	Single IE	/pfcp/Create PDR/0/PDI/Local F-TEID	7.5.2.2-2	Excluded { ie_type: 21 }	-
 session-establishment-request_test.go	Single IE	/pfcp/Create PDR/0/PDI/Network Instance	7.5.2.2-2	Excluded { ie_type: 22 }	-
 session-establishment-request_test.go	Single IE	/pfcp/Create PDR/0/PDI/SDF Filter	7.5.2.2-2	Excluded { ie_type: 23 }	-
+session-establishment-request_test.go	Single IE	/pfcp/Create PDR/0/PDI/SDF Filter/0	8.2.5	Rule("a Flow Description that is no IPFilterRule of TS 29.212 clause 5.4.2")	-
 session-establishment-request_test.go	Single IE	/pfcp/Create PDR/0/PDI/SDF Filter/0	8.2.5	SpareBits	-
 session-establishment-request_test.go	Single IE	/pfcp/Create PDR/0/PDI/UE IP address	7.5.2.2-2	Excluded { ie_type: 93 }	-
 session-establishment-request_test.go	Single IE	/pfcp/Create PDR/0/UE IP address Pool Identity/0	7.6.8	Incorrect { ie_type: 177 }	-
@@ -136,18 +142,22 @@ session-modification-request_test.go	Multiple IEs	/pfcp/Create FAR/0/Forwarding 
 session-modification-request_test.go	Multiple IEs	/pfcp/Create FAR/0/Redundant Transmission Parameters	7.6.9	Unexpected { ie_type: 255 }	-
 session-modification-request_test.go	Multiple IEs	/pfcp/Create MAR/0	7.5.2.8-2	Rule("the two accesses of a MAR have the same Priority value")	MandatoryIeIncorrect
 session-modification-request_test.go	Multiple IEs	/pfcp/Create PDR/0/Outer Header Removal	8.1.2	SpareBits	-
+session-modification-request_test.go	Multiple IEs	/pfcp/Create PDR/0/PDI/Ethernet Packet Filter/0/SDF Filter/0	8.2.5	Rule("a Flow Description that is no IPFilterRule of TS 29.212 clause 5.4.2")	-
 session-modification-request_test.go	Multiple IEs	/pfcp/Create PDR/0/PDI/Ethernet Packet Filter/0/SDF Filter/0	8.2.5	SpareBits	-
 session-modification-request_test.go	Multiple IEs	/pfcp/Create PDR/0/PDI/Local F-TEID	7.5.2.2-2	Excluded { ie_type: 21 }	-
 session-modification-request_test.go	Multiple IEs	/pfcp/Create PDR/0/PDI/Network Instance	7.5.2.2-2	Excluded { ie_type: 22 }	-
 session-modification-request_test.go	Multiple IEs	/pfcp/Create PDR/0/PDI/SDF Filter	7.5.2.2-2	Excluded { ie_type: 23 }	-
+session-modification-request_test.go	Multiple IEs	/pfcp/Create PDR/0/PDI/SDF Filter/0	8.2.5	Rule("a Flow Description that is no IPFilterRule of TS 29.212 clause 5.4.2")	-
 session-modification-request_test.go	Multiple IEs	/pfcp/Create PDR/0/PDI/SDF Filter/0	8.2.5	SpareBits	-
 session-modification-request_test.go	Multiple IEs	/pfcp/Create PDR/0/PDI/UE IP address	7.5.2.2-2	Excluded { ie_type: 93 }	-
 session-modification-request_test.go	Multiple IEs	/pfcp/Create PDR/0/UE IP address Pool Identity/0	7.6.8	Incorrect { ie_type: 177 }	-
 session-modification-request_test.go	Multiple IEs	/pfcp/Create PDR/1/Outer Header Removal	8.1.2	SpareBits	-
+session-modification-request_test.go	Multiple IEs	/pfcp/Create PDR/1/PDI/Ethernet Packet Filter/0/SDF Filter/0	8.2.5	Rule("a Flow Description that is no IPFilterRule of TS 29.212 clause 5.4.2")	-
 session-modification-request_test.go	Multiple IEs	/pfcp/Create PDR/1/PDI/Ethernet Packet Filter/0/SDF Filter/0	8.2.5	SpareBits	-
 session-modification-request_test.go	Multiple IEs	/pfcp/Create PDR/1/PDI/Local F-TEID	7.5.2.2-2	Excluded { ie_type: 21 }	-
 session-modification-request_test.go	Multiple IEs	/pfcp/Create PDR/1/PDI/Network Instance	7.5.2.2-2	Excluded { ie_type: 22 }	-
 session-modification-request_test.go	Multiple IEs	/pfcp/Create PDR/1/PDI/SDF Filter	7.5.2.2-2	Excluded { ie_type: 23 }	-
+session-modification-request_test.go	Multiple IEs	/pfcp/Create PDR/1/PDI/SDF Filter/0	8.2.5	Rule("a Flow Description that is no IPFilterRule of TS 29.212 clause 5.4.2")	-
 session-modification-request_test.go	Multiple IEs	/pfcp/Create PDR/1/PDI/SDF Filter/0	8.2.5	SpareBits	-
 session-modification-request_test.go	Multiple IEs	/pfcp/Create PDR/1/PDI/UE IP address	7.5.2.2-2	Excluded { ie_type: 93 }	-
 session-modification-request_test.go	Multiple IEs	/pfcp/Create PDR/1/UE IP address Pool Identity/0	7.6.8	Incorrect { ie_type: 177 }	-
@@ -157,10 +167,12 @@ session-modification-request_test.go	Multiple IEs	/pfcp/TSC Management Informati
 session-modification-request_test.go	Multiple IEs	/pfcp/Update FAR/0/Redundant Transmission Parameters	7.6.9	Unexpected { ie_type: 255 }	-
 session-modification-request_test.go	Multiple IEs	/pfcp/Update FAR/0/Update Forwarding parameters/Transport Level Marking	8.2.12	Rule("a ToS/Traffic Class mask other than 0xFC")	MandatoryIeIncorrect
 session-modification-request_test.go	Multiple IEs	/pfcp/Update PDR/0/Outer Header Removal	8.1.2	SpareBits	-
+session-modification-request_test.go	Multiple IEs	/pfcp/Update PDR/0/PDI/Ethernet Packet Filter/0/SDF Filter/0	8.2.5	Rule("a Flow Description that is no IPFilterRule of TS 29.212 clause 5.4.2")	-
 session-modification-request_test.go	Multiple IEs	/pfcp/Update PDR/0/PDI/Ethernet Packet Filter/0/SDF Filter/0	8.2.5	SpareBits	-
 session-modification-request_test.go	Multiple IEs	/pfcp/Update PDR/0/PDI/Local F-TEID	7.5.2.2-2	Excluded { ie_type: 21 }	-
 session-modification-request_test.go	Multiple IEs	/pfcp/Update PDR/0/PDI/Network Instance	7.5.2.2-2	Excluded { ie_type: 22 }	-
 session-modification-request_test.go	Multiple IEs	/pfcp/Update PDR/0/PDI/SDF Filter	7.5.2.2-2	Excluded { ie_type: 23 }	-
+session-modification-request_test.go	Multiple IEs	/pfcp/Update PDR/0/PDI/SDF Filter/0	8.2.5	Rule("a Flow Description that is no IPFilterRule of TS 29.212 clause 5.4.2")	-
 session-modification-request_test.go	Multiple IEs	/pfcp/Update PDR/0/PDI/SDF Filter/0	8.2.5	SpareBits	-
 session-modification-request_test.go	Multiple IEs	/pfcp/Update PDR/0/PDI/UE IP address	7.5.2.2-2	Excluded { ie_type: 93 }	-
 session-modification-request_test.go	Multiple IEs	/pfcp/Update QER/0/Packet Rate Status	7.6.9	Unexpected { ie_type: 193 }	-
@@ -179,10 +191,12 @@ session-modification-request_test.go	Single IE	/pfcp/Create FAR/0/Forwarding Par
 session-modification-request_test.go	Single IE	/pfcp/Create FAR/0/Redundant Transmission Parameters	7.6.9	Unexpected { ie_type: 255 }	-
 session-modification-request_test.go	Single IE	/pfcp/Create MAR/0	7.5.2.8-2	Rule("the two accesses of a MAR have the same Priority value")	MandatoryIeIncorrect
 session-modification-request_test.go	Single IE	/pfcp/Create PDR/0/Outer Header Removal	8.1.2	SpareBits	-
+session-modification-request_test.go	Single IE	/pfcp/Create PDR/0/PDI/Ethernet Packet Filter/0/SDF Filter/0	8.2.5	Rule("a Flow Description that is no IPFilterRule of TS 29.212 clause 5.4.2")	-
 session-modification-request_test.go	Single IE	/pfcp/Create PDR/0/PDI/Ethernet Packet Filter/0/SDF Filter/0	8.2.5	SpareBits	-
 session-modification-request_test.go	Single IE	/pfcp/Create PDR/0/PDI/Local F-TEID	7.5.2.2-2	Excluded { ie_type: 21 }	-
 session-modification-request_test.go	Single IE	/pfcp/Create PDR/0/PDI/Network Instance	7.5.2.2-2	Excluded { ie_type: 22 }	-
 session-modification-request_test.go	Single IE	/pfcp/Create PDR/0/PDI/SDF Filter	7.5.2.2-2	Excluded { ie_type: 23 }	-
+session-modification-request_test.go	Single IE	/pfcp/Create PDR/0/PDI/SDF Filter/0	8.2.5	Rule("a Flow Description that is no IPFilterRule of TS 29.212 clause 5.4.2")	-
 session-modification-request_test.go	Single IE	/pfcp/Create PDR/0/PDI/SDF Filter/0	8.2.5	SpareBits	-
 session-modification-request_test.go	Single IE	/pfcp/Create PDR/0/PDI/UE IP address	7.5.2.2-2	Excluded { ie_type: 93 }	-
 session-modification-request_test.go	Single IE	/pfcp/Create PDR/0/UE IP address Pool Identity/0	7.6.8	Incorrect { ie_type: 177 }	-
@@ -192,10 +206,12 @@ session-modification-request_test.go	Single IE	/pfcp/TSC Management Information/
 session-modification-request_test.go	Single IE	/pfcp/Update FAR/0/Redundant Transmission Parameters	7.6.9	Unexpected { ie_type: 255 }	-
 session-modification-request_test.go	Single IE	/pfcp/Update FAR/0/Update Forwarding parameters/Transport Level Marking	8.2.12	Rule("a ToS/Traffic Class mask other than 0xFC")	MandatoryIeIncorrect
 session-modification-request_test.go	Single IE	/pfcp/Update PDR/0/Outer Header Removal	8.1.2	SpareBits	-
+session-modification-request_test.go	Single IE	/pfcp/Update PDR/0/PDI/Ethernet Packet Filter/0/SDF Filter/0	8.2.5	Rule("a Flow Description that is no IPFilterRule of TS 29.212 clause 5.4.2")	-
 session-modification-request_test.go	Single IE	/pfcp/Update PDR/0/PDI/Ethernet Packet Filter/0/SDF Filter/0	8.2.5	SpareBits	-
 session-modification-request_test.go	Single IE	/pfcp/Update PDR/0/PDI/Local F-TEID	7.5.2.2-2	Excluded { ie_type: 21 }	-
 session-modification-request_test.go	Single IE	/pfcp/Update PDR/0/PDI/Network Instance	7.5.2.2-2	Excluded { ie_type: 22 }	-
 session-modification-request_test.go	Single IE	/pfcp/Update PDR/0/PDI/SDF Filter	7.5.2.2-2	Excluded { ie_type: 23 }	-
+session-modification-request_test.go	Single IE	/pfcp/Update PDR/0/PDI/SDF Filter/0	8.2.5	Rule("a Flow Description that is no IPFilterRule of TS 29.212 clause 5.4.2")	-
 session-modification-request_test.go	Single IE	/pfcp/Update PDR/0/PDI/SDF Filter/0	8.2.5	SpareBits	-
 session-modification-request_test.go	Single IE	/pfcp/Update PDR/0/PDI/UE IP address	7.5.2.2-2	Excluded { ie_type: 93 }	-
 session-modification-request_test.go	Single IE	/pfcp/Update QER/0/Packet Rate Status	7.6.9	Unexpected { ie_type: 193 }	-
@@ -216,6 +232,7 @@ session-report-request_test.go	Multiple IEs	/pfcp/Session Report/0/QoS Monitorin
 session-report-request_test.go	Multiple IEs	/pfcp/Session Report/1/Access Availability Control Information	7.6.9	Unexpected { ie_type: 216 }	-
 session-report-request_test.go	Multiple IEs	/pfcp/Session Report/1/QoS Monitoring Report/0/QoS Monitoring Measurement	8.2.171	Rule("PLMF is set with a packet delay")	MandatoryIeIncorrect
 session-report-request_test.go	Multiple IEs	/pfcp/TSC Management Information/0/NW-TT Port Number	7.5.8.5-1	ConditionalMissing { ie_type: 197 }	ConditionalIeMissing
+session-report-request_test.go	Multiple IEs	/pfcp/Usage Report/0/Application Detection Information/Flow Information	8.2.61	Rule("a Flow Description that is no IPFilterRule of TS 29.212 clause 5.4.2")	MandatoryIeIncorrect
 session-report-request_test.go	Multiple IEs	/pfcp/Usage Report/0/Usage Report Trigger	8.1.2	SpareBits	-
 session-report-request_test.go	Single IE	/pfcp/Additional Usage Reports Information	8.2.91	SpareBits	-
 session-report-request_test.go	Single IE	/pfcp/Downlink Data Report/Downlink Data Service Information/0	8.1.2	SpareBits	-
@@ -224,4 +241,5 @@ session-report-request_test.go	Single IE	/pfcp/Old CP F-SEID	7.2.2.4.2	Rule("a S
 session-report-request_test.go	Single IE	/pfcp/Session Report/0/Access Availability Control Information	7.6.9	Unexpected { ie_type: 216 }	-
 session-report-request_test.go	Single IE	/pfcp/Session Report/0/QoS Monitoring Report/0/QoS Monitoring Measurement	8.2.171	Rule("PLMF is set with a packet delay")	MandatoryIeIncorrect
 session-report-request_test.go	Single IE	/pfcp/TSC Management Information/0/NW-TT Port Number	7.5.8.5-1	ConditionalMissing { ie_type: 197 }	ConditionalIeMissing
+session-report-request_test.go	Single IE	/pfcp/Usage Report/0/Application Detection Information/Flow Information	8.2.61	Rule("a Flow Description that is no IPFilterRule of TS 29.212 clause 5.4.2")	MandatoryIeIncorrect
 session-report-request_test.go	Single IE	/pfcp/Usage Report/0/Usage Report Trigger	8.1.2	SpareBits	-

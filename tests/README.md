@@ -162,6 +162,10 @@ test `codec` expects them (`other_vectors_round_trip`, with `--ignored` and
   Application ID, Provide ATSSS Control Information and Created Bridge/Router Info where
   they are, and IE type 116, which no table of Release 19 has.
 - Access Type 3, which Table 8.2.153-1 has as spare.
+- The Flow Description of each SDF Filter is `aaaaaaaa`, and that of a Flow Information
+  is no rule either, where §8.2.5 and §8.2.61 have the IPFilterRule of TS 29.212 clause
+  5.4.2, `permit out ip from any to assigned` (`ie.NewSDFFilter("aaaaaaaa", ...)` in the
+  tests of `message/`).
 - The two accesses of a Create MAR have the same Priority value, where NOTE 2 of Table
   7.5.2.8-2 has them "set different values", and a TSC Management Information has a Port
   Management Information Container without the NW-TT Port Number that Tables 7.5.4.18-1

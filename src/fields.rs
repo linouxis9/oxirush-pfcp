@@ -1248,6 +1248,87 @@ pub(crate) fn base64(octets: &[u8]) -> bool {
             .all(|octet| octet.is_ascii_alphanumeric() || matches!(octet, b'+' | b'/'))
 }
 
+/// Whether octets are an IPFilterRule as TS 29.212 clause 5.4.2 restricts it for a Flow
+/// Description (IETF RFC 6733 clause 4.3.8): `permit out`, the decimal protocol number
+/// or `ip`, `from` an address `to` an address, each `any`, `assigned` or an IPv4 or IPv6
+/// address with its mask, and each with its ports, decimal numbers or ranges; no option,
+/// and no `!` before an address.
+pub(crate) fn ip_filter_rule(octets: &[u8]) -> bool {
+    let number = |text: &str, most: u32| {
+        let digits =
+            !text.is_empty() && text.len() <= 5 && text.bytes().all(|b| b.is_ascii_digit());
+        digits
+            .then(|| text.parse::<u32>().ok())
+            .flatten()
+            .filter(|number| *number <= most)
+    };
+    let address = |word: &str| {
+        let (address, bits) = match word.split_once('/') {
+            Some((address, bits)) => (address, Some(number(bits, 128))),
+            None => (word, None),
+        };
+        match (address.parse::<core::net::IpAddr>(), bits) {
+            _ if matches!(word, "any" | "assigned") => true,
+            (Ok(_), None) => true,
+            (Ok(address), Some(Some(bits))) => bits <= if address.is_ipv4() { 32 } else { 128 },
+            _ => false,
+        }
+    };
+    let ports = |word: &str| {
+        word.split(',').all(|part| match part.split_once('-') {
+            Some((from, to)) => number(from, 65535)
+                .zip(number(to, 65535))
+                .is_some_and(|(from, to)| from <= to),
+            None => number(part, 65535).is_some(),
+        })
+    };
+    let Ok(text) = core::str::from_utf8(octets) else {
+        return false;
+    };
+    let mut words = text.split(' ');
+    let start = words.next() == Some("permit") && words.next() == Some("out");
+    let protocol = words
+        .next()
+        .is_some_and(|word| word == "ip" || number(word, 255).is_some());
+    let source = words.next() == Some("from") && words.next().is_some_and(address);
+    if !(start && protocol && source) {
+        return false;
+    }
+    let mut next = words.next();
+    if next.is_some_and(|word| word != "to") {
+        if !next.is_some_and(ports) {
+            return false;
+        }
+        next = words.next();
+    }
+    let destination = next == Some("to") && words.next().is_some_and(address);
+    destination && words.next().is_none_or(ports) && words.next().is_none()
+}
+
+/// Whether a text is a URL by its generic syntax (IETF RFC 3986 clause 3): a scheme, of a
+/// letter and of letters, digits, `+`, `-` and `.`, a colon, and visible characters of
+/// ASCII after it.
+pub(crate) fn url(text: &str) -> bool {
+    let Some((scheme, rest)) = text.split_once(':') else {
+        return false;
+    };
+    let of_scheme = |c: u8| c.is_ascii_alphanumeric() || matches!(c, b'+' | b'-' | b'.');
+    scheme
+        .as_bytes()
+        .first()
+        .is_some_and(u8::is_ascii_alphabetic)
+        && scheme.bytes().all(of_scheme)
+        && !rest.is_empty()
+        && rest.bytes().all(|c| c.is_ascii_graphic())
+}
+
+/// Whether a text is a SIP URI by its scheme (IETF RFC 3261 clause 19.1.1): `sip:` or
+/// `sips:`, in letters of any case, and what a URL has after it.
+pub(crate) fn sip_uri(text: &str) -> bool {
+    let scheme = text.split(':').next().unwrap_or_default();
+    (scheme.eq_ignore_ascii_case("sip") || scheme.eq_ignore_ascii_case("sips")) && url(text)
+}
+
 /// Whether octets are a field name of HTTP, a token (IETF RFC 9110 clauses 5.1 and 5.6.2):
 /// one or more letters, digits and ``!#$%&'*+-.^_`|~``.
 pub(crate) fn http_field_name(octets: &[u8]) -> bool {
@@ -1562,6 +1643,15 @@ impl DigitsLv8 {
     pub fn digits(&self) -> Option<alloc::string::String> {
         let text = oxirush_utils::identity::tbcd::decode(&self.0).ok()?;
         (oxirush_utils::identity::tbcd::encode(&text).ok()? == *self.0).then_some(text)
+    }
+
+    /// How many digits it has, when they are TBCD digits of 0 to 9 alone.
+    pub(crate) fn decimal(&self) -> Option<usize> {
+        let digits = self.digits()?;
+        digits
+            .bytes()
+            .all(|digit| digit.is_ascii_digit())
+            .then_some(digits.len())
     }
 
     /// The octets of `digits`.
