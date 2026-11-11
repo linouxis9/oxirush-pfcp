@@ -204,13 +204,16 @@ accepted: true
 An IE that the crate cannot read stays as octets, in its place: decoding then
 encoding gives the octets back, byte for byte.
 
-## Check a message, and answer a faulty one
+## Validate a message and answer a faulty one
 
-`check()` lists what one message breaks of TS 29.244 on an interface, or on a
-set of them, each deviation with its path in the tree, its clause and the Cause
-of the answer: what it holds a message to, and what it does not, is in
-[Limits of `check()`](#limits-of-check). A table whose mandatory IEs differ between interfaces has a constructor
-for each, as `CreatePdr::new_sxa()` and `new_n4()`.
+`check()` validates one message against TS 29.244 on an interface, or on a set
+of interfaces. Each deviation has the path of the IE, the clause that is broken
+and the Cause to answer with. `check_with()` also validates a response against
+its request, and a message against the features that the two functions
+announced. [Limits](#limits) says what they do not cover.
+
+When the mandatory IEs of a table differ between interfaces, the struct has one
+constructor for each, such as `CreatePdr::new_sxa()` and `new_n4()`.
 
 ```rust
 use std::net::Ipv4Addr;
@@ -329,78 +332,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 2133002b000000000000100100000700003c0005000a000002001300014b0039000d0200000000000020010a000002
 ```
 
-## Limits of `check()`
-
-`check()` holds one message to what TS 29.244 V19.6.0 says of its octets, on an
-interface. A message in which it finds nothing is not thereby conformant.
-
-It checks:
-
-- the header (§7.2.2), the lengths and the framing (§7.6);
-- the tables of clause 7: the IEs that a message and each grouped IE need, may
-  have and may repeat on the interface, the IEs of a rejection, and the
-  conditions of a row that the IEs of its own scope show, 77 rows
-  (`Row::checked`);
-- each value of clause 8.2 that the crate decodes: its figure, the sentences on
-  which of its flags and fields go together, its tables of values, the ranges
-  that its clause gives a value, what a note of a table or the place of the IE
-  gives it (an Outer Header Creation of a Low Layer SSM, a bit that the CP
-  function alone sets, a bit of a PDI alone), and these formats: UTF-8 of a
-  UTF8String, base64 of a Metadata, a UUID of version 4 by its version and
-  variant, the name and the value of an HTTP header field, the Operator
-  Identifier of an APN/DNN by its three labels that end with `gprs`, and the
-  addresses of a Redirect Information, in text, by its type.
-
-It does not check:
-
-- what one message does not show. A condition of clause 7 on the state of a
-  session or of a node, on the features that the peers announced, on the request
-  that a response answers, or on an IE of the scope above or beside the row's;
-  a row that is there "if at least one" of its flags is set, whose IE of no flag
-  is not told; and a row that "may be present if", which is not told where its
-  condition does not hold. The procedures of clause 6 are a `Node`'s;
-- 27 sentences of clause 8.2 on what the octets of a value do not show: 18 on
-  the state of a session or on what its sender received (an SDF Filter ID that
-  is unique in its session, the IMSI that the SMF received in a SUPI, the
-  addresses of a PDU session of type IPv4v6), 4 on an IE of another message (a
-  Port Number by the BII flag that created the bridge), and 5 on the format of
-  another document (the range of an MBR of TS 36.413, the SST and SD of TS
-  23.003, the JSON of a DNS Query/Response Filter of TS 29.571);
-- a format that another document gives, beyond those above: the digits of an
-  IMSI, an IMEI or an MSISDN, the syntax of a Flow Description, of a URL and of
-  a SIP URI, and the content of a container or of a name that the UP function
-  is configured with;
-- a SEID of 0 in the header where the sender knows its peer's SEID: 0 is read as
-  the SEID of a sender that does not know it yet (§7.2.2.4.2), which a message
-  does not show, but in a Session Modification or Deletion Request and in a
-  response that accepts;
-- an IE, a value or octets of a later release: an IE type and a message type
-  that V19.6.0 does not have are told as such, and the octets after the fields
-  of a value are not told.
-
-The media identifications of an SDF Filter and the additional fields of PFD
-Contents are octets in a value and in a tree: `check()` alone reads them as
-their figures lay them out.
-
 ## Limits
 
-- `encode()` writes spare bits, reserved values, a false Length
-  (`RawIe::length`) or Message Length (`Header::length`) and IEs that a table
-  does not have, for a test tool, which `check()` tells; a false Length whose
-  octets frame as other IEs is checked as them, as its receiver reads them. It
-  refuses, each an `Error`:
-  - a field that disagrees with the flags or the other fields of its IE, or
-    whose octets would read as another value: missing before a later field or unknown octets, unknown
-    octets after a field that runs to the end of the IE, or a field of the length
-    that its flags give that is longer, or shorter with octets after it
-    (`Inconsistent`);
-  - a field or a header field too long for its bits or its length
-    (`FieldLength`, `HeaderField`);
-  - an IE or a message too long for its Length (`TooLong`, `MessageTooLong`).
-- TS 29.244 V19.6.0: an IE of a later release stays octets.
-- A `Node` is one PFCP entity. A request that names another's session or
-  association, as another SMF of a set sends (§5.22), comes to the caller as
-  `Received::stranger`.
+`check()` validates one message against TS 29.244 V19.6.0: its header, its
+framing, the IE tables of clause 7 and the values of clause 8.2.
+`check_with()` adds the request that a response answers and the features that
+the two functions announced. Their rustdoc lists every check. They do not cover:
+
+- Session state: an ID that refers to a rule of an earlier message.
+- What only the sender knows: its intent, or what the UE supports.
+- A SEID of 0 where the sender might not know the SEID of its peer yet.
+- The JSON of a DNS Query/Response Filter, and the content of containers.
+- Releases after V19.6.0: their IEs are kept as octets and reported as unknown.
+
+`encode()` is permissive so that a test tool can send malformed messages: it
+only refuses a value that would not decode back to itself. A `Node` is a single
+PFCP entity: a request for a session of another SMF of its set (§5.22) is
+passed to the application as `Received::stranger`.
 
 ## Performance
 

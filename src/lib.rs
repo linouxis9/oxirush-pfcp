@@ -21,10 +21,11 @@
 //! - [`Message`] decodes and encodes a message, byte for byte. Its [`Body`] has a struct
 //!   for each message type of Table 7.3-1, with a field for each row of its table; each
 //!   IE has its type, with the fields of its figure in clause 8.2.
-//! - [`Message::check`] lists what one message breaks of TS 29.244 on an interface, with
-//!   the clause and the Cause of the answer: the tables of clause 7 and the values of
-//!   clause 8.2, as its octets show them. A message in which it finds nothing is not
-//!   thereby conformant: the README says what it does not check.
+//! - [`Message::check`] validates one message against TS 29.244 on an interface: the
+//!   IE tables of clause 7 and the values of clause 8.2. It returns each deviation with
+//!   its clause and the Cause of the answer. [`Message::check_with`] also validates a
+//!   response against its request, and a message against the features that the two
+//!   functions announced. Their documentation lists what is and is not checked.
 //! - With the feature `tree`, a message is a tree that prints as JSON ([`tree`](mod@tree)), read and
 //!   edited by path ([`paths`]); with `serde`, it is serialized as its tree.
 //! - [`framing`] walks the IEs of a message as slices, without decoding them.
@@ -160,10 +161,11 @@ pub enum Error {
         /// The field.
         field: &'static str,
     },
-    /// A value whose fields disagree with its flags, as its clause has them, or whose
-    /// octets would read as another value: a field missing where a later one, or unknown
-    /// octets, would read as it, or one of the length that its flags give that is longer,
-    /// or shorter with octets after it.
+    /// A value that [`Message::encode`] cannot write so that it decodes back to the same
+    /// value. A field is present without its flag, or missing with it; a field is missing
+    /// before a later field or before unknown octets, which a decoder would read as the
+    /// missing field; unknown octets follow a field that runs to the end of the IE; or
+    /// the length of a field differs from the length that its flags give.
     Inconsistent {
         /// The IE type.
         ie: &'static str,

@@ -194,14 +194,29 @@ impl Message {
         Ok((Self { header, body }, end))
     }
 
-    /// Encode the message.
+    /// Encodes the message.
+    ///
+    /// `encode()` is permissive on purpose, so that a test tool can send malformed
+    /// messages. It writes spare bits, reserved values, IEs that the table of the message
+    /// does not have, and a false IE Length ([`RawIe::length`](crate::RawIe::length)) or
+    /// Message Length ([`Header::length`]) as they are. [`check`](Self::check) reports
+    /// each of them.
     ///
     /// # Errors
     ///
-    /// A field that disagrees with the flags of its IE ([`Error::Inconsistent`]), a field
-    /// or a field of the header too long for its bits or its length
-    /// ([`Error::FieldLength`], [`Error::HeaderField`]), and an IE or a message too long
-    /// for its Length ([`Error::TooLong`], [`Error::MessageTooLong`]).
+    /// `encode()` only refuses a value that it cannot write so that it decodes back to
+    /// the same value:
+    ///
+    /// - [`Error::Inconsistent`]: a field that disagrees with the flags or the other
+    ///   fields of its IE. A field is present without its flag, or missing with it; a
+    ///   field is missing before a later field or before unknown octets, which a decoder
+    ///   would read as the missing field; unknown octets follow a field that runs to the
+    ///   end of the IE; or the length of a field differs from the length that its flags
+    ///   give.
+    /// - [`Error::FieldLength`] and [`Error::HeaderField`]: a value that does not fit in
+    ///   the bits or in the length field of its IE field or header field.
+    /// - [`Error::TooLong`] and [`Error::MessageTooLong`]: an IE or a message that is
+    ///   longer than its 16-bit Length can express.
     pub fn encode(&self) -> Result<Vec<u8>, Error> {
         // The IEs after room for the header, which their length then completes.
         let header = self.header.encoded_len();
@@ -219,21 +234,80 @@ impl Message {
         Ok(out)
     }
 
-    /// Each way in which the message breaks TS 29.244 on `interface`: its mandatory IEs,
-    /// and the IEs that it may have, are those of the Appl. column of the interface. On a set of interfaces, as [`Interfaces::SXA_SXB`]
-    /// of a combined SGW/PGW (§5.2.6), a message may have the IEs of any of them, and
-    /// needs those that each of them needs.
+    /// Validates the message against TS 29.244 V19.6.0 on `interface` and returns every
+    /// deviation that it finds. Each [`Deviation`] has the path of the IE in the tree of
+    /// the message, the clause that is broken, the kind of deviation and, when the
+    /// specification defines one, the Cause that the receiver answers with.
     ///
-    /// It finds the IEs that are missing, excluded, repeated or incorrect, and the wrong
-    /// values, flags, lengths and header fields; [`Row::checked`](crate::Row::checked) says
-    /// which conditions of the tables it checks. A mandatory IE of a conditional grouped
-    /// IE is answered "Conditional IE missing" (§7.2.3.2). A message is checked as its
-    /// receiver reads it: an IE that it keeps as octets, which the receiver reads as the
-    /// value of its row, is checked as that value, and `check(m)` is
-    /// `check(Message::decode(m.encode()))` where the octets decode. A Length of an IE that
-    /// keeps them from decoding is told, and the message is checked with it cleared; one
-    /// whose octets frame, as other IEs, is checked as they read, its receiver telling no
-    /// fault there (§7.6.7).
+    /// `interface` selects the "Appl." columns of the tables. It can be a set, such as
+    /// [`Interfaces::SXA_SXB`] for a combined SGW/PGW (§5.2.6): the message may then carry
+    /// the IEs of any interface of the set and must carry the mandatory IEs of each.
+    ///
+    /// The message is checked as its receiver reads it. An IE that is stored as raw
+    /// octets is checked as the value of its row, so `check()` returns the same result
+    /// before and after `Message::decode(m.encode())`. An IE whose Length prevents
+    /// decoding is reported, and the rest of the message is still checked.
+    ///
+    /// [`check_with`](Self::check_with) also validates the message against context that
+    /// one message does not carry.
+    ///
+    /// # What is checked
+    ///
+    /// - **Header** (§7.2.2): the version, the SEID for the message type, a SEID of 0
+    ///   where the sender must know the SEID of its peer, the spare bits and the Message
+    ///   Length.
+    /// - **Framing** (§7.6): the Length of every IE, the fixed lengths of Table 8.1.2-1,
+    ///   and IEs that do not decode.
+    /// - **IE tables of clause 7**, for the message and for every grouped IE: missing
+    ///   mandatory IEs, IEs that the table or the interface does not have, IEs that are
+    ///   repeated more often than the table allows, IEs that a rejection must not carry
+    ///   (§7.2.3.2), and IE types and message types that Release 19 does not define. A
+    ///   missing mandatory IE inside a conditional grouped IE gets the Cause "Conditional
+    ///   IE missing" (§7.2.3.2).
+    /// - **Conditions of clause 7 that the message itself decides**, on 122 rows
+    ///   ([`Row::checked`](crate::Row::checked)): an IE that "shall be present if"
+    ///   another IE, a flag or a Cause is present; an IE that "may be present if" another
+    ///   IE is present, when it is there without it; a flags IE that is "included if at
+    ///   least one of the flags is set", when no flag is set; and conditions on an IE of
+    ///   the enclosing scope, such as the Additional Monitoring Time of a URR by its
+    ///   Measurement Method, the Weight and Priority of a MAR by its Steering Mode, or
+    ///   the QFI of a PDI by the QFIs of its Traffic Endpoint.
+    /// - **Rule IDs within the message**: a rule that is created, updated or removed more
+    ///   than once (§5.2.1, §6.3.3.2).
+    /// - **Values of clause 8.2**: flags and fields that must or must not be set
+    ///   together, reserved and spare values, spare bits, value ranges, the values of
+    ///   enumerations, and restrictions that depend on where the IE is (a bit that only
+    ///   the CP function sets, a bit that is only valid in a PDI).
+    /// - **Formats that another document defines**: UTF-8 text, the base64 of a Metadata,
+    ///   a version 4 UUID, HTTP header field names and values, FQDN labels, the Operator
+    ///   Identifier of an APN/DNN, the decimal digits of an IMSI, IMEI or MSISDN, a Flow
+    ///   Description as an IPFilterRule (TS 29.212), and the Redirect Server Address for
+    ///   its type (IPv4, IPv6, URL, SIP URI).
+    ///
+    /// # What is not checked
+    ///
+    /// A message without deviations is not proven conformant. `check()` does not cover:
+    ///
+    /// - **Session state.** Whether a rule that is updated or removed exists, whether an
+    ///   ID refers to a rule of an earlier message, whether an SDF Filter ID is unique in
+    ///   its session, and whether the NW-TT Port Number matches the BII flag that created
+    ///   the bridge.
+    /// - **What only the sender knows.** Conditions on intent or on other interfaces: "if
+    ///   the SMF wants to", "if the UE supports", the IMSI that the SMF received in a
+    ///   SUPI, how a bidirectional SDF filter was written. Requirements written with
+    ///   "should" are not checked either.
+    /// - **A SEID of 0** in a header where the sender might not know the SEID of its peer
+    ///   yet (§7.2.2.4.2). It is reported only in a Session Modification or Deletion
+    ///   Request and in a response that accepts the request.
+    /// - **Opaque content**: the JSON of a DNS Query/Response Filter (TS 29.571), the
+    ///   content of containers such as a Port Management Information Container, and names
+    ///   that are configured in the UP function (Network Instance, Forwarding Policy,
+    ///   predefined rules).
+    /// - **Later releases.** An IE type or message type that V19.6.0 does not define is
+    ///   reported as unknown and its content is not validated. Trailing octets after the
+    ///   known fields of a value are accepted.
+    /// - **The procedures of clause 6** (retransmission, heartbeats, association and
+    ///   session handling): these are the job of a `Node` (feature `node`).
     pub fn check(&self, interface: Interfaces) -> Vec<Deviation> {
         self.check_with(interface, &Known::default())
     }
