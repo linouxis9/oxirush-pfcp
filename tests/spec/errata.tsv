@@ -90,3 +90,11 @@ uplink-congestion-information-threshold	sentence-field	8.2.240	Uplink Congestion
 downlink-data-rate-threshold	sentence-field	8.2.240	Downlink Data Rate threshold	DL Data Rate threshold
 uplink-data-rate-threshold	sentence-field	8.2.240	Uplink Data Rate threshold	UL Data Rate threshold
 media-identification-tag	sentence-field	8.2.5	Length of the Media Identification Tag field and the Media Identification Tag	Media Identification Tag
+#
+# A sentence of the UE IP Address of a Created Traffic Endpoint, which the cell of the row
+# of the grouped IE has too: "In the 5GC, several IEs with the same IE type may be present
+# to represent multiple UE IP addresses, if the UPF indicated support of the IP6PL
+# feature". The cell ends "Several IEs within the same IE type may be present to represent
+# a list of created/updated Traffic Endpoints", which the crate takes: the row is there
+# more than once without the feature (`row-feature`).
+created-updated-traffic-endpoint-ip6pl	row-feature	7.5.5.1-1/Created/Updated Traffic Endpoint	IP6PL several	none

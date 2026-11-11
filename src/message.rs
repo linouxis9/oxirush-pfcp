@@ -24,6 +24,7 @@ use crate::Error;
 use crate::check::{Context, Deviation, DeviationKind};
 use crate::enums::CauseValue;
 use crate::header::Header;
+use crate::known::Known;
 use crate::macros::pfcp_messages;
 use crate::table::{Interfaces, Presence};
 
@@ -234,6 +235,43 @@ impl Message {
     /// whose octets frame, as other IEs, is checked as they read, its receiver telling no
     /// fault there (§7.6.7).
     pub fn check(&self, interface: Interfaces) -> Vec<Deviation> {
+        self.check_with(interface, &Known::default())
+    }
+
+    /// Like [`check`](Self::check), and also validates the message against the context
+    /// in `known`. Each part of [`Known`] that is `None` is skipped.
+    ///
+    /// - **Announced features.** Reports an IE that requires a feature which the UP or CP
+    ///   function did not announce: for example a Number of Reports in a Create URR when
+    ///   the UP function did not announce NORP. This covers 35 rows of clause 7. The
+    ///   deviation is [`DeviationKind::Excluded`], or [`DeviationKind::Repeated`] when the
+    ///   feature is only needed for more than one instance of the IE, and its clause is
+    ///   the table of the row.
+    ///
+    /// ```
+    /// use oxirush_pfcp::{Interfaces, Known, Message, UpFunctionFeatures};
+    ///
+    /// # fn main() -> Result<(), oxirush_pfcp::Error> {
+    /// // A Session Report Response: Cause, then an Update BAR with a BAR ID and a
+    /// // DL Buffering Duration (Table 7.5.9.2-1).
+    /// let octets = [
+    ///     0x21, 57, 0, 31, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, // header
+    ///     0, 19, 0, 1, 1, // Cause
+    ///     0, 12, 0, 10, 0, 88, 0, 1, 1, 0, 47, 0, 1, 2, // Update BAR
+    /// ];
+    /// let response = Message::decode(&octets)?;
+    /// assert!(response.check(Interfaces::N4).is_empty());
+    ///
+    /// // The UP function announced its features, and DLBD is not one of them.
+    /// let features = UpFunctionFeatures::default();
+    /// let known = Known::default().with_up_features(&features);
+    /// let found = response.check_with(Interfaces::N4, &known);
+    /// assert_eq!(found[0].path, "/pfcp/Update BAR/DL Buffering Duration");
+    /// assert_eq!(found[0].clause, "7.5.9.2-1");
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn check_with(&self, interface: Interfaces, known: &Known<'_>) -> Vec<Deviation> {
         let message_type = self.body.message_type();
         let mut found = Vec::new();
         let context = Context {
@@ -244,12 +282,12 @@ impl Message {
             header: self.header,
             body,
         });
-        found.extend(read.as_ref().unwrap_or(self).check_read(interface));
+        found.extend(read.as_ref().unwrap_or(self).check_read(interface, known));
         found
     }
 
     /// The check of a message as it is.
-    fn check_read(&self, interface: Interfaces) -> Vec<Deviation> {
+    fn check_read(&self, interface: Interfaces, known: &Known<'_>) -> Vec<Deviation> {
         let message_type = self.body.message_type();
         let rejection = self.body.cause().filter(|cause| cause.rejects());
         let context = Context {
@@ -257,6 +295,7 @@ impl Message {
             view: Presence::Mandatory,
             request: is_request(message_type) && message_type != 1,
             rejected: rejection,
+            lacking: crate::known::lacking(&self.body, known),
         };
         let mut found = self.header_deviations(interface, context);
         // "This flag shall be set to "1" by the UP function, if the "Overload Control

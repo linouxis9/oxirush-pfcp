@@ -50,6 +50,7 @@ mod fields;
 pub mod framing;
 mod header;
 mod ie;
+mod known;
 mod macros;
 mod message;
 #[cfg(feature = "node")]
@@ -73,6 +74,10 @@ pub use enums::*;
 pub use fields::*;
 pub use header::Header;
 pub use ie::{Codec, IeFault, IeType, Placed, RawIe, VENDOR};
+pub use known::Known;
+#[doc(hidden)]
+#[cfg(feature = "spec")]
+pub use known::ROWS as FEATURE_ROWS;
 pub use message::{
     Body, MESSAGE_TYPES, Message, MessageTypeInfo, is_node_related, is_request, message_type_info,
 };

@@ -25,6 +25,8 @@ use oxirush_pfcp::*;
 mod conditions;
 mod header;
 mod interfaces;
+#[cfg(feature = "tree")]
+mod known;
 mod reading;
 mod rejections;
 mod tables;

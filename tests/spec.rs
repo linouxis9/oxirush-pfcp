@@ -1044,6 +1044,62 @@ fn sentence_rules(sentences: &'static str, rules: &'static str, name: &str) {
     report(problems);
 }
 
+/// An IE of `ie_type` and `content`.
+fn ie(ie_type: u16, content: &[u8]) -> Vec<u8> {
+    let length = (content.len() as u16).to_be_bytes();
+    [&ie_type.to_be_bytes()[..], &length, content].concat()
+}
+
+/// The rows from a message down to the row `name` of the table `id`.
+fn place(table: &'static Table, id: &str, name: &str, chain: &mut Vec<&'static Row>) -> bool {
+    if let Some(row) = table
+        .rows
+        .iter()
+        .find(|row| table.id == id && row.name == name)
+    {
+        chain.push(row);
+        return true;
+    }
+    for row in table.rows {
+        if let Some(content) = row.content {
+            chain.push(row);
+            if place(content, id, name, chain) {
+                return true;
+            }
+            chain.pop();
+        }
+    }
+    false
+}
+
+/// The message of the type `info` that has the IEs `beside` at the place of the last row
+/// of `chain`, each of the rows above it once.
+fn message_at(info: &MessageTypeInfo, chain: &[&Row], beside: &[Vec<u8>]) -> Message {
+    let mut content = beside.concat();
+    for above in chain.iter().rev().skip(1) {
+        content = ie(above.ie_type, &content);
+    }
+    let (kind, header): (u8, &[u8]) = match is_node_related(info.message_type) {
+        true => (0x20, &[0, 0, 1, 0]),
+        false => (0x21, &[0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0]),
+    };
+    let length = ((header.len() + content.len()) as u16).to_be_bytes();
+    let octets = [&[kind, info.message_type][..], &length, header, &content].concat();
+    Message::decode(&octets).expect("a message of its IEs")
+}
+
+/// The first interface that has the message of the type `info` and each row of `chain`.
+fn interface_of(info: &MessageTypeInfo, chain: &[&Row]) -> Option<Interfaces> {
+    [
+        Interfaces::N4,
+        Interfaces::SXB,
+        Interfaces::SXA,
+        Interfaces::N4MB,
+    ]
+    .into_iter()
+    .find(|on| info.interfaces.has(*on) && chain.iter().all(|row| row.on(*on).is_some()))
+}
+
 /// The rows of the tables of clause 7 whose comment makes the IE there by what the IEs
 /// beside it show (`row-conditions.tsv`): the crate checks each (`Row::checked`), and
 /// check() tells the IE where the comment has it absent, in a message that has the row at
@@ -1052,31 +1108,6 @@ fn sentence_rules(sentences: &'static str, rules: &'static str, name: &str) {
 /// if" another is, or is not, is told without the other, or with it, and not otherwise.
 #[test]
 fn row_conditions() {
-    /// The rows from a message down to the row `name` of the table `id`.
-    fn place(table: &'static Table, id: &str, name: &str, chain: &mut Vec<&'static Row>) -> bool {
-        if let Some(row) = table
-            .rows
-            .iter()
-            .find(|row| table.id == id && row.name == name)
-        {
-            chain.push(row);
-            return true;
-        }
-        for row in table.rows {
-            if let Some(content) = row.content {
-                chain.push(row);
-                if place(content, id, name, chain) {
-                    return true;
-                }
-                chain.pop();
-            }
-        }
-        false
-    }
-    let ie = |ie_type: u16, content: &[u8]| {
-        let length = (content.len() as u16).to_be_bytes();
-        [&ie_type.to_be_bytes()[..], &length, content].concat()
-    };
     let mut problems = Vec::new();
     for cells in records(include_str!("spec/row-conditions.tsv")) {
         let [table, name, there] = cells[..] else {
@@ -1096,32 +1127,14 @@ fn row_conditions() {
             ));
             continue;
         }
-        let interface = [
-            Interfaces::N4,
-            Interfaces::SXB,
-            Interfaces::SXA,
-            Interfaces::N4MB,
-        ]
-        .into_iter()
-        .find(|on| message.interfaces.has(*on) && chain.iter().all(|row| row.on(*on).is_some()));
-        let Some(interface) = interface else {
+        let Some(interface) = interface_of(message, &chain) else {
             problems.push(format!("Table {table}, {name}: no interface has the row"));
             continue;
         };
         // How many times check() tells the row where its condition has it absent, in a
         // message of the IEs `beside` it at its place
         let told = |beside: &[Vec<u8>]| {
-            let mut content = beside.concat();
-            for above in chain.iter().rev().skip(1) {
-                content = ie(above.ie_type, &content);
-            }
-            let (kind, header): (u8, &[u8]) = match is_node_related(message.message_type) {
-                true => (0x20, &[0, 0, 1, 0]),
-                false => (0x21, &[0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0]),
-            };
-            let length = ((header.len() + content.len()) as u16).to_be_bytes();
-            let octets = [&[kind, message.message_type][..], &length, header, &content].concat();
-            let message = Message::decode(&octets).expect("a message of its IEs");
+            let message = message_at(message, &chain, beside);
             let excluded = DeviationKind::Excluded {
                 ie_type: row.ie_type,
             };
@@ -1164,6 +1177,140 @@ fn row_conditions() {
             ));
         }
     }
+    report(problems);
+}
+
+/// The rows of the tables of clause 7 whose comment has the IE there, or there more than
+/// once, where a function supports a feature (`row-features.tsv`): the crate has the same
+/// rows, and `check_with()` tells the IE, at its place in a message, where the function
+/// announced none of the features, and not where it announced any one of them, nor where
+/// what it announced is not known. The features of the CP function are those of the CP
+/// Function Features of the message, an association message, and those that are known
+/// where an association update has none.
+#[test]
+fn row_features() {
+    let errata = Errata::new();
+    let mut problems = Vec::new();
+    let mut rows = Vec::new();
+    for cells in records(include_str!("spec/row-features.tsv")) {
+        let [table, name, function, features, several] = cells[..] else {
+            panic!("row-features.tsv: {cells:?} has not five cells");
+        };
+        let said = format!("{features} {several}");
+        if errata.apply("row-feature", &format!("{table}/{name}"), &said) != said {
+            continue;
+        }
+        let features: Vec<_> = features.split(" | ").collect();
+        rows.push((
+            table,
+            name,
+            function == "CP",
+            features,
+            several == "several",
+        ));
+    }
+    let crates: Vec<_> = FEATURE_ROWS
+        .iter()
+        .map(|(table, name, cp, features, several)| {
+            (*table, *name, *cp, features.to_vec(), *several)
+        })
+        .collect();
+    if rows != crates {
+        problems.push(format!(
+            "the rows of row-features.tsv are not those of the crate: {rows:?} and {crates:?}"
+        ));
+    }
+    // The features of a function that announced `named` alone, from the bits of its IE
+    fn features<T: Codec>(layout: Option<&Layout>, octets: usize, named: Option<&str>) -> T {
+        let mut written = vec![0u8; octets];
+        if let Some(named) = named {
+            let bits = layout.expect("a layout").bits.iter();
+            let bit = bits.clone().find(|bit| bit.name == named);
+            let bit = bit.unwrap_or_else(|| panic!("no feature {named}"));
+            written[bit.octet] |= 1 << (bit.bit - 1);
+        }
+        T::decode(&written).expect("features")
+    }
+    for (table, name, cp, named, several) in rows {
+        let mut chain = Vec::new();
+        let info = MESSAGE_TYPES
+            .iter()
+            .find(|info| place(info.table, table, name, &mut chain));
+        let (Some(info), Some(row)) = (info, chain.last().copied()) else {
+            problems.push(format!("Table {table}: no row {name:?} in the crate"));
+            continue;
+        };
+        let Some(interface) = interface_of(info, &chain) else {
+            problems.push(format!("Table {table}, {name}: no interface has the row"));
+            continue;
+        };
+        // How many times check_with() tells the row, of `count` IEs, where the function
+        // announced `announced` alone, or where what it announced is not known: the
+        // most, of the lengths of zeros that the IE decodes of
+        let told = |count: usize, announced: Option<Option<&str>>, own: bool| {
+            let up = announced
+                .filter(|_| !cp)
+                .map(|named| features::<UpFunctionFeatures>(UpFunctionFeatures::LAYOUT, 12, named));
+            let cp_features = announced
+                .filter(|_| cp)
+                .map(|named| features::<CpFunctionFeatures>(CpFunctionFeatures::LAYOUT, 3, named));
+            let mut known = Known::default();
+            let mut beside = Vec::new();
+            match (cp, own, &up, &cp_features) {
+                (false, _, Some(up), _) => known = known.with_up_features(up),
+                (true, false, _, Some(cp)) => known = known.with_cp_features(cp),
+                (true, true, _, Some(cp)) => {
+                    let mut octets = Vec::new();
+                    cp.encode(&mut octets).expect("features");
+                    beside.push(ie(89, &octets));
+                }
+                _ => {}
+            }
+            let kind = match several {
+                true => DeviationKind::Repeated {
+                    ie_type: row.ie_type,
+                },
+                false => DeviationKind::Excluded {
+                    ie_type: row.ie_type,
+                },
+            };
+            let lengths = (1..=32).map(|length| {
+                let mut ies = beside.clone();
+                ies.extend(vec![ie(row.ie_type, &vec![0; length]); count]);
+                let found = message_at(info, &chain, &ies).check_with(interface, &known);
+                let found = found.into_iter();
+                found
+                    .filter(|found| found.kind == kind && found.clause == table)
+                    .count()
+            });
+            lengths.max().unwrap_or(0)
+        };
+        let count = 1 + usize::from(several);
+        // The features of the CP function that are known, of an association update alone
+        let setup = matches!(info.message_type, 5 | 6);
+        for own in [true, false] {
+            if !cp && own || setup && !own {
+                continue;
+            }
+            let mut tells = vec![told(count, Some(None), own), told(count, None, own)];
+            tells.extend(
+                named
+                    .iter()
+                    .map(|feature| told(count, Some(Some(feature)), own)),
+            );
+            tells.push(told(count - 1, Some(None), own));
+            let mut expected = vec![0; tells.len()];
+            expected[0] = 1;
+            // An association setup without CP Function Features announces none
+            expected[1] = usize::from(setup);
+            if tells != expected {
+                problems.push(format!(
+                    "Table {table}, {name}: told {tells:?} times with none of {named:?}, with what was announced not known, with each of them, and with one IE less, and not {expected:?}"
+                ));
+            }
+        }
+    }
+    problems.extend(errata.unused(&["row-feature"]));
     report(problems);
 }
 

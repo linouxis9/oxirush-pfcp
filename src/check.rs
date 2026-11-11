@@ -390,6 +390,9 @@ pub(crate) struct Context {
     pub(crate) request: bool,
     /// The Cause of a response that rejects the request, at the message level.
     pub(crate) rejected: Option<CauseValue>,
+    /// The features that are known to be missing, as [`crate::known::lacking`] returns
+    /// them: 0 when no features are known.
+    pub(crate) lacking: u32,
 }
 
 impl Context {
@@ -400,6 +403,7 @@ impl Context {
             view: Presence::Mandatory,
             request: false,
             rejected: None,
+            lacking: 0,
         }
     }
 
@@ -697,6 +701,9 @@ pub(crate) fn check_row(
     let over = on.is_some_and(|on| !on.most.allows(count));
     if rejected || off || over {
         row_deviations(table, row, [rejected, off, over], path, found);
+    }
+    if context.lacking != 0 && !off {
+        crate::known::check_row(table, row, count, context.lacking, path, found);
     }
     !off
 }

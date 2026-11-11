@@ -37,6 +37,10 @@ The inventory of the document that the test `spec` holds the crate to:
 - `spec/row-conditions.tsv`: each row of a table of clause 7 whose comment has the IE
   there by a flag of its own or by an IE beside it, which `check()` tells in a message
   that has the row at its place;
+- `spec/row-features.tsv`: each row of a table of clause 7 that requires a feature of
+  the UP or CP function ("may be present if the UP function supports the NORP
+  feature"). The test checks that the crate has the same rows and that `check_with()`
+  reports the IE when none of its features was announced;
 - `spec/range-rules.tsv`: each sentence of clause 8.2 that bounds the value of a field,
   with the rule of `check()` that checks it, or why no value of the field breaks it;
 - the octets of the four values that the crate reads by hand, as their figures follow a

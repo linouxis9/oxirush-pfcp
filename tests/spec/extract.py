@@ -18,6 +18,12 @@ script:
                         included if at least one of the flags is set", and "with X" or
                         "without X" for one that "may be present if the X IE is present",
                         or "is not included"
+    row-features.tsv    the rows of those tables that require a feature of Table
+                        8.2.25-1 or 8.2.58-1 ("may be present if the UP function
+                        supports the NORP feature"): the function that announces the
+                        features (UP or CP), the features (any one of them allows the
+                        IE), and "several" when the feature is only required for more
+                        than one instance of the IE
     layouts.tsv         the figures of clause 8.2: their clause, the type that they say, and
                         the names of their flags and fields, in order
     figures.tsv         the place of each flag and field of those figures: the octets of its
@@ -163,7 +169,7 @@ def main():
     heading, caption = '', None
     message_types, ie_types, tables, layouts, values, clause6 = [], [], [], [], [], []
     read = []
-    figures, conditions, flags, ranges, beside = [], [], [], [], []
+    figures, conditions, flags, ranges, beside, comments = [], [], [], [], [], []
     # The figure of the clause, as relations() reads its sentences: its fields of octets,
     # by name and by their octets, its fields of bits of more than one bit, those of them
     # of rows that a letter counts, its flags by their bits, its rows, and the names of
@@ -218,6 +224,7 @@ def main():
                     several = repetition(row[2])
                     tables.append(['row', number, without_notes(row[0]), row[1], interfaces(row[3:8]), without_notes(row[8]), several])
                     beside.extend([number, without_notes(row[0]), condition] for condition in row_conditions(row[2]))
+                    comments.append((number, without_notes(row[0]), row[2]))
             # An IE beside a row is a row of its table.
             named = {row[2] for row in tables if row[0] == 'row' and row[1] == number}
             beside = [row for row in beside if row[0] != number or row[2] == 'a flag' or row[2].split(' ', 1)[1] in named]
@@ -246,6 +253,7 @@ def main():
     write('ie-types.tsv', ['type', 'name', 'reference', 'length'], ie_types)
     write('tables.tsv', ['table|row|same', 'table', 'name, or the name of the row', 'heading, or presence', 'IE type, or interfaces', 'IE type', 'once, several, or how many'], tables)
     write('row-conditions.tsv', ['table', 'row', 'there'], beside)
+    write('row-features.tsv', ['table', 'row', 'function', 'features', 'one or several'], row_features(comments, values))
     write('layouts.tsv', ['clause', 'type in the figure', 'fields'], layouts)
     write('figures.tsv', ['clause', 'octets', 'name', 'lowest bit', 'bits'], figures)
     write('conditions.tsv', ['clause', 'flag', 'set', 'field', 'there'], conditions)
@@ -278,6 +286,40 @@ def row_conditions(comment):
         if may:
             for name, negation in BESIDE.findall(sentence[may.end():]):
                 out.append(('without ' if negation else 'with ') + name)
+    return out
+
+
+def row_features(comments, values):
+    """The rows whose comment requires a feature for the IE: "This IE may be present if
+    the UP function supports the NORP feature", "shall be present if ... and if the UPF
+    indicated support of the DRQOS feature". A comment may also require the feature only
+    for more than one instance: "several IEs with the same IE type may be present ..., if
+    the UPF indicated support of the IP6PL feature". A feature is a name of Table 8.2.25-1
+    or 8.2.58-1 that the sentence calls a feature. SSET and MPAS are in both tables: the
+    function is the CP function when the sentence names the SMF or the CP function."""
+    names = {'UP': {}, 'CP': {}}
+    for table, _, place, name in values:
+        if table in ('8.2.25-1', '8.2.58-1') and '/' in place:
+            names['UP' if table == '8.2.25-1' else 'CP'][name] = place
+    name = '|'.join(sorted(map(re.escape, set(names['UP']) | set(names['CP'])), key=len, reverse=True))
+    called = re.compile(r'(?<![A-Za-z0-9-])((?:%s)(?:(?: and/or | or | and )(?:%s))*) feature\b|\bfeature ((?:%s))(?![A-Za-z0-9-])' % (name, name, name))
+    out = []
+    for table, row, comment in comments:
+        for sentence in re.split(r'(?<=[.;])\s+', clean(comment)):
+            one = re.search(r'\b(?:may be (?:present|included),? (?:if|when)|shall be (?:present|included) (?:if|when))\b(.*)', sentence)
+            several = re.search(r'(?i)\bseveral IEs with the same IE type may be present\b(.*)', sentence)
+            there = several or one
+            if not there or not re.search(r'(?i)\bsupport', there.group(1)):
+                continue
+            words = there.group(1)
+            found = []
+            for listed, after in called.findall(words):
+                found.extend(re.split(r' and/or | or | and ', listed) if listed else [after])
+            both = [feature for feature in found if feature in names['UP'] and feature in names['CP']]
+            function = 'CP' if (both and re.search(r'\bSMF\b|\bCP [Ff]unction', words)) or (found and found[0] not in names['UP']) else 'UP'
+            found = [feature for feature in dict.fromkeys(found) if feature in names[function]]
+            if found:
+                out.append([table, row, function, ' | '.join(found), 'several' if several else 'one'])
     return out
 
 
