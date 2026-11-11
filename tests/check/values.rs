@@ -574,6 +574,22 @@ fn the_media_identifications_of_an_sdf_filter() {
     }
 }
 
+/// §8.2.39, bit 5: with DNP, "the Length of Domain Name and the Domain Name fields shall
+/// also be present", which DN has there: a Domain Name Protocol is of a Domain Name.
+#[test]
+fn the_domain_name_protocol_of_pfd_contents_has_its_domain_name() {
+    // DNP alone, and the protocol "tls"
+    let alone = value_found::<PfdContents>("10000003746c73");
+    let rule = DeviationKind::Rule("DNP is set and DN is not");
+    assert_eq!(alone, [("8.2.39", rule)]);
+    // DN and DNP: "a.com", then "tls"; and DN alone
+    assert_eq!(
+        value_found::<PfdContents>("14000005612e636f6d0003746c73"),
+        []
+    );
+    assert_eq!(value_found::<PfdContents>("04000005612e636f6d"), []);
+}
+
 /// §8.2.168: bit 3 of Reporting Frequency is reserved, "set to "0" by the sender" and
 /// ignored by the receiver: set, it is a deviation as a spare bit is, which the receiver
 /// ignores.

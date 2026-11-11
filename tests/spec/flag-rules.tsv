@@ -1,7 +1,8 @@
 # The sentences of clause 8.2 of TS 29.244 V19.6.0 that say which flags of an IE are set,
 # as flag-sentences.tsv numbers them in their clauses: together, "at least one", "one and
 # only one", "only one of", "may only be set", "shall be set to "1" if the ... flag is
-# set", "shall not be set", "either ... shall be set" and "exclusive"; with the value of
+# set", "shall not be set", "either ... shall be set" and "exclusive"; with the field of
+# another flag, "also present"; with the value of
 # another field, "flags of a value"; with the Cause of the message, "with the Cause"; and
 # always, "always set". A sentence of who
 # sets a bit ("shall only be set by the CP function") is not of them. Each row gives the rule of check() that checks the sentence,
@@ -31,6 +32,7 @@
 8.2.26	3	may only be set	DFRT is set and FORW is not	81	82
 8.2.31	1	shall not be set	SUMPC and RUMUC are both set	18	08 10
 8.2.37	1	at least one	neither V4 nor V6 is set	000000000000000001	0200000000000000010a000001
+8.2.39	1	also present	DNP is set and DN is not	10000003746c73	14000005612e636f6d0003746c73 04000005612e636f6d
 8.2.40	1	at least one	no bit is set	00	02
 8.2.41	1	at least one	no bit is set	0000	0100
 8.2.44	1	at least one	no bit is set	00	010000000000000400

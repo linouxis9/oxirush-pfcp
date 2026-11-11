@@ -19,13 +19,15 @@ script:
                         row, its lowest bit and how many bits it has
     conditions.tsv      the sentences of clause 8.2 that make a field there or not as a flag
                         is set or not: the flag, whether it is set, the field, whether it is
-                        there; and those that make it there or not as a field of bits of
+                        there, or "also present" where another flag has the field there;
+                        and those that make it there or not as a field of bits of
                         the figure has a value: that field, "is" and the names of the
                         values, the field, whether it is there
     flag-sentences.tsv  the sentences of clause 8.2 that say which flags of an IE are set
                         together: "at least one", "one and only one", "only one of", "may
                         only be set", "shall be set to "1" if the ... flag is set", "shall
-                        not be set", "either ... shall be set" or "exclusive", with a value
+                        not be set", "either ... shall be set" or "exclusive", with the
+                        field of another flag ("shall also be present"), with a value
                         ("if ... is 1, then the ... flags shall be set"), with the Cause of
                         the message ("shall be set to "1" ... if ... the Cause IE is set
                         to"), or always ("this bit shall be set to "1"."), by their clause
@@ -289,7 +291,7 @@ def relations(paragraph, fields, labels, cells):
     for sentence in re.split(r'(?<=[.;])\s+', paragraph):
         out.extend(value_relations(sentence, fields, cells))
         sentence = re.split(r'\botherwise\b', sentence)[0]
-        found = re.search(r'(.+?)\s*shall (not )?be present', sentence)
+        found = re.search(r'(.+?)\s*shall (not )?(also )?be present', sentence)
         if not found:
             continue
         flags = []
@@ -313,8 +315,11 @@ def relations(paragraph, fields, labels, cells):
             if re.search(pattern, rest):
                 named.append(name)
                 rest = re.sub(pattern, ' ', rest)
+        # A field that is "also" there with a flag is one that another flag has there: the
+        # two flags are set together, which a sentence of flags says (FLAG_PHRASES).
+        there = 'absent' if absent else 'also present' if found.group(3) else 'present'
         for name in named:
-            out.extend([flag, state, name, 'absent' if absent else 'present'] for flag, state in flags)
+            out.extend([flag, state, name, there] for flag, state in flags)
     return out
 
 
@@ -375,6 +380,9 @@ FLAG_PHRASES = [
     # Of the flags that a value of another field has set: "If Proxy Authen Type Value is
     # 1, then the PAN and PAR flags shall be set".
     ('flags of a value', re.compile(r'(?i)\bif [A-Za-z /-]+ is \d+, then the [A-Za-z0-9, -]+ flags? shall be set\b')),
+    # Of a flag whose field is of the field of another flag: "if this bit is set to "1",
+    # the Length of Domain Name and the Domain Name fields shall also be present".
+    ('also present', re.compile(r'(?i)\bif this bit is set to ["“]1["”],[^.;]*\bshall also be present\b')),
     # Of a flag that is always set: "This bit shall be set to "1"." alone, not "to "1" if".
     ('always set', re.compile(r'(?i)\bthis (?:bit|flag) shall be set to ["“]1["”]\s*\.')),
     # Of a flag that the Cause of the message has set: "This flag shall be set to "1" by

@@ -1062,6 +1062,7 @@ fn flag_checked(ie_type: u16, octets: &[u8]) -> Option<Vec<(&'static str, Deviat
         ApplyAction,
         PFCPSMReqFlags,
         FSeid,
+        PfdContents,
         MeasurementMethod,
         UsageReportTrigger,
         VolumeMeasurement,
@@ -1423,11 +1424,19 @@ fn figure_places() {
 /// The conditions of the fields of clause 8.2: each sentence that makes a field there, or
 /// not, as a flag is set or not (`conditions.tsv`) is a term of the condition of the
 /// field in the crate, of the same sense: "If CH is set, the TEID shall not be present"
-/// is `!ch` in the condition of TEID. Those of the value of a field of bits are checked by
-/// value_conditions().
+/// is `!ch` in the condition of TEID. A field that a sentence has "also present" where a
+/// flag is set is one that another flag has there: the two flags are set together, which
+/// a row of `flag-rules.tsv` of the clause, "also present", checks. Those of the value of
+/// a field of bits are checked by value_conditions().
 #[test]
 fn figure_conditions() {
     let errata = Errata::new();
+    // The clauses whose sentence of a field "also present" has its rule of flags
+    let also: BTreeSet<&str> = records(include_str!("spec/flag-rules.tsv"))
+        .into_iter()
+        .filter(|cells| cells[2] == "also present" && !cells[3].starts_with("none: "))
+        .map(|cells| cells[0])
+        .collect();
     let mut sentences: BTreeMap<&str, Vec<(&str, &str, &str, &str)>> = BTreeMap::new();
     for cells in records(include_str!("spec/conditions.tsv")) {
         if cells[2].starts_with("is ") {
@@ -1484,6 +1493,13 @@ fn figure_conditions() {
                 })
             });
             let Some(member) = member else { continue };
+            if *there == "also present" {
+                checked += 1;
+                if !also.contains(info.clause) {
+                    problems.push(format!("clause {} {}: {:?} is also there where {flag} is {set}, and no row of flag-rules.tsv has the rule of the two flags", info.clause, info.name, member.name));
+                }
+                continue;
+            }
             let positive = (*set == "set") == (*there == "present");
             let term = if positive {
                 bits.ident.to_string()

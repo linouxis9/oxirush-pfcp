@@ -119,6 +119,11 @@ pfcp_layout! {
         additional_url "Additional URL": Lv16 if aurl,
         additional_domain_name_and_protocol "Additional Domain Name and Domain Name Protocol": Lv16 if adnp,
     }
+    check(this, path, found) {
+        // With DNP, "the Length of Domain Name and the Domain Name fields shall also be
+        // present", which DN has there.
+        flag_rule(this.dnp && !this.dn, path, "8.2.39", "DNP is set and DN is not", found);
+    }
 }
 
 pfcp_layout! {

@@ -39,6 +39,8 @@
 8.2.39	CP	set	Custom PFD Content	present
 8.2.39	DNP	set	Length of Domain Name Protocol	present
 8.2.39	DNP	set	Domain Name Protocol	present
+8.2.39	DNP	set	Length of Domain Name	also present
+8.2.39	DNP	set	Domain Name	also present
 8.2.39	AFD	set	Length of Additional Flow Description	present
 8.2.39	AFD	set	Additional Flow Description	present
 8.2.39	AURL	set	Length of Additional URL	present
