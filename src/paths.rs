@@ -767,9 +767,9 @@ fn no_such_member(of: Of, name: &str) -> Option<String> {
 }
 
 /// What an edit opens at a place so that `segment` goes into it: a list with one more
-/// entry for the position of its length, empty, and a message without IEs, or an object
-/// of IEs without the list or the grouped IE of the row, or with it `null`, with them
-/// empty. `None` where the place has what the segment names, or is not there to open, as
+/// entry for the position of its length, empty, and a message without IEs or without a
+/// header, or an object of IEs without the list or the grouped IE of the row, or with it
+/// `null`, with them empty. `None` where the place has what the segment names, or is not there to open, as
 /// its holder is opened first.
 fn room(value: Option<&Value>, of: Of, list: bool, segment: &str) -> Option<Value> {
     let lacks = |members: &Map, name: &str| {
@@ -786,10 +786,12 @@ fn room(value: Option<&Value>, of: Of, list: bool, segment: &str) -> Option<Valu
             grown.push(entry);
             Some(Value::Array(grown))
         }
-        (Value::Object(members), Of::Message(_))
-            if tree::same_name(segment, "ies") && lacks(members, "ies") =>
-        {
-            let name = tree::member(members, "ies").map_or("ies", |(name, _)| name);
+        (Value::Object(members), Of::Message(_)) => {
+            let opened = ["ies", "header"].into_iter();
+            let member = opened
+                .filter(|member| lacks(members, member))
+                .find(|member| tree::same_name(segment, member))?;
+            let name = tree::member(members, member).map_or(member, |(name, _)| name);
             let mut members = members.clone();
             members.insert(name.into(), Value::Object(Map::new()));
             Some(Value::Object(members))

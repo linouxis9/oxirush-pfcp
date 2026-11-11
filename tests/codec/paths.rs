@@ -425,6 +425,25 @@ fn set_adds_an_entry_at_the_end_of_a_list() {
         panic!()
     };
     assert_eq!(request.remove_pdr.len(), 1);
+    // Below the header of a message that has none, or a null one, as below its IEs
+    for mut written in [
+        tree!({"message": "PFCP Heartbeat Request"}),
+        tree!({"message": "PFCP Heartbeat Request", "header": null, "ies": null}),
+    ] {
+        set(&mut written, "/header/Sequence Number", 7).unwrap();
+        assert_eq!(written["header"], tree!({"Sequence Number": 7}));
+        set(&mut written, "/pfcp/Recovery Time Stamp", 9).unwrap();
+        let message = Message::from_tree(&written).unwrap();
+        assert_eq!(message.header.sequence, 7);
+        let Body::HeartbeatRequest(request) = message.body else {
+            panic!()
+        };
+        assert_eq!(request.recovery_time_stamp, Some(RecoveryTimeStamp::new(9)));
+    }
+    // A member that a header has not is refused, of a header that is not there too
+    let mut written = tree!({"message": "PFCP Heartbeat Request"});
+    assert!(set(&mut written, "/header/Bogus", 7).is_err());
+    assert_eq!(written, tree!({"message": "PFCP Heartbeat Request"}));
     let before = tree.clone();
     for path in [
         "/pfcp/Create PDR/9/PDR ID",
