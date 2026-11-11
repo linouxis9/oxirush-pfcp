@@ -408,6 +408,98 @@ fn a_dns_server_address_is_an_address() {
     assert_eq!(Ipv4Address::default().0, Ipv4Addr::UNSPECIFIED);
 }
 
+/// The values that their clauses have "encoded in UTF8String format" are their text in a
+/// tree: a Calling Number and a Called Number (§8.2.190, §8.2.191), a Tunnel Password
+/// (§8.2.212), and the Key ID and the Shared Secret of a Key ID and Shared Secret
+/// (§8.2.276). Octets that are no UTF-8 are in hexadecimal: of a value that is one field,
+/// in an object of that field, apart from `{"octets": ...}`, which an IE kept as octets
+/// is; of a field, in `{"octets": ...}`. A password and a passphrase are in a tree, which
+/// reads back, and not in `Debug`, nor in an error of their tree.
+#[test]
+fn a_number_a_password_and_a_key_id_are_their_text() {
+    let calling = CallingNumber(b"33612345678".to_vec().into());
+    assert_eq!(tree::Tree::to_tree(&calling), tree!("33612345678"));
+    assert_eq!(
+        tree::from_value::<CallingNumber>(&tree!("33612345678")).ok(),
+        Some(calling)
+    );
+    let called = CalledNumber(b"internet".to_vec().into());
+    assert_eq!(tree::Tree::to_tree(&called), tree!("internet"));
+    assert_eq!(
+        tree::from_value::<CalledNumber>(&tree!("internet")).ok(),
+        Some(called)
+    );
+    let other = CallingNumber(vec![0xff, 0xfe].into());
+    let written = tree!({"Calling Number value": "fffe"});
+    assert_eq!(tree::Tree::to_tree(&other), written);
+    assert_eq!(
+        tree::from_value::<CallingNumber>(&written).ok(),
+        Some(other)
+    );
+    assert!(tree::from_value::<CallingNumber>(&tree!({"octets": "fffe"})).is_err());
+    assert!(tree::from_value::<CallingNumber>(&tree!(5)).is_err());
+    // A password
+    let password = TunnelPassword(b"secret!pass".to_vec().into());
+    assert_eq!(tree::Tree::to_tree(&password), tree!("secret!pass"));
+    assert_eq!(
+        tree::from_value::<TunnelPassword>(&tree!("secret!pass")).ok(),
+        Some(password.clone())
+    );
+    assert_eq!(format!("{password:?}"), "TunnelPassword(11 octets)");
+    let other = TunnelPassword(vec![0xff, 0xfe].into());
+    let written = tree!({"Tunnel Password value": "fffe"});
+    assert_eq!(tree::Tree::to_tree(&other), written);
+    assert_eq!(
+        tree::from_value::<TunnelPassword>(&written).ok(),
+        Some(other)
+    );
+    let refusal = tree!({"Tunnel Password value": "fffe", "secret!pass": 1});
+    let error = tree::from_value::<TunnelPassword>(&refusal).unwrap_err();
+    assert!(!error.to_string().contains("secret!pass"), "{error}");
+    // An HMAC Key is octets, and no text
+    let key = HmacKeyStamp(b"key".to_vec().into());
+    assert_eq!(tree::Tree::to_tree(&key), tree!("6b6579"));
+    // A Key ID and a Shared Secret
+    let key = KeyIdAndSharedSecret {
+        key_id: TextLv8::from("owamp"),
+        shared_secret: SecretTextLv8(b"passphrase".to_vec().into()),
+        ..Default::default()
+    };
+    let written = tree!({"Key ID": "owamp", "Shared Secret": "passphrase"});
+    assert_eq!(tree::Tree::to_tree(&key), written);
+    assert_eq!(
+        tree::from_value::<KeyIdAndSharedSecret>(&written).ok(),
+        Some(key.clone())
+    );
+    assert!(!format!("{key:?}").contains("passphrase"), "{key:?}");
+    assert!(format!("{key:?}").contains("SecretTextLv8(10 octets)"));
+    let written = tree!({"Key ID": {"octets": "ff"}, "Shared Secret": {"octets": "fe"}});
+    let other: KeyIdAndSharedSecret = tree::from_value(&written).unwrap();
+    assert_eq!(
+        (&other.key_id.0[..], &other.shared_secret.0[..]),
+        (&[0xff][..], &[0xfe][..])
+    );
+    assert_eq!(tree::Tree::to_tree(&other), written);
+    let refusal = tree!({"Key ID": "owamp", "Shared Secret": {"passphrase": 1}});
+    let error = tree::from_value::<KeyIdAndSharedSecret>(&refusal).unwrap_err();
+    assert!(!error.to_string().contains("passphrase"), "{error}");
+    // In a message: the value of octets that are no text, and the IE kept as octets
+    let mut message = establishment();
+    let mut written = message.to_tree();
+    written["ies"]["L2TP Session Information"] = tree!({"Calling Number": {"Calling Number value": "fffe"}, "Called Number": {"octets": "fffe"}});
+    let Body::SessionEstablishmentRequest(request) = &mut message.body else {
+        panic!()
+    };
+    let session = L2tpSessionInformation {
+        calling_number: Some(CallingNumber(vec![0xff, 0xfe].into())),
+        raw: vec![RawIe::new(283, vec![0xff, 0xfe])],
+        ..Default::default()
+    };
+    request.l2tp_session_information = Some(session.into());
+    assert_eq!(Message::from_tree(&written).unwrap(), message);
+    assert_eq!(message.to_tree(), written);
+}
+
 /// The octets after the fields of an IE, of a later release, are "the unknown octets" of
 /// §8.1.2 in a tree. A value of one field, without flags, is that field alone without
 /// them: a number, and the octets after their length of a Forwarding Policy.

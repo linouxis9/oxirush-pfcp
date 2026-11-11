@@ -1407,7 +1407,8 @@ impl Field for SsmAddress {
 
 // ── Secrets ────────────────────────────────────────────────────────────────
 
-/// Octets of a key or a password, which `Debug` does not print: their length alone.
+/// Octets of a key or a password that are no text, which `Debug` does not print: their
+/// length alone.
 #[derive(Clone, Default, PartialEq, Eq)]
 pub struct SecretLv8(pub Octets);
 
@@ -1454,6 +1455,55 @@ impl Field for SecretLv8 {
     }
 }
 
+/// A passphrase after a length of one octet, a UTF8String, which `Debug` does not print,
+/// nor an error of its tree: the Shared Secret of a Key ID and Shared Secret (§8.2.276).
+/// Its tree is the text, or `{"octets": ...}` for octets that are no UTF-8.
+#[derive(Clone, Default, PartialEq, Eq)]
+pub struct SecretTextLv8(pub Octets);
+
+impl fmt::Debug for SecretTextLv8 {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "SecretTextLv8({} octets)", self.0.len())
+    }
+}
+
+impl Field for SecretTextLv8 {
+    #[cfg(feature = "tree")]
+    const BELOW: &'static crate::paths::Below = TextLv8::BELOW;
+    fn read(octets: &mut &[u8]) -> Option<Self> {
+        Lv8::read(octets).map(|value| Self(value.0))
+    }
+    fn write(&self, out: &mut Vec<u8>) {
+        Lv8(self.0.clone()).write(out);
+    }
+    fn size(&self) -> usize {
+        1 + self.0.len()
+    }
+    fn fits(&self) -> bool {
+        self.0.len() <= usize::from(u8::MAX)
+    }
+    fn check(&self, path: &crate::check::Path, clause: &'static str, found: &mut Vec<Deviation>) {
+        Lv8(self.0.clone()).check(path, clause, found);
+    }
+    #[cfg(feature = "tree")]
+    fn to_tree(&self) -> oxirush_utils::tree::Value {
+        TextLv8(self.0.clone()).to_tree()
+    }
+    #[cfg(feature = "tree")]
+    fn from_tree(
+        value: &oxirush_utils::tree::Value,
+        reading: &mut oxirush_utils::tree::Reading,
+    ) -> Result<Self, oxirush_utils::tree::Refused> {
+        reading.secret(|reading| {
+            let octets = crate::values::text_from_tree(value, reading, "octets")?;
+            if octets.len() > usize::from(u8::MAX) {
+                return Err(reading.mismatch("octets that their length can say", value));
+            }
+            Ok(Self(octets.into()))
+        })
+    }
+}
+
 /// Digits after a length of one octet, as TBCD: an IMSI, an IMEI or an MSISDN, as TS
 /// 29.274 §8.3, §8.10 and §8.11 write them. Its tree is the digits, or `{"octets": ...}`
 /// for octets that are no TBCD string.
@@ -1486,8 +1536,9 @@ impl fmt::Debug for DigitsLv8 {
     }
 }
 
-/// Text after a length of one octet: a NAI, a SUPI, a GPSI or a PEI. Its tree is the
-/// text, or `{"octets": ...}` for octets that are no UTF-8.
+/// Text after a length of one octet: a NAI, a SUPI, a GPSI or a PEI, and the Key ID of a
+/// Key ID and Shared Secret, a UTF8String (§8.2.276). Its tree is the text, or
+/// `{"octets": ...}` for octets that are no UTF-8.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct TextLv8(pub Octets);
 

@@ -253,7 +253,7 @@ PFCP Session Modification Response (SEID 0x1001, sequence 8): 213500170000000000
 ## A message as JSON
 
 With `tree`, a message is a tree that prints as JSON, with the names of the
-specification, and reads back. The tree carries keys in hexadecimal, as the
+specification, and reads back. The tree carries keys and passwords, as the
 Tunnel Password, which `Debug` and the errors of a tree hide: do not log it.
 
 ```rust

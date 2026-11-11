@@ -807,10 +807,10 @@ pfcp_octets! {
     DataNetworkAccessIdentifier "Data Network Access Identifier" "8.2.161";
     /// User Plane Node Management Information Container (§8.2.182).
     UserPlaneNodeManagementInformationContainer "User Plane Node Management Information" "8.2.182";
-    /// Calling Number (§8.2.190).
-    CallingNumber "Calling Number value" "8.2.190";
-    /// Called Number (§8.2.191).
-    CalledNumber "Called Number value" "8.2.191";
+    /// Calling Number (§8.2.190): a UTF8String, whose tree is its text.
+    CallingNumber "Calling Number value" "8.2.190" [text];
+    /// Called Number (§8.2.191): a UTF8String, whose tree is its text.
+    CalledNumber "Called Number value" "8.2.191" [text];
     /// Group ID (§8.2.198).
     GroupId "Group ID" "8.2.198";
     /// Event Notification URI (§8.2.202).

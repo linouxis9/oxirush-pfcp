@@ -69,7 +69,12 @@ The first version, of TS 29.244 V19.6.0 (2026-06):
   `{"Network Instance": ...}`, its octets in hexadecimal, otherwise, as are an APN/DNN,
   `{"APN/DNN": ...}`, and the Network Instance field of Remote GTP-U Peer (`NameLv16`);
   a name has labels of 1 to 63 octets, of 253 octets at most; a DNS Server Address and
-  an NBNS Server Address are their IPv4 address (`Ipv4Address`), `"10.0.0.1"`;
+  an NBNS Server Address are their IPv4 address (`Ipv4Address`), `"10.0.0.1"`; a Calling
+  Number, a Called Number and a Tunnel Password, each a UTF8String, are their text, or
+  an object of their field for octets that are no UTF-8, `{"Calling Number value": ...}`,
+  and so are the Key ID and the Shared Secret of a Key ID and Shared Secret (`TextLv8`,
+  `SecretTextLv8`), with `{"octets": ...}`: a password and a passphrase are in a tree,
+  and neither in `Debug` nor in an error of their tree;
   `NetworkInstance::from_name()` builds one of a name. The members of a Node ID, as of
   any value, go by their names in any case: `{"fqdn": ...}`.
 - With `node`, `Node`, a PFCP entity without I/O: delivery and retransmission (§6.4),

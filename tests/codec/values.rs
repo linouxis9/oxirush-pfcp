@@ -471,7 +471,10 @@ fn fields_of_each_kind_read_back_as_their_figures_have_them() {
     read_back::<MbsSessionIdentifier>("03 010203040506 04e8000001 820102");
     let key: KeyIdAndSharedSecret = read_back("01aa 02bbcc");
     assert_eq!(&key.shared_secret.0[..], [0xbb, 0xcc]);
-    assert_eq!(format!("{:?}", key.shared_secret), "SecretLv8(2 octets)");
+    assert_eq!(
+        format!("{:?}", key.shared_secret),
+        "SecretTextLv8(2 octets)"
+    );
     read_back::<FailedRuleId>("00 0001");
     let fq_csid: FqCsid = read_back("11 20010db8000000000000000000000001 0007 01 ff");
     assert_eq!(
@@ -498,7 +501,7 @@ fn fields_of_each_kind_read_back_as_their_figures_have_them() {
     let user: UserId = read_back("08 0c 75736572406578616d706c65");
     assert_eq!(tree::Tree::to_tree(&user)["NAI"], tree!("user@example"));
     let key = KeyIdAndSharedSecret {
-        shared_secret: SecretLv8(vec![1; 256].into()),
+        shared_secret: SecretTextLv8(vec![1; 256].into()),
         ..key
     };
     assert!(key.encode(&mut Vec::new()).is_err());

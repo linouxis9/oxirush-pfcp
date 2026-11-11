@@ -639,10 +639,10 @@ pfcp_bits! {
 }
 
 pfcp_layout! {
-    /// Key ID and Shared Secret (OWAMP or TWAMP) (§8.2.276): the shared secret is a key,
-    /// which `Debug` does not print.
+    /// Key ID and Shared Secret (OWAMP or TWAMP) (§8.2.276), each a UTF8String, its text in
+    /// a tree: the shared secret is a passphrase, which `Debug` does not print.
     pub struct KeyIdAndSharedSecret "8.2.276" {
-        fields { key_id "Key ID": Lv8, shared_secret "Shared Secret": SecretLv8 }
+        fields { key_id "Key ID": TextLv8, shared_secret "Shared Secret": SecretTextLv8 }
     }
     check(this, path, found) {
         flag_rule(this.key_id.0.len() > 80, path, "8.2.276", "a Key ID of more than 80 octets", found);
@@ -652,8 +652,8 @@ pfcp_layout! {
 pfcp_octets! {
     /// HMAC Key (STAMP) (§8.2.274): a key.
     HmacKeyStamp "HMAC Key" "8.2.274" [secret];
-    /// Tunnel Password (§8.2.212): a password.
-    TunnelPassword "Tunnel Password value" "8.2.212" [secret];
+    /// Tunnel Password (§8.2.212): a password, a UTF8String, whose tree is its text.
+    TunnelPassword "Tunnel Password value" "8.2.212" [password];
 }
 
 /// The IE types whose content is a key or a password, which the `Debug` of an IE kept as

@@ -81,7 +81,12 @@ fn an_error_of_a_tree_prints_no_key() {
         establishment(
             r#"{"L2TP Tunnel Information": [{"Tunnel Password": "7365637265742170617373", "Bogus": 1}]}"#,
         ),
-        establishment(r#"{"L2TP Tunnel Information": [{"Tunnel Password": "73656372657421zz"}]}"#),
+        establishment(
+            r#"{"L2TP Tunnel Information": [{"Tunnel Password": {"Tunnel Password value": "73656372657421zz"}}]}"#,
+        ),
+        establishment(
+            r#"{"L2TP Tunnel Information": [{"Tunnel Password": {"x": "7365637265742170617373"}}]}"#,
+        ),
         establishment(
             r#"{"L2TP Tunnel Information": [{"octets": "0139000b7365637265742170617373", "length": "x"}]}"#,
         ),
@@ -92,14 +97,20 @@ fn an_error_of_a_tree_prints_no_key() {
             r#"{"L2TP Session Information": {"L2TP User Authentication": {"Proxy Authen Type Value": 1, "PAR": true, "Proxy Authen Response Value": "7365637265742170617373", "x": 1}}}"#,
         ),
         association(
-            r#""N6 Delay Measurement Control Information": [{"Protocol Specific Configuration Parameters": {"Key ID and Shared Secret (OWAMP or TWAMP)": {"Shared Secret": "7365637265742170617373", "Key ID": "01"}}}]"#,
+            r#""N6 Delay Measurement Control Information": [{"Protocol Specific Configuration Parameters": {"Key ID and Shared Secret (OWAMP or TWAMP)": {"Shared Secret": "7365637265742170617373", "Key ID": "01", "x": 1}}}]"#,
+        ),
+        association(
+            r#""N6 Delay Measurement Control Information": [{"Protocol Specific Configuration Parameters": {"Key ID and Shared Secret (OWAMP or TWAMP)": {"Shared Secret": {"octets": "73656372657421zz"}, "Key ID": "01"}}}]"#,
         ),
         association(
             r#""N6 Delay Measurement Control Information": {"Protocol Specific Configuration Parameters": {"HMAC Key (STAMP)": "7365637265742170617373"}}"#,
         ),
     ] {
         let tree: tree::Value = serde_json::from_str(&written).unwrap();
-        let error = Message::from_tree(&tree).unwrap_err().to_string();
+        let error = Message::from_tree(&tree)
+            .map(|_| ())
+            .expect_err(&written)
+            .to_string();
         assert!(!error.contains("736563726574"), "{written}: {error}");
         let error = serde_json::from_str::<Message>(&written)
             .unwrap_err()
