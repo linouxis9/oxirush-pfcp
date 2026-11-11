@@ -1975,3 +1975,40 @@ fn the_subsequent_event_threshold_and_quota_of_an_additional_monitoring_time() {
         ]
     );
 }
+
+/// §8.2.193: a DNS Server Address is an IPv4 address of four octets, which its encoded
+/// length counts.
+#[test]
+fn a_dns_server_address_is_four_octets() {
+    let address = DnsServerAddress::new(Ipv4Address(std::net::Ipv4Addr::new(10, 0, 0, 53)));
+    let mut octets = Vec::new();
+    address.encode(&mut octets).unwrap();
+    assert_eq!(octets, [10, 0, 0, 53]);
+    assert_eq!(Codec::encoded_len(&address), 4);
+}
+
+/// §8.2.276: a Shared Secret has a length of one octet. check() reports one of more than
+/// 255 octets, which encode() would refuse, and a tree may hold 255 octets but not 256.
+#[cfg(feature = "tree")]
+#[test]
+fn the_length_of_a_shared_secret() {
+    let secret = |length: usize| KeyIdAndSharedSecret {
+        key_id: TextLv8(b"1".to_vec().into()),
+        shared_secret: SecretTextLv8(vec![b'a'; length].into()),
+        ..Default::default()
+    };
+    let long = DeviationKind::Rule("more octets than their length can say");
+    let found: Vec<_> = secret(256)
+        .deviations()
+        .into_iter()
+        .map(|found| (found.clause, found.kind))
+        .collect();
+    assert_eq!(found, [("8.2.276", long)]);
+    assert!(secret(255).deviations().is_empty());
+    let written = |length: usize| tree!({"Key ID": "1", "Shared Secret": "a".repeat(length)});
+    assert_eq!(
+        tree::from_value::<KeyIdAndSharedSecret>(&written(255)).ok(),
+        Some(secret(255))
+    );
+    assert!(tree::from_value::<KeyIdAndSharedSecret>(&written(256)).is_err());
+}
