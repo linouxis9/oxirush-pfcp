@@ -34,6 +34,9 @@ The inventory of the document that the test `spec` holds the crate to:
 - `spec/flag-rules.tsv`: each sentence of clause 8.2 that says which flags of an IE are
   set, together, with the field of another flag, with the value of another field or the
   Cause of the message, or always, with the rule of `check()` that checks it, or why a value does not show it alone;
+- `spec/row-conditions.tsv`: each row of a table of clause 7 whose comment has the IE
+  there by a flag of its own or by an IE beside it, which `check()` tells in a message
+  that has the row at its place;
 - `spec/range-rules.tsv`: each sentence of clause 8.2 that bounds the value of a field,
   with the rule of `check()` that checks it, or why no value of the field breaks it;
 - the octets of the four values that the crate reads by hand, as their figures follow a
@@ -108,6 +111,14 @@ both the APN/DNN Network Identifier and APN/DNN Operator Identifier" (TS 23.003 
 9.1.1 and 9.1.2, `internet.mnc070.mcc999.gprs`): `smf_n4_build_session_establishment_request()`
 (`src/smf/n4-build.c`) builds it from `sess->session.name`, with `ogs_fqdn_build()`. The
 test `captures` expects the four.
+
+**free5GC 3b34a08e** (smf 796a2de8). The SMF gives each Update Forwarding Parameters of
+a Session Modification Request a PFCPSMReq-Flags, whose SNDEM it sets where an end
+marker is to be sent: without one the IE has no flag (`0031 0001 00`), where Table
+7.5.4.3-2 has it "included if at least one of the flags is set to "1"".
+`farToUpdateFAR()` (`internal/pfcp/message/build.go`) writes
+`PFCPSMReqFlags: &pfcpType.PFCPSMReqFlags{Sndem: far.ForwardingParameters.SendEndMarker}`
+whatever the flag. The test `captures` expects it in seven messages.
 
 **go-pfcp v0.0.24**, in its test vectors, which `go-pfcp-deviations.tsv` lists as the
 test `codec` expects them (`other_vectors_round_trip`, with `--ignored` and

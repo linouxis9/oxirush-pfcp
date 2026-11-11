@@ -533,7 +533,7 @@ macro_rules! pfcp_bits {
             /// Whether no bit of a field is set: "at least one bit shall be set to 1" of a
             /// value of flags alone.
             #[allow(dead_code)]
-            fn none_set(&self) -> bool {
+            pub(crate) fn none_set(&self) -> bool {
                 let (octets, _) = self.octets();
                 octets.iter().zip(Self::MASKS).all(|(octet, mask)| octet & mask == 0)
             }

@@ -607,7 +607,7 @@ pfcp_table! {
         gtp_u_path_qos_control_information: "GTP-U Path QoS Control Information" C* GtpUPathQoSControlInformation [N4],
         clock_drift_control_information: "Clock Drift Control Information" O* ClockDriftControlInformation [N4],
         upf_instance_id: "UPF Instance ID" C NfInstanceId [N4 N4MB],
-        pfcpasreq_flags: "PFCPASReq-Flags" O PFCPASReqFlags [N4],
+        pfcpasreq_flags: "PFCPASReq-Flags" O PFCPASReqFlags [N4] absent(|s| s.pfcpasreq_flags.as_ref().is_some_and(|flags| flags.none_set())),
         n6_delay_measurement_control_information: "N6 Delay Measurement Control Information" C* N6DelayMeasurementControlInformation [N4],
         n6_delay_measurement_protocols: "N6 Delay Measurement Protocols" C N6DelayMeasurementProtocols [N4],
         operator_configurable_upf_capability: "Operator Configurable UPF Capability" O* OperatorConfigurableUpfCapability [N4],
@@ -625,7 +625,7 @@ pfcp_table! {
         cp_function_features: "CP Function Features" C CpFunctionFeatures [SXA SXB SXC N4 N4MB],
         alternative_smf_ip_address: "Alternative SMF IP Address" O* AlternativeSmfIpAddress [N4 N4MB],
         smf_set_id: "SMF Set ID" C SmfSetId [N4 N4MB] if |s| of_mpas(&s.cp_function_features),
-        pfcpasrsp_flags: "PFCPASRsp-Flags" O PFCPASRspFlags [SXA SXB SXC N4 N4MB],
+        pfcpasrsp_flags: "PFCPASRsp-Flags" O PFCPASRspFlags [SXA SXB SXC N4 N4MB] absent(|s| s.pfcpasrsp_flags.as_ref().is_some_and(|flags| flags.none_set())),
         clock_drift_control_information: "Clock Drift Control Information" C* ClockDriftControlInformation [N4],
         ue_ip_address_pool_information: "UE IP address Pool Information" O* UeIpAddressPoolInformation [SXB N4],
         gtp_u_path_qos_control_information: "GTP-U Path QoS Control Information" C* GtpUPathQoSControlInformation [N4],
@@ -645,7 +645,7 @@ pfcp_table! {
         cp_function_features: "CP Function Features" O CpFunctionFeatures [SXA SXB SXC N4 N4MB],
         pfcp_association_release_request: "PFCP Association Release Request" C PfcpAssociationReleaseRequest [SXA SXB SXC N4 N4MB],
         graceful_release_period: "Graceful Release Period" C GracefulReleasePeriod [SXA SXB SXC N4 N4MB],
-        pfcpaureq_flags: "PFCPAUReq-Flags" O PFCPAUReqFlags [SXA SXB SXC N4],
+        pfcpaureq_flags: "PFCPAUReq-Flags" O PFCPAUReqFlags [SXA SXB SXC N4] absent(|s| s.pfcpaureq_flags.as_ref().is_some_and(|flags| flags.none_set())),
         alternative_smf_ip_address: "Alternative SMF IP Address" O* AlternativeSmfIpAddress [N4 N4MB],
         smf_set_id: "SMF Set ID" O SmfSetId [N4 N4MB],
         clock_drift_control_information: "Clock Drift Control Information" C* ClockDriftControlInformation [N4],
@@ -767,7 +767,7 @@ pfcp_table! {
         trace_information: "Trace Information" O TraceInformation [SXA SXB SXC N4],
         apn_dnn: "APN/DNN" O ApnDnn [SXA SXB N4 N4MB],
         create_mar: "Create MAR" C* CreateMar [N4],
-        pfcpsereq_flags: "PFCPSEReq-Flags" C PFCPSEReqFlags [SXA SXB N4],
+        pfcpsereq_flags: "PFCPSEReq-Flags" C PFCPSEReqFlags [SXA SXB N4] absent(|s| s.pfcpsereq_flags.as_ref().is_some_and(|flags| flags.none_set())),
         create_bridge_router_info: "Create Bridge/Router Info" C CreateBridgeRouterInfo [N4],
         create_srr: "Create SRR" O* CreateSrr [N4],
         provide_atsss_control_information: "Provide ATSSS Control Information" Cb ProvideAtsssControlInformation [N4],
@@ -783,8 +783,8 @@ pfcp_table! {
         mbs_session_n4_control_information: "MBS Session N4 Control Information" C* MbsSessionN4ControlInformation [N4],
         dscp_to_ppi_control_information: "DSCP to PPI Control Information" O* DscpToPpiControlInformation [N4],
         tl_container: "TL-Container" C TlContainer [N4],
-        trace_collection_entity_uri: "Trace Collection Entity URI" O Uri [SXA SXB SXC N4],
-        ue_level_measurements_configuration: "UE Level Measurements Configuration" O UeLevelMeasurementsConfiguration [N4],
+        trace_collection_entity_uri: "Trace Collection Entity URI" O Uri [SXA SXB SXC N4] absent(|s| s.trace_information.is_none()),
+        ue_level_measurements_configuration: "UE Level Measurements Configuration" O UeLevelMeasurementsConfiguration [N4] absent(|s| s.trace_information.is_none()),
         alternative_smf_ip_address: "Alternative SMF IP Address" O AlternativeSmfIpAddress [N4],
         moq_control_information: "MoQ Control Information" C MoQControlInformation [N4],
     }
@@ -837,7 +837,7 @@ pfcp_table! {
         update_qer: "Update QER" C* UpdateQer [SXB SXC N4 N4MB],
         update_bar: "Update BAR" Cb UpdateBar [SXA N4],
         update_traffic_endpoint: "Update Traffic Endpoint" C* UpdateTrafficEndpoint [SXA SXB SXC N4 N4MB],
-        pfcpsmreq_flags: "PFCPSMReq-Flags" C PFCPSMReqFlags [SXA SXB SXC N4 N4MB],
+        pfcpsmreq_flags: "PFCPSMReq-Flags" C PFCPSMReqFlags [SXA SXB SXC N4 N4MB] absent(|s| s.pfcpsmreq_flags.as_ref().is_some_and(|flags| flags.none_set())),
         // NOTE 3: "The QAURR (Query All URRs) flag in the PFCPSMReq-Flags IE and the Query
         // URR IE are exclusive from each other".
         query_urr: "Query URR" C* QueryUrr [SXA SXB SXC N4 N4MB] absent(|s| s.pfcpsmreq_flags.as_ref().is_some_and(|flags| flags.qaurr)),
@@ -865,7 +865,7 @@ pfcp_table! {
         mbs_session_n4_control_information: "MBS Session N4 Control Information" C* MbsSessionN4ControlInformation [N4],
         dscp_to_ppi_control_information: "DSCP to PPI Control Information" Cb DscpToPpiControlInformation [N4],
         tl_container: "TL-Container" C* TlContainer [N4],
-        trace_collection_entity_uri: "Trace Collection Entity URI" O Uri [SXA SXB SXC N4],
+        trace_collection_entity_uri: "Trace Collection Entity URI" O Uri [SXA SXB SXC N4] absent(|s| s.trace_information.is_none()),
         ue_level_measurements_configuration: "UE Level Measurements Configuration" O UeLevelMeasurementsConfiguration [N4],
         alternative_smf_ip_address: "Alternative SMF IP Address" O AlternativeSmfIpAddress [N4],
         moq_control_information: "MoQ Control Information" C MoQControlInformation [N4],
@@ -915,7 +915,7 @@ pfcp_table! {
         additional_usage_reports_information: "Additional Usage Reports Information" C AdditionalUsageReportsInformation [SXA SXB SXC N4 N4MB],
         packet_rate_status_report: "Packet Rate Status Report" Cb PacketRateStatusReport [SXB N4],
         mbs_session_n4_information: "MBS Session N4 Information" C* MbsSessionN4Information [N4],
-        pfcpsdrsp_flags: "PFCPSDRsp-Flags" C PFCPSDRspFlags [SXA SXB SXC N4],
+        pfcpsdrsp_flags: "PFCPSDRsp-Flags" C PFCPSDRspFlags [SXA SXB SXC N4] absent(|s| s.pfcpsdrsp_flags.as_ref().is_some_and(|flags| flags.none_set())),
         tl_container: "TL-Container" C* TlContainer [N4],
         session_report: "Session Report" O* SessionReportDeletion [N4],
     }
@@ -931,9 +931,9 @@ pfcp_table! {
         load_control_information: "Load Control Information" Ob LoadControlInformation [SXA SXB SXC N4 N4MB],
         overload_control_information: "Overload Control Information" Ob OverloadControlInformation [SXA SXB SXC N4 N4MB],
         additional_usage_reports_information: "Additional Usage Reports Information" C AdditionalUsageReportsInformation [SXA SXB SXC N4 N4MB],
-        pfcpsrreq_flags: "PFCPSRReq-Flags" C PFCPSRReqFlags [SXA SXB SXC N4 N4MB],
+        pfcpsrreq_flags: "PFCPSRReq-Flags" C PFCPSRReqFlags [SXA SXB SXC N4 N4MB] absent(|s| s.pfcpsrreq_flags.as_ref().is_some_and(|flags| flags.none_set())),
         old_cp_f_seid: "Old CP F-SEID" C FSeid [N4 N4MB],
-        smf_change_reason: "SMF Change Reason" O SmfChangeReason [N4 N4MB],
+        smf_change_reason: "SMF Change Reason" O SmfChangeReason [N4 N4MB] absent(|s| s.old_cp_f_seid.is_none()),
         packet_rate_status_report: "Packet Rate Status Report" Cb PacketRateStatusReport [SXB N4],
         tsc_management_information: "TSC Management Information" C* TscManagementInformationReport [N4] if |s| s.report_type.as_ref().is_some_and(|t| t.tmir),
         session_report: "Session Report" C* SessionReport [N4] if |s| s.report_type.as_ref().is_some_and(|t| t.sesr),
@@ -947,7 +947,7 @@ pfcp_table! {
         cause: "Cause" M Cause [SXA SXB SXC N4 N4MB],
         offending_ie: "Offending IE" C OffendingIe [SXA SXB SXC N4 N4MB] if |s| cause_is(&s.cause, &OF_AN_IE),
         update_bar: "Update BAR" Cb UpdateBarReport [SXA N4],
-        pfcpsrrsp_flags: "PFCPSRRsp-Flags" C PFCPSRRspFlags [SXA N4],
+        pfcpsrrsp_flags: "PFCPSRRsp-Flags" C PFCPSRRspFlags [SXA N4] absent(|s| s.pfcpsrrsp_flags.as_ref().is_some_and(|flags| flags.none_set())),
         cp_f_seid: "CP F-SEID" O FSeid [N4 N4MB],
         n4_u_f_teid: "N4-u F-TEID" O FTeid [N4],
         alternative_smf_ip_address: "Alternative SMF IP Address" O*2 AlternativeSmfIpAddress [N4 N4MB]
@@ -1002,8 +1002,8 @@ pfcp_table! {
     /// Clock Drift Control Information within PFCP Association Setup Request (Table 7.4.4.1.2-1).
     group ClockDriftControlInformation = 203, "Clock Drift Control Information", "7.4.4.1.2-1" {
         requested_clock_drift_information: "Requested Clock Drift Information" M RequestedClockDriftInformation [N4],
-        time_domain_number: "Time Domain Number" C* TimeDomainNumber [N4],
-        configured_time_domain: "Configured Time Domain" C ConfiguredTimeDomain [N4],
+        time_domain_number: "Time Domain Number" C* TimeDomainNumber [N4] absent(|s| s.configured_time_domain.is_some()),
+        configured_time_domain: "Configured Time Domain" C ConfiguredTimeDomain [N4] absent(|s| !s.time_domain_number.is_empty()),
         time_offset_threshold: "Time Offset Threshold" C TimeOffsetThreshold [N4] if |s| s.requested_clock_drift_information.as_ref().is_some_and(|r| r.rrto),
         cumulative_rateratio_threshold: "Cumulative rateRatio Threshold" C CumulativeRateRatioThreshold [N4] if |s| s.requested_clock_drift_information.as_ref().is_some_and(|r| r.rrcr),
     }
@@ -1176,7 +1176,7 @@ pfcp_table! {
     group MbsSessionN4mbControlInformation = 300, "MBS Session N4mb Control Information", "7.5.2.1-4" {
         mbs_session_identifier: "MBS Session Identifier" M MbsSessionIdentifier [N4MB],
         area_session_id: "Area Session ID" C AreaSessionId [N4MB],
-        mbsn4mbreq_flags: "MBSN4mbReq-Flags" C MBSN4mbReqFlags [N4MB],
+        mbsn4mbreq_flags: "MBSN4mbReq-Flags" C MBSN4mbReqFlags [N4MB] absent(|s| s.mbsn4mbreq_flags.as_ref().is_some_and(|flags| flags.none_set())),
         multicast_transport_information_for_n3mb_and_or_n19mb: "Multicast Transport Information for N3mb and/or N19mb" C MulticastTransportInformation [N4MB],
     }
 }
@@ -1351,7 +1351,7 @@ pfcp_table! {
         // Marking IE shall not be present".
         transport_level_marking: "Transport Level Marking" C TransportLevelMarking [SXA SXB N4] absent(|s| !s.extended_transport_level_marking.is_empty()),
         extended_transport_level_marking: "Extended Transport Level Marking" C* ExtendedTransportLevelMarking [N4],
-        transport_level_marking_indications: "Transport Level Marking Indications" C TransportLevelMarkingIndications [N4],
+        transport_level_marking_indications: "Transport Level Marking Indications" C TransportLevelMarkingIndications [N4] absent(|s| s.transport_level_marking_indications.as_ref().is_some_and(|flags| flags.none_set())),
         forwarding_policy: "Forwarding Policy" C ForwardingPolicy [SXB SXC N4] if |s| s.destination_interface.as_ref().is_some_and(|d| d.interface_value == DestinationInterfaceValue::SgiLanN6Lan),
         metadata: "Metadata" O Metadata [N4],
         header_enrichment: "Header Enrichment" O HeaderEnrichment [SXB SXC N4],
@@ -1427,7 +1427,7 @@ pfcp_table! {
         event_notification_uri: "Event Notification URI" M EventNotificationUri [N4],
         notification_binding_indication: "Notification Binding Indication" C BindingIndication [N4],
         notification_correlation_id: "Notification Correlation ID" M NotificationCorrelationId [N4],
-        header_handling_reporting_indication: "Header Handling Reporting Indication" C HeaderHandlingReportingIndication [N4],
+        header_handling_reporting_indication: "Header Handling Reporting Indication" C HeaderHandlingReportingIndication [N4] absent(|s| s.header_handling_reporting_indication.as_ref().is_some_and(|flags| flags.none_set())),
     }
 }
 
@@ -1469,15 +1469,15 @@ pfcp_table! {
         dropped_dl_traffic_threshold: "Dropped DL Traffic Threshold" C DroppedDlTrafficThreshold [SXA N4] if |s| triggers(s, |t| t.droth),
         quota_validity_time: "Quota Validity Time" C QuotaValidityTime [SXB N4] if |s| triggers(s, |t| t.quvti),
         monitoring_time: "Monitoring Time" O MonitoringTime [SXA SXB SXC N4],
-        subsequent_volume_threshold: "Subsequent Volume Threshold" O SubsequentVolumeThreshold [SXA SXB SXC N4],
-        subsequent_time_threshold: "Subsequent Time Threshold" O SubsequentTimeThreshold [SXA SXB SXC N4],
-        subsequent_volume_quota: "Subsequent Volume Quota" O SubsequentVolumeQuota [SXB SXC N4],
-        subsequent_time_quota: "Subsequent Time Quota" O SubsequentTimeQuota [SXB SXC N4],
-        subsequent_event_threshold: "Subsequent Event Threshold" O SubsequentEventThreshold [SXB SXC N4],
-        subsequent_event_quota: "Subsequent Event Quota" O SubsequentEventQuota [SXB SXC N4],
+        subsequent_volume_threshold: "Subsequent Volume Threshold" O SubsequentVolumeThreshold [SXA SXB SXC N4] absent(|s| s.monitoring_time.is_none()),
+        subsequent_time_threshold: "Subsequent Time Threshold" O SubsequentTimeThreshold [SXA SXB SXC N4] absent(|s| s.monitoring_time.is_none()),
+        subsequent_volume_quota: "Subsequent Volume Quota" O SubsequentVolumeQuota [SXB SXC N4] absent(|s| s.monitoring_time.is_none()),
+        subsequent_time_quota: "Subsequent Time Quota" O SubsequentTimeQuota [SXB SXC N4] absent(|s| s.monitoring_time.is_none()),
+        subsequent_event_threshold: "Subsequent Event Threshold" O SubsequentEventThreshold [SXB SXC N4] absent(|s| s.monitoring_time.is_none()),
+        subsequent_event_quota: "Subsequent Event Quota" O SubsequentEventQuota [SXB SXC N4] absent(|s| s.monitoring_time.is_none()),
         inactivity_detection_time: "Inactivity Detection Time" C InactivityDetectionTime [SXB SXC N4],
         linked_urr_id: "Linked URR ID" C* LinkedUrrId [SXB SXC N4 N4MB] if |s| triggers(s, |t| t.liusa),
-        measurement_information: "Measurement Information" C MeasurementInformation [SXA SXB SXC N4],
+        measurement_information: "Measurement Information" C MeasurementInformation [SXA SXB SXC N4] absent(|s| s.measurement_information.as_ref().is_some_and(|flags| flags.none_set())),
         time_quota_mechanism: "Time Quota Mechanism" C TimeQuotaMechanism [SXB],
         aggregated_urrs: "Aggregated URRs" C* AggregatedURRs [SXB],
         far_id_for_quota_action: "FAR ID for Quota Action" C FarId [SXB SXC N4],
@@ -1506,12 +1506,12 @@ pfcp_table! {
     /// are an Unsigned32.
     group AdditionalMonitoringTime = 147, "Additional Monitoring Time", "7.5.2.4-3" {
         monitoring_time: "Monitoring Time" M MonitoringTime [SXA SXB SXC N4],
-        subsequent_volume_threshold: "Subsequent Volume Threshold" O SubsequentVolumeThreshold [SXA SXB SXC N4],
-        subsequent_time_threshold: "Subsequent Time Threshold" O SubsequentTimeThreshold [SXA SXB SXC N4],
-        subsequent_volume_quota: "Subsequent Volume Quota" O SubsequentVolumeQuota [SXB SXC N4],
-        subsequent_time_quota: "Subsequent Time Quota" O SubsequentTimeQuota [SXB SXC N4],
-        subsequent_event_threshold: "Subsequent Event Threshold" O EventThreshold [SXB SXC N4],
-        subsequent_event_quota: "Subsequent Event Quota" O EventQuota [SXB SXC N4],
+        subsequent_volume_threshold: "Subsequent Volume Threshold" O SubsequentVolumeThreshold [SXA SXB SXC N4] absent(|s| s.monitoring_time.is_none()),
+        subsequent_time_threshold: "Subsequent Time Threshold" O SubsequentTimeThreshold [SXA SXB SXC N4] absent(|s| s.monitoring_time.is_none()),
+        subsequent_volume_quota: "Subsequent Volume Quota" O SubsequentVolumeQuota [SXB SXC N4] absent(|s| s.monitoring_time.is_none()),
+        subsequent_time_quota: "Subsequent Time Quota" O SubsequentTimeQuota [SXB SXC N4] absent(|s| s.monitoring_time.is_none()),
+        subsequent_event_threshold: "Subsequent Event Threshold" O EventThreshold [SXB SXC N4] absent(|s| s.monitoring_time.is_none()),
+        subsequent_event_quota: "Subsequent Event Quota" O EventQuota [SXB SXC N4] absent(|s| s.monitoring_time.is_none()),
     }
 }
 
@@ -1531,7 +1531,7 @@ pfcp_table! {
         paging_policy_indicator: "Paging Policy Indicator" C PagingPolicyIndicator [N4],
         averaging_window: "Averaging Window" O AveragingWindow [N4],
         qer_control_indications: "QER Control Indications" C QerControlIndications [SXB N4],
-        qer_indications: "QER Indications" C QerIndications [N4 N4MB],
+        qer_indications: "QER Indications" C QerIndications [N4 N4MB] absent(|s| s.qer_indications.as_ref().is_some_and(|flags| flags.none_set())),
         pdu_set_importance_for_n6_unmarked_pdus: "PDU Set Importance for N6-unmarked PDUs" C PduSetImportanceForN6UnmarkedPDUs [N4],
     }
 }
@@ -1584,7 +1584,7 @@ pfcp_table! {
         // NOTE 2: "The Threshold Values IE and the Steering Mode Indicator IE shall not be
         // present together", one deviation, at the second.
         threshold_values: "Threshold Values" C Thresholds [N4],
-        steering_mode_indicator: "Steering Mode Indicator" C SteeringModeIndicator [N4] absent(|s| s.threshold_values.is_some()),
+        steering_mode_indicator: "Steering Mode Indicator" C SteeringModeIndicator [N4] absent(|s| s.threshold_values.is_some() || s.steering_mode_indicator.as_ref().is_some_and(|flags| flags.none_set())),
         // Of the MPQUIC functionalities; "In all other cases, this IE shall be absent".
         transport_mode: "Transport Mode" C TransportMode [N4] absent(|s| !mpquic(&s.steering_functionality)) if |s| mpquic(&s.steering_functionality),
     }
@@ -1643,7 +1643,7 @@ pfcp_table! {
         // release does not give (NOTE 2).
         measurement_period: "Measurement Period" C MeasurementPeriod [N4] if |s| frequency(s, |f| f.perio),
         reporting_suggestion_info: "Reporting Suggestion Info" C ReportingSuggestionInfo [N4],
-        measurement_indication: "Measurement Indication" C MeasurementIndication [N4],
+        measurement_indication: "Measurement Indication" C MeasurementIndication [N4] absent(|s| s.measurement_indication.as_ref().is_some_and(|flags| flags.none_set())),
         reporting_thresholds: "Reporting Thresholds" C ReportingThresholds [N4] if |s| frequency(s, |f| f.evett) && s.requested_qos_monitoring.as_ref().is_some_and(|r| r.ulci || r.dlci || r.uldr || r.dldr),
         remaining_data_reporting_indication: "Remaining Data Reporting Indication" O RemainingDataReportingIndication [N4],
     }
@@ -1655,7 +1655,7 @@ pfcp_table! {
         event_notification_uri: "Event Notification URI" M EventNotificationUri [N4],
         notification_correlation_id: "Notification Correlation ID" C NotificationCorrelationId [N4],
         notification_binding_indication: "Notification Binding Indication" C BindingIndication [N4],
-        reporting_flags: "Reporting Flags" C ReportingFlags [N4],
+        reporting_flags: "Reporting Flags" C ReportingFlags [N4] absent(|s| s.reporting_flags.as_ref().is_some_and(|flags| flags.none_set())),
     }
 }
 
@@ -1720,7 +1720,7 @@ pfcp_table! {
         mbs_session_identifier: "MBS Session Identifier" M MbsSessionIdentifier [N4],
         area_session_id: "Area Session ID" C AreaSessionId [N4],
         n19mb_dl_tunnel_id: "N19mb DL Tunnel ID" C FTeid [N4],
-        mbsn4resp_flags: "MBSN4Resp-Flags" C MBSN4RespFlags [N4],
+        mbsn4resp_flags: "MBSN4Resp-Flags" C MBSN4RespFlags [N4] absent(|s| s.mbsn4resp_flags.as_ref().is_some_and(|flags| flags.none_set())),
     }
 }
 
@@ -1757,7 +1757,7 @@ pfcp_table! {
         overload_control_sequence_number: "Overload Control Sequence Number" M SequenceNumber [SXA SXB SXC N4 N4MB],
         overload_reduction_metric: "Overload Reduction Metric" M Metric [SXA SXB SXC N4 N4MB],
         period_of_validity: "Period of Validity" M Timer [SXA SXB SXC N4 N4MB],
-        overload_control_information_flags: "Overload Control Information Flags" C OciFlags [SXA SXB SXC N4 N4MB],
+        overload_control_information_flags: "Overload Control Information Flags" C OciFlags [SXA SXB SXC N4 N4MB] absent(|s| s.overload_control_information_flags.as_ref().is_some_and(|flags| flags.none_set())),
     }
 }
 
@@ -1865,11 +1865,11 @@ pfcp_table! {
         outer_header_creation: "Outer Header Creation" C OuterHeaderCreation [SXA SXB N4],
         transport_level_marking: "Transport Level Marking" C TransportLevelMarking [SXA SXB N4],
         extended_transport_level_marking: "Extended Transport Level Marking" Cb ExtendedTransportLevelMarking [N4],
-        transport_level_marking_indications: "Transport Level Marking Indications" C TransportLevelMarkingIndications [N4],
+        transport_level_marking_indications: "Transport Level Marking Indications" C TransportLevelMarkingIndications [N4] absent(|s| s.transport_level_marking_indications.as_ref().is_some_and(|flags| flags.none_set())),
         forwarding_policy: "Forwarding Policy" C ForwardingPolicy [SXB SXC N4],
         metadata: "Metadata" C Metadata [N4],
         header_enrichment: "Header Enrichment" C HeaderEnrichment [SXB SXC N4],
-        pfcpsmreq_flags: "PFCPSMReq-Flags" C PFCPSMReqFlags [SXA SXB N4],
+        pfcpsmreq_flags: "PFCPSMReq-Flags" C PFCPSMReqFlags [SXA SXB N4] absent(|s| s.pfcpsmreq_flags.as_ref().is_some_and(|flags| flags.none_set())),
         linked_traffic_endpoint_id: "Linked Traffic Endpoint ID" C TrafficEndpointId [SXA SXB N4],
         destination_interface_type: "Destination Interface Type" C InterfaceType3gpp [SXA SXB N4],
         data_network_access_identifier: "Data Network Access Identifier" C DataNetworkAccessIdentifier [],
@@ -1920,7 +1920,7 @@ pfcp_table! {
         subsequent_event_quota: "Subsequent Event Quota" O SubsequentEventQuota [SXB SXC N4],
         inactivity_detection_time: "Inactivity Detection Time" C InactivityDetectionTime [SXB SXC N4],
         linked_urr_id: "Linked URR ID" C* LinkedUrrId [SXB SXC N4 N4MB],
-        measurement_information: "Measurement Information" C MeasurementInformation [SXA SXB SXC N4],
+        measurement_information: "Measurement Information" C MeasurementInformation [SXA SXB SXC N4] absent(|s| s.measurement_information.as_ref().is_some_and(|flags| flags.none_set())),
         time_quota_mechanism: "Time Quota Mechanism" C TimeQuotaMechanism [SXB],
         aggregated_urrs: "Aggregated URRs" C* AggregatedURRs [SXB],
         far_id_for_quota_action: "FAR ID for Quota Action" C FarId [SXB SXC N4],
@@ -1998,7 +1998,7 @@ pfcp_table! {
         dl_buffering_suggested_packet_count: "DL Buffering Suggested Packet Count" O DlBufferingSuggestedPacketCount [SXA N4],
         mt_edt_control_information: "MT-EDT Control Information" O MtEdtControlInformation [SXA],
         mt_sdt_control_information: "MT-SDT Control Information" O MtSdtControlInformation [N4],
-        extended_dl_buffering_notification_policy: "Extended DL Buffering Notification Policy" C ExtendedDlBufferingNotificationPolicy [N4],
+        extended_dl_buffering_notification_policy: "Extended DL Buffering Notification Policy" C ExtendedDlBufferingNotificationPolicy [N4] absent(|s| s.dl_buffering_duration.is_none()),
     }
 }
 
@@ -2051,7 +2051,7 @@ pfcp_table! {
         n3gpp_access_forwarding_action_information: "3GPP Access Forwarding Action Information" Cb ThreeGppAccessForwardingActionInformation [N4],
         non_3gpp_access_forwarding_action_information: "Non-3GPP Access Forwarding Action Information" Cb NonThreeGppAccessForwardingActionInformation [N4],
         threshold_values: "Threshold values" C Thresholds [N4],
-        steering_mode_indicator: "Steering Mode Indicator" C SteeringModeIndicator [N4],
+        steering_mode_indicator: "Steering Mode Indicator" C SteeringModeIndicator [N4] absent(|s| s.steering_mode_indicator.as_ref().is_some_and(|flags| flags.none_set())),
         transport_mode: "Transport Mode" C TransportMode [N4],
     }
 }
@@ -2363,6 +2363,6 @@ pfcp_table! {
         dl_buffering_duration: "DL Buffering Duration" C DlBufferingDuration [SXA N4],
         dl_buffering_suggested_packet_count: "DL Buffering Suggested Packet Count" O DlBufferingSuggestedPacketCount [SXA N4],
         suggested_buffering_packets_count: "Suggested Buffering Packets Count" C SuggestedBufferingPacketsCount [SXB SXC N4],
-        extended_dl_buffering_notification_policy: "Extended DL Buffering Notification Policy" C ExtendedDlBufferingNotificationPolicy [N4],
+        extended_dl_buffering_notification_policy: "Extended DL Buffering Notification Policy" C ExtendedDlBufferingNotificationPolicy [N4] absent(|s| s.dl_buffering_duration.is_none()),
     }
 }

@@ -1044,6 +1044,129 @@ fn sentence_rules(sentences: &'static str, rules: &'static str, name: &str) {
     report(problems);
 }
 
+/// The rows of the tables of clause 7 whose comment makes the IE there by what the IEs
+/// beside it show (`row-conditions.tsv`): the crate checks each (`Row::checked`), and
+/// check() tells the IE where the comment has it absent, in a message that has the row at
+/// its place, on an interface that has it. An IE of flags "included if at least one of
+/// the flags is set" is told with no flag, and not with one; an IE that "may be present
+/// if" another is, or is not, is told without the other, or with it, and not otherwise.
+#[test]
+fn row_conditions() {
+    /// The rows from a message down to the row `name` of the table `id`.
+    fn place(table: &'static Table, id: &str, name: &str, chain: &mut Vec<&'static Row>) -> bool {
+        if let Some(row) = table
+            .rows
+            .iter()
+            .find(|row| table.id == id && row.name == name)
+        {
+            chain.push(row);
+            return true;
+        }
+        for row in table.rows {
+            if let Some(content) = row.content {
+                chain.push(row);
+                if place(content, id, name, chain) {
+                    return true;
+                }
+                chain.pop();
+            }
+        }
+        false
+    }
+    let ie = |ie_type: u16, content: &[u8]| {
+        let length = (content.len() as u16).to_be_bytes();
+        [&ie_type.to_be_bytes()[..], &length, content].concat()
+    };
+    let mut problems = Vec::new();
+    for cells in records(include_str!("spec/row-conditions.tsv")) {
+        let [table, name, there] = cells[..] else {
+            panic!("row-conditions.tsv: {cells:?} has not three cells");
+        };
+        let mut chain = Vec::new();
+        let message = MESSAGE_TYPES
+            .iter()
+            .find(|info| place(info.table, table, name, &mut chain));
+        let (Some(message), Some(row)) = (message, chain.last().copied()) else {
+            problems.push(format!("Table {table}: no row {name:?} in the crate"));
+            continue;
+        };
+        if !row.checked {
+            problems.push(format!(
+                "Table {table}, {name}: the crate checks no condition of the row"
+            ));
+            continue;
+        }
+        let interface = [
+            Interfaces::N4,
+            Interfaces::SXB,
+            Interfaces::SXA,
+            Interfaces::N4MB,
+        ]
+        .into_iter()
+        .find(|on| message.interfaces.has(*on) && chain.iter().all(|row| row.on(*on).is_some()));
+        let Some(interface) = interface else {
+            problems.push(format!("Table {table}, {name}: no interface has the row"));
+            continue;
+        };
+        // How many times check() tells the row where its condition has it absent, in a
+        // message of the IEs `beside` it at its place
+        let told = |beside: &[Vec<u8>]| {
+            let mut content = beside.concat();
+            for above in chain.iter().rev().skip(1) {
+                content = ie(above.ie_type, &content);
+            }
+            let (kind, header): (u8, &[u8]) = match is_node_related(message.message_type) {
+                true => (0x20, &[0, 0, 1, 0]),
+                false => (0x21, &[0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0]),
+            };
+            let length = ((header.len() + content.len()) as u16).to_be_bytes();
+            let octets = [&[kind, message.message_type][..], &length, header, &content].concat();
+            let message = Message::decode(&octets).expect("a message of its IEs");
+            let excluded = DeviationKind::Excluded {
+                ie_type: row.ie_type,
+            };
+            let found = message.check(interface).into_iter();
+            found.filter(|found| found.kind == excluded).count()
+        };
+        let fixed = |ie_type: u16| ie_type_info(ie_type).and_then(|info| info.fixed);
+        let own = vec![0u8; usize::from(fixed(row.ie_type).unwrap_or(1)).max(1)];
+        let (without, with) = match there.split_once(' ') {
+            Some(("a", "flag")) => {
+                let mut set = own.clone();
+                set[0] = 1;
+                (
+                    told(&[ie(row.ie_type, &own)]),
+                    told(&[ie(row.ie_type, &set)]),
+                )
+            }
+            Some((word @ ("with" | "without"), other)) => {
+                let above = chain.iter().rev().nth(1).and_then(|above| above.content);
+                let rows = above.unwrap_or(message.table).rows;
+                let Some(other) = rows.iter().find(|row| row.name == other) else {
+                    problems.push(format!("Table {table}, {name}: no row {other:?} beside it"));
+                    continue;
+                };
+                let alone = told(&[ie(row.ie_type, &own)]);
+                // The other IE, of zeros of a length that decodes as it
+                let both = (1..=32).map(|length| {
+                    told(&[ie(other.ie_type, &vec![0; length]), ie(row.ie_type, &own)])
+                });
+                match word {
+                    "with" => (alone, both.min().unwrap_or(1)),
+                    _ => (both.max().unwrap_or(0), alone),
+                }
+            }
+            _ => panic!("row-conditions.tsv: {there:?}"),
+        };
+        if (without, with) != (1, 0) {
+            problems.push(format!(
+                "Table {table}, {name}, there {there}: told {without} times where the comment has it absent, and {with} where it has it"
+            ));
+        }
+    }
+    report(problems);
+}
+
 /// The clauses and the kinds of what check() finds in a message of `octets`, on N4, which
 /// encodes back to them: `None` for octets that do not.
 fn message_checked(_: u16, octets: &[u8]) -> Option<Vec<(&'static str, DeviationKind)>> {

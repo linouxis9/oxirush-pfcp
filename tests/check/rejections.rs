@@ -267,7 +267,11 @@ fn the_aoci_of_a_rejected_establishment() {
     )];
     let rejected = CauseValue::NoResourcesAvailable;
     assert_eq!(found(establishment(rejected, None)), broken);
-    assert_eq!(found(establishment(rejected, aoci(false))), broken);
+    // Flags of no flag are told so too: the IE is there "if any of flag in this IE is set"
+    let mut none = broken.clone();
+    let excluded = DeviationKind::Excluded { ie_type: 110 };
+    none.push((broken[0].0.clone(), "7.5.3.4-1", excluded));
+    assert_eq!(found(establishment(rejected, aoci(false))), none);
     assert_eq!(found(establishment(rejected, aoci(true))), []);
     assert_eq!(found(establishment(CauseValue::RequestAccepted, None)), []);
     let modification = Message::session(

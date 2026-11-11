@@ -208,6 +208,66 @@ const EXPECTED: &[Found] = &[
         OPERATOR_IDENTIFIER,
         None,
     ),
+    // free5GC 3b34a08e: the SMF gives each Update Forwarding Parameters a PFCPSMReq-Flags,
+    // whose SNDEM it sets where an end marker is to be sent: without it the IE has no flag,
+    // where Table 7.5.4.3-2 has it "included if at least one of the flags is set to "1""
+    // (smf internal/pfcp/message/build.go).
+    (
+        "free5gc-5gs-handover",
+        "7",
+        "/pfcp/Update FAR/0/Update Forwarding parameters/PFCPSMReq-Flags",
+        "7.5.4.3-2",
+        DeviationKind::Excluded { ie_type: 49 },
+        None,
+    ),
+    (
+        "free5gc-5gs-lifecycle",
+        "7",
+        "/pfcp/Update FAR/0/Update Forwarding parameters/PFCPSMReq-Flags",
+        "7.5.4.3-2",
+        DeviationKind::Excluded { ie_type: 49 },
+        None,
+    ),
+    (
+        "free5gc-5gs-lifecycle",
+        "11",
+        "/pfcp/Update FAR/0/Update Forwarding parameters/PFCPSMReq-Flags",
+        "7.5.4.3-2",
+        DeviationKind::Excluded { ie_type: 49 },
+        None,
+    ),
+    (
+        "free5gc-5gs-lifecycle",
+        "15",
+        "/pfcp/Update FAR/0/Update Forwarding parameters/PFCPSMReq-Flags",
+        "7.5.4.3-2",
+        DeviationKind::Excluded { ie_type: 49 },
+        None,
+    ),
+    (
+        "free5gc-5gs-lifecycle",
+        "23",
+        "/pfcp/Update FAR/0/Update Forwarding parameters/PFCPSMReq-Flags",
+        "7.5.4.3-2",
+        DeviationKind::Excluded { ie_type: 49 },
+        None,
+    ),
+    (
+        "free5gc-5gs-lifecycle",
+        "25",
+        "/pfcp/Update FAR/0/Update Forwarding parameters/PFCPSMReq-Flags",
+        "7.5.4.3-2",
+        DeviationKind::Excluded { ie_type: 49 },
+        None,
+    ),
+    (
+        "free5gc-5gs-lifecycle",
+        "29",
+        "/pfcp/Update FAR/0/Update Forwarding parameters/PFCPSMReq-Flags",
+        "7.5.4.3-2",
+        DeviationKind::Excluded { ie_type: 49 },
+        None,
+    ),
 ];
 
 #[test]

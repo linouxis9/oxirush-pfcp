@@ -121,8 +121,10 @@ pub struct Row {
     /// this place. `None` for another IE.
     pub content: Option<&'static Table>,
     /// Whether `check()` checks a condition of the row that the IEs of its scope show: of
-    /// its presence (§7.6.6) or of its absence. A NOTE of two rows, as one of two IEs that
-    /// one of them is needed, is checked at one of them.
+    /// its presence (§7.6.6) or of its absence, as an IE of flags that is "included if at
+    /// least one of the flags is set" and has none, and one that "may be present if"
+    /// another IE is, without it. A NOTE of two rows, as one of two IEs that one of them
+    /// is needed, is checked at one of them.
     pub checked: bool,
 }
 

@@ -616,7 +616,8 @@ fn the_times_that_a_usage_report_has() {
     shown(&deletion, &[]);
 }
 
-/// The rows whose condition `check()` checks are those that say so.
+/// The rows whose condition `check()` checks are those that say so: a conditional row, or
+/// an optional one that its comment has absent by what the IEs beside it show.
 #[test]
 fn the_rows_whose_condition_is_checked() {
     let checked: Vec<(&str, &str)> = MESSAGE_TYPES
@@ -635,11 +636,11 @@ fn the_rows_whose_condition_is_checked() {
     assert!(checked.iter().all(|(_, name)| !name.is_empty()));
     for info in MESSAGE_TYPES {
         for row in info.table.rows.iter().filter(|row| row.checked) {
-            let conditional = row
+            let mandatory = row
                 .roles
                 .iter()
-                .any(|role| role.presence == Presence::Conditional);
-            assert!(conditional, "{} {}", info.name(), row.name);
+                .all(|role| role.presence == Presence::Mandatory);
+            assert!(!mandatory, "{} {}", info.name(), row.name);
         }
     }
 }

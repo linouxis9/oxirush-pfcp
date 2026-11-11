@@ -13,6 +13,11 @@ script:
     tables.tsv          the tables of clause 7, one row each, and whether the comment of a
                         row says that several IEs of it may be there, and how many when it
                         says
+    row-conditions.tsv  the rows of those tables whose comment makes the IE there by what
+                        the IEs beside it show: "a flag" for an IE of flags that "shall be
+                        included if at least one of the flags is set", and "with X" or
+                        "without X" for one that "may be present if the X IE is present",
+                        or "is not included"
     layouts.tsv         the figures of clause 8.2: their clause, the type that they say, and
                         the names of their flags and fields, in order
     figures.tsv         the place of each flag and field of those figures: the octets of its
@@ -158,7 +163,7 @@ def main():
     heading, caption = '', None
     message_types, ie_types, tables, layouts, values, clause6 = [], [], [], [], [], []
     read = []
-    figures, conditions, flags, ranges = [], [], [], []
+    figures, conditions, flags, ranges, beside = [], [], [], [], []
     # The figure of the clause, as relations() reads its sentences: its fields of octets,
     # by name and by their octets, its fields of bits of more than one bit, those of them
     # of rows that a letter counts, its flags by their bits, its rows, and the names of
@@ -212,6 +217,10 @@ def main():
                 elif len(row) >= 9 and row[1] in ('M', 'C', 'O'):
                     several = repetition(row[2])
                     tables.append(['row', number, without_notes(row[0]), row[1], interfaces(row[3:8]), without_notes(row[8]), several])
+                    beside.extend([number, without_notes(row[0]), condition] for condition in row_conditions(row[2]))
+            # An IE beside a row is a row of its table.
+            named = {row[2] for row in tables if row[0] == 'row' and row[1] == number}
+            beside = [row for row in beside if row[0] != number or row[2] == 'a flag' or row[2].split(' ', 1)[1] in named]
         elif title and re.match(r'Table 8\.2\.\d+[.-]\d+', title):
             number = re.match(r'Table (8\.2\.\d+[.-]\d+)', title).group(1)
             named = value_rows(number, title.split(':', 1)[1].strip(), rows)
@@ -236,6 +245,7 @@ def main():
     write('message-types.tsv', ['value', 'name', 'interfaces'], message_types)
     write('ie-types.tsv', ['type', 'name', 'reference', 'length'], ie_types)
     write('tables.tsv', ['table|row|same', 'table', 'name, or the name of the row', 'heading, or presence', 'IE type, or interfaces', 'IE type', 'once, several, or how many'], tables)
+    write('row-conditions.tsv', ['table', 'row', 'there'], beside)
     write('layouts.tsv', ['clause', 'type in the figure', 'fields'], layouts)
     write('figures.tsv', ['clause', 'octets', 'name', 'lowest bit', 'bits'], figures)
     write('conditions.tsv', ['clause', 'flag', 'set', 'field', 'there'], conditions)
@@ -244,6 +254,31 @@ def main():
     write('value-tables.tsv', ['table', 'title', 'value', 'name'], values)
     write('read-as.tsv', ['table', 'values', 'read as'], read)
     write('clause-6.tsv', ['clause', 'title', 'requirements'], [[c, t, str(n)] for c, t, n in clause6])
+
+
+# An IE of flags that is there with a flag set: "This IE shall be included if at least one
+# of the flags is set to "1"", "if any of the following flag is set", "if any of flag in
+# this IE is set".
+A_FLAG = re.compile(r'(?i)\b(?:included|present) if (?:at least one|any) (?:of )?(?:the )?(?:following )?flags?\b(?! in the [A-Z])')
+# An IE that may be there with another of its table, or without it: "This IE may be present
+# if the Monitoring Time IE is present and ...", "may be included if the Time Domain Number
+# IE is not included", "may be present when the Old CP F-SEID is present"; not one of two
+# conditions ("if the Query URR IE is present or the QAURR flag is set").
+BESIDE = re.compile(r'\b(?:if|when) (?:the )?([A-Z][A-Za-z0-9 /-]*?)(?: IE)? is (not )?(?:present|included)\b(?! or\b)')
+
+
+def row_conditions(comment):
+    """What the comment of a row of a table of clause 7 says of the IE by the IEs beside
+    it: "a flag", "with X", "without X"."""
+    out = []
+    for sentence in re.split(r'(?<=[.;])\s+', clean(comment)):
+        if A_FLAG.search(sentence):
+            out.append('a flag')
+        may = re.search(r'\bmay be (?:present|included)\b', sentence)
+        if may:
+            for name, negation in BESIDE.findall(sentence[may.end():]):
+                out.append(('without ' if negation else 'with ') + name)
+    return out
 
 
 def repetition(comment):

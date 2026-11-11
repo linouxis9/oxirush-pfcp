@@ -1,0 +1,43 @@
+# table	row	there
+7.4.4.1-1	PFCPASReq-Flags	a flag
+7.4.4.1.2-1	Time Domain Number	without Configured Time Domain
+7.4.4.1.2-1	Configured Time Domain	without Time Domain Number
+7.4.4.2-1	PFCPASRsp-Flags	a flag
+7.4.4.3-1	PFCPAUReq-Flags	a flag
+7.5.2.1-1	PFCPSEReq-Flags	a flag
+7.5.2.1-1	Trace Collection Entity URI	with Trace Information
+7.5.2.1-1	UE Level Measurements Configuration	with Trace Information
+7.5.2.1-4	MBSN4mbReq-Flags	a flag
+7.5.2.3-2	Transport Level Marking Indications	a flag
+7.5.2.3-8	Header Handling Reporting Indication	a flag
+7.5.2.4-1	Subsequent Volume Threshold	with Monitoring Time
+7.5.2.4-1	Subsequent Time Threshold	with Monitoring Time
+7.5.2.4-1	Subsequent Volume Quota	with Monitoring Time
+7.5.2.4-1	Subsequent Time Quota	with Monitoring Time
+7.5.2.4-1	Subsequent Event Threshold	with Monitoring Time
+7.5.2.4-1	Subsequent Event Quota	with Monitoring Time
+7.5.2.4-1	Measurement Information	a flag
+7.5.2.4-3	Subsequent Volume Threshold	with Monitoring Time
+7.5.2.4-3	Subsequent Time Threshold	with Monitoring Time
+7.5.2.4-3	Subsequent Volume Quota	with Monitoring Time
+7.5.2.4-3	Subsequent Time Quota	with Monitoring Time
+7.5.2.4-3	Subsequent Event Threshold	with Monitoring Time
+7.5.2.4-3	Subsequent Event Quota	with Monitoring Time
+7.5.2.5-1	QER Indications	a flag
+7.5.2.8-1	Steering Mode Indicator	a flag
+7.5.2.9-3	Measurement Indication	a flag
+7.5.2.9-4	Reporting Flags	a flag
+7.5.3.1-5	MBSN4Resp-Flags	a flag
+7.5.3.4-1	Overload Control Information Flags	a flag
+7.5.4.1-1	PFCPSMReq-Flags	a flag
+7.5.4.1-1	Trace Collection Entity URI	with Trace Information
+7.5.4.3-2	Transport Level Marking Indications	a flag
+7.5.4.3-2	PFCPSMReq-Flags	a flag
+7.5.4.4-1	Measurement Information	a flag
+7.5.4.11-1	Extended DL Buffering Notification Policy	with DL Buffering Duration
+7.5.4.16-1	Steering Mode Indicator	a flag
+7.5.7.1-1	PFCPSDRsp-Flags	a flag
+7.5.8.1-1	PFCPSRReq-Flags	a flag
+7.5.8.1-1	SMF Change Reason	with Old CP F-SEID
+7.5.9.1-1	PFCPSRRsp-Flags	a flag
+7.5.9.2-1	Extended DL Buffering Notification Policy	with DL Buffering Duration
