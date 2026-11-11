@@ -34,9 +34,9 @@ The inventory of the document that the test `spec` holds the crate to:
 - `spec/flag-rules.tsv`: each sentence of clause 8.2 that says which flags of an IE are
   set, together, with the field of another flag, with the value of another field or the
   Cause of the message, or always, with the rule of `check()` that checks it, or why a value does not show it alone;
-- `spec/row-conditions.tsv`: each row of a table of clause 7 whose comment has the IE
-  there by a flag of its own or by an IE beside it, which `check()` tells in a message
-  that has the row at its place;
+- `spec/row-conditions.tsv`: each row of a table of clause 7 whose presence depends on
+  one of its own flags or on another IE of the same table. The test builds a message
+  with the row and checks that `check()` reports it when the condition is not met;
 - `spec/row-features.tsv`: each row of a table of clause 7 that requires a feature of
   the UP or CP function ("may be present if the UP function supports the NORP
   feature"). The test checks that the crate has the same rows and that `check_with()`
@@ -116,13 +116,13 @@ both the APN/DNN Network Identifier and APN/DNN Operator Identifier" (TS 23.003 
 (`src/smf/n4-build.c`) builds it from `sess->session.name`, with `ogs_fqdn_build()`. The
 test `captures` expects the four.
 
-**free5GC 3b34a08e** (smf 796a2de8). The SMF gives each Update Forwarding Parameters of
-a Session Modification Request a PFCPSMReq-Flags, whose SNDEM it sets where an end
-marker is to be sent: without one the IE has no flag (`0031 0001 00`), where Table
-7.5.4.3-2 has it "included if at least one of the flags is set to "1"".
-`farToUpdateFAR()` (`internal/pfcp/message/build.go`) writes
-`PFCPSMReqFlags: &pfcpType.PFCPSMReqFlags{Sndem: far.ForwardingParameters.SendEndMarker}`
-whatever the flag. The test `captures` expects it in seven messages.
+**free5GC 3b34a08e** (smf 796a2de8). The SMF adds a PFCPSMReq-Flags IE to every Update
+Forwarding Parameters of a Session Modification Request, and sets its SNDEM flag only
+when an end marker must be sent. Without an end marker the IE has no flag set
+(`0031 0001 00`), but Table 7.5.4.3-2 says that the IE is "included if at least one of
+the flags is set to "1"". `farToUpdateFAR()` (`internal/pfcp/message/build.go`) always
+writes `PFCPSMReqFlags: &pfcpType.PFCPSMReqFlags{Sndem: far.ForwardingParameters.SendEndMarker}`.
+The test `captures` expects this deviation in seven messages.
 
 **go-pfcp v0.0.24**, in its test vectors, which `go-pfcp-deviations.tsv` lists as the
 test `codec` expects them (`other_vectors_round_trip`, with `--ignored` and
@@ -166,14 +166,14 @@ test `codec` expects them (`other_vectors_round_trip`, with `--ignored` and
   Application ID, Provide ATSSS Control Information and Created Bridge/Router Info where
   they are, and IE type 116, which no table of Release 19 has.
 - Access Type 3, which Table 8.2.153-1 has as spare.
-- The Flow Description of each SDF Filter is `aaaaaaaa`, and that of a Flow Information
-  is no rule either, where §8.2.5 and §8.2.61 have the IPFilterRule of TS 29.212 clause
-  5.4.2, `permit out ip from any to assigned` (`ie.NewSDFFilter("aaaaaaaa", ...)` in the
-  tests of `message/`).
-- The two accesses of a Create MAR have the same Priority value, where NOTE 2 of Table
-  7.5.2.8-2 has them "set different values", and a TSC Management Information has a Port
-  Management Information Container without the NW-TT Port Number that Tables 7.5.4.18-1
-  and 7.5.8.5-1 then have.
+- The Flow Description of every SDF Filter is `aaaaaaaa`
+  (`ie.NewSDFFilter("aaaaaaaa", ...)` in the tests of `message/`), and the Flow
+  Description of a Flow Information is not a rule either. §8.2.5 and §8.2.61 require an
+  IPFilterRule as in TS 29.212 clause 5.4.2, such as `permit out ip from any to assigned`.
+- The two accesses of a Create MAR have the same Priority value, but NOTE 2 of Table
+  7.5.2.8-2 says that they "shall set different values". A TSC Management Information
+  has a Port Management Information Container without the NW-TT Port Number that Tables
+  7.5.4.18-1 and 7.5.8.5-1 require with it.
 - The UPF Instance ID of the Association Setup Request and Response is
   `11111111-2222-2222-3333-333344444444`, a UUID of version 2, where §8.2.175 has "a
   Universally Unique Identifier (UUID) version 4" (`ie.NewNFInstanceID(...)` in

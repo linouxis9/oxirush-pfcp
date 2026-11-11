@@ -15,20 +15,23 @@
    limitations under the License.
 */
 
-//! PFCP, the protocol between the control plane and the user plane of 3GPP (TS 29.244
-//! V19.6.0, Release 19): N4 between an SMF and a UPF, N4mb, and Sxa, Sxb and Sxc in EPC.
+//! An implementation of PFCP, the 3GPP protocol between the control plane and the user
+//! plane (TS 29.244 V19.6.0, Release 19). It covers N4 between an SMF and a UPF, N4mb,
+//! and Sxa, Sxb and Sxc in the EPC.
 //!
-//! - [`Message`] decodes and encodes a message, byte for byte. Its [`Body`] has a struct
-//!   for each message type of Table 7.3-1, with a field for each row of its table; each
-//!   IE has its type, with the fields of its figure in clause 8.2.
+//! - [`Message`] decodes and encodes a message, byte for byte. Its [`Body`] is a struct
+//!   for each message type of Table 7.3-1, with one field for each row of its table.
+//!   Each IE has its own type, with the fields of its figure in clause 8.2.
 //! - [`Message::check`] validates one message against TS 29.244 on an interface: the
 //!   IE tables of clause 7 and the values of clause 8.2. It returns each deviation with
 //!   its clause and the Cause of the answer. [`Message::check_with`] also validates a
 //!   response against its request, and a message against the features that the two
 //!   functions announced. Their documentation lists what is and is not checked.
-//! - With the feature `tree`, a message is a tree that prints as JSON ([`tree`](mod@tree)), read and
-//!   edited by path ([`paths`]); with `serde`, it is serialized as its tree.
-//! - [`framing`] walks the IEs of a message as slices, without decoding them.
+//! - With the `tree` feature, a message converts to and from a tree that prints as JSON
+//!   ([`tree`](mod@tree)), and [`paths`] reads and edits the tree by path. With `serde`,
+//!   a message is serialized as that tree.
+//! - [`framing`] iterates over the IEs of a message as byte slices, without decoding
+//!   them.
 //!
 //! The [README](https://github.com/linouxis9/oxirush-pfcp#readme) has an example of
 //! each.

@@ -120,11 +120,12 @@ pub struct Row {
     /// differs by place, as Session Report (Tables 7.5.7.3-1 and 7.5.8.6-1), the one of
     /// this place. `None` for another IE.
     pub content: Option<&'static Table>,
-    /// Whether `check()` checks a condition of the row that the IEs of its scope show: of
-    /// its presence (§7.6.6) or of its absence, as an IE of flags that is "included if at
-    /// least one of the flags is set" and has none, and one that "may be present if"
-    /// another IE is, without it. A NOTE of two rows, as one of two IEs that one of them
-    /// is needed, is checked at one of them.
+    /// Whether `check()` evaluates a condition of this row from the other IEs of the
+    /// message. The condition can require the IE (§7.6.6) or exclude it: a flags IE that
+    /// is "included if at least one of the flags is set" is excluded when no flag is set,
+    /// and an IE that "may be present if" another IE is present is excluded without it.
+    /// A NOTE that applies to two rows, such as "at least one of the two IEs shall be
+    /// present", is evaluated on one of them.
     pub checked: bool,
 }
 

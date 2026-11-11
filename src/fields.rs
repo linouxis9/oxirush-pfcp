@@ -839,9 +839,9 @@ impl<T: Field> Field for Each<T> {
     }
 }
 
-/// A length of two octets, then entries up to it, each after the other: the additional
-/// flow descriptions, URLs and domain names of PFD Contents (Figures 8.2.39-2, 8.2.39-3
-/// and 8.2.39-4). Its tree is the list of them.
+/// A list of entries behind a two-octet length that counts the octets of all the entries.
+/// PFD Contents uses it for its additional flow descriptions, URLs and domain names
+/// (Figures 8.2.39-2, 8.2.39-3 and 8.2.39-4). In a tree, it is a list.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Entries16<T>(pub Vec<T>);
 
@@ -894,9 +894,9 @@ impl<T: Field> Field for Entries16<T> {
     }
 }
 
-/// An additional Domain Name of PFD Contents with its Domain Name Protocol, each after
-/// its length of two octets (Figure 8.2.39-4), "the same as the Domain Name field and
-/// Domain Name Protocol field".
+/// An additional Domain Name of PFD Contents together with its Domain Name Protocol
+/// (Figure 8.2.39-4). Each field follows its own two-octet length and has the same format
+/// as the Domain Name and Domain Name Protocol fields of PFD Contents.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct DomainNameAndProtocol {
     /// The Domain Name.

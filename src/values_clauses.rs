@@ -33,8 +33,9 @@ use crate::values::*;
 // ── Flags, then the fields that they announce ──────────────────────────────
 
 pfcp_layout! {
-    /// SDF Filter (§8.2.5), with the (S)RTP Multiplexed Media Identification Information
-    /// that SMMII announces, each a [`MediaIdentification`] after its length.
+    /// SDF Filter (§8.2.5). When SMMII is set, it ends with a list of (S)RTP Multiplexed
+    /// Media Identification Information entries, each a [`MediaIdentification`] behind
+    /// its length.
     pub struct SdfFilter "8.2.5" {
         flags(u8) { smmii "SMMII": 6, bid "BID": 5, fl "FL": 4, spi "SPI": 3, ttc "TTC": 2, fd "FD": 1 }
         spare_octet "Spare octet": Spare,
@@ -63,10 +64,11 @@ pfcp_layout! {
 }
 
 pfcp_layout! {
-    /// An (S)RTP Multiplexed Media Identification Information of an SDF Filter (Figure
-    /// 8.2.5-2): the fields that its flags announce, which identify a media flow of (S)RTP
-    /// or of (S)RTCP. One of the RTCP Packet Type is of (S)RTCP traffic only, one of the
-    /// Payload Type of (S)RTP only, and one of neither of both (NOTE 4).
+    /// One (S)RTP Multiplexed Media Identification Information entry of an SDF Filter
+    /// (Figure 8.2.5-2). Its flags say which fields are present, and the fields identify
+    /// one media flow. An entry with an RTCP Packet Type matches (S)RTCP traffic only, an
+    /// entry with a Payload Type matches (S)RTP traffic only, and an entry with neither
+    /// matches both (NOTE 4).
     pub struct MediaIdentification "8.2.5" part "(S)RTP Multiplexed Media Identification Information" {
         flags(u8) { rptpi "RPTPI": 5, rhidmpi "RHIDMPI": 4, midpi "MIDPI": 3, ptpi "PTPI": 2, ssrcpi "SSRCPI": 1 }
         ssrc "Synchronization Source (SSRC)": u32 if ssrcpi,
@@ -138,9 +140,9 @@ pfcp_layout! {
 }
 
 pfcp_layout! {
-    /// PFD contents (§8.2.39), with its additional flow descriptions and URLs, each a text
-    /// after its length, and its additional domain names, each with its protocol (Figures
-    /// 8.2.39-2, 8.2.39-3 and 8.2.39-4).
+    /// PFD contents (§8.2.39). The additional flow descriptions and URLs are lists of
+    /// text, and the additional domain names are a list of domain names with their
+    /// protocol (Figures 8.2.39-2, 8.2.39-3 and 8.2.39-4).
     pub struct PfdContents "8.2.39" {
         flags(u8) { adnp "ADNP": 8, aurl "AURL": 7, afd "AFD": 6, dnp "DNP": 5, cp "CP": 4, dn "DN": 3, url "URL": 2, fd "FD": 1 }
         spare_octet "Spare octet": Spare,
