@@ -337,8 +337,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
   does not have, for a test tool, which `check()` tells; a false Length whose
   octets frame as other IEs is checked as them, as its receiver reads them. It
   refuses, each an `Error`:
-  - a field that disagrees with the flags of its IE, or whose octets would read
-    as another value: missing before a later field or unknown octets, unknown
+  - a field that disagrees with the flags or the other fields of its IE, or
+    whose octets would read as another value: missing before a later field or unknown octets, unknown
     octets after a field that runs to the end of the IE, or a field of the length
     that its flags give that is longer, or shorter with octets after it
     (`Inconsistent`);

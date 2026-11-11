@@ -415,7 +415,7 @@ macro_rules! pfcp_layout {
                     Some(field) => Err(reading.refuse(
                         oxirush_utils::tree::ErrorKind::Value,
                         alloc::format!(
-                            "{field} is written where its flags do not have it, or is missing where they do, or its octets would read as another value ({})",
+                            "{field} is written where its flags or its other fields do not have it, or is missing where they do, or its octets would read as another value ({})",
                             $clause
                         ),
                     )),

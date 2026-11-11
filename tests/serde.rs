@@ -54,6 +54,46 @@ fn a_message_and_an_ie_are_their_trees_in_json() {
     assert_eq!(serde_json::from_str::<FSeid>(&json).unwrap(), seid);
 }
 
+/// An error of serde is at the place that `Message::from_tree` and `check()` give it, a
+/// path that `paths::select` takes: `/header/...` for a field of the header, `/pfcp/...`
+/// for an IE.
+#[test]
+fn an_error_of_serde_is_at_the_path_of_from_tree() {
+    for (written, place) in [
+        (
+            r#"{"message": "PFCP Heartbeat Request", "header": {"Sequence Number": "x"}, "ies": {"Recovery Time Stamp": 7}}"#,
+            "/header/Sequence Number",
+        ),
+        (
+            r#"{"message": "PFCP Heartbeat Request", "header": {"Sequence Number": 1}, "ies": {"Recovery Time Stamp": "x"}}"#,
+            "/pfcp/Recovery Time Stamp",
+        ),
+        (
+            r#"{"message": "PFCP Heartbeat Request", "header": {"Sequence Number": 1}, "ies": {"Source IP Address": [{"V4": true, "IPv4 address": 5}]}}"#,
+            "/pfcp/Source IP Address/0/IPv4 address",
+        ),
+        (
+            r#"{"message": "PFCP Heartbeat Request", "header": {"Sequence Number": 1}, "ies": {"Recovery Time Stamp": 7}, "x": 1}"#,
+            "",
+        ),
+    ] {
+        let tree: tree::Value = serde_json::from_str(written).unwrap();
+        let told = Message::from_tree(&tree).unwrap_err();
+        assert_eq!(told.at(), place, "{told}");
+        if !place.is_empty() {
+            assert!(paths::select(&tree, place).is_ok(), "{place}");
+        }
+        let error = serde_json::from_str::<Message>(written)
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains(&told.to_string()), "{error}: {told}");
+        assert!(
+            !error.contains("at ies/") && !error.contains("at header/"),
+            "{error}"
+        );
+    }
+}
+
 /// An error of a tree prints no key, nor does one of serde: a row that holds one, at any
 /// depth, is read as a secret, of which a refusal says nothing that is written, whether
 /// the row is written as a list where it is once or the reverse, as octets of other
