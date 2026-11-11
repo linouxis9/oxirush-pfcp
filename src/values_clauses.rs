@@ -941,7 +941,8 @@ impl Rules for FqCsid {
 oxirush_utils::impl_serde!(FqCsid);
 
 /// `{"FQ-CSID Node-ID Type": 0, "Node-Address": "10.0.0.1", "PDN Connection Set Identifiers": [1]}`:
-/// an IPv4 or IPv6 address as text, the other Node-Address as its octets.
+/// an IPv4 or IPv6 address as text, the other Node-Address as its octets, of any length
+/// for a Node-ID Type that the clause reserves, which `encode()` writes too.
 #[cfg(feature = "tree")]
 impl oxirush_utils::tree::Tree for FqCsid {
     const NAME: &'static str = "FQ-CSID";
@@ -1025,8 +1026,10 @@ impl oxirush_utils::tree::Tree for FqCsid {
                 "unknown octets after a Node Type only (8.2.43)",
             ));
         }
+        // As encode() takes it: a reserved Node-ID Type has the Node-Address that it has.
         if fq_csid.csids.len() > 15
-            || Self::address_length(node_id_type) != Some(fq_csid.node_address.len())
+            || Self::address_length(node_id_type)
+                .is_some_and(|length| length != fq_csid.node_address.len())
         {
             return Err(reading.refuse(oxirush_utils::tree::ErrorKind::Value, "a Node-Address of the length of its type, and at most fifteen identifiers (8.2.43)"));
         }

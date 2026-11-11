@@ -500,6 +500,51 @@ fn a_number_a_password_and_a_key_id_are_their_text() {
     assert_eq!(message.to_tree(), written);
 }
 
+/// §8.2.43: an FQ-CSID of a Node-ID Type that the clause reserves, which a value may have
+/// and `encode()` writes, with the Node-Address that it has, for a test to send: its tree
+/// reads back, as the tree of any value that encodes does, and writes the same octets.
+/// One of a type that the clause names has a Node-Address of the length of that type.
+#[test]
+fn an_fq_csid_of_a_reserved_node_id_type_reads_back_from_its_tree() {
+    let reserved = FqCsid {
+        node_id_type: 5,
+        node_address: vec![1, 2, 3].into(),
+        csids: vec![7],
+        ..Default::default()
+    };
+    let mut octets = Vec::new();
+    reserved.encode(&mut octets).unwrap();
+    assert_eq!(octets, [0x51, 1, 2, 3, 0, 7]);
+    let written = tree::Tree::to_tree(&reserved);
+    let expected = tree!({"FQ-CSID Node-ID Type": 5, "Node-Address": "010203", "PDN Connection Set Identifiers": [7]});
+    assert_eq!(written, expected);
+    assert_eq!(
+        tree::from_value::<FqCsid>(&written).ok(),
+        Some(reserved.clone())
+    );
+    // In a message, whose tree reads back and encodes to the same octets
+    let mut message = establishment();
+    let Body::SessionEstablishmentRequest(request) = &mut message.body else {
+        panic!()
+    };
+    request.fq_csid = vec![reserved];
+    let read = Message::from_tree(&message.to_tree()).unwrap();
+    assert_eq!(read, message);
+    assert_eq!(read.encode().unwrap(), message.encode().unwrap());
+    // Of a type that the clause names, the Node-Address has the length of its type
+    for (kind, address) in [
+        (0, tree!("0a00")),
+        (1, tree!("10.0.0.1")),
+        (2, tree!("0a00")),
+    ] {
+        let short = tree!({"FQ-CSID Node-ID Type": kind, "Node-Address": address, "PDN Connection Set Identifiers": [7]});
+        assert!(tree::from_value::<FqCsid>(&short).is_err(), "{short}");
+    }
+    let many = tree!({"FQ-CSID Node-ID Type": 5, "Node-Address": "01", "PDN Connection Set Identifiers": vec![1u16; 16]});
+    let error = tree::from_value::<FqCsid>(&many).unwrap_err().to_string();
+    assert!(error.contains("at most fifteen identifiers"), "{error}");
+}
+
 /// The octets after the fields of an IE, of a later release, are "the unknown octets" of
 /// §8.1.2 in a tree. A value of one field, without flags, is that field alone without
 /// them: a number, and the octets after their length of a Forwarding Policy.
