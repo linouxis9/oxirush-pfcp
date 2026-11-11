@@ -186,7 +186,9 @@ pub enum DeviationKind {
         /// The value that the receiver takes.
         read: u32,
     },
-    /// A value that its table reserves: the receiver takes the IE as incorrect (§7.6.8).
+    /// A value that its table reserves: the receiver takes the IE as incorrect (§7.6.8);
+    /// and one that a note of its table has the receiver reject, as an Outer Header
+    /// Removal Description that Table 8.2.64-1 does not name (its NOTE 7).
     ReservedValue {
         /// The value.
         value: u32,

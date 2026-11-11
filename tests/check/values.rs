@@ -236,6 +236,59 @@ fn a_reserved_value_follows_the_presence_of_its_own_row() {
     );
 }
 
+/// Table 8.2.64-1, NOTE 7: of an Outer Header Removal Description that the table does not
+/// name, 9 to 255, "If the UP function receives an unknown value, it shall reject the
+/// request message with the cause set to "Mandatory IE incorrect" together with the
+/// Offending IE set to the IE type of Outer Header Removal IE": the value is told as one
+/// that the table reserves is, and not as a spare one, which a receiver ignores.
+#[test]
+fn an_unknown_outer_header_removal_description_is_rejected() {
+    for unknown in [9, 200, 255] {
+        let told = value_found::<OuterHeaderRemoval>(&format!("{unknown:02x}"));
+        let kind = DeviationKind::ReservedValue {
+            value: unknown.into(),
+        };
+        assert_eq!(told, [("8.2.64", kind.clone())]);
+        let mut message = establishment();
+        request_with(&mut message, |request| {
+            let removal = OuterHeaderRemoval {
+                outer_header_removal_description: OuterHeaderRemovalDescription::from_value(
+                    unknown,
+                ),
+                present: 1,
+                ..Default::default()
+            };
+            request.create_pdr[0].outer_header_removal = Some(removal);
+        });
+        let found = message.check(Interfaces::N4);
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert_eq!(found[0].path, "/pfcp/Create PDR/0/Outer Header Removal");
+        assert_eq!(
+            (
+                found[0].kind.clone(),
+                found[0].cause,
+                found[0].offending_ie()
+            ),
+            (kind, Some(CauseValue::MandatoryIeIncorrect), Some(95))
+        );
+        let said = found[0].to_string();
+        assert!(
+            said.contains("is a reserved value") && said.contains("\"Mandatory IE incorrect\""),
+            "{said}"
+        );
+    }
+    // The values that the table names
+    for known in 0..=8 {
+        assert_eq!(
+            value_found::<OuterHeaderRemoval>(&format!("{known:02x}")),
+            []
+        );
+    }
+    assert_eq!(OuterHeaderRemovalDescription::RESERVED.len(), 247);
+    assert_eq!(OuterHeaderRemovalDescription::RESERVED[..2], [9, 10]);
+    assert_eq!(OuterHeaderRemovalDescription::RESERVED.last(), Some(&255));
+}
+
 /// §8.2.43: "Other values of Node-Address Type are reserved", which §7.6.8 makes an
 /// incorrect value: a conditional FQ-CSID of one, which only a built value has, is
 /// answered "Mandatory IE incorrect".

@@ -204,6 +204,7 @@
 8.2.64-1	Outer Header Removal Description	6	GTP-U/UDP/IP
 8.2.64-1	Outer Header Removal Description	7	VLAN TAG POP (i.e. removal of one VLAN tag, S-TAG or C-TAG)
 8.2.64-1	Outer Header Removal Description	8	VLAN TAGs POP-POP (i.e. removal of 2 VLAN tags, S-TAG and C-TAG)
+8.2.64-1	Outer Header Removal Description	9 to 255	<rejected>
 8.2.64-2	GTP-U Extension Header Deletion	6/1	PDU Session Container
 8.2.67-1	Header Type	0	HTTP
 8.2.78.1	Graceful Release Period information element	0	2 seconds

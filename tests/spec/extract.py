@@ -34,7 +34,9 @@ script:
                         and their number in it, which flag-rules.tsv lists with the rule
                         that checks each
     value-tables.tsv    the tables of clause 8.2 that name values, or bits as octet/bit; a
-                        value that a table reserves is named <reserved>
+                        value that a table reserves is named <reserved>, and the spare
+                        values that a note of the table has the receiver reject with
+                        "Mandatory IE incorrect", "9 to 255", are named <rejected>
     read-as.tsv         the values of those tables that a receiver reads as another: the
                         table, the values, and what they are read as, in the words of the
                         document
@@ -445,12 +447,22 @@ def value_rows(number, title, rows):
                 if re.fullmatch(r'\d+/\d+', row[0])]
     at = numbers[0]
     name_at = head.index('meaning') if 'meaning' in head else 1 - at
+    # The notes of the table that have the receiver reject an unknown value.
+    rejecting = set()
+    for row in rows:
+        for cell in row:
+            for label, words in re.findall(r'(NOTE(?: \d+)?):\s*(.*?)(?=NOTE(?: \d+)?:|$)', cell, flags=re.S):
+                if re.search(r'unknown value, it shall reject the request message with the cause set to "Mandatory IE incorrect"', clean(words)):
+                    rejecting.add(label)
     out = []
     for row in rows[1:]:
         if len(row) <= max(at, name_at) or row[0].startswith('NOTE'):
             continue
         value, name = row[at], without_notes(row[name_at])
         name = clean(re.sub(r'\s+– see .*$|\s*\(see clause .*$', '', name)).rstrip('.')
+        if re.match(r'(?i)spare', name) and re.fullmatch(r'\d+ to \d+', value) and rejecting & set(re.findall(r'NOTE(?: \d+)?', row[name_at])):
+            out.append([number, title, value, '<rejected>'])
+            continue
         if not re.fullmatch(r'\d+', value) or re.match(r'(?i)spare|for future use', name):
             continue
         out.append([number, title, value, '<reserved>' if re.match(r'(?i)<?reserved', name) else name])

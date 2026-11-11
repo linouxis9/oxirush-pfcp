@@ -129,8 +129,11 @@ pfcp_enum! {
         3 Day "day",
         4 Week "week",
     }
-    /// Outer Header Removal Description (Table 8.2.64-1).
-    pub enum OuterHeaderRemovalDescription "Table 8.2.64-1" bits 8 {
+    /// Outer Header Removal Description (Table 8.2.64-1): a value that the table does not
+    /// name, 9 to 255, is spare, and "If the UP function receives an unknown value, it shall
+    /// reject the request message with the cause set to "Mandatory IE incorrect" together
+    /// with the Offending IE set to the IE type of Outer Header Removal IE" (NOTE 7).
+    pub enum OuterHeaderRemovalDescription "Table 8.2.64-1" bits 8 rejected [9 ..= 255] {
         0 GtpUUdpIpv4 "GTP-U/UDP/IPv4",
         1 GtpUUdpIpv6 "GTP-U/UDP/IPv6",
         2 UdpIpv4 "UDP/IPv4",

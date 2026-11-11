@@ -1480,7 +1480,9 @@ macro_rules! pfcp_table {
 
 /// The values that a table of clause 8.2 names: a variant each, and `Other` for a value that
 /// the table has as spare or reserved, or does not have, kept as it is. A field of `bits`
-/// bits, or a whole octet whose other bits are spare.
+/// bits, or a whole octet whose other bits are spare. `reserved [..]` lists the values that
+/// the table reserves, and `rejected [from ..= to]` gives those that a note of the table
+/// has its receiver reject, which are reserved in effect (§7.6.8).
 ///
 /// ```text
 /// pub enum Gate "Table 8.2.7-1 and Table 8.2.7-2" bits 2 {
@@ -1492,6 +1494,7 @@ macro_rules! pfcp_enum {
     ($(
         $(#[$meta:meta])*
         pub enum $ty:ident $table:literal bits $bits:literal $(reserved [$($reserved:literal),*])?
+            $(rejected [$rejected_from:literal ..= $rejected_to:literal])?
             $(read [$($from:literal ..= $to:literal as $target:literal),+])? {
             $( $value:literal $variant:ident $name:literal ),* $(,)?
         }
@@ -1542,9 +1545,10 @@ macro_rules! pfcp_enum {
             pub const NAMES: &'static [(u8, &'static str)] = &[$(($value, $name)),*];
             /// The width of the field, in bits.
             pub const BITS: u32 = $bits;
-            /// The values that the tables reserve: a receiver takes the IE as incorrect
-            /// (§7.6.8), where it ignores a spare one.
-            pub const RESERVED: &'static [u8] = &[$($($reserved),*)?];
+            /// The values that the tables reserve, and those that a note of theirs has a
+            /// receiver reject: a receiver takes the IE as incorrect (§7.6.8), where it
+            /// ignores a spare one.
+            pub const RESERVED: &'static [u8] = pfcp_enum!(@reserved [$($($reserved),*)?] $([$rejected_from $rejected_to])?);
             /// The values that a sender does not send and a receiver reads as another, as
             /// the tables say: from, to, and the value that they are read as.
             pub const READ_AS: &'static [(u8, u8, u8)] = &[$($(($from, $to, $target)),+)?];
@@ -1676,6 +1680,22 @@ macro_rules! pfcp_enum {
             }
         }
     )*};
+    (@reserved [$($reserved:literal),*]) => { &[$($reserved),*] };
+    (@reserved [] [$from:literal $to:literal]) => {
+        &crate::macros::values_from::<{ $to - $from + 1 }>($from)
+    };
 }
 
 pub(crate) use {pfcp_bits, pfcp_enum, pfcp_ies, pfcp_layout, pfcp_messages, pfcp_table};
+
+/// Each value from `from`, `N` of them: the values that a note of a table of values has a
+/// receiver reject (`rejected` of `pfcp_enum`).
+pub(crate) const fn values_from<const N: usize>(from: u8) -> [u8; N] {
+    let mut values = [0; N];
+    let mut at = 0;
+    while at < N {
+        values[at] = from + at as u8;
+        at += 1;
+    }
+    values
+}

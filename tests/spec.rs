@@ -586,7 +586,9 @@ const ENUMERATIONS: &[Enumeration] = enumerations![
 ];
 
 /// The tables of clause 8.2 that name values: each is an enumeration of the crate with
-/// the same values and names; and those of bits name flags of their IE type.
+/// the same values and names, and the same values reserved, those that a note of the
+/// table has its receiver reject among them; and those of bits name flags of their IE
+/// type.
 #[test]
 fn value_tables() {
     let mut document: BTreeMap<&str, Vec<(&str, &str)>> = BTreeMap::new();
@@ -606,18 +608,24 @@ fn value_tables() {
                 problems.push(format!("Table {table}: not in the document"));
                 continue;
             };
+            // A row of one value, or of the values "9 to 255" that a note has rejected
             let rows: Vec<(u8, &str)> = rows
                 .iter()
-                .map(|(value, name)| (value.parse().unwrap(), *name))
+                .flat_map(|(value, name)| {
+                    let (from, to) = value.split_once(" to ").unwrap_or((value, value));
+                    let (from, to): (u8, u8) = (from.parse().unwrap(), to.parse().unwrap());
+                    (from..=to).map(|value| (value, *name))
+                })
                 .collect();
+            let is_reserved = |name: &str| ["<reserved>", "<rejected>"].contains(&name);
             let named: Vec<(u8, &str)> = rows
                 .iter()
-                .filter(|(_, name)| *name != "<reserved>")
+                .filter(|(_, name)| !is_reserved(name))
                 .copied()
                 .collect();
             let kept: Vec<u8> = rows
                 .iter()
-                .filter(|(_, name)| *name == "<reserved>")
+                .filter(|(_, name)| is_reserved(name))
                 .map(|(value, _)| *value)
                 .collect();
             if named != *names {
