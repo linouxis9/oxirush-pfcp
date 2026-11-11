@@ -1,7 +1,8 @@
 # The sentences of clause 8.2 of TS 29.244 V19.6.0 that say which flags of an IE are set,
 # as flag-sentences.tsv numbers them in their clauses: together, "at least one", "one and
 # only one", "only one of", "may only be set", "shall be set to "1" if the ... flag is
-# set", "shall not be set", "either ... shall be set" and "exclusive"; with the field of
+# set", "shall not be set", "either ... shall be set", "exclusive" and "shall contain an
+# IPv4 and/or IPv6 address", "an address"; with the field of
 # another flag, "also present"; with the value of
 # another field, "flags of a value"; with the Cause of the message, "with the Cause"; and
 # always, "always set". A sentence of who
@@ -51,6 +52,8 @@
 8.2.94	1	at least one	none of PCP, DEI and VID is set	000000	040064
 8.2.95	1	at least one	none of PCP, DEI and VID is set	000000	040064
 8.2.102	1	always set	ETHI is not set	00	01
+8.2.129	1	an address	neither V4 nor V6 is set	00 04	020a000001 0120010db8000000000000000000000001 060a000001
+8.2.135	1	an address	neither V4 nor V6 is set	00	020a000001 0120010db8000000000000000000000001
 8.2.137	1	one and only one	none, or more than one, of V6, V4 and A is set	00 0ae0000001	08 02e0000001 06e0000001e00000ff
 8.2.145	1	at least one	no bit is set	00	01
 8.2.152	1	at least one	no bit is set	00	01
@@ -66,6 +69,7 @@
 8.2.187	4	flags of a value	a Proxy Authen Type of 5 lacks PAN, PAC, PAR or PAI	000500 00050d0161017207	00050f01610163017207
 8.2.196	1	at least one	no bit is set	00	010064
 8.2.197	1	shall not be set	ALBI and UEAI are both set	03	01
+8.2.199	1	an address	neither V4 nor V6 is set	00	020a000001 0120010db8000000000000000000000001
 8.2.200	1	at least one	neither UMN6RS nor an IP address is set	00 041f90	010a000001 40
 8.2.209	1	only one of	neither or both of V4 and V6 are set	04 07	05 011f900a000001
 8.2.217	1	at least one	no bit is set	2a2a00 2a2a0000	2a2a01 2a2a0001
@@ -77,4 +81,5 @@
 8.2.262	1	at least one	no bit is set	00	05
 8.2.262	2	exclusive	PER and EVT are both set	03	01 02 06
 8.2.268	1	at least one	no bit is set	0000	0100
+8.2.270	1	an address	neither V4 nor V6 is set	00	020a000001 0120010db8000000000000000000000001
 8.2.278	1	either	neither or both of TRUE and FALSE are set	00 03	01 02

@@ -26,8 +26,9 @@ script:
     flag-sentences.tsv  the sentences of clause 8.2 that say which flags of an IE are set
                         together: "at least one", "one and only one", "only one of", "may
                         only be set", "shall be set to "1" if the ... flag is set", "shall
-                        not be set", "either ... shall be set" or "exclusive", with the
-                        field of another flag ("shall also be present"), with a value
+                        not be set", "either ... shall be set", "exclusive" or "shall
+                        contain an IPv4 and/or IPv6 address", with the field of another
+                        flag ("shall also be present"), with a value
                         ("if ... is 1, then the ... flags shall be set"), with the Cause of
                         the message ("shall be set to "1" ... if ... the Cause IE is set
                         to"), or always ("this bit shall be set to "1"."), by their clause
@@ -389,6 +390,9 @@ FLAG_PHRASES = [
     # Of the flags that a value of another field has set: "If Proxy Authen Type Value is
     # 1, then the PAN and PAR flags shall be set".
     ('flags of a value', re.compile(r'(?i)\bif [A-Za-z /-]+ is \d+, then the [A-Za-z0-9, -]+ flags? shall be set\b')),
+    # Of an IE of addresses that has one: "The CP IP Address IE shall contain an IPv4
+    # and/or IPv6 address", one of the flags V4 and V6.
+    ('an address', re.compile(r'(?i)\bshall contain an IPv4 and/or IPv6 address\b')),
     # Of a flag whose field is of the field of another flag: "if this bit is set to "1",
     # the Length of Domain Name and the Domain Name fields shall also be present".
     ('also present', re.compile(r'(?i)\bif this bit is set to ["“]1["”],[^.;]*\bshall also be present\b')),

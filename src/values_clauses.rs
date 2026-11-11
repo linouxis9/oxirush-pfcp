@@ -272,6 +272,10 @@ pfcp_layout! {
         ipv4_address "IPv4 address": Ipv4Addr if v4,
         ipv6_address "IPv6 address": Ipv6Addr if v6,
     }
+    check(this, path, found) {
+        // It "shall contain an IPv4 and/or IPv6 address".
+        flag_rule(!(this.v4 || this.v6), path, "8.2.135", "neither V4 nor V6 is set", found);
+    }
 }
 
 pfcp_layout! {

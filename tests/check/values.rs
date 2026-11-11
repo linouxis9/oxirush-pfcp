@@ -777,6 +777,35 @@ fn the_ranges_of_the_values_of_clause_8_2() {
     );
 }
 
+/// §8.2.129, §8.2.135, §8.2.199 and §8.2.270: an Alternative SMF IP Address, a CP PFCP
+/// Entity IP Address, a CP IP Address and a MoQ Relay IP Address "shall contain an IPv4
+/// and/or IPv6 address": one of neither V4 nor V6 is told.
+#[test]
+fn an_ie_of_an_address_has_an_address() {
+    fn told<T: Codec + Check>(clause: &'static str) {
+        let rule = DeviationKind::Rule("neither V4 nor V6 is set");
+        assert_eq!(value_found::<T>("00"), [(clause, rule)]);
+        for octets in [
+            "020a000001",
+            "0120010db8000000000000000000000001",
+            "030a00000120010db8000000000000000000000001",
+        ] {
+            assert_eq!(value_found::<T>(octets), [], "{octets}");
+        }
+    }
+    told::<AlternativeSmfIpAddress>("8.2.129");
+    told::<CpPfcpEntityIpAddress>("8.2.135");
+    told::<CpIpAddress>("8.2.199");
+    told::<MoQRelayIpAddress>("8.2.270");
+    // A preferred PFCP entity of no address
+    let rule = DeviationKind::Rule("neither V4 nor V6 is set");
+    assert_eq!(
+        value_found::<AlternativeSmfIpAddress>("04"),
+        [("8.2.129", rule)]
+    );
+    assert_eq!(value_found::<AlternativeSmfIpAddress>("060a000001"), []);
+}
+
 /// §8.2.39, bit 5: with DNP, "the Length of Domain Name and the Domain Name fields shall
 /// also be present", which DN has there: a Domain Name Protocol is of a Domain Name.
 #[test]
