@@ -21,8 +21,10 @@
 //! - [`Message`] decodes and encodes a message, byte for byte. Its [`Body`] has a struct
 //!   for each message type of Table 7.3-1, with a field for each row of its table; each
 //!   IE has its type, with the fields of its figure in clause 8.2.
-//! - [`Message::check`] lists how a message breaks TS 29.244 on an interface, with the
-//!   clause and the Cause of the answer.
+//! - [`Message::check`] lists what one message breaks of TS 29.244 on an interface, with
+//!   the clause and the Cause of the answer: the tables of clause 7 and the values of
+//!   clause 8.2, as its octets show them. A message in which it finds nothing is not
+//!   thereby conformant: the README says what it does not check.
 //! - With the feature `tree`, a message is a tree that prints as JSON ([`tree`](mod@tree)), read and
 //!   edited by path ([`paths`]); with `serde`, it is serialized as its tree.
 //! - [`framing`] walks the IEs of a message as slices, without decoding them.

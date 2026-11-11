@@ -24,9 +24,19 @@ The first version, of TS 29.244 V19.6.0 (2026-06):
   field that runs to the end of the IE, a field longer than the length that its flags
   give, or shorter with octets after it, a value of bits of a number of octets that it
   may not have, and a Node ID of other octets that are an address or an FQDN.
-- `check()`: how a message breaks the tables and clauses on an interface, each deviation
-  with its path, its clause and the Cause of the answer; `deviations()` of a value on
-  its own. A `Row` is its roles, each with its presence, its interfaces and how many IEs
+- `check()`: what one message breaks of the tables and clauses on an interface, each
+  deviation with its path, its clause and the Cause of the answer; `deviations()` of a
+  value on its own. It holds a message to what its octets show, and a message in which
+  it finds nothing is not thereby conformant: the README says what it checks and what it
+  does not ("Limits of `check()`"). Of a value of clause 8.2, it checks the figure, the
+  sentences on which flags and fields go together, the tables of values, the ranges that
+  the clause gives (a Congestion information of 0 to 10000, an RTP Payload Type of 0 to
+  127), the formats that it gives with "shall" and that the octets show (UTF-8, base64, a
+  UUID of version 4, an HTTP header field, the Operator Identifier of an APN/DNN, the
+  addresses of a Redirect Information by its type), and the media identifications of an
+  SDF Filter and the additional fields of PFD Contents, which a value keeps as octets.
+  An Outer Header Removal Description that Table 8.2.64-1 does not name is answered
+  "Mandatory IE incorrect", as its NOTE 7 has it. A `Row` is its roles, each with its presence, its interfaces and how many IEs
   of it may be there: the row itself, or the rows that share a field, which the wire
   does not tell apart; `Row::content` the table of a grouped IE in its place, of an IE
   type whose content differs by place. `Row::on` gives what a row is on an interface, or

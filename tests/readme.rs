@@ -123,7 +123,7 @@ fn block_1() {
             println!("{message}: {} PDR, from {}", request.create_pdr.len(), from.interface_value);
         }
 
-        // Nothing is wrong with it on N4; Sxa has no Precedence in a Create PDR
+        // check() finds nothing in it on N4; Sxa has no Precedence in a Create PDR
         println!("{} deviations on N4", message.check(Interfaces::N4).len());
         for deviation in message.check(Interfaces::SXA) {
             println!("on Sxa: {deviation}");
