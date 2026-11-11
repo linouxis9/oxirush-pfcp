@@ -33,6 +33,10 @@ script:
                         to"), or always ("this bit shall be set to "1"."), by their clause
                         and their number in it, which flag-rules.tsv lists with the rule
                         that checks each
+    range-sentences.tsv the sentences of clause 8.2 that bound the value of a field, "in
+                        the range 1 to 255", "between (and including) 0 and 127", "from 0
+                        up to 100", by their clause and their number in it, with the
+                        bounds, which range-rules.tsv lists with the rule that checks each
     value-tables.tsv    the tables of clause 8.2 that name values, or bits as octet/bit; a
                         value that a table reserves is named <reserved>, and the spare
                         values that a note of the table has the receiver reject with
@@ -149,7 +153,7 @@ def main():
     heading, caption = '', None
     message_types, ie_types, tables, layouts, values, clause6 = [], [], [], [], [], []
     read = []
-    figures, conditions, flags = [], [], []
+    figures, conditions, flags, ranges = [], [], [], []
     # The fields of octets of the figure of the clause, by name and by their octets, and
     # its fields of bits of more than one bit.
     fields, labels, cells = [], {}, []
@@ -168,6 +172,8 @@ def main():
                 clause = heading.split(' ', 1)[0]
                 for phrase in flag_sentences(value):
                     flags.append([clause, str(sum(row[0] == clause for row in flags) + 1), phrase])
+                for bounds in range_sentences(value):
+                    ranges.append([clause, str(sum(row[0] == clause for row in ranges) + 1), bounds])
             caption = value if style == 'TH' else None
             continue
         block, widths = block
@@ -219,6 +225,7 @@ def main():
     write('figures.tsv', ['clause', 'octets', 'name', 'lowest bit', 'bits'], figures)
     write('conditions.tsv', ['clause', 'flag', 'set', 'field', 'there'], conditions)
     write('flag-sentences.tsv', ['clause', 'n', 'phrase'], flags)
+    write('range-sentences.tsv', ['clause', 'n', 'bounds'], ranges)
     write('value-tables.tsv', ['table', 'title', 'value', 'name'], values)
     write('read-as.tsv', ['table', 'values', 'read as'], read)
     write('clause-6.tsv', ['clause', 'title', 'requirements'], [[c, t, str(n)] for c, t, n in clause6])
@@ -400,6 +407,22 @@ def flag_sentences(paragraph):
         phrase = next((name for name, pattern in FLAG_PHRASES if pattern.search(sentence)), None)
         if phrase:
             out.append(phrase)
+    return out
+
+
+# The bounds of a value that a sentence of clause 8.2 says: "in the range 1 to 255", "in the
+# (decimal) values range 0 to 10000", "between (and including) 0 and 127", "the range of
+# the Packet Count value is from 0 to 255", "from 0 up to 100".
+RANGE = re.compile(r'(?i)\b(?:range|between)\b[^.;]{0,40}?\b(\d+) (?:to|and) (\d+)\b|\bfrom (\d+) up to (\d+)\b')
+
+
+def range_sentences(paragraph):
+    """The bounds of each sentence of a paragraph that bounds the value of a field."""
+    out = []
+    for sentence in re.split(r'(?<!i\.e\.)(?<!e\.g\.)(?<=[.;:])\s+(?=[A-Z(-])', paragraph):
+        for found in RANGE.finditer(sentence):
+            low, high = [group for group in found.groups() if group is not None]
+            out.append(f'{low} to {high}')
     return out
 
 

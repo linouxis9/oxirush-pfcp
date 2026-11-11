@@ -721,6 +721,62 @@ fn the_additional_fields_of_pfd_contents() {
     assert_eq!(value_found::<PfdContents>("20000000"), []);
 }
 
+/// The values that their clauses bound: the Downlink and the Uplink Congestion information
+/// of a QoS Monitoring Measurement, and their thresholds of Reporting Thresholds, "in the
+/// (decimal) values range 0 to 10000 (included)" (§8.2.171, §8.2.240); an RTP Payload
+/// Type, "an integer between (and including) 0 and 127" (§8.2.236); an RTP Header
+/// Extension ID, "a decimal value in the range 1 to 255" (§8.2.235); and the PSI value of
+/// a PDU Set Importance for N6-unmarked PDUs, "within the range (inclusive) of values 1 to
+/// 15" (§8.2.282). A value outside its range is told, and the ends of the range are not.
+#[test]
+fn the_ranges_of_the_values_of_clause_8_2() {
+    fn told<T: Codec + Check>(
+        clause: &'static str,
+        rule: &'static str,
+        outside: &[&str],
+        within: &[&str],
+    ) {
+        for octets in outside {
+            let expected = [(clause, DeviationKind::Rule(rule))];
+            assert_eq!(value_found::<T>(octets), expected, "{octets}");
+        }
+        for octets in within {
+            assert_eq!(value_found::<T>(octets), [], "{octets}");
+        }
+    }
+    // DLCI, ULCI, and both: 10001 and 65535; 0 and 10000
+    told::<QoSMonitoringMeasurement>(
+        "8.2.171",
+        "a Downlink or Uplink Congestion information above 10000",
+        &["102711", "10ffff", "202711", "3000002711", "3027110000"],
+        &["100000", "102710", "202710", "3027102710"],
+    );
+    told::<ReportingThresholds>(
+        "8.2.240",
+        "a Downlink or Uplink Congestion information threshold above 10000",
+        &["012711", "01ffff", "022711", "0300002711", "0327110000"],
+        &["010000", "012710", "022710", "0327102710"],
+    );
+    told::<RtpPayloadType>(
+        "8.2.236",
+        "a Payload Type above 127",
+        &["80", "c8", "ff"],
+        &["00", "7f"],
+    );
+    told::<RtpHeaderExtensionId>(
+        "8.2.235",
+        "an RTP Header Extension ID of 0",
+        &["00"],
+        &["01", "ff"],
+    );
+    told::<PduSetImportanceForN6UnmarkedPDUs>(
+        "8.2.282",
+        "a PSI value of 0",
+        &["00"],
+        &["01", "0f"],
+    );
+}
+
 /// §8.2.39, bit 5: with DNP, "the Length of Domain Name and the Domain Name fields shall
 /// also be present", which DN has there: a Domain Name Protocol is of a Domain Name.
 #[test]

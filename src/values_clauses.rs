@@ -466,6 +466,10 @@ pfcp_layout! {
     }
     check(this, path, found) {
         flag_rule(!(this.dlci || this.ulci || this.dldr || this.uldr), path, "8.2.240", "no bit is set", found);
+        // "in the (decimal) values range 0 to 10000 (included)", as the Congestion
+        // information that they are thresholds of (§8.2.171).
+        let above = |threshold: Option<u16>| threshold.is_some_and(|value| value > 10000);
+        flag_rule(above(this.dl_congestion_information_threshold) || above(this.ul_congestion_information_threshold), path, "8.2.240", "a Downlink or Uplink Congestion information threshold above 10000", found);
     }
 }
 

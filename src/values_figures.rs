@@ -141,10 +141,14 @@ pfcp_field! {
     AreaSessionId(u16) "Area Session ID value" "8.2.213";
     /// RTP Header Extension Type (§8.2.234).
     RtpHeaderExtensionType(RtpHeaderExtensionTypeValue) "RTP Header Extension Type" "8.2.234";
-    /// RTP Header Extension ID (§8.2.235).
-    RtpHeaderExtensionId(u8) "RTP Header Extension ID" "8.2.235";
-    /// RTP Payload Type (§8.2.236).
-    RtpPayloadType(u8) "Payload Type" "8.2.236";
+    /// RTP Header Extension ID (§8.2.235): "a decimal value in the range 1 to 255".
+    RtpHeaderExtensionId(u8) "RTP Header Extension ID" "8.2.235" check(this, path, found) {
+        flag_rule(this.value == 0, path, "8.2.235", "an RTP Header Extension ID of 0", found);
+    };
+    /// RTP Payload Type (§8.2.236): "an integer between (and including) 0 and 127".
+    RtpPayloadType(u8) "Payload Type" "8.2.236" check(this, path, found) {
+        flag_rule(this.value > 127, path, "8.2.236", "a Payload Type above 127", found);
+    };
     /// RTP Payload Format (§8.2.237).
     RtpPayloadFormat(PayloadFormat) "Payload Format" "8.2.237";
     /// Reporting Endpoint ID (§8.2.253).
@@ -777,9 +781,13 @@ pfcp_bits! {
 }
 
 pfcp_bits! {
-    /// PDU Set Importance for N6-unmarked PDUs (§8.2.282).
+    /// PDU Set Importance for N6-unmarked PDUs (§8.2.282): a PSI value "within the range
+    /// (inclusive) of values 1 to 15".
     pub struct PduSetImportanceForN6UnmarkedPDUs "8.2.282" octets 1 min 1 {
         psi_value "PSI value": 0 1 4,
+    }
+    check(this, path, found) {
+        flag_rule(this.psi_value == 0, path, "8.2.282", "a PSI value of 0", found);
     }
 }
 
@@ -1137,6 +1145,10 @@ pfcp_layout! {
     check(this, path, found) {
         flag_rule(!(this.dlpd || this.ulpd || this.rppd || this.plmf || this.dlci || this.ulci || this.dldr || this.uldr), path, "8.2.171", "no bit is set", found);
         flag_rule(this.plmf && (this.rppd || this.ulpd || this.dlpd), path, "8.2.171", "PLMF is set with a packet delay", found);
+        // "in the (decimal) values range 0 to 10000 (included)", a percentage of two
+        // decimal places.
+        let above = |information: Option<u16>| information.is_some_and(|value| value > 10000);
+        flag_rule(above(this.downlink_congestion_information) || above(this.uplink_congestion_information), path, "8.2.171", "a Downlink or Uplink Congestion information above 10000", found);
     }
 }
 

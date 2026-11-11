@@ -948,15 +948,40 @@ fn requirements() {
 /// the values of each row as it says, or the row says why it cannot.
 #[test]
 fn flag_rules() {
-    let sentences: Vec<(&str, &str, &str)> = records(include_str!("spec/flag-sentences.tsv"))
+    sentence_rules(
+        include_str!("spec/flag-sentences.tsv"),
+        include_str!("spec/flag-rules.tsv"),
+        "flag-rules.tsv",
+    );
+}
+
+/// The sentences of clause 8.2 that bound the value of a field: each has its row in
+/// `range-rules.tsv`, in the order of `range-sentences.tsv`, with its bounds, and check()
+/// answers the values of each row as it says, or the row says why no value breaks it.
+#[test]
+fn value_ranges() {
+    sentence_rules(
+        include_str!("spec/range-sentences.tsv"),
+        include_str!("spec/range-rules.tsv"),
+        "range-rules.tsv",
+    );
+}
+
+/// The sentences of the fixture `sentences`, by their clause, their number in it and their
+/// phrase, against the rows of `rules`, the fixture `name`: each sentence has its row, in
+/// its order, and each row is of a sentence; check() gives a value that breaks the rule of
+/// a row that deviation alone, a `Rule` of its words, or a value read as another for a
+/// rule `read as N`, and a value that keeps it none.
+fn sentence_rules(sentences: &'static str, rules: &'static str, name: &str) {
+    let sentences: Vec<(&str, &str, &str)> = records(sentences)
         .into_iter()
         .map(|cells| (cells[0], cells[1], cells[2]))
         .collect();
     let mut listed = Vec::new();
     let mut problems = Vec::new();
-    for cells in records(include_str!("spec/flag-rules.tsv")) {
+    for cells in records(rules) {
         let [clause, n, phrase, rule, breaks, keeps] = cells[..] else {
-            problems.push(format!("flag-rules.tsv: {cells:?} has not six cells"));
+            problems.push(format!("{name}: {cells:?} has not six cells"));
             continue;
         };
         listed.push((clause, n, phrase));
@@ -977,9 +1002,8 @@ fn flag_rules() {
                 "with the Cause" => message_checked,
                 _ => flag_checked,
             };
-            let Some(found) = hex::decode(octets)
-                .ok()
-                .and_then(|octets| checked(info.ie_type, &octets))
+            let decoded = hex::decode(octets).unwrap_or_default();
+            let Some(found) = checked(info.ie_type, &decoded).filter(|_| !decoded.is_empty())
             else {
                 problems.push(format!(
                     "{clause}/{n}: {octets} is no value of IE type {}",
@@ -987,8 +1011,14 @@ fn flag_rules() {
                 ));
                 continue;
             };
+            let read = rule
+                .strip_prefix("read as ")
+                .map(|read| DeviationKind::ReadAs {
+                    value: decoded[0].into(),
+                    read: read.parse().expect("read as a number"),
+                });
             let expected = match broken {
-                true => vec![(clause, DeviationKind::Rule(rule))],
+                true => vec![(clause, read.unwrap_or(DeviationKind::Rule(rule)))],
                 false => Vec::new(),
             };
             if found != expected {
@@ -998,20 +1028,18 @@ fn flag_rules() {
     }
     for sentence in &sentences {
         if !listed.contains(sentence) {
-            problems.push(format!(
-                "flag-rules.tsv: no row of the sentence {sentence:?}"
-            ));
+            problems.push(format!("{name}: no row of the sentence {sentence:?}"));
         }
     }
     for row in &listed {
         if !sentences.contains(row) {
-            problems.push(format!(
-                "flag-rules.tsv: {row:?} is no sentence of the document"
-            ));
+            problems.push(format!("{name}: {row:?} is no sentence of the document"));
         }
     }
     if problems.is_empty() && listed != sentences {
-        problems.push("flag-rules.tsv: the rows are not in the order of the sentences".into());
+        problems.push(format!(
+            "{name}: the rows are not in the order of the sentences"
+        ));
     }
     report(problems);
 }
@@ -1033,8 +1061,8 @@ fn message_checked(_: u16, octets: &[u8]) -> Option<Vec<(&'static str, Deviation
 }
 
 /// The clauses and the kinds of what check() finds in a value of `ie_type` of `octets`,
-/// which encodes back to them: `None` for a type of no row of `flag-rules.tsv`, or octets
-/// that do not.
+/// which encodes back to them: `None` for a type of no row of `flag-rules.tsv` and of
+/// `range-rules.tsv`, or octets that do not.
 fn flag_checked(ie_type: u16, octets: &[u8]) -> Option<Vec<(&'static str, DeviationKind)>> {
     fn of<T: Codec + Check>(octets: &[u8]) -> Option<Vec<(&'static str, DeviationKind)>> {
         let value = T::decode(octets)?;
@@ -1106,6 +1134,10 @@ fn flag_checked(ie_type: u16, octets: &[u8]) -> Option<Vec<(&'static str, Deviat
         ExpeditedTransferIndication,
         EthernetPduSessionInformation,
         L2tpUserAuthentication,
+        Weight,
+        RtpHeaderExtensionId,
+        RtpPayloadType,
+        PduSetImportanceForN6UnmarkedPDUs,
     );
     None
 }

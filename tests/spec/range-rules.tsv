@@ -1,0 +1,30 @@
+# The sentences of clause 8.2 of TS 29.244 V19.6.0 that bound the value of a field, as
+# range-sentences.tsv numbers them in their clauses, with their bounds: "in the range 1 to
+# 255", "between (and including) 0 and 127", "from 0 up to 100". Each row gives the rule of
+# check() that checks the sentence, in its words, with the octets of values of the IE of
+# the clause that break it and that keep it, or `none:` and why no value breaks it:
+#
+#   rule     the words of the Rule deviation of the clause that check() gives a value
+#            outside the bounds, or `read as N` for a value that check() tells as one
+#            that its receiver reads as N
+#   breaks   values outside the bounds, which break nothing else: check() gives that
+#            deviation alone
+#   keeps    values within them, their ends among them: check() gives no deviation
+#
+# The test `value_ranges` fails on a sentence without its row, a row of no sentence, and a
+# value that check() does not answer as the row says.
+#
+# clause	n	bounds	rule	breaks	keeps
+8.2.5	1	0 to 127	a Payload Type of a media identification above 127	20000100020280 200001000202ff	20000100020200 2000010002027f
+8.2.5	2	1 to 255	an RTP SDES Header Extension ID for MID of a media identification of 0	20000100040c016100	20000100040c016101 20000100040c0161ff
+8.2.30	1	0 to 65535	none: the one or two octets of the Packet Count value hold no other value	-	-
+8.2.92	1	0 to 255	none: the octet of the Traffic Endpoint ID value holds no other value	-	-
+8.2.100	1	0 to 255	none: the octet of the Packet Count value holds no other value	-	-
+8.2.116	1	0 to 7	none: the three bits of the PPI value hold no other value	-	-
+8.2.126	1	0 to 100	read as 0	65 ff	00 64
+8.2.171	1	0 to 10000	a Downlink or Uplink Congestion information above 10000	102711 20ffff	100000 102710 3027102710
+8.2.214	1	0 to 7	none: the three bits of the PPI Value hold no other value	-	-
+8.2.235	1	1 to 255	an RTP Header Extension ID of 0	00	01 ff
+8.2.236	1	0 to 127	a Payload Type above 127	80 ff	00 7f
+8.2.240	1	0 to 10000	a Downlink or Uplink Congestion information threshold above 10000	012711 02ffff	010000 012710 0327102710
+8.2.282	1	1 to 15	a PSI value of 0	00	01 0f
