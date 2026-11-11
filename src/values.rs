@@ -151,8 +151,10 @@ pfcp_layout! {
     placed(address, table, path, found) {
         // S/D "is only applicable to the UE IP Address IE in the PDI IE, Create Traffic
         // Endpoint IE and Update Traffic Endpoint IE", whose rows have it a source or a
-        // destination, and "shall be set to "0" and ignored by the receiver" in the others.
-        if address.sd && !["7.5.2.2-2", "7.5.2.7-1", "7.5.4.13-1"].contains(&table) {
+        // destination, and "shall be set to "0" and ignored by the receiver" in the others;
+        // and IPv6D "is only applicable to the UE IP address IE in" the same three.
+        let applicable = ["7.5.2.2-2", "7.5.2.7-1", "7.5.4.13-1"].contains(&table);
+        if (address.sd || address.ipv6d) && !applicable {
             found.push(Deviation::new(path, "8.2.62", DeviationKind::SpareBits));
         }
         flag_rule((address.chv4 || address.chv6) && crate::check::of_the_up_function(table), path, "8.2.62", "CHV4 or CHV6 is set in an IE of the UP function", found);
@@ -713,6 +715,10 @@ pfcp_layout! {
         if !(creation.gtpu_udp_ipv4 || creation.gtpu_udp_ipv6 || creation.udp_ipv4 || creation.udp_ipv6 || creation.ipv4_header || creation.ipv6_header || creation.c_tag_header || creation.s_tag_header || creation.n19_indication || creation.n6_indication || creation.low_layer_ssm_and_c_teid) {
             found.push(Deviation::new(path, "8.2.56", DeviationKind::Rule("no bit of the description is set")));
         }
+        // With 6/3, "the TEID, IPv4/IPv6 address and Port Number fields shall not be
+        // present" (NOTE 7 of Table 8.2.56-1): the bits of octet 5 that have them there.
+        let with = creation.gtpu_udp_ipv4 || creation.gtpu_udp_ipv6 || creation.udp_ipv4 || creation.udp_ipv6 || creation.ipv4_header || creation.ipv6_header;
+        flag_rule(creation.low_layer_ssm_and_c_teid && with, path, "8.2.56", "Low Layer SSM and C-TEID is set with a TEID, an IP address or a Port Number", found);
         let (c_tag, s_tag) = (creation.c_tag.as_ref(), creation.s_tag.as_ref());
         crate::values_clauses::check_tags(c_tag.map(|tag| &tag[..]), s_tag.map(|tag| &tag[..]), path, "8.2.56", found);
     }

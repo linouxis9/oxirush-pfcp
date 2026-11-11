@@ -473,6 +473,108 @@ fn an_outer_header_creation_of_octet_6_alone() {
     );
 }
 
+/// Table 8.2.56-1, NOTE 7: with "Low Layer SSM and C-TEID" (6/3), "the TEID, IPv4/IPv6
+/// address and Port Number fields shall not be present": the bits of octet 5 that have
+/// them there are told with it.
+#[test]
+fn an_outer_header_creation_of_a_low_layer_ssm_has_no_teid_address_or_port() {
+    let rule = "Low Layer SSM and C-TEID is set with a TEID, an IP address or a Port Number";
+    let v6 = "20010db8000000000000000000000001";
+    // 5/1 and its TEID and IPv4 address; 5/2; 5/3 and its address and port; 5/4; 5/5; 5/6
+    for with in [
+        "0104000000010a000001".to_string(),
+        format!("020400000001{v6}"),
+        "04040a0000011f90".to_string(),
+        format!("0804{v6}1f90"),
+        "10040a000001".to_string(),
+        format!("2004{v6}"),
+    ] {
+        let told = value_found::<OuterHeaderCreation>(&with);
+        assert_eq!(told, [("8.2.56", DeviationKind::Rule(rule))], "{with}");
+    }
+    // 6/3 alone, with 6/1 and 6/2, and with a C-TAG; and 5/1 without it
+    for without in ["0004", "0007", "4004010064", "0100000000010a000001"] {
+        assert_eq!(value_found::<OuterHeaderCreation>(without), [], "{without}");
+    }
+}
+
+/// §8.2.62, bit 4: IPv6D "is only applicable to the UE IP address IE in the PDI IE, Create
+/// Traffic Endpoint IE and Update Traffic Endpoint IE", as S/D is: set in another IE, as
+/// the UE IP Address of a Created PDR or of a usage report, it is told as S/D is there,
+/// a bit that its place does not have, with no Cause.
+#[test]
+fn the_ipv6d_of_a_ue_ip_address_is_of_a_pdi_and_a_traffic_endpoint() {
+    let delegated = UeIpAddress {
+        v6: true,
+        ipv6d: true,
+        ipv6: Some("2001:db8::".parse().unwrap()),
+        ipv6_prefix_delegation_bits: Some(56),
+        ..Default::default()
+    };
+    let told = |message: Message| -> Vec<(String, DeviationKind, Option<CauseValue>)> {
+        let octets = message.encode().unwrap();
+        let found = Message::decode(&octets).unwrap().check(Interfaces::N4);
+        let found = found.into_iter().filter(|found| found.clause == "8.2.62");
+        found
+            .map(|found| (found.path, found.kind, found.cause))
+            .collect()
+    };
+    let mut message = establishment();
+    request_with(&mut message, |request| {
+        let pdi = request.create_pdr[0].pdi.as_mut().unwrap();
+        pdi.ue_ip_address = vec![delegated.clone()];
+        request.create_traffic_endpoint = vec![CreateTrafficEndpoint {
+            traffic_endpoint_id: Some(TrafficEndpointId::new(1)),
+            ue_ip_address: vec![delegated.clone()],
+            ..Default::default()
+        }];
+    });
+    assert_eq!(told(message), []);
+    let update = SessionModificationRequest {
+        update_traffic_endpoint: vec![UpdateTrafficEndpoint {
+            traffic_endpoint_id: Some(TrafficEndpointId::new(1)),
+            ue_ip_address: vec![delegated.clone()],
+            ..Default::default()
+        }],
+        ..Default::default()
+    };
+    assert_eq!(told(Message::session(1, 8, update)), []);
+    // In a Created PDR, and in a usage report of a Session Report Request
+    let response = SessionEstablishmentResponse {
+        node_id: Some(NodeId::Ipv4(SMF)),
+        cause: Some(Cause::new(CauseValue::RequestAccepted)),
+        up_f_seid: Some(FSeid::ipv4(1, SMF)),
+        created_pdr: vec![CreatedPdr {
+            pdr_id: Some(PdrId::new(1)),
+            ue_ip_address: vec![delegated.clone()],
+            ..Default::default()
+        }],
+        ..Default::default()
+    };
+    let spare = |path: &str| (path.to_string(), DeviationKind::SpareBits, None);
+    assert_eq!(
+        told(Message::session(1, 7, response)),
+        [spare("/pfcp/Created PDR/0/UE IP Address/0")]
+    );
+    let report = SessionReportRequest {
+        report_type: Some(ReportType {
+            usar: true,
+            ..Default::default()
+        }),
+        usage_report: vec![UsageReport {
+            ue_ip_address: Some(delegated.clone()),
+            ..Default::default()
+        }],
+        ..Default::default()
+    };
+    assert_eq!(
+        told(Message::session(1, 9, report)),
+        [spare("/pfcp/Usage Report/0/UE IP address")]
+    );
+    // The IE alone has no place to tell
+    assert_eq!(delegated.deviations(), []);
+}
+
 /// The rules of clause 8.2 on which flags go together, in messages (tests/spec/flag-rules.tsv
 /// has each): an Apply Action of no action or of two, a Report Type, a Measurement Method,
 /// Reporting Triggers and a Node Report Type of no bit. Each in a mandatory IE of a request

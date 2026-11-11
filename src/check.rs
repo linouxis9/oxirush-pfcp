@@ -168,9 +168,10 @@ pub enum DeviationKind {
     /// Spare bits that are not zero (§8.1.2), and a reserved bit or a field that its clause
     /// has the sender set to 0 and the receiver ignore, as bit 3 of Reporting Frequency
     /// (§8.2.168), the Number of Additional Usage Reports with AURI (§8.2.91), a field of
-    /// RTP Header Extension Additional Information whose flag is 0 (§8.2.241), S/D of a UE
-    /// IP Address outside a PDI, a Create and an Update Traffic Endpoint (§8.2.62), and the
-    /// four bits after the NID of an MBS Session Identifier (§8.2.206).
+    /// RTP Header Extension Additional Information whose flag is 0 (§8.2.241), S/D and
+    /// IPv6D of a UE IP Address outside a PDI, a Create and an Update Traffic Endpoint,
+    /// where alone they are applicable (§8.2.62), and the four bits after the NID of an
+    /// MBS Session Identifier (§8.2.206).
     SpareBits,
     /// A value that its table has as spare, or does not have: the receiver ignores it
     /// (§7.6.8).
