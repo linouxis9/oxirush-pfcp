@@ -72,8 +72,10 @@ pfcp_layout! {
         // RTP SDES Header Extension ID for MID "in the range 1 to 255".
         let fields = || media.iter().filter_map(|media| media.0.split_first()).map(|(flags, rest)| media_fields(*flags, rest));
         flag_rule(fields().any(|fields| fields.is_none()), path, "8.2.5", "a media identification without the octets of a field that its flags announce", found);
-        flag_rule(fields().flatten().any(|(payload_type, _)| payload_type.is_some_and(|value| value > 127)), path, "8.2.5", "a Payload Type of a media identification above 127", found);
-        flag_rule(fields().flatten().any(|(_, id)| id == Some(0)), path, "8.2.5", "an RTP SDES Header Extension ID for MID of a media identification of 0", found);
+        // The first octet of the field of `name` of each media identification that has it
+        let of = |name: &'static str| fields().flatten().filter_map(move |fields| fields.iter().find(|(field, _)| *field == name).and_then(|(_, octets)| octets.first().copied()));
+        flag_rule(of(MEDIA_FIELDS[1].1).any(|payload_type| payload_type > 127), path, "8.2.5", "a Payload Type of a media identification above 127", found);
+        flag_rule(of(MEDIA_FIELDS[3].1).any(|id| id == 0), path, "8.2.5", "an RTP SDES Header Extension ID for MID of a media identification of 0", found);
     }
 }
 
@@ -85,28 +87,58 @@ const MIDPI: u8 = 0x04;
 const RHIDMPI: u8 = 0x08;
 const RPTPI: u8 = 0x10;
 
+/// The fields of an (S)RTP Multiplexed Media Identification Information after its octet of
+/// flags, in the order of Figure 8.2.5-2: the flag that announces each, its name, and its
+/// octets, or `None` for one after its length of one octet.
+const MEDIA_FIELDS: [(u8, &str, Option<usize>); 5] = [
+    (SSRCPI, "Synchronization Source (SSRC)", Some(4)),
+    (PTPI, "Payload Type (PT)", Some(1)),
+    (MIDPI, "Media Identification Tag", None),
+    (RHIDMPI, "RTP SDES Header Extension ID for MID", Some(1)),
+    (RPTPI, "RTCP Packet Type", Some(1)),
+];
+
 /// The fields of an (S)RTP Multiplexed Media Identification Information of `flags`, read
-/// from the octets after them as Figure 8.2.5-2 lays them out: the SSRC, the Payload
-/// Type, the Media Identification Tag after its length, the RTP SDES Header Extension ID
-/// for MID and the RTCP Packet Type, each where its flag announces it. The Payload Type
-/// and the RTP SDES Header Extension ID for MID that it has, whose values the clause
-/// bounds, or `None` where the octets end before a field does. The octets after the fields
-/// are a later release's.
-fn media_fields(flags: u8, mut rest: &[u8]) -> Option<(Option<u8>, Option<u8>)> {
-    let octet = |flag: u8, rest: &mut &[u8]| match flags & flag != 0 {
-        true => u8::read(rest).map(Some),
-        false => Some(None),
-    };
-    if flags & SSRCPI != 0 {
-        u32::read(&mut rest)?;
+/// from the octets after them as Figure 8.2.5-2 lays them out, each where its flag
+/// announces it, by its name: `None` where the octets end before a field does. The octets
+/// after the fields are a later release's.
+fn media_fields(flags: u8, mut rest: &[u8]) -> Option<Vec<(&'static str, &[u8])>> {
+    let mut fields = Vec::new();
+    for (flag, name, octets) in MEDIA_FIELDS {
+        if flags & flag == 0 {
+            continue;
+        }
+        let length = match octets {
+            Some(octets) => octets,
+            None => usize::from(u8::read(&mut rest)?),
+        };
+        let (field, after) = rest.split_at_checked(length)?;
+        fields.push((name, field));
+        rest = after;
     }
-    let payload_type = octet(PTPI, &mut rest)?;
-    if flags & MIDPI != 0 {
-        Lv8::read(&mut rest)?;
-    }
-    let extension_id = octet(RHIDMPI, &mut rest)?;
-    octet(RPTPI, &mut rest)?;
-    Some((payload_type, extension_id))
+    Some(fields)
+}
+
+/// The flags of Figure 8.2.5-2, by their names and their bits, which the test `spec`
+/// reads the sentences of the clause with: for that test alone.
+#[cfg(feature = "spec")]
+#[doc(hidden)]
+pub const MEDIA_IDENTIFICATION_FLAGS: [(&str, u8); 5] = [
+    ("SSRCPI", SSRCPI),
+    ("PTPI", PTPI),
+    ("MIDPI", MIDPI),
+    ("RHIDMPI", RHIDMPI),
+    ("RPTPI", RPTPI),
+];
+
+/// The names of the fields that `check()` reads of an (S)RTP Multiplexed Media
+/// Identification Information of `octets`, its flags first: for the test `spec` alone.
+#[cfg(feature = "spec")]
+#[doc(hidden)]
+pub fn media_identification_fields(octets: &[u8]) -> Option<Vec<&'static str>> {
+    let (flags, rest) = octets.split_first()?;
+    let fields = media_fields(*flags, rest)?;
+    Some(fields.into_iter().map(|(name, _)| name).collect())
 }
 
 /// Whether `octets` are entries, each after its length of two octets, as the Additional

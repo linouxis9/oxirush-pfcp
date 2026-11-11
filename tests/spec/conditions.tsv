@@ -14,6 +14,14 @@
 8.2.5	SPI	set	Security Parameter Index	present
 8.2.5	FL	set	Flow Label	present
 8.2.5	BID	set	SDF Filter ID	present
+8.2.5	SMMII	set	Number of (S)RTP Multiplexed Media Identification Information instances	present
+8.2.5	SMMII	set	Length of (S)RTP Multiplexed Media Identification Information 1	present
+8.2.5	SMMII	set	(S)RTP Multiplexed Media Identification Information 1	present
+8.2.5	SSRCPI	set	Synchronization Source (SSRC)	present
+8.2.5	PTPI	set	Payload Type (PT)	present
+8.2.5	MIDPI	set	Length of the Media Identification Tag field and the Media Identification Tag	present
+8.2.5	RHIDMPI	set	RTP SDES Header Extension ID for MID	present
+8.2.5	RPTPI	set	RTCP Packet Type	present
 8.2.13	TOVOL	set	Total Volume	present
 8.2.13	ULVOL	set	Uplink Volume	present
 8.2.13	DLVOL	set	Downlink Volume	present
@@ -26,7 +34,12 @@
 8.2.20	Redirect Address Type	is IPv4 address and Port | IPv6 address and Port | IPv4 and IPv6 addresses and Port	Redirect Port	present
 8.2.20	Redirect Address Type	is IPv4 address and Port | IPv6 address and Port | IPv4 and IPv6 addresses and Port	Redirect Address Server Address	present
 8.2.20	Redirect Address Type	is IPv4 and IPv6 addresses and Port	Other Redirect Server Address	present
+8.2.27	PPI	set	Paging Policy Indication value	present
+8.2.27	PPI	unset	Paging Policy Indication value	absent
+8.2.27	QFII	set	QFI	present
+8.2.27	QFII	unset	QFI	absent
 8.2.27	DLPSI	set	DL Data Packets Size	present
+8.2.27	DLPSI	unset	DL Data Packets Size	absent
 8.2.37	V6	set	IPv6 address	present
 8.2.37	V4	set	IPv4 address	present
 8.2.39	FD	set	Length of Flow Description	present
@@ -58,12 +71,30 @@
 8.2.50	TOVOL	set	Total Volume	present
 8.2.50	ULVOL	set	Uplink Volume	present
 8.2.50	DLVOL	set	Downlink Volume	present
+8.2.56	GTP-U/UDP/IPv4	set	TEID	present
+8.2.56	GTP-U/UDP/IPv6	set	TEID	present
+8.2.56	GTP-U/UDP/IPv4	set	IPv4 Address	present
+8.2.56	UDP/IPv4	set	IPv4 Address	present
+8.2.56	IPv4	set	IPv4 Address	present
+8.2.56	GTP-U/UDP/IPv6	set	IPv6 Address	present
+8.2.56	UDP/IPv6	set	IPv6 Address	present
+8.2.56	IPv6	set	IPv6 Address	present
+8.2.56	UDP/IPv4	set	Port Number	present
+8.2.56	UDP/IPv6	set	Port Number	present
 8.2.62	V6	set	IPv6 address	present
 8.2.62	V4	set	IPv4 address	present
 8.2.62	IPv6D	set	IPv6 Prefix Delegation Bits	present
 8.2.62	CHV4	set	IPv4 address	absent
 8.2.62	CHV6	set	IPv6 address	absent
 8.2.62	IP6PL	set	IPv6 Prefix Length	present
+8.2.63	ULPR	set	Uplink Time Unit	present
+8.2.63	ULPR	set	Maximum Uplink Packet Rate	present
+8.2.63	DLPR	set	Downlink Time Unit	present
+8.2.63	DLPR	set	Maximum Downlink Packet Rate	present
+8.2.63	ULPR	set	Additional Uplink Time Unit	present
+8.2.63	ULPR	set	Additional Maximum Uplink Packet Rate	present
+8.2.63	DLPR	set	Additional Downlink Time Unit	present
+8.2.63	DLPR	set	Additional Maximum Downlink Packet Rate	present
 8.2.66	TTC	set	ToS/Traffic Class	present
 8.2.66	SCI	set	Service Class Indicator	present
 8.2.70	V6	set	IPv6 address	present
@@ -96,16 +127,30 @@
 8.2.135	V4	set	IPv4 Address	present
 8.2.137	V6	set	(start) IPv6 address	present
 8.2.137	V4	set	(start) IPv4 address	present
+8.2.137	V4	set	(start) IPv4 address	present
+8.2.137	V4	set	(end) IPv4 address	present
+8.2.137	V6	set	(start) IPv6 address	present
+8.2.137	V6	set	(end) IPv6 address	present
 8.2.138	V6	set	IPv6 address	present
 8.2.138	V4	set	IPv4 address	present
 8.2.138	Mask/Prefix	set	mask/prefix length	present
 8.2.139	UL	set	Number of Remaining Uplink Packets Allowed	present
 8.2.139	DL	set	Number of Remaining Downlink Packets Allowed	present
+8.2.139	UL	set	Number of Remaining Additional Uplink Packets Allowed	present
+8.2.139	DL	set	Number of Remaining Additional Downlink Packets Allowed	present
+8.2.139	UL	set	Rate Control Status Validity Time	present
+8.2.139	DL	set	Rate Control Status Validity Time	present
 8.2.143	BID	set	User Plane Node ID value	present
 8.2.157	V4	set	MPTCP Proxy IPv4 Address	present
+8.2.157	V6	set	MPTCP IPv6 Address	present
 8.2.158	V4	set	Link-Specific Multipath IPv4 Address for 3GPP Access	present
 8.2.158	V6	set	Link-Specific Multipath IPv6 Address for 3GPP Access	present
 8.2.158	NV4	set	Link-Specific Multipath IPv4 Address for Non-3GPP Access	present
+8.2.158	NV6	set	Link-Specific Multipath IPv6 Address for Non-3GPP Access	present
+8.2.159	V4	set	PMF IPv4 Address	present
+8.2.159	V6	set	PMF IPv6 Address	present
+8.2.159	MAC	set	PMF MAC Address for Non-3GPP Access	present
+8.2.159	MAC	set	PMF MAC Address for 3GPP Access	present
 8.2.169	DL	set	Downlink packet delay threshold	present
 8.2.169	UL	set	Uplink packet delay threshold	present
 8.2.169	RP	set	Round trip packet delay threshold	present
@@ -129,7 +174,11 @@
 8.2.196	PLR	set	Packet Loss Rate value	present
 8.2.199	V6	set	IPv6 Address	present
 8.2.199	V4	set	IPv4 Address	present
+8.2.200	DIPV4	set	Destination IPv4	present
+8.2.200	DIPV6	set	Destination IPv6	present
 8.2.200	DPN	set	Destination Port Number	present
+8.2.200	SIPV4	set	Source IPv4	present
+8.2.200	SIPV6	set	Source IPv6	present
 8.2.200	SPN	set	Source Port Number	present
 8.2.200	UMN6RS	set	Destination IPv4 Address	absent
 8.2.200	UMN6RS	set	Destination IPv6 Address	absent
@@ -147,11 +196,17 @@
 8.2.209	CH	set	IPv4 address	absent
 8.2.209	CH	set	IPv6 address	absent
 8.2.209	CH	set	UDP Port	absent
+8.2.220	DL	set	Downlink packet N6 Jitter threshold	present
 8.2.222	DL	set	Higher DL Jitter Measurement	present
 8.2.222	DL	set	Lower DL Jitter Measurement	present
 8.2.222	DL	set	DL Periodicity	present
 8.2.226	V4	set	MPQUIC Proxy IPv4 Address	present
+8.2.226	V6	set	MPQUIC IPv6 Address	present
 8.2.229	Reporting Urgency value	is delay tolerant	Reporting Time Info	present
+8.2.240	DLCI	set	Downlink Congestion Information threshold	present
+8.2.240	ULCI	set	Uplink Congestion Information threshold	present
+8.2.240	DLDR	set	Downlink Data Rate threshold	present
+8.2.240	ULDR	set	Uplink Data Rate threshold	present
 8.2.242	CHV4	set	IPv4 address	absent
 8.2.242	V4	set	IPv4 address	present
 8.2.243	SIPV4	set	Source IPv4 address	present

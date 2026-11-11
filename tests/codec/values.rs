@@ -904,6 +904,164 @@ fn a_value_whose_octets_would_read_as_another_is_refused() {
     kept(NodeId::Other(0x12, vec![10u8, 0, 0, 1].into()));
 }
 
+/// Five values of flags and the fields that they announce, each read and written back as
+/// its figure has it, field by field: a Packet Rate Status, whose additional packets are of
+/// APR with UL or DL, and whose validity time of UL or DL (§8.2.139); an MPTCP and an
+/// MPQUIC Address Information, of a proxy type, a port and addresses (§8.2.157, §8.2.226);
+/// a Link-Specific Multipath IP Address, of four addresses (§8.2.158); and a PMF Address
+/// Information, whose ports are of an address, and whose MAC addresses of MAC (§8.2.159).
+/// Without the octets of a field that its flags announce, none decodes.
+#[test]
+fn five_values_of_flags_read_back_as_their_figures_have_them() {
+    let v6: std::net::Ipv6Addr = "2001:db8::1".parse().unwrap();
+    let v4 = Ipv4Addr::new(10, 0, 0, 1);
+    let ipv6 = "20010db8000000000000000000000001";
+    // UL, DL and APR: each count, then the time; UL alone; APR alone, of no count
+    let status: PacketRateStatus = read_back("07 0001 0002 0003 0004 0000000000000005");
+    assert_eq!(
+        (
+            status.remaining_uplink_packets,
+            status.remaining_additional_uplink_packets,
+            status.remaining_downlink_packets,
+            status.remaining_additional_downlink_packets,
+            status.rate_control_status_validity_time,
+        ),
+        (Some(1), Some(2), Some(3), Some(4), Some(5))
+    );
+    let status: PacketRateStatus = read_back("01 0001 0000000000000005");
+    assert_eq!(
+        (
+            status.remaining_uplink_packets,
+            status.remaining_additional_uplink_packets
+        ),
+        (Some(1), None)
+    );
+    assert_eq!(status.rate_control_status_validity_time, Some(5));
+    let status: PacketRateStatus = read_back("06 0003 0004 0000000000000005");
+    assert_eq!(
+        (
+            status.remaining_downlink_packets,
+            status.remaining_additional_downlink_packets
+        ),
+        (Some(3), Some(4))
+    );
+    let status: PacketRateStatus = read_back("04");
+    assert_eq!(status.rate_control_status_validity_time, None);
+    assert_eq!(
+        PacketRateStatus::decode(&hex::decode("010001").unwrap()),
+        None
+    );
+    // A proxy type, a port, then the IPv4 and the IPv6 address of V4 and V6
+    let mptcp: MptcpAddressInformation = read_back(&format!("03 01 1f90 0a000001 {ipv6}"));
+    assert_eq!((mptcp.mptcp_proxy_type, mptcp.mptcp_proxy_port), (1, 8080));
+    assert_eq!(
+        (
+            mptcp.mptcp_proxy_ipv4_address,
+            mptcp.mptcp_proxy_ipv6_address
+        ),
+        (Some(v4), Some(v6))
+    );
+    let mptcp: MptcpAddressInformation = read_back(&format!("02 01 1f90 {ipv6}"));
+    assert_eq!(
+        (
+            mptcp.mptcp_proxy_ipv4_address,
+            mptcp.mptcp_proxy_ipv6_address
+        ),
+        (None, Some(v6))
+    );
+    assert_eq!(
+        MptcpAddressInformation::decode(&hex::decode("01011f90").unwrap()),
+        None
+    );
+    let mpquic: MpquicAddressInformation = read_back(&format!("03 02 01bb 0a000001 {ipv6}"));
+    assert_eq!(
+        (mpquic.mpquic_proxy_type, mpquic.mpquic_proxy_port),
+        (2, 443)
+    );
+    assert_eq!(
+        (
+            mpquic.mpquic_proxy_ipv4_address,
+            mpquic.mpquic_proxy_ipv6_address
+        ),
+        (Some(v4), Some(v6))
+    );
+    let mpquic: MpquicAddressInformation = read_back("01 02 01bb 0a000001");
+    assert_eq!(
+        (
+            mpquic.mpquic_proxy_ipv4_address,
+            mpquic.mpquic_proxy_ipv6_address
+        ),
+        (Some(v4), None)
+    );
+    assert_eq!(
+        MpquicAddressInformation::decode(&hex::decode("020201bb").unwrap()),
+        None
+    );
+    // V4, V6, NV4 and NV6: the addresses for 3GPP access, then for non-3GPP access, the
+    // last of sixteen octets
+    let link: LinkSpecificMultipathIpAddress =
+        read_back(&format!("0f 0a000001 {ipv6} 0a000002 {ipv6}"));
+    assert_eq!(
+        (link.ipv4_for_3gpp_access, link.ipv6_for_3gpp_access),
+        (Some(v4), Some(v6))
+    );
+    assert_eq!(
+        (link.ipv4_for_non_3gpp_access, link.ipv6_for_non_3gpp_access),
+        (Some(Ipv4Addr::new(10, 0, 0, 2)), Some(v6))
+    );
+    let link: LinkSpecificMultipathIpAddress = read_back(&format!("08 {ipv6}"));
+    assert_eq!(
+        (link.ipv4_for_3gpp_access, link.ipv6_for_non_3gpp_access),
+        (None, Some(v6))
+    );
+    let short = hex::decode("0800000001").unwrap();
+    assert_eq!(LinkSpecificMultipathIpAddress::decode(&short), None);
+    // V4, V6 and MAC: the addresses, the two ports, the two MAC addresses; MAC alone has
+    // no port, and an address alone has both
+    let pmf: PmfAddressInformation = read_back(&format!(
+        "07 0a000001 {ipv6} 1f90 1f91 010203040506 0708090a0b0c"
+    ));
+    assert_eq!(
+        (pmf.pmf_ipv4_address, pmf.pmf_ipv6_address),
+        (Some(v4), Some(v6))
+    );
+    assert_eq!(
+        (
+            pmf.pmf_port_for_3gpp_access,
+            pmf.pmf_port_for_non_3gpp_access
+        ),
+        (Some(8080), Some(8081))
+    );
+    assert_eq!(
+        (
+            pmf.pmf_mac_address_for_3gpp_access,
+            pmf.pmf_mac_address_for_non_3gpp_access
+        ),
+        (Some([1, 2, 3, 4, 5, 6]), Some([7, 8, 9, 10, 11, 12]))
+    );
+    let pmf: PmfAddressInformation = read_back("04 010203040506 0708090a0b0c");
+    assert_eq!(
+        (
+            pmf.pmf_port_for_3gpp_access,
+            pmf.pmf_port_for_non_3gpp_access
+        ),
+        (None, None)
+    );
+    let pmf: PmfAddressInformation = read_back(&format!("02 {ipv6} 1f90 1f91"));
+    assert_eq!(
+        (
+            pmf.pmf_ipv6_address,
+            pmf.pmf_port_for_3gpp_access,
+            pmf.pmf_port_for_non_3gpp_access
+        ),
+        (Some(v6), Some(8080), Some(8081))
+    );
+    assert_eq!(
+        PmfAddressInformation::decode(&hex::decode("010a0000011f90").unwrap()),
+        None
+    );
+}
+
 /// A field that the value of another field has or not: the Redirect Server Address of a
 /// Redirect Information, absent where the Redirect Address Type is "Port" (§8.2.20), and
 /// the Reporting Time Info of a Reporting Suggestion Info, present where the Reporting

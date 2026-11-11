@@ -140,6 +140,10 @@ def blocks(body):
                 yield from blocks(content)
 
 
+# A clause without a figure yet.
+NO_FIGURE = {'fields': [], 'labels': {}, 'cells': [], 'narrow': [], 'numbered': {}, 'rows': [], 'table': {}}
+
+
 def interfaces(cells):
     return ' '.join(name for name, cell in zip(INTERFACES, cells) if 'X' in cell.upper())
 
@@ -155,21 +159,23 @@ def main():
     message_types, ie_types, tables, layouts, values, clause6 = [], [], [], [], [], []
     read = []
     figures, conditions, flags, ranges = [], [], [], []
-    # The fields of octets of the figure of the clause, by name and by their octets, and
-    # its fields of bits of more than one bit.
-    fields, labels, cells = [], {}, []
+    # The figure of the clause, as relations() reads its sentences: its fields of octets,
+    # by name and by their octets, its fields of bits of more than one bit, those of them
+    # of rows that a letter counts, its flags by their bits, its rows, and the names of
+    # the bits of the table of bits of the clause, by their octet and bit.
+    shape = dict(NO_FIGURE)
     for kind, block in blocks(body):
         if kind == 'p':
             style, value = block
             if style.startswith('Heading') or re.match(r'^8\.2\.\d+ [A-Z]', value) and style == '':
                 heading = value
-                fields, labels, cells = [], {}, []
+                shape = dict(NO_FIGURE, table={})
                 if re.match(r'^6(\.\d+)* ', value):
                     clause6.append(value.split(' ', 1) + [0])
             elif clause6 and re.match(r'^6(\.\d+)* ', heading):
                 clause6[-1][2] += len(requirements(value))
             elif re.match(r'^8\.2\.\d+ ', heading):
-                conditions.extend([heading.split(' ', 1)[0]] + relation for relation in relations(value, fields, labels, cells))
+                conditions.extend([heading.split(' ', 1)[0]] + relation for relation in relations(value, shape))
                 clause = heading.split(' ', 1)[0]
                 for phrase in flag_sentences(value):
                     flags.append([clause, str(sum(row[0] == clause for row in flags) + 1), phrase])
@@ -208,7 +214,10 @@ def main():
                     tables.append(['row', number, without_notes(row[0]), row[1], interfaces(row[3:8]), without_notes(row[8]), several])
         elif title and re.match(r'Table 8\.2\.\d+[.-]\d+', title):
             number = re.match(r'Table (8\.2\.\d+[.-]\d+)', title).group(1)
-            values.extend(value_rows(number, title.split(':', 1)[1].strip(), rows))
+            named = value_rows(number, title.split(':', 1)[1].strip(), rows)
+            values.extend(named)
+            if re.match(r'^8\.2\.\d+ ', heading):
+                shape['table'].update({row[2]: row[3] for row in named if '/' in row[2]})
             read.extend(read_as(number, rows))
         elif re.match(r'^8\.2\.\d+ ', heading):
             figure = members(rows, spans)
@@ -216,9 +225,14 @@ def main():
                 layouts.append([heading.split(' ', 1)[0]] + figure)
                 found = places(block, widths)
                 figures.extend([heading.split(' ', 1)[0]] + place for place in found)
-                fields = [name for _, name, _, bits in found if bits == '8']
-                labels = {re.sub(r'\s+', '', octets): name for octets, name, _, bits in found if bits == '8'}
-                cells = [name for _, name, _, bits in found if 1 < int(bits) < 8]
+                shape.update(
+                    fields=[name for _, name, _, bits in found if bits == '8'],
+                    labels={re.sub(r'\s+', '', octets): name for octets, name, _, bits in found if bits == '8'},
+                    cells=[name for _, name, _, bits in found if 1 < int(bits) < 8],
+                    narrow=[name for octets, name, _, bits in found if 1 < int(bits) < 8 and offsets(octets)],
+                    numbered={bit: name for octets, name, bit, bits in found if bits == '1' and octets == found[0][0]},
+                    rows=[(octets, name) for octets, name, _, bits in found],
+                )
     write('message-types.tsv', ['value', 'name', 'interfaces'], message_types)
     write('ie-types.tsv', ['type', 'name', 'reference', 'length'], ie_types)
     write('tables.tsv', ['table|row|same', 'table', 'name, or the name of the row', 'heading, or presence', 'IE type, or interfaces', 'IE type', 'once, several, or how many'], tables)
@@ -291,45 +305,86 @@ def places(rows, widths):
     return out
 
 
-def relations(paragraph, fields, labels, cells):
+def offsets(label):
+    """The octets of a row of a figure that its label counts from a letter: "m" is (m, 0,
+    0), "(m+1) to (m+2)" (m, 1, 2), "a to (a+1)" (a, 0, 1); None for another label."""
+    label = re.sub(r'[\s"\']', '', label)
+    found = re.fullmatch(r'\(?([a-z])(?:\+(\d+))?\)?(?:to\(?\1(?:\+(\d+))?\)?)?', label)
+    if not found:
+        return None
+    low = int(found.group(2) or 0)
+    return found.group(1), low, int(found.group(3) or low)
+
+
+def relations(paragraph, figure):
     """The relations of a paragraph of clause 8.2 between a flag and a field of its figure:
     each sentence that makes fields there, or not, as a flag is set or not, before its
-    "otherwise". A field goes by its name, the longest first, or by its octets. And those
-    between the value of a field of bits and a field (value_relations)."""
+    "otherwise". A flag goes by its name, as the bit of the paragraph ("Bit 1 – FD"), "the
+    CH bit", "If PPI is set to", "bit 1 (ULPR)", by its number ("either bit 1 or bit 2") or
+    by its place in the table of bits of the clause ("any of the bits 5/1 and 5/2"); it is
+    set, or not ("is not set", "is set to "0""). A field goes by its name, the longest
+    first, by the first of a numbered series without its number, or by its octets, of one
+    row or of several ("octets m to (m+2)"); a name that the figure does not have is
+    written as the sentence has it after "then the", which errata.tsv gives its field.
+    And those between the value of a field of bits and a field (value_relations)."""
     out = []
     bit = re.match(r'^-?\s*Bits? \d+ *[–-] *([A-Za-z0-9/-]+)', paragraph)
-    for sentence in re.split(r'(?<=[.;])\s+', paragraph):
-        out.extend(value_relations(sentence, fields, cells))
+    fields = figure['fields'] + figure['narrow']
+    # A sentence goes on after "i.e." where it then says the bits of its condition.
+    for sentence in re.split(r'(?<=[.;])\s+(?!if in Octet\b)', paragraph):
+        out.extend(value_relations(sentence, figure['fields'], figure['cells']))
         sentence = re.split(r'\botherwise\b', sentence)[0]
-        found = re.search(r'(.+?)\s*shall (not )?(also )?be present', sentence)
+        found = re.search(r'(.+?)\s*shall (not )?(also )?be presen[td]', sentence)
         if not found:
             continue
         flags = []
         if bit and re.search(r'this bit is set to "1"', sentence):
             flags.append((bit.group(1), 'set'))
-        for flag, negation in re.findall(r'the ([A-Za-z0-9/-]+) (?:bit|flag)(?: in octet \d+)? is (not )?set', sentence):
-            flags.append((flag, 'unset' if negation else 'set'))
-        for flag in re.findall(r'\bIf ([A-Z][A-Za-z0-9/-]+) is set to "1"', sentence):
+        for flag, negation, value in re.findall(r'the ([A-Za-z0-9/-]+) (?:bit|flag)(?: in octet \d+)? is (not )?set(?: to "([01])")?', sentence):
+            flags.append((flag, 'unset' if negation or value == '0' else 'set'))
+        for flag, value in re.findall(r'\bIf ([A-Z][A-Za-z0-9/-]+) is set to "([01])"', sentence):
+            flags.append((flag, 'unset' if value == '0' else 'set'))
+        for flag in re.findall(r'\bbit \d \(([A-Za-z0-9/-]+)\) is set to "1"', sentence):
             flags.append((flag, 'set'))
+        for numbers in re.findall(r'\beither bit (\d) or bit (\d) is set\b', sentence):
+            flags.extend((figure['numbered'][number], 'set') for number in numbers if number in figure['numbered'])
+        for places in re.findall(r'\bany of the bits ((?:\d/\d(?:, | and )?)+) are set\b', sentence):
+            flags.extend((figure['table'][place], 'set') for place in re.findall(r'\d/\d', places) if place in figure['table'])
         segment = found.group(1)
         absent = bool(found.group(2)) or bool(re.search(r'(?i)\b(neither|none) of\b', segment))
         named = []
-        for label, name in labels.items():
+        for label, name in figure['labels'].items():
             if re.search(r'(?i)octets?"?' + re.escape(label) + r'(?![a-z0-9(])', segment.replace(' ', '')) and name not in named:
                 named.append(name)
+        # The rows of the octets that the sentence names from a letter: "octets m to
+        # (m+2)", "octets 'a' to (a+1)", "octet "m"", "octets "q" to "q+1"".
+        for letter, last in re.findall(r'\boctets? ["\']?([a-z])["\']?(?: to ["\']?\(?\1\+(\d+)\)?["\']?)?(?![A-Za-z0-9])', segment):
+            for label, name in figure['rows']:
+                place = offsets(label)
+                if place and place[0] == letter and place[2] <= int(last or 0) and name not in named:
+                    named.append(name)
         rest = segment
         # The longest name first, and names of one length in the order of the figure: a set
         # would order them by the hashes of the strings, which change from run to run.
         for name in sorted(dict.fromkeys(fields), key=len, reverse=True):
-            pattern = r'(?i)(?<![A-Za-z0-9])' + re.escape(name) + r'(?![A-Za-z0-9])'
-            if re.search(pattern, rest):
-                named.append(name)
-                rest = re.sub(pattern, ' ', rest)
+            # The first of a numbered series goes without its number too.
+            series = re.sub(r' (?:1|instances)$', '', name)
+            for written in dict.fromkeys([name, series]):
+                pattern = r'(?i)(?<![A-Za-z0-9])' + re.escape(written) + r'(?![A-Za-z0-9])'
+                if re.search(pattern, rest):
+                    if name not in named:
+                        named.append(name)
+                    rest = re.sub(pattern, ' ', rest)
+                    break
+        # A name that the figure does not have, as the sentence writes it.
+        written = re.search(r'\bthen the (.+?)(?: fields?)?$', segment.strip())
+        if flags and not named and written:
+            named.append(written.group(1))
         # A field that is "also" there with a flag is one that another flag has there: the
         # two flags are set together, which a sentence of flags says (FLAG_PHRASES).
         there = 'absent' if absent else 'also present' if found.group(3) else 'present'
         for name in named:
-            out.extend([flag, state, name, there] for flag, state in flags)
+            out.extend([flag, state, name, there] for flag, state in dict.fromkeys(flags))
     return out
 
 

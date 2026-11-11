@@ -1470,8 +1470,12 @@ fn figure_places() {
 /// field in the crate, of the same sense: "If CH is set, the TEID shall not be present"
 /// is `!ch` in the condition of TEID. A field that a sentence has "also present" where a
 /// flag is set is one that another flag has there: the two flags are set together, which
-/// a row of `flag-rules.tsv` of the clause, "also present", checks. Those of the value of
-/// a field of bits are checked by value_conditions().
+/// a row of `flag-rules.tsv` of the clause, "also present", checks. A sentence whose flag
+/// or field the crate does not have fails the test: one that names it otherwise than the
+/// figure is an erratum (`sentence-flag`, `sentence-field`). The sentences of the flags of
+/// the second figure of clause 8.2.5, of a media identification that `check()` reads by
+/// hand, are checked with its reader: the field is read with its flag alone, and not
+/// without it. Those of the value of a field of bits are checked by value_conditions().
 #[test]
 fn figure_conditions() {
     let errata = Errata::new();
@@ -1504,12 +1508,38 @@ fn figure_conditions() {
     }
     let mut problems = Vec::new();
     let mut checked = 0;
+    let mut clauses: BTreeSet<&str> = sentences.keys().copied().collect();
     for info in IE_TYPES {
         let Some(layout) = ie_type_layout(info.ie_type).1 else {
             continue;
         };
+        clauses.remove(info.clause);
         for (flag, set, field, there) in sentences.get(info.clause).into_iter().flatten() {
+            let flag = errata.apply("sentence-flag", info.clause, flag);
+            let field = errata.apply("sentence-field", info.clause, field);
+            let (flag, field) = (&flag, &field);
             let Some(bits) = layout.bits.iter().find(|bits| key(bits.name) == key(flag)) else {
+                let media = MEDIA_IDENTIFICATION_FLAGS
+                    .iter()
+                    .find(|(name, _)| info.clause == "8.2.5" && name == flag);
+                let Some((_, bit)) = media else {
+                    problems.push(format!(
+                        "clause {} {}: {flag:?}, which a sentence has {set}, is no flag of the crate",
+                        info.clause, info.name
+                    ));
+                    continue;
+                };
+                // The fields that the reader of Figure 8.2.5-2 reads of octets of `flags`
+                // and zeros after them: the sentence names one of them.
+                let reads = |flags: u8| {
+                    let octets = [&[flags][..], &[0; 16]].concat();
+                    let read = media_identification_fields(&octets).unwrap_or_default();
+                    read.iter().any(|name| key(field).contains(&key(name)))
+                };
+                checked += 1;
+                if (*set, *there) != ("set", "present") || !reads(*bit) || reads(0) {
+                    problems.push(format!("clause {} {}: a media identification has {field:?} {there} where {flag} is {set} in the document", info.clause, info.name));
+                }
                 continue;
             };
             // The field by its name, by the name in brackets of its octets, by the label of
@@ -1536,7 +1566,13 @@ fn figure_conditions() {
                         || names.iter().any(|known| key(known) == key(name))
                 })
             });
-            let Some(member) = member else { continue };
+            let Some(member) = member else {
+                problems.push(format!(
+                    "clause {} {}: {field:?}, which a sentence has {there} where {flag} is {set}, is no field of the crate",
+                    info.clause, info.name
+                ));
+                continue;
+            };
             if *there == "also present" {
                 checked += 1;
                 if !also.contains(info.clause) {
@@ -1568,9 +1604,14 @@ fn figure_conditions() {
             }
         }
     }
-    problems.extend(errata.unused(&["condition"]));
+    for clause in clauses {
+        problems.push(format!(
+            "clause {clause}: sentences of conditions, and no layout of the crate to check them with"
+        ));
+    }
+    problems.extend(errata.unused(&["condition", "sentence-flag", "sentence-field"]));
     report(problems);
-    assert!(checked >= 150, "{checked} conditions checked");
+    assert_eq!(checked, 218, "conditions checked");
 }
 
 /// The values of a field of bits where a field is there, and those where it is absent.

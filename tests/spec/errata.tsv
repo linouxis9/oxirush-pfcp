@@ -9,8 +9,11 @@
 # one that the document leaves to a note that no row names is added (`read-as-row`). A
 # field or a value of a sentence of a condition on the value of a field of bits that the
 # sentence names otherwise than the figure or the table is given its name
-# (`condition-field`, `condition-value`), and a relation that the clause says in no such
-# sentence is added (`condition-row`, its cells apart with " ; ").
+# (`condition-field`, `condition-value`), and a relation that the clause says in other
+# words than those of presence that the extractor reads is added (`condition-row`, its
+# cells apart with " ; "). A flag or a field of a sentence of a condition on a flag that
+# the sentence names otherwise than the figure is given its name (`sentence-flag`,
+# `sentence-field`).
 #
 # name	kind	where	the document	the crate
 modifcation	message-name	17	PFCP Session Set Modifcation Response	PFCP Session Set Modification Response
@@ -66,8 +69,23 @@ unspecified-acceptance-cause	read-as-row	8.2.1-1/4 to 63	Spare (NOTE 1, an unspe
 unspecified-failure-cause	read-as	8.2.263-1/4 to 255	an unspecified failure cause	0
 redirect-address-server-address	condition-field	8.2.20	Redirect Address Server Address	Redirect Server Address
 ipv4-and-ipv6-address	condition-value	8.2.20/Redirect Address Type	IPv4 and IPv6 address	IPv4 and IPv6 addresses
-# "If the Redirect Address Type is set to Port, the Redirect Address Server Address shall
-# not be present, the UP function shall ... only change the destination port to the port
-# as indicated in Redirect Port field": no sentence has the Redirect Port of a Port
-# redirect present, which the port of the redirect is.
+# No error of the document, and a relation that the extractor does not read: "If the
+# Redirect Address Type is set to Port, the Redirect Address Server Address shall not be
+# present, the UP function shall ... only change the destination port to the port as
+# indicated in Redirect Port field" has the Redirect Port of a Port redirect there, as the
+# port of the redirect, in no words of presence.
 redirect-port-of-port	condition-row	8.2.20	the port "as indicated in Redirect Port field"	Redirect Address Type ; is Port ; Redirect Port ; present
+# The sentences of the flags of these clauses name a flag or a field otherwise than their
+# figures do.
+mask-prefix-length-flag	sentence-flag	8.2.138	Mask/Prefix	MPL
+mptcp-ipv6-address	sentence-field	8.2.157	MPTCP IPv6 Address	MPTCP Proxy IPv6 Address
+destination-ipv4	sentence-field	8.2.200	Destination IPv4	Destination IPv4 Address
+destination-ipv6	sentence-field	8.2.200	Destination IPv6	Destination IPv6 Address
+source-ipv4	sentence-field	8.2.200	Source IPv4	Source IPv4 Address
+source-ipv6	sentence-field	8.2.200	Source IPv6	Source IPv6 Address
+downlink-packet-n6-jitter-threshold	sentence-field	8.2.220	Downlink packet N6 Jitter threshold	Downlink N6 Jitter threshold
+mpquic-ipv6-address	sentence-field	8.2.226	MPQUIC IPv6 Address	MPQUIC Proxy IPv6 Address
+downlink-congestion-information-threshold	sentence-field	8.2.240	Downlink Congestion Information threshold	DL Congestion information threshold
+uplink-congestion-information-threshold	sentence-field	8.2.240	Uplink Congestion Information threshold	UL Congestion information threshold
+downlink-data-rate-threshold	sentence-field	8.2.240	Downlink Data Rate threshold	DL Data Rate threshold
+uplink-data-rate-threshold	sentence-field	8.2.240	Uplink Data Rate threshold	UL Data Rate threshold
