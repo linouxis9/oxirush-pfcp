@@ -950,7 +950,9 @@ macro_rules! pfcp_messages {
 /// presence and its interfaces, which are the row's; its own are those where a constructor
 /// takes it: where one of its rows is mandatory. A row whose condition the scope alone shows ends with
 /// `absent(|scope| condition)`, where `check()` reports it there, and `if |scope|
-/// condition`, where it reports it missing.
+/// condition`, where it reports it missing. A table whose rows are the scope above rows
+/// with a condition on its IEs begins with `@ function;`, which checks those conditions
+/// from it ([`crate::across`]).
 macro_rules! pfcp_table {
     // A table whose mandatory IEs differ between its interfaces has a constructor for each
     // interface that it lists, and no `new()`.
@@ -970,6 +972,7 @@ macro_rules! pfcp_table {
         @table [$($by:ident)*]
         $(#[$meta:meta])*
         $kind:ident $ty:ident = $code:literal, $name:literal, $id:literal {
+            $(@ $across:path ;)?
             $( $field:ident : $row:literal $p:ident $(* $($max:literal)?)? $vty:ident
                 [$($interface:ident)*] $(roles [$($role:literal $rp:ident $(* $($rmax:literal)?)? [$($ri:ident)*]),*])?
                 $(absent(|$ascope:ident| $absent:expr))? $(if |$scope:ident| $condition:expr)? , )*
@@ -1200,6 +1203,7 @@ macro_rules! pfcp_table {
                     })?
                     row += 1;
                 )*
+                $( $across(self, path, context, found); )?
             }
         }
 

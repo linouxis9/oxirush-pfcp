@@ -68,6 +68,12 @@ fn of_mpas(features: &Option<CpFunctionFeatures>) -> bool {
     features.as_ref().is_some_and(|features| features.mpas)
 }
 
+/// Whether a Measurement Method measures `by`, or is not there to say: the measurement
+/// that a subsequent threshold or quota of a URR is of (Table 7.5.2.4-1).
+fn measures(method: &Option<MeasurementMethod>, by: fn(&MeasurementMethod) -> bool) -> bool {
+    method.as_ref().is_none_or(by)
+}
+
 /// Whether a usage report is of a trigger that has its start and end times: not of the
 /// start or the stop of traffic, or of MAC addresses (Tables 7.5.5.2-1, 7.5.7.2-1 and
 /// 7.5.8.3-1).
@@ -751,6 +757,7 @@ pfcp_table! {
 pfcp_table! {
     /// PFCP Session Establishment Request (Table 7.5.2.1-1).
     message SessionEstablishmentRequest = 50, "PFCP Session Establishment Request", "7.5.2.1-1" by [SXA SXB SXC N4 N4MB] {
+        @ crate::across::establishment;
         node_id: "Node ID" M NodeId [SXA SXB SXC N4 N4MB],
         cp_f_seid: "CP F-SEID" M FSeid [SXA SXB SXC N4 N4MB],
         create_pdr: "Create PDR" M* CreatePdr [SXA SXB SXC N4 N4MB],
@@ -818,6 +825,7 @@ pfcp_table! {
 pfcp_table! {
     /// PFCP Session Modification Request (Table 7.5.4.1-1).
     message SessionModificationRequest = 52, "PFCP Session Modification Request", "7.5.4.1-1" {
+        @ crate::across::modification;
         cp_f_seid: "CP F-SEID" C FSeid [SXA SXB SXC N4 N4MB],
         remove_pdr: "Remove PDR" C* RemovePdr [SXA SXB SXC N4 N4MB],
         remove_far: "Remove FAR" C* RemoveFar [SXA SXB SXC N4 N4MB],
@@ -844,7 +852,8 @@ pfcp_table! {
         fq_csid: "FQ-CSID" C*5 FqCsid [SXA SXB N4]
             roles ["PGW-C/SMF FQ-CSID" C [SXA SXB N4], "SGW-C FQ-CSID" C [SXA SXB], "MME FQ-CSID" C [SXA SXB], "ePDG FQ-CSID" C [SXB], "TWAN FQ-CSID" C [SXB]],
         user_plane_inactivity_timer: "User Plane Inactivity Timer" C UserPlaneInactivityTimer [SXB SXC N4 N4MB],
-        query_urr_reference: "Query URR Reference" O QueryUrrReference [SXA SXB SXC N4 N4MB],
+        // "This IE may be present if the Query URR IE is present or the QAURR flag is set".
+        query_urr_reference: "Query URR Reference" O QueryUrrReference [SXA SXB SXC N4 N4MB] absent(|s| s.query_urr.is_empty() && !s.pfcpsmreq_flags.as_ref().is_some_and(|flags| flags.qaurr)),
         trace_information: "Trace Information" O TraceInformation [SXA SXB SXC N4],
         remove_mar: "Remove MAR" C* RemoveMar [N4],
         update_mar: "Update MAR" C* UpdateMar [N4],
@@ -1455,6 +1464,7 @@ pfcp_table! {
 pfcp_table! {
     /// Create URR IE within PFCP Session Establishment Request (Table 7.5.2.4-1).
     group CreateUrr = 6, "Create URR", "7.5.2.4-1" {
+        @ crate::across::create_urr;
         urr_id: "URR ID" M UrrId [SXA SXB SXC N4 N4MB],
         measurement_method: "Measurement Method" M MeasurementMethod [SXA SXB SXC N4 N4MB],
         reporting_triggers: "Reporting Triggers" M ReportingTriggers [SXA SXB SXC N4 N4MB],
@@ -1469,12 +1479,12 @@ pfcp_table! {
         dropped_dl_traffic_threshold: "Dropped DL Traffic Threshold" C DroppedDlTrafficThreshold [SXA N4] if |s| triggers(s, |t| t.droth),
         quota_validity_time: "Quota Validity Time" C QuotaValidityTime [SXB N4] if |s| triggers(s, |t| t.quvti),
         monitoring_time: "Monitoring Time" O MonitoringTime [SXA SXB SXC N4],
-        subsequent_volume_threshold: "Subsequent Volume Threshold" O SubsequentVolumeThreshold [SXA SXB SXC N4] absent(|s| s.monitoring_time.is_none()),
-        subsequent_time_threshold: "Subsequent Time Threshold" O SubsequentTimeThreshold [SXA SXB SXC N4] absent(|s| s.monitoring_time.is_none()),
-        subsequent_volume_quota: "Subsequent Volume Quota" O SubsequentVolumeQuota [SXB SXC N4] absent(|s| s.monitoring_time.is_none()),
-        subsequent_time_quota: "Subsequent Time Quota" O SubsequentTimeQuota [SXB SXC N4] absent(|s| s.monitoring_time.is_none()),
-        subsequent_event_threshold: "Subsequent Event Threshold" O SubsequentEventThreshold [SXB SXC N4] absent(|s| s.monitoring_time.is_none()),
-        subsequent_event_quota: "Subsequent Event Quota" O SubsequentEventQuota [SXB SXC N4] absent(|s| s.monitoring_time.is_none()),
+        subsequent_volume_threshold: "Subsequent Volume Threshold" O SubsequentVolumeThreshold [SXA SXB SXC N4] absent(|s| s.monitoring_time.is_none() || !measures(&s.measurement_method, |method| method.volum)),
+        subsequent_time_threshold: "Subsequent Time Threshold" O SubsequentTimeThreshold [SXA SXB SXC N4] absent(|s| s.monitoring_time.is_none() || !measures(&s.measurement_method, |method| method.durat)),
+        subsequent_volume_quota: "Subsequent Volume Quota" O SubsequentVolumeQuota [SXB SXC N4] absent(|s| s.monitoring_time.is_none() || !measures(&s.measurement_method, |method| method.volum)),
+        subsequent_time_quota: "Subsequent Time Quota" O SubsequentTimeQuota [SXB SXC N4] absent(|s| s.monitoring_time.is_none() || !measures(&s.measurement_method, |method| method.durat)),
+        subsequent_event_threshold: "Subsequent Event Threshold" O SubsequentEventThreshold [SXB SXC N4] absent(|s| s.monitoring_time.is_none() || !measures(&s.measurement_method, |method| method.event)),
+        subsequent_event_quota: "Subsequent Event Quota" O SubsequentEventQuota [SXB SXC N4] absent(|s| s.monitoring_time.is_none() || !measures(&s.measurement_method, |method| method.event)),
         inactivity_detection_time: "Inactivity Detection Time" C InactivityDetectionTime [SXB SXC N4],
         linked_urr_id: "Linked URR ID" C* LinkedUrrId [SXB SXC N4 N4MB] if |s| triggers(s, |t| t.liusa),
         measurement_information: "Measurement Information" C MeasurementInformation [SXA SXB SXC N4] absent(|s| s.measurement_information.as_ref().is_some_and(|flags| flags.none_set())),
@@ -1576,6 +1586,7 @@ pfcp_table! {
 pfcp_table! {
     /// Create MAR IE within PFCP Session Establishment Request (Table 7.5.2.8-1).
     group CreateMar = 165, "Create MAR", "7.5.2.8-1" {
+        @ crate::across::create_mar;
         mar_id: "MAR ID" M MarId [N4],
         steering_functionality: "Steering Functionality" M SteeringFunctionality [N4],
         steering_mode: "Steering Mode" M SteeringMode [N4],
@@ -1898,6 +1909,7 @@ pfcp_table! {
 pfcp_table! {
     /// Update URR IE within PFCP Session Modification Request (Table 7.5.4.4-1).
     group UpdateUrr = 13, "Update URR", "7.5.4.4-1" by [SXA SXB SXC N4 N4MB] {
+        @ crate::across::update_urr;
         urr_id: "URR ID" M UrrId [SXA SXB SXC N4],
         measurement_method: "Measurement Method" C MeasurementMethod [SXA SXB SXC N4],
         reporting_triggers: "Reporting Triggers" C ReportingTriggers [SXA SXB SXC N4 N4MB],
@@ -2083,7 +2095,7 @@ pfcp_table! {
     group TscManagementInformation = 199, "TSC Management Information", "7.5.4.18-1" {
         port_management_information_container: "Port Management Information Container" O PortManagementInformationContainer [N4],
         user_plane_node_management_information_container: "User Plane Node Management Information Container" O UserPlaneNodeManagementInformationContainer [N4],
-        nw_tt_port_number: "NW-TT Port Number" C NwTtPortNumber [N4],
+        nw_tt_port_number: "NW-TT Port Number" C NwTtPortNumber [N4] if |s| s.port_management_information_container.is_some(),
         direct_reporting_information: "Direct Reporting Information" Cb DirectReportingInformationTsc [N4],
     }
 }
@@ -2152,7 +2164,7 @@ pfcp_table! {
     group TscManagementInformationResponse = 200, "TSC Management Information", "7.5.5.3-1" {
         port_management_information_container: "Port Management Information Container" O PortManagementInformationContainer [N4],
         user_plane_node_management_information_container: "User Plane Node Management Information Container" O UserPlaneNodeManagementInformationContainer [N4],
-        nw_tt_port_number: "NW-TT Port Number" C NwTtPortNumber [N4],
+        nw_tt_port_number: "NW-TT Port Number" C NwTtPortNumber [N4] if |s| s.port_management_information_container.is_some(),
     }
 }
 
@@ -2288,7 +2300,7 @@ pfcp_table! {
     group TscManagementInformationReport = 201, "TSC Management Information", "7.5.8.5-1" {
         port_management_information_container: "Port Management Information Container" O PortManagementInformationContainer [N4],
         user_plane_node_management_information_container: "User Plane Node Management Information Container" O UserPlaneNodeManagementInformationContainer [N4],
-        nw_tt_port_number: "NW-TT Port Number" C NwTtPortNumber [N4],
+        nw_tt_port_number: "NW-TT Port Number" C NwTtPortNumber [N4] if |s| s.port_management_information_container.is_some(),
     }
 }
 

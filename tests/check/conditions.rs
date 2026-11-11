@@ -793,3 +793,248 @@ fn a_condition_reads_the_rows_of_the_interface_alone() {
         )]
     );
 }
+
+/// What check() finds below `prefix` in the message that `ies` are of, on N4: the path and
+/// the kind of each deviation.
+#[cfg(feature = "tree")]
+fn below(message: &str, ies: tree::Value, prefix: &str) -> Vec<(String, DeviationKind)> {
+    let written =
+        tree!({"message": message, "header": {"SEID": 1, "Sequence Number": 1}, "ies": ies});
+    let message = Message::from_tree(&written).unwrap_or_else(|error| panic!("{error}"));
+    let found = message.check(Interfaces::N4).into_iter();
+    let found = found.filter(|found| found.path.starts_with(prefix));
+    found.map(|found| (found.path, found.kind)).collect()
+}
+
+/// Conditions of a row on the IEs beside it that the tables write in other words than
+/// "may be present if the X IE is present": a Query URR Reference "may be present if the
+/// Query URR IE is present or the QAURR flag is set" (Table 7.5.4.1-1); "When PMIC IE is
+/// present", the NW-TT Port Number "shall contain the related NW-TT Port Number" (Table
+/// 7.5.4.18-1); and a subsequent threshold or quota of a Create URR "may be present if the
+/// Monitoring Time IE is present and" the measurement of its kind "is used" (Table
+/// 7.5.2.4-1), which the Measurement Method says.
+#[cfg(feature = "tree")]
+#[test]
+fn a_row_by_the_ies_beside_it() {
+    let modification = "PFCP Session Modification Request";
+    let reference = "/pfcp/Query URR Reference";
+    let excluded =
+        |path: &str, ie_type| vec![(path.to_string(), DeviationKind::Excluded { ie_type })];
+    let told = below(modification, tree!({"Query URR Reference": 7}), reference);
+    assert_eq!(told, excluded(reference, 125));
+    for with in [
+        tree!({"Query URR Reference": 7, "Query URR": [{"URR ID": 1}]}),
+        tree!({"Query URR Reference": 7, "PFCPSMReq-Flags": {"QAURR": true}}),
+    ] {
+        assert_eq!(below(modification, with, reference), []);
+    }
+    // A Port Management Information Container without the port that it is of
+    let tsc = "/pfcp/TSC Management Information";
+    let container =
+        tree!({"TSC Management Information": [{"Port Management Information Container": "00"}]});
+    let missing = DeviationKind::ConditionalMissing { ie_type: 197 };
+    assert_eq!(
+        below(modification, container, tsc),
+        [(format!("{tsc}/0/NW-TT Port Number"), missing)]
+    );
+    for with in [
+        tree!({"TSC Management Information": [{"Port Management Information Container": "00", "NW-TT Port Number": 1}]}),
+        tree!({"TSC Management Information": [{"User Plane Node Management Information Container": "00"}]}),
+    ] {
+        assert_eq!(below(modification, with, tsc), []);
+    }
+    // A URR that measures the volume: its subsequent thresholds and quotas of the time
+    // and of events are told, with the Monitoring Time that they need
+    let urr = |more: tree::Value| {
+        let mut urr = tree!({
+            "URR ID": 1, "Measurement Method": {"VOLUM": true}, "Reporting Triggers": {"VOLTH": true},
+            "Monitoring Time": 5,
+        });
+        for (name, value) in more.as_object().unwrap() {
+            urr[name.as_str()] = value.clone();
+        }
+        below(
+            modification,
+            tree!({"Create URR": [urr]}),
+            "/pfcp/Create URR/0/Subsequent",
+        )
+    };
+    let volume = tree!({"TOVOL": true, "Total Volume": 1});
+    assert_eq!(
+        urr(
+            tree!({"Subsequent Volume Threshold": volume.clone(), "Subsequent Volume Quota": volume.clone()})
+        ),
+        []
+    );
+    let others = urr(tree!({
+        "Subsequent Time Threshold": 1, "Subsequent Time Quota": 1,
+        "Subsequent Event Threshold": 1, "Subsequent Event Quota": 1,
+    }));
+    let kinds: Vec<_> = others.into_iter().map(|(_, kind)| kind).collect();
+    let excluded = |ie_type| DeviationKind::Excluded { ie_type };
+    assert_eq!(
+        kinds,
+        [excluded(35), excluded(122), excluded(151), excluded(150)]
+    );
+}
+
+/// Conditions of a row that a scope above it shows (`check()` reads the whole message):
+/// the subsequent thresholds and quotas of an Additional Monitoring Time, by the
+/// Measurement Method of its URR (Table 7.5.2.4-3); the Weight and the Priority of the
+/// forwarding action information of an access, by the Steering Mode of its MAR (Tables
+/// 7.5.2.8-2 and 7.5.2.8-3, NOTE 2); the Tunnel Preference of an L2TP Tunnel Information,
+/// "if multiple L2TP Tunnel Information IEs are included in the message" (Table
+/// 7.5.2.1-2); and the QFI of a PDI, which "shall not be present if Traffic Endpoint ID is
+/// present and the QFI(s) are included in the Traffic Endpoint" (Table 7.5.2.2-2).
+#[cfg(feature = "tree")]
+#[test]
+fn a_row_by_the_ies_of_a_scope_above_it() {
+    let establishment = "PFCP Session Establishment Request";
+    let excluded = |ie_type| DeviationKind::Excluded { ie_type };
+    let missing = |ie_type| DeviationKind::ConditionalMissing { ie_type };
+    // An Additional Monitoring Time of a URR that measures the duration
+    let time = "/pfcp/Create URR/0/Additional Monitoring Time/0";
+    let urr = |time: tree::Value| {
+        let urr = tree!({
+            "URR ID": 1, "Measurement Method": {"DURAT": true}, "Reporting Triggers": {"TIMTH": true},
+            "Additional Monitoring Time": [time],
+        });
+        below(
+            establishment,
+            tree!({"Create URR": [urr]}),
+            "/pfcp/Create URR/0/Additional",
+        )
+    };
+    assert_eq!(
+        urr(
+            tree!({"Monitoring Time": 5, "Subsequent Time Threshold": 1, "Subsequent Time Quota": 1})
+        ),
+        []
+    );
+    let volume = tree!({"TOVOL": true, "Total Volume": 1});
+    assert_eq!(
+        urr(
+            tree!({"Monitoring Time": 5, "Subsequent Volume Threshold": volume, "Subsequent Event Quota": 1})
+        ),
+        [
+            (format!("{time}/Subsequent Volume Threshold"), excluded(34)),
+            (format!("{time}/Subsequent Event Quota"), excluded(148)),
+        ]
+    );
+    // A MAR of each Steering Mode
+    let mar = |mode: &str, access: tree::Value, other: tree::Value| {
+        let mar = tree!({
+            "MAR ID": 1, "Steering Functionality": "ATSSS-LL", "Steering Mode": mode,
+            "3GPP Access Forwarding Action Information": access,
+            "Non-3GPP Access Forwarding Action Information": other,
+        });
+        below(
+            establishment,
+            tree!({"Create MAR": [mar]}),
+            "/pfcp/Create MAR/0",
+        )
+    };
+    let first = "/pfcp/Create MAR/0/3GPP Access Forwarding Action Information";
+    let second = "/pfcp/Create MAR/0/Non-3GPP Access Forwarding Action Information";
+    assert_eq!(
+        mar(
+            "Load Balancing",
+            tree!({"FAR ID": 1, "Weight": 60}),
+            tree!({"FAR ID": 2, "Weight": 40})
+        ),
+        []
+    );
+    assert_eq!(
+        mar(
+            "Load Balancing",
+            tree!({"FAR ID": 1}),
+            tree!({"FAR ID": 2, "Weight": 40, "Priority": "Active"})
+        ),
+        [
+            (format!("{first}/Weight"), missing(173)),
+            (format!("{second}/Priority"), excluded(174))
+        ]
+    );
+    assert_eq!(
+        mar(
+            "Active-Standby",
+            tree!({"FAR ID": 1, "Priority": "Active"}),
+            tree!({"FAR ID": 2, "Priority": "Standby"})
+        ),
+        []
+    );
+    assert_eq!(
+        mar(
+            "Active-Standby",
+            tree!({"FAR ID": 1}),
+            tree!({"FAR ID": 2, "Priority": "High"})
+        ),
+        [
+            (format!("{first}/Priority"), missing(174)),
+            (
+                format!("{second}/Priority"),
+                DeviationKind::Rule(
+                    "a Priority value that is not one of the Steering Mode of its MAR"
+                )
+            ),
+        ]
+    );
+    assert_eq!(
+        mar(
+            "Priority-based",
+            tree!({"FAR ID": 1, "Priority": "High"}),
+            tree!({"FAR ID": 2, "Priority": "High"})
+        ),
+        [(
+            "/pfcp/Create MAR/0".to_string(),
+            DeviationKind::Rule("the two accesses of a MAR have the same Priority value")
+        )]
+    );
+    assert_eq!(
+        mar("Redundant", tree!({"FAR ID": 1}), tree!({"FAR ID": 2})),
+        []
+    );
+    assert_eq!(
+        mar(
+            "Redundant",
+            tree!({"FAR ID": 1, "Priority": "Primary"}),
+            tree!({"FAR ID": 2, "Priority": "Secondary"})
+        ),
+        []
+    );
+    assert_eq!(
+        mar("Smallest Delay", tree!({"FAR ID": 1}), tree!({"FAR ID": 2})),
+        []
+    );
+    // Two L2TP Tunnel Information, one without its Tunnel Preference; and one alone
+    let tunnels = "/pfcp/L2TP Tunnel Information";
+    let tunnel = |more: tree::Value| {
+        let mut tunnel = tree!({"LNS Address": "0a000001"});
+        for (name, value) in more.as_object().unwrap() {
+            tunnel[name.as_str()] = value.clone();
+        }
+        tunnel
+    };
+    let two = tree!({"L2TP Tunnel Information": [tunnel(tree!({"Tunnel Preference": 1})), tunnel(tree!({}))]});
+    assert_eq!(
+        below(establishment, two, tunnels),
+        [(format!("{tunnels}/1/Tunnel Preference"), missing(281))]
+    );
+    let one = tree!({"L2TP Tunnel Information": [tunnel(tree!({}))]});
+    assert_eq!(below(establishment, one, tunnels), []);
+    // A PDI of a Traffic Endpoint that the message creates with its QFIs, and without
+    let pdr = |endpoint: tree::Value| {
+        let pdr = tree!({
+            "PDR ID": 1, "Precedence": 1, "FAR ID": 1,
+            "PDI": {"Source Interface": "Access", "Traffic Endpoint ID": [1], "QFI": [5]},
+        });
+        let ies = tree!({"Create PDR": [pdr], "Create Traffic Endpoint": [endpoint]});
+        below(establishment, ies, "/pfcp/Create PDR/0/PDI/QFI")
+    };
+    assert_eq!(
+        pdr(tree!({"Traffic Endpoint ID": 1, "QFI": [5]})),
+        [("/pfcp/Create PDR/0/PDI/QFI".to_string(), excluded(124))]
+    );
+    assert_eq!(pdr(tree!({"Traffic Endpoint ID": 1})), []);
+    assert_eq!(pdr(tree!({"Traffic Endpoint ID": 2, "QFI": [5]})), []);
+}

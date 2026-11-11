@@ -40,6 +40,7 @@ extern crate alloc;
 #[cfg(any(test, feature = "endpoint"))]
 extern crate std;
 
+mod across;
 mod check;
 #[cfg(feature = "endpoint")]
 #[cfg_attr(docsrs, doc(cfg(feature = "endpoint")))]

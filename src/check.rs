@@ -419,7 +419,7 @@ impl Context {
 
     /// The Cause of an answer to a mandatory IE of the scope that is missing, or that is
     /// there and incorrect.
-    fn cause(self, missing: bool) -> Option<CauseValue> {
+    pub(crate) fn cause(self, missing: bool) -> Option<CauseValue> {
         match (self.request, self.view, missing) {
             (false, ..) | (_, Presence::Optional, _) => None,
             (true, Presence::Mandatory, true) => Some(CauseValue::MandatoryIeMissing),
@@ -437,7 +437,7 @@ impl Context {
 
     /// The Cause of an answer to a conditional IE of the scope that is missing where its
     /// condition holds (§7.6.6).
-    fn conditional_cause(self) -> Option<CauseValue> {
+    pub(crate) fn conditional_cause(self) -> Option<CauseValue> {
         match (self.request, self.view) {
             (true, Presence::Mandatory | Presence::Conditional) => {
                 Some(CauseValue::ConditionalIeMissing)

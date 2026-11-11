@@ -84,6 +84,7 @@ session-establishment-request_test.go	Multiple IEs	/header/SEID	7.2.2.4.2	Rule("
 session-establishment-request_test.go	Multiple IEs	/pfcp/APN~1DNN	8.2.117	Rule("an APN/DNN without its Operator Identifier, three labels that end with gprs, after its Network Identifier")	-
 session-establishment-request_test.go	Multiple IEs	/pfcp/Create FAR/0/Forwarding Parameters/Transport Level Marking	8.2.12	Rule("a ToS/Traffic Class mask other than 0xFC")	MandatoryIeIncorrect
 session-establishment-request_test.go	Multiple IEs	/pfcp/Create FAR/0/Redundant Transmission Parameters	7.6.9	Unexpected { ie_type: 255 }	-
+session-establishment-request_test.go	Multiple IEs	/pfcp/Create MAR/0	7.5.2.8-2	Rule("the two accesses of a MAR have the same Priority value")	MandatoryIeIncorrect
 session-establishment-request_test.go	Multiple IEs	/pfcp/Create PDR/0/Outer Header Removal	8.1.2	SpareBits	-
 session-establishment-request_test.go	Multiple IEs	/pfcp/Create PDR/0/PDI/Ethernet Packet Filter/0/SDF Filter/0	8.2.5	SpareBits	-
 session-establishment-request_test.go	Multiple IEs	/pfcp/Create PDR/0/PDI/Local F-TEID	7.5.2.2-2	Excluded { ie_type: 21 }	-
@@ -106,6 +107,7 @@ session-establishment-request_test.go	Single IE	/header/SEID	7.2.2.4.2	Rule("a S
 session-establishment-request_test.go	Single IE	/pfcp/APN~1DNN	8.2.117	Rule("an APN/DNN without its Operator Identifier, three labels that end with gprs, after its Network Identifier")	-
 session-establishment-request_test.go	Single IE	/pfcp/Create FAR/0/Forwarding Parameters/Transport Level Marking	8.2.12	Rule("a ToS/Traffic Class mask other than 0xFC")	MandatoryIeIncorrect
 session-establishment-request_test.go	Single IE	/pfcp/Create FAR/0/Redundant Transmission Parameters	7.6.9	Unexpected { ie_type: 255 }	-
+session-establishment-request_test.go	Single IE	/pfcp/Create MAR/0	7.5.2.8-2	Rule("the two accesses of a MAR have the same Priority value")	MandatoryIeIncorrect
 session-establishment-request_test.go	Single IE	/pfcp/Create PDR/0/Outer Header Removal	8.1.2	SpareBits	-
 session-establishment-request_test.go	Single IE	/pfcp/Create PDR/0/PDI/Ethernet Packet Filter/0/SDF Filter/0	8.2.5	SpareBits	-
 session-establishment-request_test.go	Single IE	/pfcp/Create PDR/0/PDI/Local F-TEID	7.5.2.2-2	Excluded { ie_type: 21 }	-
@@ -132,6 +134,7 @@ session-modification-request_test.go	Multiple IEs	/pfcp/Access Availability Info
 session-modification-request_test.go	Multiple IEs	/pfcp/Access Availability Information/0	8.2.153	SpareValue { value: 3 }	-
 session-modification-request_test.go	Multiple IEs	/pfcp/Create FAR/0/Forwarding Parameters/Transport Level Marking	8.2.12	Rule("a ToS/Traffic Class mask other than 0xFC")	MandatoryIeIncorrect
 session-modification-request_test.go	Multiple IEs	/pfcp/Create FAR/0/Redundant Transmission Parameters	7.6.9	Unexpected { ie_type: 255 }	-
+session-modification-request_test.go	Multiple IEs	/pfcp/Create MAR/0	7.5.2.8-2	Rule("the two accesses of a MAR have the same Priority value")	MandatoryIeIncorrect
 session-modification-request_test.go	Multiple IEs	/pfcp/Create PDR/0/Outer Header Removal	8.1.2	SpareBits	-
 session-modification-request_test.go	Multiple IEs	/pfcp/Create PDR/0/PDI/Ethernet Packet Filter/0/SDF Filter/0	8.2.5	SpareBits	-
 session-modification-request_test.go	Multiple IEs	/pfcp/Create PDR/0/PDI/Local F-TEID	7.5.2.2-2	Excluded { ie_type: 21 }	-
@@ -150,6 +153,7 @@ session-modification-request_test.go	Multiple IEs	/pfcp/Create PDR/1/PDI/UE IP a
 session-modification-request_test.go	Multiple IEs	/pfcp/Create PDR/1/UE IP address Pool Identity/0	7.6.8	Incorrect { ie_type: 177 }	-
 session-modification-request_test.go	Multiple IEs	/pfcp/Create QER/0/QER Control Indications	8.1.2	SpareBits	-
 session-modification-request_test.go	Multiple IEs	/pfcp/Create SRR/0/QoS Monitoring per QoS flow Control Information/0/Reporting Frequency	8.2.168	SpareBits	-
+session-modification-request_test.go	Multiple IEs	/pfcp/TSC Management Information/0/NW-TT Port Number	7.5.4.18-1	ConditionalMissing { ie_type: 197 }	ConditionalIeMissing
 session-modification-request_test.go	Multiple IEs	/pfcp/Update FAR/0/Redundant Transmission Parameters	7.6.9	Unexpected { ie_type: 255 }	-
 session-modification-request_test.go	Multiple IEs	/pfcp/Update FAR/0/Update Forwarding parameters/Transport Level Marking	8.2.12	Rule("a ToS/Traffic Class mask other than 0xFC")	MandatoryIeIncorrect
 session-modification-request_test.go	Multiple IEs	/pfcp/Update PDR/0/Outer Header Removal	8.1.2	SpareBits	-
@@ -173,6 +177,7 @@ session-modification-request_test.go	Single IE	/pfcp/Access Availability Informa
 session-modification-request_test.go	Single IE	/pfcp/Access Availability Information/0	8.2.153	SpareValue { value: 3 }	-
 session-modification-request_test.go	Single IE	/pfcp/Create FAR/0/Forwarding Parameters/Transport Level Marking	8.2.12	Rule("a ToS/Traffic Class mask other than 0xFC")	MandatoryIeIncorrect
 session-modification-request_test.go	Single IE	/pfcp/Create FAR/0/Redundant Transmission Parameters	7.6.9	Unexpected { ie_type: 255 }	-
+session-modification-request_test.go	Single IE	/pfcp/Create MAR/0	7.5.2.8-2	Rule("the two accesses of a MAR have the same Priority value")	MandatoryIeIncorrect
 session-modification-request_test.go	Single IE	/pfcp/Create PDR/0/Outer Header Removal	8.1.2	SpareBits	-
 session-modification-request_test.go	Single IE	/pfcp/Create PDR/0/PDI/Ethernet Packet Filter/0/SDF Filter/0	8.2.5	SpareBits	-
 session-modification-request_test.go	Single IE	/pfcp/Create PDR/0/PDI/Local F-TEID	7.5.2.2-2	Excluded { ie_type: 21 }	-
@@ -183,6 +188,7 @@ session-modification-request_test.go	Single IE	/pfcp/Create PDR/0/PDI/UE IP addr
 session-modification-request_test.go	Single IE	/pfcp/Create PDR/0/UE IP address Pool Identity/0	7.6.8	Incorrect { ie_type: 177 }	-
 session-modification-request_test.go	Single IE	/pfcp/Create QER/0/QER Control Indications	8.1.2	SpareBits	-
 session-modification-request_test.go	Single IE	/pfcp/Create SRR/0/QoS Monitoring per QoS flow Control Information/0/Reporting Frequency	8.2.168	SpareBits	-
+session-modification-request_test.go	Single IE	/pfcp/TSC Management Information/0/NW-TT Port Number	7.5.4.18-1	ConditionalMissing { ie_type: 197 }	ConditionalIeMissing
 session-modification-request_test.go	Single IE	/pfcp/Update FAR/0/Redundant Transmission Parameters	7.6.9	Unexpected { ie_type: 255 }	-
 session-modification-request_test.go	Single IE	/pfcp/Update FAR/0/Update Forwarding parameters/Transport Level Marking	8.2.12	Rule("a ToS/Traffic Class mask other than 0xFC")	MandatoryIeIncorrect
 session-modification-request_test.go	Single IE	/pfcp/Update PDR/0/Outer Header Removal	8.1.2	SpareBits	-
@@ -209,6 +215,7 @@ session-report-request_test.go	Multiple IEs	/pfcp/Session Report/0/Access Availa
 session-report-request_test.go	Multiple IEs	/pfcp/Session Report/0/QoS Monitoring Report/0/QoS Monitoring Measurement	8.2.171	Rule("PLMF is set with a packet delay")	MandatoryIeIncorrect
 session-report-request_test.go	Multiple IEs	/pfcp/Session Report/1/Access Availability Control Information	7.6.9	Unexpected { ie_type: 216 }	-
 session-report-request_test.go	Multiple IEs	/pfcp/Session Report/1/QoS Monitoring Report/0/QoS Monitoring Measurement	8.2.171	Rule("PLMF is set with a packet delay")	MandatoryIeIncorrect
+session-report-request_test.go	Multiple IEs	/pfcp/TSC Management Information/0/NW-TT Port Number	7.5.8.5-1	ConditionalMissing { ie_type: 197 }	ConditionalIeMissing
 session-report-request_test.go	Multiple IEs	/pfcp/Usage Report/0/Usage Report Trigger	8.1.2	SpareBits	-
 session-report-request_test.go	Single IE	/pfcp/Additional Usage Reports Information	8.2.91	SpareBits	-
 session-report-request_test.go	Single IE	/pfcp/Downlink Data Report/Downlink Data Service Information/0	8.1.2	SpareBits	-
@@ -216,4 +223,5 @@ session-report-request_test.go	Single IE	/pfcp/Downlink Data Report/Downlink Dat
 session-report-request_test.go	Single IE	/pfcp/Old CP F-SEID	7.2.2.4.2	Rule("a Session Report Request of a SEID other than 0 with the Old CP F-SEID")	-
 session-report-request_test.go	Single IE	/pfcp/Session Report/0/Access Availability Control Information	7.6.9	Unexpected { ie_type: 216 }	-
 session-report-request_test.go	Single IE	/pfcp/Session Report/0/QoS Monitoring Report/0/QoS Monitoring Measurement	8.2.171	Rule("PLMF is set with a packet delay")	MandatoryIeIncorrect
+session-report-request_test.go	Single IE	/pfcp/TSC Management Information/0/NW-TT Port Number	7.5.8.5-1	ConditionalMissing { ie_type: 197 }	ConditionalIeMissing
 session-report-request_test.go	Single IE	/pfcp/Usage Report/0/Usage Report Trigger	8.1.2	SpareBits	-

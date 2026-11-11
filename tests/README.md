@@ -162,6 +162,10 @@ test `codec` expects them (`other_vectors_round_trip`, with `--ignored` and
   Application ID, Provide ATSSS Control Information and Created Bridge/Router Info where
   they are, and IE type 116, which no table of Release 19 has.
 - Access Type 3, which Table 8.2.153-1 has as spare.
+- The two accesses of a Create MAR have the same Priority value, where NOTE 2 of Table
+  7.5.2.8-2 has them "set different values", and a TSC Management Information has a Port
+  Management Information Container without the NW-TT Port Number that Tables 7.5.4.18-1
+  and 7.5.8.5-1 then have.
 - The UPF Instance ID of the Association Setup Request and Response is
   `11111111-2222-2222-3333-333344444444`, a UUID of version 2, where §8.2.175 has "a
   Universally Unique Identifier (UUID) version 4" (`ie.NewNFInstanceID(...)` in
