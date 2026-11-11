@@ -8,6 +8,10 @@ all_features = true
 
 # Mutants that no test can tell from the code, each with why.
 exclude_re = [
+    # A message that serde deserializes goes through `Located`, which is only read:
+    # serde writes a message through the tree of `Message` itself, and nothing writes the
+    # tree of a `Located`.
+    'src/message\.rs:\d+:\d+: replace forms::<impl Tree for Located>::to_tree -> Value with Default::default\(\)$',
     # The two values of disjoint bits of an octet that together joins: the fields of a
     # header, refused first when wider than their bits, a Narrow value and its spare bits,
     # an Address Type and its length, the Node-ID Type and the CSIDs of an FQ-CSID, whose
