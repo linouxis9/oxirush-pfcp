@@ -626,6 +626,8 @@ pub struct Node {
     /// The features of its function that the node last announced, in an association setup
     /// or update of its own: those that it bundles with the peers of adopted sessions by.
     features: Features,
+    /// The features of a function that announced none, which [`Node::known`] lends.
+    blank: (crate::UpFunctionFeatures, crate::CpFunctionFeatures),
     transmits: [VecDeque<Transmit>; 16],
     events: VecDeque<Event>,
 }
@@ -664,6 +666,7 @@ impl Node {
             overload: Overloads::default(),
             orphans: BTreeSet::new(),
             features: Features::default(),
+            blank: Default::default(),
             transmits: Default::default(),
             events: VecDeque::new(),
         }
@@ -787,6 +790,27 @@ impl Node {
     /// `request_port` (§4.2.2). A peer has one: a setup of another Node ID ends it.
     pub fn association(&self, peer: SocketAddr) -> Option<&Association> {
         self.association_of(canonical(peer))
+    }
+
+    /// The context for [`Message::check_with`] of the messages exchanged with a peer: the
+    /// UP Function Features and the CP Function Features that the two functions announced
+    /// in the setup of their association and in its updates. A function that sent no
+    /// features IE announced none. `None` for a peer without an association.
+    pub fn known(&self, peer: SocketAddr) -> Option<crate::Known<'_>> {
+        let association = self.association(peer)?;
+        let (mut up, mut cp) = (&self.blank.0, &self.blank.1);
+        let wholes = [&association.own.whole, &association.set.features.whole];
+        for whole in wholes.into_iter().flatten() {
+            match &**whole {
+                state::Whole::Up(features) => up = features,
+                state::Whole::Cp(features) => cp = features,
+            }
+        }
+        Some(
+            crate::Known::default()
+                .with_up_features(up)
+                .with_cp_features(cp),
+        )
     }
 
     /// The session of a local SEID.

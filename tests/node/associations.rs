@@ -168,6 +168,44 @@ fn association_update() {
     );
 }
 
+/// `Node::known()` gives the features that the two functions announced: those of the
+/// setup, then those of an update that carries a features IE. Each side of the
+/// association sees the same, and a function that sent no IE announced none.
+#[test]
+fn the_features_that_the_two_functions_announced() {
+    let (mut smf, mut upf) = (node(SMF, Function::Cp), node(UPF, Function::Up));
+    assert!(smf.known(UPF).is_none());
+    let up = UpFunctionFeatures {
+        norp: true,
+        ..Default::default()
+    };
+    set_up(&mut smf, &mut upf, at(0), cp_features(), up.clone());
+    events(&mut smf);
+    for (node, peer) in [(&smf, UPF), (&upf, SMF)] {
+        let known = node.known(peer).unwrap();
+        assert_eq!(known.up_features, Some(&up));
+        assert_eq!(known.cp_features, Some(&cp_features()));
+    }
+    let cp = CpFunctionFeatures {
+        load: true,
+        ..Default::default()
+    };
+    let update = AssociationUpdateRequest::new(node_id(SMF)).with_cp_function_features(cp.clone());
+    smf.request(at(1), UPF, Message::node(0, update)).unwrap();
+    pass(&mut smf, &mut upf, UPF, at(1));
+    let (received, _) = request(&mut upf);
+    let answer = AssociationUpdateResponse::new(node_id(UPF), accepted());
+    upf.respond(at(1), &received, answer).unwrap();
+    pass(&mut upf, &mut smf, SMF, at(1));
+    for (node, peer) in [(&smf, UPF), (&upf, SMF)] {
+        let known = node.known(peer).unwrap();
+        assert_eq!(
+            (known.up_features, known.cp_features),
+            (Some(&up), Some(&cp))
+        );
+    }
+}
+
 /// §7.6.10: of a request that names its Node ID or its CP F-SEID twice, the node reads the
 /// first before it decodes the rest, as the decode takes it: an update of the host's Node
 /// ID and then another's is the host's, and an establishment of a CP F-SEID and then one

@@ -43,10 +43,20 @@ pub struct Association {
 
 /// The features of a function that the node keeps (§8.2.25, §8.2.58): MPAS of the SMF
 /// sets (§5.22.3), and BUNDL (§6.5).
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct Features {
     pub(crate) mpas: bool,
     pub(crate) bundl: bool,
+    /// The whole IE, for [`Node::known`](super::Node::known). It is boxed so that a
+    /// request that carries no features stays small.
+    pub(crate) whole: Option<alloc::boxed::Box<Whole>>,
+}
+
+/// The features IE of a function, as it announced it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum Whole {
+    Up(crate::UpFunctionFeatures),
+    Cp(crate::CpFunctionFeatures),
 }
 
 /// What a peer says of itself in an Association Setup: the features of its function, and

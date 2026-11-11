@@ -22,6 +22,7 @@ use alloc::vec::Vec;
 use core::net::{IpAddr, SocketAddr};
 use core::time::Duration;
 
+use super::state::Whole;
 use super::*;
 
 /// When each associated peer is due a heartbeat, and the peers by when.
@@ -469,10 +470,12 @@ pub(super) fn features(
         true => cp.map(|features| Features {
             mpas: features.mpas,
             bundl: features.bundl,
+            whole: Some(alloc::boxed::Box::new(Whole::Cp(features.clone()))),
         }),
         false => up.map(|features| Features {
             mpas: features.mpas,
             bundl: features.bundl,
+            whole: Some(alloc::boxed::Box::new(Whole::Up(features.clone()))),
         }),
     }
 }

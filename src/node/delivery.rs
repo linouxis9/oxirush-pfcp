@@ -38,7 +38,7 @@ pub(crate) enum Change {
 }
 
 /// What the node keeps of a request that it sends, besides its message.
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Default)]
 pub(crate) struct Pending {
     /// A heartbeat of the node's own, whose response goes to no event.
     pub(crate) heartbeat: bool,
@@ -183,7 +183,7 @@ impl Node {
             mark,
             change,
             local_address,
-            features,
+            features: features.clone(),
         };
         let id = self.send(now, to, message, pending)?;
         if let Some(features) = features {

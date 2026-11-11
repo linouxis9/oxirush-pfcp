@@ -116,7 +116,7 @@ impl Node {
                         response.up_function_features.as_ref(),
                         response.smf_set_id.as_ref(),
                     );
-                    let own = request.features.unwrap_or_default();
+                    let own = request.features.clone().unwrap_or_default();
                     self.associate(now, from, node_id.clone(), None, set, own);
                 }
             }
@@ -139,7 +139,7 @@ impl Node {
                     .association_of(from)
                     .map(|association| association.key.clone())
                 {
-                    self.update_set(&key, features, None, request.features);
+                    self.update_set(&key, features, None, request.features.clone());
                 }
             }
             Body::SessionEstablishmentResponse(response) => {
@@ -348,8 +348,8 @@ impl Node {
         effect: Effect,
     ) {
         let own = self.announced(body);
-        if let Some(own) = own {
-            self.features = own;
+        if let Some(own) = &own {
+            self.features = own.clone();
         }
         let Some(node_id) = &request.node_id else {
             return;
