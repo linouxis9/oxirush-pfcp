@@ -40,6 +40,8 @@
 #![no_std]
 #![deny(unsafe_code)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
+// The crate documentation links to `tree` and `paths`, which only the `tree` feature has.
+#![cfg_attr(not(feature = "tree"), allow(rustdoc::broken_intra_doc_links))]
 
 extern crate alloc;
 #[cfg(any(test, feature = "endpoint"))]
