@@ -385,3 +385,25 @@ fn the_length_of_its_own_content_is_no_false_length() {
     assert_eq!(features, [&tree!(true)]);
     assert_eq!(message.check(Interfaces::N4), read.check(Interfaces::N4));
 }
+
+/// A false Length shorter than the octets of an IE leaves its other octets to frame as IEs
+/// of their own: its receiver reads one octet of CP Function Features and a vendor IE of
+/// type 40863 and of a null length after it, and `check()` finds in the message what it
+/// finds in its octets. The `edit` fuzz target found it.
+#[test]
+fn a_false_length_reads_as_the_ies_that_its_octets_frame() {
+    let tree = tree!({"message": "PFCP Association Setup Request", "header": {"Sequence Number": 1},
+        "ies": {"Node ID": "127.0.0.4", "Recovery Time Stamp": 7, "CP Function Features": {"octets": "9f9f9f0000", "length": 1}}});
+    let message = Message::from_tree(&tree).unwrap();
+    assert_eq!(message.to_tree(), tree);
+    let read = Message::decode(&message.encode().unwrap()).unwrap();
+    let tree = read.to_tree();
+    let features = select(&tree, "/pfcp/CP Function Features").unwrap();
+    assert_eq!(features[0]["LOAD"], tree!(true));
+    assert_eq!(features[0]["length"], tree!(1));
+    let vendor = select(&tree, "/pfcp/40863").unwrap();
+    assert_eq!(vendor, [&tree!({"octets": ""})]);
+    for interface in [Interfaces::N4, Interfaces::SXB, Interfaces::ALL] {
+        assert_eq!(message.check(interface), read.check(interface));
+    }
+}

@@ -222,13 +222,35 @@ fn cleared(value: &mut Value) {
     }
 }
 
+/// Whether the tree writes a false Length of an IE kept as octets: one other than the
+/// length of its Enterprise ID and its octets.
+fn false_length(value: &Value) -> bool {
+    match value {
+        Value::Object(members) => {
+            let octets = members.get("octets").and_then(Value::as_str);
+            let length = members.get("length").and_then(Value::as_u64);
+            if let (Some(octets), Some(length)) = (octets, length) {
+                let vendor = 2 * u64::from(members.contains_key("Enterprise ID"));
+                if length != octets.len() as u64 / 2 + vendor {
+                    return true;
+                }
+            }
+            members.values().any(false_length)
+        }
+        Value::Array(entries) => entries.iter().any(false_length),
+        _ => false,
+    }
+}
+
 /// What holds of a message that the crate wrote from a tree: it encodes, and its tree
 /// loads back to it. Its octets decode to a message that encodes to them, whose tree loads
 /// back to it, which has each value of the message as it is ([`held`]), and in which
 /// `check()` finds what it finds in the message, on every interface: `check(m)` is
 /// `check(Message::decode(m.encode()))`. A tree may write a false Length or Message Length,
 /// for a test tool, which keeps the octets from decoding: then `check()` tells it, and the
-/// message without the Lengths that the tree writes decodes.
+/// message without the Lengths that the tree writes decodes. A false Length can also frame
+/// the octets after it as other IEs (§7.6.7): then the message of the octets has those IEs
+/// in place of the values of the message, and `check()` still finds the same in both.
 pub fn written(message: &Message) {
     let octets = match message.encode() {
         Ok(octets) => octets,
@@ -264,7 +286,7 @@ pub fn written(message: &Message) {
     let mut values = tree.clone();
     cleared(&mut values);
     assert!(
-        held(&values, &read_tree, table),
+        false_length(&tree) || held(&values, &read_tree, table),
         "a value of a message reads as another: {tree} reads as {read_tree}"
     );
     assert_eq!(
