@@ -698,3 +698,57 @@ fn a_message_is_checked_as_its_octets_in_a_corpus() {
     println!("{files} files, {count} messages with an IE written otherwise");
     assert!(count > 0);
 }
+
+/// The 64-bit FNV-1a digest of `text`, in hexadecimal.
+fn digest(text: &str) -> String {
+    let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
+    for octet in text.bytes() {
+        hash = (hash ^ u64::from(octet)).wrapping_mul(0x0100_0000_01b3);
+    }
+    format!("{hash:016x}")
+}
+
+/// Each captured message has the tree that `captures/trees.tsv` records, by the
+/// length and the FNV-1a digest of its text, and from_tree() writes the octets that
+/// it records, by their digest. A change of how a message becomes a tree, or a tree a
+/// message, keeps every line; `OXIRUSH_BLESS=1` writes the file again from the code.
+#[test]
+fn each_captured_message_has_the_tree_recorded() {
+    let mut made = Vec::new();
+    for line in include_str!("captures/messages.tsv").lines() {
+        let columns: Vec<&str> = line.split('\t').collect();
+        if line.starts_with('#') || columns.len() < 6 {
+            continue;
+        }
+        let name = format!("{}/{}", columns[0], columns[1]);
+        let message = Message::decode(&hex::decode(columns[5]).unwrap()).unwrap();
+        let tree = message.to_tree();
+        let written = match Message::from_tree(&tree).map(|written| written.encode()) {
+            Ok(Ok(octets)) => hex::encode(octets),
+            Ok(Err(error)) => format!("error: {error}"),
+            Err(error) => format!("error: {error}"),
+        };
+        let tree = tree.to_string();
+        made.push(format!(
+            "{name}\t{}\t{}\t{}",
+            tree.len(),
+            digest(&tree),
+            digest(&written)
+        ));
+    }
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/captures/trees.tsv");
+    if std::env::var_os("OXIRUSH_BLESS").is_some() {
+        let header = "# run/number\tlength of the tree\tdigest of the tree\tdigest of the octets that it writes\n";
+        std::fs::write(path, header.to_owned() + &made.join("\n") + "\n").unwrap();
+        return;
+    }
+    let recorded = std::fs::read_to_string(path).unwrap();
+    let recorded: Vec<&str> = recorded
+        .lines()
+        .filter(|line| !line.starts_with('#'))
+        .collect();
+    assert_eq!(recorded.len(), made.len(), "the number of messages");
+    for (recorded, made) in recorded.iter().zip(&made) {
+        assert_eq!(recorded, made);
+    }
+}
