@@ -13,7 +13,6 @@ gives it the layout of each value as the crate reads it.
 | `src/endpoint.rs` | Through `Handle::request`, that a request dropped once queued closes its reply before its cancel goes, as the waker of the cancels sees it; what a request takes in the incoming queue |
 | `allocation` | What the node allocates and keeps of what it rejects unread: the datagrams of hosts without an association, and their rejections; and what a decoded message takes at most, per octet, the figure of SECURITY.md: 242.6 times, found by search over the lists of grouped IEs of every table, with one to three levels of grouped IEs in each entry |
 | `codec` | A module of `codec/` for each subject: `paths`, what `select` and `set` take; `trees`, the tree of a message and of its values; `kept`, the IEs that a scope keeps as octets; `values`, the fields against their figures, the octets of the four values read by hand among them (Node ID, FQ-CSID, MAC Addresses Detected and Removed); `messages`, headers, lengths, framing, and the vectors of `PFCP_VECTORS` |
-| `serde` | A message and an IE as JSON through serde |
 
 ## The document
 

@@ -901,9 +901,6 @@ impl Rules for FqCsid {
     }
 }
 
-#[cfg(feature = "serde")]
-oxirush_utils::impl_serde!(FqCsid);
-
 /// `{"FQ-CSID Node-ID Type": 0, "Node-Address": "10.0.0.1", "PDN Connection Set Identifiers": [1]}`:
 /// an IPv4 or IPv6 address as text, the other Node-Address as its octets, of any length
 /// for a Node-ID Type that the clause reserves, which `encode()` writes too.
@@ -1089,9 +1086,6 @@ macro_rules! mac_addresses {
                 }
             }
         }
-
-        #[cfg(feature = "serde")]
-        oxirush_utils::impl_serde!($ty);
 
         #[cfg(feature = "tree")]
         impl oxirush_utils::tree::Tree for $ty {

@@ -15,7 +15,7 @@ The first version. It implements TS 29.244 V19.6.0 (2026-06):
   against the features that the two functions announced, and a message against
   the state of its session (`SessionRules`).
 - With `tree`, a message converts to a tree that prints as JSON and can be read
-  and edited by path. With `serde`, it is serialized as that tree.
+  and edited by path. Any format of serde writes the tree.
 - With `node`, `Node` is a PFCP node without I/O: delivery and retransmission,
   heartbeats, associations, sessions, load and overload control, and bundles.
 - With `endpoint`, `Endpoint` runs a node on a Tokio UDP socket.

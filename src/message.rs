@@ -711,46 +711,6 @@ pub(crate) mod forms {
         "Message Length",
     ];
 
-    /// A message as serde reads it: one whose refusal is that of
-    /// [`Message::from_tree`], at the path that it gives, `/header/...` or `/pfcp/...`.
-    #[cfg(feature = "serde")]
-    struct Located(Message);
-
-    #[cfg(feature = "serde")]
-    impl Tree for Located {
-        const NAME: &'static str = <Message as Tree>::NAME;
-
-        fn to_tree(&self) -> Value {
-            self.0.to_tree()
-        }
-
-        fn from_tree(value: &Value, reading: &mut Reading) -> Result<Self, Refused> {
-            Message::from_tree(value).map(Self).map_err(|error| {
-                let why = match error.at() {
-                    "" => error.reason().into(),
-                    at => alloc::format!("{}, at {at}", error.reason()),
-                };
-                reading.refuse(error.kind(), why)
-            })
-        }
-    }
-
-    #[cfg(feature = "serde")]
-    impl tree::serde::Serialize for Message {
-        fn serialize<S: tree::serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-            tree::serde::serialize(self, serializer)
-        }
-    }
-
-    #[cfg(feature = "serde")]
-    impl<'de> tree::serde::Deserialize<'de> for Message {
-        fn deserialize<D: tree::serde::Deserializer<'de>>(
-            deserializer: D,
-        ) -> Result<Self, D::Error> {
-            tree::serde::deserialize::<Located, D>(deserializer).map(|located| located.0)
-        }
-    }
-
     /// `{"message": NAME, "header": {"SEID": ..., "Sequence Number": ...}, "ies": {...}}`,
     /// with the other fields of the header where they are not what a sender writes.
     impl Tree for Message {

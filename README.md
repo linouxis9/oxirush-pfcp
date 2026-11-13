@@ -59,13 +59,12 @@ The crate is not on crates.io yet. Use the Git repository:
 oxirush-pfcp = { git = "https://github.com/linouxis9/oxirush-pfcp" }
 hex = "0.4" # only for the examples on this page
 # With JSON and the Tokio endpoint:
-# oxirush-pfcp = { git = "https://github.com/linouxis9/oxirush-pfcp", features = ["serde", "endpoint"] }
+# oxirush-pfcp = { git = "https://github.com/linouxis9/oxirush-pfcp", features = ["tree", "endpoint"] }
 ```
 
 | Feature | Adds | Needs |
 | ------- | ---- | ----- |
 | `tree` | messages and IEs as JSON trees, with reads and edits by path | `oxirush-utils` with `tree` |
-| `serde` | `Serialize` and `Deserialize`, using the same trees | `oxirush-utils` with `tree` |
 | `node` | `Node`, a PFCP node without I/O | nothing |
 | `endpoint` | `Endpoint`, a `Node` on a UDP socket | a Tokio runtime |
 

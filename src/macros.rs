@@ -357,9 +357,6 @@ macro_rules! pfcp_layout {
             )?
         }
 
-        #[cfg(feature = "serde")]
-        oxirush_utils::impl_serde!($ty);
-
         $( pfcp_layout!(@part $ty $part); )?
 
         #[cfg(feature = "tree")]
@@ -694,9 +691,6 @@ macro_rules! pfcp_bits {
                 )?
             }
         }
-
-        #[cfg(feature = "serde")]
-        oxirush_utils::impl_serde!($ty);
 
         /// The flags that are set and the fields, with `Spare`, `length` (the octets of
         /// the fields that the value has, when it has not all of them, which a tree reads
@@ -1460,9 +1454,6 @@ macro_rules! pfcp_table {
                 crate::check::check_scope(read.as_ref().unwrap_or(self), path, context, found);
             }
         }
-
-        #[cfg(feature = "serde")]
-        oxirush_utils::impl_serde!($ty);
 
         #[cfg(feature = "tree")]
         impl oxirush_utils::tree::Tree for $ty {

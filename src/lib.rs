@@ -29,8 +29,8 @@
 //!   functions announced, and a message against the state of its session
 //!   ([`SessionRules`]). Their documentation lists what is and is not checked.
 //! - With the `tree` feature, a message converts to and from a tree that prints as JSON
-//!   ([`tree`](mod@tree)), and [`paths`] reads and edits the tree by path. With `serde`,
-//!   a message is serialized as that tree.
+//!   ([`tree`](mod@tree)), and [`paths`] reads and edits the tree by path. A tree
+//!   implements `Serialize` and `Deserialize`: any format of serde writes it.
 //! - [`framing`] iterates over the IEs of a message as byte slices, without decoding
 //!   them.
 //!

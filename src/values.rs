@@ -393,9 +393,6 @@ impl NodeId {
     }
 }
 
-#[cfg(feature = "serde")]
-oxirush_utils::impl_serde!(NodeId);
-
 /// An address as text, or `{"FQDN": "upf.example"}`, or `{"Node ID Type": 5, "Node ID
 /// value": ...}` for another Node ID, its first octet and the octets after it: not
 /// `{"octets": ...}`, which an IE kept as octets is in the tree of its scope.
@@ -550,9 +547,6 @@ impl Codec for NetworkInstance {
 }
 
 impl Rules for NetworkInstance {}
-
-#[cfg(feature = "serde")]
-oxirush_utils::impl_serde!(NetworkInstance);
 
 /// The name of the labels of a domain name or an APN, `"internet"` (§8.2.4, TS 23.003
 /// clause 9.1), or `{"Network Instance": ...}`, its octets in hexadecimal, of other octets.
@@ -933,9 +927,6 @@ macro_rules! pfcp_octets {
                 )?
             }
         }
-
-        #[cfg(feature = "serde")]
-        oxirush_utils::impl_serde!($ty);
 
         #[cfg(feature = "tree")]
         impl oxirush_utils::tree::Tree for $ty {

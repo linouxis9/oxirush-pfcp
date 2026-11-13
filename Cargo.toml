@@ -30,8 +30,6 @@ include = [
 [features]
 # The tree of a message, its paths and its edits, on the engine of oxirush-utils.
 tree = ["oxirush-utils/tree"]
-# `Serialize` and `Deserialize` for a message and each of its IEs, through its tree.
-serde = ["tree"]
 # A PFCP entity without I/O: delivery, heartbeat, associations, sessions, load and
 # overload control.
 node = []
@@ -62,10 +60,6 @@ required-features = ["tree"]
 [[test]]
 name = "spec"
 required-features = ["spec"]
-
-[[test]]
-name = "serde"
-required-features = ["serde"]
 
 [[test]]
 name = "node"
