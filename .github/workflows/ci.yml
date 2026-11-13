@@ -59,16 +59,26 @@ jobs:
       - run: cargo test --all-features
       - run: cargo build --features node
 
+  fmt:
+    name: Format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # The rustfmt of the MSRV: a new stable release must not change what is formatted.
+      - uses: dtolnay/rust-toolchain@1.88
+        with:
+          components: rustfmt
+      - run: cargo fmt --check
+
   lint:
-    name: Format, Clippy and documentation
+    name: Clippy and documentation
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
-          components: clippy, rustfmt
+          components: clippy
       - uses: Swatinem/rust-cache@v2
-      - run: cargo fmt --check
       - run: cargo clippy --all-features --all-targets -- -D warnings
       - run: cargo doc --no-deps --all-features
         env:
