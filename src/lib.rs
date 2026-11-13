@@ -106,6 +106,12 @@ pub use values_figures::*;
 #[cfg_attr(docsrs, doc(cfg(feature = "tree")))]
 pub use oxirush_utils::tree;
 
+/// The examples of the README, which the documentation tests compile and run: each
+/// checks what it gives with `assert_eq!`.
+#[cfg(all(doctest, feature = "tree", feature = "endpoint"))]
+#[doc = include_str!("../README.md")]
+struct Readme;
+
 /// Why a message does not decode or encode.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]

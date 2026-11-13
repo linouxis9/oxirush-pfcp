@@ -90,23 +90,6 @@ jobs:
       - run: cargo build --release --manifest-path benches/Cargo.toml --features tree
       - run: cargo build --release --manifest-path benches/Cargo.toml --all-features
 
-  # tests/readme.rs is the test of the blocks of README.md that the README tool of
-  # oxirush-aper writes, at this revision: it must be the one of the README.
-  readme:
-    name: The test of the README
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          path: crate
-      - uses: actions/checkout@v4
-        with:
-          repository: linouxis9/oxirush-aper
-          ref: f0ac242e921289807c1dc64483e4931e0792f0e0
-          path: oxirush-aper
-      - run: python3 ../oxirush-aper/protocols/tests/readme.py --check
-        working-directory: crate
-
   # The fixtures of the test `spec`, as tests/spec/extract.py writes them from the
   # document in the 3GPP archive, whose SHA-256 it checks.
   fixtures:

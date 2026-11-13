@@ -26,33 +26,29 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cp_f_seid = FSeid::ipv4(0x1001, smf);
     let request = SessionEstablishmentRequest::new_n4(NodeId::Ipv4(smf), cp_f_seid, pdr, far);
     let octets = Message::session(0, 7, request).encode()?;
-    println!("{}", hex::encode(&octets));
+    assert_eq!(
+        hex::encode(&octets),
+        "21320069000000000000000000000700003c0005000a0000010039000d0200000000000010010a00000100010024003800020001001d0004000000ff0002000a00140001000015000105006c00040000000100030017006c000400000001002c0002020000040005002a000101",
+    );
 
     // The UPF decodes it and reads its IEs as typed fields
     let message = Message::decode(&octets)?;
-    if let Body::SessionEstablishmentRequest(request) = &message.body {
-        let pdi = request.create_pdr[0].pdi.as_ref().ok_or("no PDI")?;
-        let from = pdi.source_interface.as_ref().ok_or("no Source Interface")?;
-        println!("{message}: {} PDR, from {}", request.create_pdr.len(), from.interface_value);
-    }
+    assert_eq!(message.to_string(), "PFCP Session Establishment Request (SEID 0x0, sequence 7)");
+    let Body::SessionEstablishmentRequest(request) = &message.body else { return Err("another message".into()) };
+    let pdi = request.create_pdr[0].pdi.as_ref().ok_or("no PDI")?;
+    let from = pdi.source_interface.as_ref().ok_or("no Source Interface")?;
+    assert_eq!(request.create_pdr.len(), 1);
+    assert_eq!(from.interface_value, SourceInterfaceValue::Access);
 
     // check() reports nothing on N4. On Sxa, a Create PDR has no Precedence
-    println!("{} deviations on N4", message.check(Interfaces::N4).len());
-    for deviation in message.check(Interfaces::SXA) {
-        println!("on Sxa: {deviation}");
-    }
+    assert!(message.check(Interfaces::N4).is_empty());
+    let on_sxa: Vec<String> = message.check(Interfaces::SXA).iter().map(ToString::to_string).collect();
+    assert_eq!(on_sxa, ["Precedence is not on this interface (TS 29.244 7.5.2.2-1), at /pfcp/Create PDR/0/Precedence"]);
     Ok(())
 }
 ```
 
-```text
-21320069000000000000000000000700003c0005000a0000010039000d0200000000000010010a00000100010024003800020001001d0004000000ff0002000a00140001000015000105006c00040000000100030017006c000400000001002c0002020000040005002a000101
-PFCP Session Establishment Request (SEID 0x0, sequence 7): 1 PDR, from Access
-0 deviations on N4
-on Sxa: Precedence is not on this interface (TS 29.244 7.5.2.2-1), at /pfcp/Create PDR/0/Precedence
-```
-
-Every example on this page is followed by its output.
+Each example shows what it gives with `assert_eq!`, and runs as a test of the crate.
 
 ## Installation
 
@@ -105,39 +101,31 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let setup = AssociationSetupRequest::new(smf_id, RecoveryTimeStamp::new(3_900_000_000));
     smf.request(now, upf_address, Message::node(0, setup))?;
     let datagram = smf.poll_transmit().ok_or("nothing to send")?;
-    println!("to {}: {} octets, again at {:?}", datagram.to, datagram.octets.len(), smf.poll_timeout());
+    assert_eq!((datagram.to, datagram.octets.len()), (upf_address, 25));
+    assert_eq!(smf.poll_timeout(), Some(Duration::from_secs(3)));
 
     // The UPF receives the datagram, and the application answers the request
     upf.handle_datagram(now, smf_address, &datagram.octets);
-    while let Some(event) = upf.poll_event() {
-        if let Event::Request { request, message } = event {
-            println!("the UPF: {message}");
-            let accepted = Cause::new(CauseValue::RequestAccepted);
-            upf.respond(now, &request, AssociationSetupResponse::new(upf_id.clone(), accepted, RecoveryTimeStamp::new(3_900_000_000)))?;
-        }
-    }
+    let Some(Event::Request { request, message }) = upf.poll_event() else { return Err("no request".into()) };
+    assert_eq!(message.to_string(), "PFCP Association Setup Request (sequence 1)");
+    let accepted = Cause::new(CauseValue::RequestAccepted);
+    upf.respond(now, &request, AssociationSetupResponse::new(upf_id, accepted, RecoveryTimeStamp::new(3_900_000_000)))?;
 
     // The SMF receives the response. The request is complete and the association exists
     let answer = upf.poll_transmit().ok_or("no answer")?;
     smf.handle_datagram(now, upf_address, &answer.octets);
+    let mut events = Vec::new();
     while let Some(event) = smf.poll_event() {
-        match event {
-            Event::Associated { peer, .. } => println!("the SMF: associated with {peer}"),
-            Event::Response { message, .. } => println!("the SMF: {message}"),
-            other => println!("the SMF: {other:?}"),
-        }
+        events.push(match event {
+            Event::Associated { peer, .. } => format!("associated with {peer}"),
+            Event::Response { message, .. } => message.to_string(),
+            other => format!("{other:?}"),
+        });
     }
-    println!("no more timer: {:?}", smf.poll_timeout());
+    assert_eq!(events, ["associated with 10.0.0.2:8805", "PFCP Association Setup Response (sequence 1)"]);
+    assert_eq!(smf.poll_timeout(), Some(Duration::from_secs(60)));
     Ok(())
 }
-```
-
-```text
-to 10.0.0.2:8805: 25 octets, again at Some(3s)
-the UPF: PFCP Association Setup Request (sequence 1)
-the SMF: associated with 10.0.0.2:8805
-the SMF: PFCP Association Setup Response (sequence 1)
-no more timer: Some(60s)
 ```
 
 The remaining timer is the first heartbeat to the UPF. Protocol errors of a
@@ -169,14 +157,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let heartbeat = HeartbeatRequest::new(RecoveryTimeStamp::new(3_900_000_000));
         let message = Message::node(0, heartbeat);
         let response = smf.handle().request(upf.handle().local_addr(), message).await?;
-        println!("{response}");
+        assert_eq!(response.to_string(), "PFCP Heartbeat Response (sequence 1)");
         Ok(())
     })
 }
-```
-
-```text
-PFCP Heartbeat Response (sequence 1)
 ```
 
 ## Decode a message and read its IEs
@@ -186,6 +170,8 @@ with one field for each row of its table in the specification. Each IE has its
 own type.
 
 ```rust
+use std::net::Ipv4Addr;
+
 use oxirush_pfcp::*;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -195,15 +181,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let Body::SessionEstablishmentResponse(response) = &message.body else { return Err("another message".into()) };
     let cause = response.cause.as_ref().ok_or("no Cause")?.value;
     let up_f_seid = response.up_f_seid.as_ref().ok_or("no F-SEID")?;
-    println!("{message}: {cause} ({}), UP F-SEID {:#x} at {:?}", cause.value(), up_f_seid.seid, up_f_seid.ipv4);
-    println!("accepted: {}", cause == CauseValue::RequestAccepted);
+    assert_eq!(message.to_string(), "PFCP Session Establishment Response (SEID 0x1001, sequence 7)");
+    assert_eq!(cause, CauseValue::RequestAccepted);
+    assert_eq!((cause.to_string(), cause.value()), ("Request accepted (success)".into(), 1));
+    assert_eq!((up_f_seid.seid, up_f_seid.ipv4), (0x2001, Some(Ipv4Addr::new(10, 0, 0, 2))));
     Ok(())
 }
-```
-
-```text
-PFCP Session Establishment Response (SEID 0x1001, sequence 7): Request accepted (success) (1), UP F-SEID 0x2001 at Some(10.0.0.2)
-accepted: true
 ```
 
 An IE that the crate cannot decode is kept as raw octets in its position, so
@@ -236,9 +219,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_remove_pdr(RemovePdr::new(PdrId::new(3)));
     pdr.pdr_id = None;
     let request = Message::session(0x2001, 8, modification.with_create_pdr(pdr));
-    for deviation in request.check(Interfaces::N4) {
-        println!("{deviation}");
-    }
+    let deviations: Vec<String> = request.check(Interfaces::N4).iter().map(ToString::to_string).collect();
+    assert_eq!(deviations, [
+        r#"the mandatory PDR ID is missing (TS 29.244 7.5.2.2-1), at /pfcp/Create PDR/1/PDR ID: the answer is "Conditional IE missing""#,
+        "the message changes PDR 3 more than once (TS 29.244 6.3.3.2), at /pfcp",
+    ]);
 
     // Build the response from the first deviation that has a Cause
     let deviation = request.check(Interfaces::N4).into_iter().find(|deviation| deviation.cause.is_some()).ok_or("none")?;
@@ -248,17 +233,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         ..Default::default()
     };
     let answer = Message::session(0x1001, request.header.sequence, response);
-    println!("{answer}: {}", hex::encode(answer.encode()?));
-    println!("{} deviations in the answer", answer.check(Interfaces::N4).len());
+    assert_eq!(answer.to_string(), "PFCP Session Modification Response (SEID 0x1001, sequence 8)");
+    assert_eq!(hex::encode(answer.encode()?), "213500170000000000001001000008000013000143002800020038");
+    assert!(answer.check(Interfaces::N4).is_empty());
     Ok(())
 }
-```
-
-```text
-the mandatory PDR ID is missing (TS 29.244 7.5.2.2-1), at /pfcp/Create PDR/1/PDR ID: the answer is "Conditional IE missing"
-the message changes PDR 3 more than once (TS 29.244 6.3.3.2), at /pfcp
-PFCP Session Modification Response (SEID 0x1001, sequence 8): 213500170000000000001001000008000013000143002800020038
-0 deviations in the answer
 ```
 
 ## A message as JSON
@@ -275,7 +254,15 @@ use oxirush_pfcp::tree;
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let octets = hex::decode("2133002b000000000000100100000700003c0005000a00000200130001010039000d0200000000000020010a000002")?;
     let tree = Message::decode(&octets)?.to_tree();
-    println!("{tree:#}");
+    assert_eq!(tree, tree!({
+        "message": "PFCP Session Establishment Response",
+        "header": {"SEID": 4097, "Sequence Number": 7},
+        "ies": {
+            "Node ID": "10.0.0.2",
+            "Cause": "Request accepted (success)",
+            "UP F-SEID": {"V4": true, "SEID": 8193, "IPv4 address": "10.0.0.2"}
+        }
+    }));
 
     // A tree written by hand: names match without case or punctuation
     let written = tree!({
@@ -284,32 +271,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "ies": {"recovery time stamp": 3_900_000_000u32}
     });
     let heartbeat = Message::from_tree(&written)?;
-    println!("{heartbeat}: {}", hex::encode(heartbeat.encode()?));
+    assert_eq!(heartbeat.to_string(), "PFCP Heartbeat Request (sequence 9)");
+    assert_eq!(hex::encode(heartbeat.encode()?), "2001000c0000090000600004e8754700");
     Ok(())
 }
-```
-
-```json
-{
-  "message": "PFCP Session Establishment Response",
-  "header": {
-    "SEID": 4097,
-    "Sequence Number": 7
-  },
-  "ies": {
-    "Node ID": "10.0.0.2",
-    "Cause": "Request accepted (success)",
-    "UP F-SEID": {
-      "V4": true,
-      "SEID": 8193,
-      "IPv4 address": "10.0.0.2"
-    }
-  }
-}
-```
-
-```text
-PFCP Heartbeat Request (sequence 9): 2001000c0000090000600004e8754700
 ```
 
 A tree lists the IEs in the order of the tables of the specification. The
@@ -328,17 +293,15 @@ use oxirush_pfcp::*;
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let octets = hex::decode("2133002b000000000000100100000700003c0005000a00000200130001010039000d0200000000000020010a000002")?;
     let mut tree = Message::decode(&octets)?.to_tree();
-    println!("{:?}", paths::select(&tree, "/pfcp/up f-seid/ipv4 address")?);
+    assert_eq!(paths::select(&tree, "/pfcp/up f-seid/ipv4 address")?, [&tree!("10.0.0.2")]);
     paths::set(&mut tree, "/pfcp/Cause", "No resources available")?;
     let edited = Message::from_tree(&tree)?;
-    println!("{}", hex::encode(edited.encode()?));
+    assert_eq!(
+        hex::encode(edited.encode()?),
+        "2133002b000000000000100100000700003c0005000a000002001300014b0039000d0200000000000020010a000002",
+    );
     Ok(())
 }
-```
-
-```text
-[String("10.0.0.2")]
-2133002b000000000000100100000700003c0005000a000002001300014b0039000d0200000000000020010a000002
 ```
 
 ## Limits
@@ -377,8 +340,7 @@ cargo +nightly fuzz run tree -- -max_total_time=60
 the specification and against lab captures, and what the crate reports in
 other implementations. The fuzz targets are in `fuzz/`. One of them,
 `differential`, compares the crate with rs-pfcp 0.5.0, an independent codec, on
-the same input. Every Rust example on this page is compiled and run by the
-tests, and its output is compared.
+the same input.
 
 Pull requests are welcome. Add a test for what you change and sign off your
 commits (`git commit -s`, the [Developer Certificate of
