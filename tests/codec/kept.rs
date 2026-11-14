@@ -433,3 +433,23 @@ fn an_fq_csid_of_a_reserved_node_id_type_is_received_as_octets() {
     assert_eq!(at(&read), [DeviationKind::Incorrect { ie_type: 65 }]);
 }
 
+/// Vendor IEs of one type that a tree writes without their Enterprise ID, for a test to
+/// send (§8.1.1): the receiver reads the first two octets of each as its Enterprise ID, and
+/// one of fewer octets as one without, and `check()` finds in the message what it finds in
+/// its octets. The `paths` fuzz target found it.
+#[test]
+fn vendor_ies_without_an_enterprise_id_read_with_the_first_two_octets_as_it() {
+    let tree = tree!({"message": "PFCP Association Setup Request", "header": {"Sequence Number": 1},
+        "ies": {"Node ID": "127.0.0.4", "Recovery Time Stamp": 7, "59392": [{"octets": "1d7777"}, {"octets": ""}]}});
+    let message = Message::from_tree(&tree).unwrap();
+    let read = Message::decode(&message.encode().unwrap()).unwrap();
+    let tree = read.to_tree();
+    let vendor = select(&tree, "/pfcp/59392").unwrap();
+    assert_eq!(
+        vendor,
+        [&tree!([{"octets": "77", "Enterprise ID": 7543}, {"octets": ""}])]
+    );
+    for interface in [Interfaces::N4, Interfaces::SXB, Interfaces::ALL] {
+        assert_eq!(message.check(interface), read.check(interface));
+    }
+}

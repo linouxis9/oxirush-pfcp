@@ -362,7 +362,12 @@ fn held(written: &Value, read: &Value, table: Option<&'static Table>) -> bool {
             let row = table.and_then(|table| table.rows.iter().find(|row| row.name == name));
             match (name.as_str(), row) {
                 ("ies", _) => held(value, other, table),
-                (_, None) => value == other || kept(value),
+                // An IE of no row, or the header: each IE of the type in its place
+                (_, None) => {
+                    let (written, read) = (entries(value), entries(other));
+                    written.len() == read.len()
+                        && written.iter().zip(&read).all(|(value, other)| value == other || kept(value))
+                }
                 (_, Some(row)) => {
                     let (written, read) = (entries(value), entries(other));
                     written.len() == read.len()
