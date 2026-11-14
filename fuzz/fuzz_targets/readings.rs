@@ -39,7 +39,7 @@ use rs_pfcp::error::PfcpError;
 use rs_pfcp::ie::{Ie, IeType};
 
 /// The readings of rs-pfcp that TS 29.244 does not have, which a difference may be.
-pub const READINGS: [&str; 13] = [
+pub const READINGS: [&str; 14] = [
     "rs-pfcp refuses a message without an IE that it needs, which this crate decodes and \
      check() tells of that IE: missing, incorrect or of a null length (§7.6.6, §7.6.8)",
     "rs-pfcp needs the UP F-SEID of every Session Establishment Response, which Table \
@@ -68,6 +68,11 @@ pub const READINGS: [&str; 13] = [
      into fields of their own, which its all_ies() leaves out",
     "rs-pfcp gives no SEID of a node related message whose S flag is set, which check() \
      tells (§7.2.2.1)",
+    "rs-pfcp panics on an FQ-CSID whose bits 4 to 1 of octet 5 are 2, which it reads as the \
+     Node-ID Type of an FQDN, and whose bits 8 to 5 count more PDN Connection Set \
+     Identifiers than its octets hold (a subtraction that overflows in ie/fq_csid.rs), \
+     where §8.2.43 has the Node-ID Type in bits 8 to 5 and the Number of CSID in bits 4 \
+     to 1: the octets are not compared",
 ];
 
 /// The IE types whose values both read: Cause, F-TEID, Precedence, PDR ID, F-SEID, Node
@@ -77,6 +82,10 @@ pub const VALUES: [u16; 10] = [19, 21, 29, 56, 57, 60, 81, 93, 108, 109];
 /// Compare the readings of `octets`, and panic at a difference that is not one of
 /// [`READINGS`].
 pub fn compare(octets: &[u8]) {
+    if panics_rs_pfcp(octets) {
+        let _ = READINGS[13];
+        return;
+    }
     let (ours, theirs) = match (Message::decode(octets), rs_pfcp::message::parse(octets)) {
         (Ok(ours), Ok(theirs)) => (ours, theirs),
         (Err(_), Err(_)) => return,
@@ -284,6 +293,16 @@ fn unframed(octets: &[u8]) -> Vec<u16> {
 fn fqdn_not_utf8(octets: &[u8]) -> bool {
     let not_utf8 = |ie: &IeSlice| ie.value.first() == Some(&2) && core::str::from_utf8(&ie.value[1..]).is_err();
     every_ie(octets).iter().any(|ie| ie.ie_type == 60 && not_utf8(ie))
+}
+
+/// Whether rs-pfcp panics on the octets: an FQ-CSID, at any level, whose low half of its
+/// first octet is 2 and whose high half counts more identifiers of two octets than the IE
+/// has octets (`READINGS[13]`).
+fn panics_rs_pfcp(octets: &[u8]) -> bool {
+    let panics = |ie: &IeSlice| {
+        ie.value.first().is_some_and(|first| first & 0x0f == 2 && ie.value.len() < 2 * usize::from(first >> 4))
+    };
+    every_ie(octets).iter().any(|ie| ie.ie_type == 65 && panics(ie))
 }
 
 /// The IE type that a deviation names.
