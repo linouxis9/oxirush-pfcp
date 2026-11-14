@@ -520,6 +520,45 @@ fn each_deviation_is_at_a_path_that_select_takes() {
     assert_eq!(at(hmac), Vec::<String>::new());
 }
 
+/// Each IE of each capture, at every level of its grouped IEs, is the tree that the type of
+/// its row gives of its octets, with the table of the row's place, and each member of the
+/// tree of a value is one that its type takes.
+#[test]
+fn each_captured_ie_is_the_tree_of_its_octets_with_what_its_type_takes() {
+    let mut count = 0;
+    for (octets, _) in captures() {
+        let message = Message::decode(&octets).unwrap();
+        let tree = message.to_tree();
+        let (_, _, ies) = framing::message_ies(&octets).unwrap();
+        let mut found = Vec::new();
+        entries(
+            &tree,
+            "/pfcp",
+            message.body.table().unwrap(),
+            ies,
+            &mut found,
+        );
+        for (path, content) in found {
+            let (row, info) = paths::row_at(&tree, &path).unwrap().unwrap();
+            let [held] = &paths::select(&tree, &path).unwrap()[..] else {
+                panic!("{path}")
+            };
+            assert_eq!(
+                info.tree_of(&content, row.content).as_ref(),
+                Some(*held),
+                "{path}"
+            );
+            if let (Some(takes), tree::Value::Object(members)) = (info.takes(), held) {
+                for member in members.keys() {
+                    assert!(takes.member(member).is_some(), "{path}/{member}");
+                }
+            }
+            count += 1;
+        }
+    }
+    assert!(count > 1000, "{count}");
+}
+
 /// The captures, each with the interface that it was sent on.
 fn captures() -> Vec<(Vec<u8>, Interfaces)> {
     let lines = include_str!("captures/messages.tsv").lines();

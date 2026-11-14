@@ -329,9 +329,27 @@ impl NodeId {
     /// the value of a Node ID that is no text, apart from the form of an IE kept as octets.
     /// The tree of an address is the address alone.
     pub(crate) const MEMBERS: &'static [&'static str] = &["FQDN", "Node ID Type", "Node ID value"];
-    /// What the tree of each field may hold below it: nothing, of scalars alone.
+    /// What its tree takes: an address, an FQDN, or the octets of another Node ID.
     #[cfg(feature = "tree")]
-    pub(crate) const MEMBERS_BELOW: &'static [(&'static str, &'static crate::paths::Below)] = &[];
+    pub(crate) const TAKES: &'static oxirush_utils::tree::Takes =
+        &oxirush_utils::tree::Takes::OneOf(&[
+            &oxirush_utils::tree::Takes::Ipv4,
+            &oxirush_utils::tree::Takes::Ipv6,
+            &oxirush_utils::tree::Takes::Members(
+                None,
+                &[("FQDN", &oxirush_utils::tree::Takes::Name)],
+            ),
+            &oxirush_utils::tree::Takes::Members(
+                None,
+                &[
+                    (
+                        "Node ID Type",
+                        &oxirush_utils::tree::Takes::Number(u8::MAX as u64),
+                    ),
+                    ("Node ID value", &oxirush_utils::tree::Takes::Octets(None)),
+                ],
+            ),
+        ]);
     /// Read by hand: its layout depends on its type.
     #[doc(hidden)]
     #[cfg(feature = "spec")]
@@ -504,9 +522,9 @@ impl NetworkInstance {
     /// Its field, which its tree is of octets that are no name: its tree is its name
     /// otherwise.
     pub(crate) const MEMBERS: &'static [&'static str] = Self::FIELDS;
-    /// What the tree of each field may hold below it: nothing, of scalars alone.
+    /// What its tree takes: [`NAME_TAKES`].
     #[cfg(feature = "tree")]
-    pub(crate) const MEMBERS_BELOW: &'static [(&'static str, &'static crate::paths::Below)] = &[];
+    pub(crate) const TAKES: &'static oxirush_utils::tree::Takes = NAME_TAKES;
     /// Its layout.
     #[doc(hidden)]
     #[cfg(feature = "spec")]
@@ -563,6 +581,20 @@ impl oxirush_utils::tree::Tree for NetworkInstance {
         name_from_tree(value, reading, Self::FIELDS).map(|octets| Self(octets.into()))
     }
 }
+
+/// What the tree of a Network Instance and of the Network Instance field of Remote GTP-U
+/// Peer takes ([`name_tree`]).
+#[cfg(feature = "tree")]
+pub(crate) const NAME_TAKES: &oxirush_utils::tree::Takes = &oxirush_utils::tree::Takes::OneOf(&[
+    &oxirush_utils::tree::Takes::Name,
+    &oxirush_utils::tree::Takes::Members(
+        None,
+        &[(
+            "Network Instance",
+            &oxirush_utils::tree::Takes::Octets(None),
+        )],
+    ),
+]);
 
 /// The tree of the octets of a Network Instance, of an APN/DNN and of the Network Instance
 /// field of Remote GTP-U Peer: the name of their labels, a text whatever its characters,
@@ -871,9 +903,10 @@ macro_rules! pfcp_octets {
             /// None, as its tree is its octets; or, of the labels of a name and of a text,
             /// its field, which its tree is of octets that are no name, or no text.
             pub(crate) const MEMBERS: &'static [&'static str] = pfcp_octets!(@members $($secret)?);
-            /// What the tree of each field may hold below it: nothing, of scalars alone.
+            /// What its tree takes: its octets, or the name or the text that they are,
+            /// with its field of octets that are no name, or no text.
             #[cfg(feature = "tree")]
-            pub(crate) const MEMBERS_BELOW: &'static [(&'static str, &'static crate::paths::Below)] = &[];
+            pub(crate) const TAKES: &'static oxirush_utils::tree::Takes = pfcp_octets!(@takes $name $($secret)?);
             /// Its layout.
             #[doc(hidden)]
             #[cfg(feature = "spec")]
@@ -963,6 +996,17 @@ macro_rules! pfcp_octets {
     (@text text) => { true };
     (@text password) => { true };
     (@text $($kind:ident)?) => { false };
+    (@takes $name:literal secret) => { &oxirush_utils::tree::Takes::Octets(None) };
+    (@takes $name:literal) => { &oxirush_utils::tree::Takes::Octets(None) };
+    (@takes $name:literal name) => { pfcp_octets!(@takes $name Name) };
+    (@takes $name:literal text) => { pfcp_octets!(@takes $name Text) };
+    (@takes $name:literal password) => { pfcp_octets!(@takes $name Text) };
+    (@takes $name:literal $form:ident) => {
+        &oxirush_utils::tree::Takes::OneOf(&[
+            &oxirush_utils::tree::Takes::$form,
+            &oxirush_utils::tree::Takes::Members(None, &[($name, &oxirush_utils::tree::Takes::Octets(None))]),
+        ])
+    };
     (@members) => { &[] };
     (@members secret) => { &[] };
     (@members $kind:ident) => { Self::FIELDS };

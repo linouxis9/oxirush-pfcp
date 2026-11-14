@@ -83,11 +83,10 @@ pub(crate) trait Field: Sized {
         value: &oxirush_utils::tree::Value,
         reading: &mut oxirush_utils::tree::Reading,
     ) -> Result<Self, oxirush_utils::tree::Refused>;
-    /// What its tree may hold below it, which a path below it is judged by where a value
-    /// lacks it, and in either form of a tree of two: nothing for a field whose tree is a
-    /// scalar.
+    /// What its tree takes, which a path below it is judged by where a value lacks it, and
+    /// in either form of a tree of two.
     #[cfg(feature = "tree")]
-    const BELOW: &'static crate::paths::Below = &crate::paths::Below::Scalar;
+    const TAKES: &'static oxirush_utils::tree::Takes;
     /// Whether it reads the octets up to the end of the IE, which then has no unknown
     /// octets after it.
     const TO_THE_END: bool = false;
@@ -237,6 +236,8 @@ macro_rules! number_field {
         impl Field for $t {
             #[cfg(feature = "spec")]
             const OCTETS: Option<usize> = Some(core::mem::size_of::<$t>());
+            #[cfg(feature = "tree")]
+            const TAKES: &'static oxirush_utils::tree::Takes = &oxirush_utils::tree::Takes::Number(<$t>::MAX as u64);
             fn read(octets: &mut &[u8]) -> Option<Self> {
                 take(octets).map(<$t>::from_be_bytes)
             }
@@ -268,6 +269,9 @@ macro_rules! signed_field {
         impl Field for $t {
             #[cfg(feature = "spec")]
             const OCTETS: Option<usize> = Some(core::mem::size_of::<$t>());
+            #[cfg(feature = "tree")]
+            const TAKES: &'static oxirush_utils::tree::Takes =
+                &oxirush_utils::tree::Takes::Signed(<$t>::MIN as i64, <$t>::MAX as i64);
             fn read(octets: &mut &[u8]) -> Option<Self> {
                 take(octets).map(<$t>::from_be_bytes)
             }
@@ -297,6 +301,9 @@ signed_field!(i32, i64);
 pub(crate) trait Narrowable: Copy + Field {
     /// The width of its field, in bits.
     const BITS: u32;
+    /// What its tree takes in a [`Narrow`] field: a value of its bits.
+    #[cfg(feature = "tree")]
+    const NARROW: &'static oxirush_utils::tree::Takes;
     /// The value of a number.
     fn from_value(value: u8) -> Self;
     /// The number.
@@ -330,11 +337,11 @@ impl<E: Narrowable> Field for Narrow<E> {
     #[cfg(feature = "spec")]
     const OCTETS: Option<usize> = Some(1);
     #[cfg(feature = "tree")]
-    const BELOW: &'static crate::paths::Below = &crate::paths::Below::Object(
+    const TAKES: &'static oxirush_utils::tree::Takes = &oxirush_utils::tree::Takes::Members(
         Some("value"),
         &[
-            ("value", &crate::paths::Below::Scalar),
-            ("Spare", &crate::paths::Below::Scalar),
+            ("value", E::NARROW),
+            ("Spare", &oxirush_utils::tree::Takes::Number(u8::MAX as u64)),
         ],
     );
     #[cfg(feature = "spec")]
@@ -424,6 +431,9 @@ pub type SixBits = Narrow<Number<6>>;
 
 impl<const BITS: u32> Narrowable for Number<BITS> {
     const BITS: u32 = BITS;
+    #[cfg(feature = "tree")]
+    const NARROW: &'static oxirush_utils::tree::Takes =
+        &oxirush_utils::tree::Takes::Number((1 << BITS) - 1);
     fn from_value(value: u8) -> Self {
         Self(value)
     }
@@ -436,6 +446,9 @@ impl<const BITS: u32> Narrowable for Number<BITS> {
 impl<const BITS: u32> Field for Number<BITS> {
     #[cfg(feature = "spec")]
     const OCTETS: Option<usize> = Some(1);
+    #[cfg(feature = "tree")]
+    const TAKES: &'static oxirush_utils::tree::Takes =
+        &oxirush_utils::tree::Takes::Number(u8::MAX as u64);
     fn read(octets: &mut &[u8]) -> Option<Self> {
         u8::read(octets).map(Self)
     }
@@ -465,6 +478,9 @@ pub struct U40(pub u64);
 impl Field for U40 {
     #[cfg(feature = "spec")]
     const OCTETS: Option<usize> = Some(5);
+    #[cfg(feature = "tree")]
+    const TAKES: &'static oxirush_utils::tree::Takes =
+        &oxirush_utils::tree::Takes::Number((1 << 40) - 1);
     fn read(octets: &mut &[u8]) -> Option<Self> {
         let [a, b, c, d, e] = take::<5>(octets)?;
         Some(Self(u64::from_be_bytes([0, 0, 0, a, b, c, d, e])))
@@ -511,6 +527,8 @@ pub type OctetArray16 = [u8; 16];
 impl<const N: usize> Field for [u8; N] {
     #[cfg(feature = "spec")]
     const OCTETS: Option<usize> = Some(N);
+    #[cfg(feature = "tree")]
+    const TAKES: &'static oxirush_utils::tree::Takes = &oxirush_utils::tree::Takes::Octets(Some(N));
     fn read(octets: &mut &[u8]) -> Option<Self> {
         take::<N>(octets)
     }
@@ -553,7 +571,7 @@ macro_rules! length_value {
     ($($ty:ident $length:ty, $tree:ident),*) => {$(
         impl Field for $ty {
             #[cfg(feature = "tree")]
-            const BELOW: &'static crate::paths::Below = length_value!(@below $tree);
+            const TAKES: &'static oxirush_utils::tree::Takes = length_value!(@takes $tree);
             fn read(octets: &mut &[u8]) -> Option<Self> {
                 let length = usize::from(<$length as Field>::read(octets)?);
                 let (value, rest) = octets.split_at_checked(length)?;
@@ -598,8 +616,8 @@ macro_rules! length_value {
     (@to_tree name $octets:expr) => { crate::values::name_tree($octets, crate::values::NetworkInstance::FIELDS) };
     (@from_tree octets $value:ident, $reading:ident) => { $reading.octets($value) };
     (@from_tree name $value:ident, $reading:ident) => { crate::values::name_from_tree($value, $reading, crate::values::NetworkInstance::FIELDS) };
-    (@below octets) => { &crate::paths::Below::Scalar };
-    (@below name) => { &crate::paths::Below::Object(None, &[("Network Instance", &crate::paths::Below::Scalar)]) };
+    (@takes octets) => { &oxirush_utils::tree::Takes::Octets(None) };
+    (@takes name) => { crate::values::NAME_TAKES };
 }
 length_value!(Lv8 u8, octets, Lv16 u16, octets, NameLv16 u16, name);
 
@@ -610,6 +628,8 @@ pub struct Rest(pub Octets);
 
 impl Field for Rest {
     const TO_THE_END: bool = true;
+    #[cfg(feature = "tree")]
+    const TAKES: &'static oxirush_utils::tree::Takes = &oxirush_utils::tree::Takes::Octets(None);
     fn read(octets: &mut &[u8]) -> Option<Self> {
         let all = core::mem::take(octets);
         Some(Self(Octets::copied(all)))
@@ -651,6 +671,9 @@ impl Percent {
 impl Field for Percent {
     #[cfg(feature = "spec")]
     const OCTETS: Option<usize> = Some(1);
+    #[cfg(feature = "tree")]
+    const TAKES: &'static oxirush_utils::tree::Takes =
+        &oxirush_utils::tree::Takes::Number(u8::MAX as u64);
     fn read(octets: &mut &[u8]) -> Option<Self> {
         u8::read(octets).map(Self)
     }
@@ -693,6 +716,9 @@ pub struct Spare(pub u8);
 impl Field for Spare {
     #[cfg(feature = "spec")]
     const OCTETS: Option<usize> = Some(1);
+    #[cfg(feature = "tree")]
+    const TAKES: &'static oxirush_utils::tree::Takes =
+        &oxirush_utils::tree::Takes::Number(u8::MAX as u64);
     fn read(octets: &mut &[u8]) -> Option<Self> {
         u8::read(octets).map(Self)
     }
@@ -741,7 +767,7 @@ pub struct Counted<T>(pub Vec<T>);
 
 impl<T: Field> Field for Counted<T> {
     #[cfg(feature = "tree")]
-    const BELOW: &'static crate::paths::Below = T::BELOW;
+    const TAKES: &'static oxirush_utils::tree::Takes = &oxirush_utils::tree::Takes::List(T::TAKES);
     fn read(octets: &mut &[u8]) -> Option<Self> {
         let count = u8::read(octets)?;
         let mut values = Vec::with_capacity(usize::from(count).min(octets.len()));
@@ -802,7 +828,7 @@ impl<T: Field> Field for Each<T> {
     #[cfg(feature = "spec")]
     const CELLS: &'static [NarrowCell] = T::CELLS;
     #[cfg(feature = "tree")]
-    const BELOW: &'static crate::paths::Below = T::BELOW;
+    const TAKES: &'static oxirush_utils::tree::Takes = &oxirush_utils::tree::Takes::List(T::TAKES);
     fn read(octets: &mut &[u8]) -> Option<Self> {
         let mut values = Vec::new();
         while !octets.is_empty() {
@@ -847,7 +873,7 @@ pub struct Entries16<T>(pub Vec<T>);
 
 impl<T: Field> Field for Entries16<T> {
     #[cfg(feature = "tree")]
-    const BELOW: &'static crate::paths::Below = T::BELOW;
+    const TAKES: &'static oxirush_utils::tree::Takes = &oxirush_utils::tree::Takes::List(T::TAKES);
     fn read(octets: &mut &[u8]) -> Option<Self> {
         let length = usize::from(u16::read(octets)?);
         let (mut within, rest) = octets.split_at_checked(length)?;
@@ -907,11 +933,11 @@ pub struct DomainNameAndProtocol {
 
 impl Field for DomainNameAndProtocol {
     #[cfg(feature = "tree")]
-    const BELOW: &'static crate::paths::Below = &crate::paths::Below::Object(
+    const TAKES: &'static oxirush_utils::tree::Takes = &oxirush_utils::tree::Takes::Members(
         None,
         &[
-            ("Domain Name", TextLv16::BELOW),
-            ("Domain Name Protocol", &crate::paths::Below::Scalar),
+            ("Domain Name", TextLv16::TAKES),
+            ("Domain Name Protocol", Lv16::TAKES),
         ],
     );
     fn read(octets: &mut &[u8]) -> Option<Self> {
@@ -971,6 +997,8 @@ impl From<oxirush_utils::identity::Plmn> for PlmnId {
 impl Field for PlmnId {
     #[cfg(feature = "spec")]
     const OCTETS: Option<usize> = Some(3);
+    #[cfg(feature = "tree")]
+    const TAKES: &'static oxirush_utils::tree::Takes = &oxirush_utils::tree::Takes::Plmn;
     /// Its digits, by two in an octet (TS 24.008 clause 10.5.1.3).
     #[cfg(feature = "spec")]
     const CELLS: &'static [NarrowCell] = &[
@@ -1083,13 +1111,17 @@ impl From<core::net::IpAddr> for TypedAddress {
 
 impl Field for TypedAddress {
     #[cfg(feature = "tree")]
-    const BELOW: &'static crate::paths::Below = &crate::paths::Below::Object(
-        Some("Address"),
-        &[
-            ("Address Type", &crate::paths::Below::Scalar),
-            ("Address", &crate::paths::Below::Scalar),
-        ],
-    );
+    const TAKES: &'static oxirush_utils::tree::Takes = &oxirush_utils::tree::Takes::OneOf(&[
+        &oxirush_utils::tree::Takes::Ipv4,
+        &oxirush_utils::tree::Takes::Ipv6,
+        &oxirush_utils::tree::Takes::Members(
+            Some("Address"),
+            &[
+                ("Address Type", &oxirush_utils::tree::Takes::Number(3)),
+                ("Address", &oxirush_utils::tree::Takes::Octets(None)),
+            ],
+        ),
+    ]);
     #[cfg(feature = "spec")]
     const CELLS: &'static [NarrowCell] = &[
         NarrowCell {
@@ -1187,6 +1219,9 @@ pub struct U24(pub u32);
 impl Field for U24 {
     #[cfg(feature = "spec")]
     const OCTETS: Option<usize> = Some(3);
+    #[cfg(feature = "tree")]
+    const TAKES: &'static oxirush_utils::tree::Takes =
+        &oxirush_utils::tree::Takes::Number(0xff_ffff);
     fn read(octets: &mut &[u8]) -> Option<Self> {
         let [a, b, c] = take::<3>(octets)?;
         Some(Self(u32::from_be_bytes([0, a, b, c])))
@@ -1223,10 +1258,12 @@ impl Field for U24 {
 }
 
 macro_rules! address_field {
-    ($($t:ty, $n:literal);*) => {$(
+    ($($t:ty, $n:literal, $takes:ident);*) => {$(
         impl Field for $t {
             #[cfg(feature = "spec")]
             const OCTETS: Option<usize> = Some($n);
+            #[cfg(feature = "tree")]
+            const TAKES: &'static oxirush_utils::tree::Takes = &oxirush_utils::tree::Takes::$takes;
             fn read(octets: &mut &[u8]) -> Option<Self> {
                 take::<$n>(octets).map(<$t>::from)
             }
@@ -1251,7 +1288,7 @@ macro_rules! address_field {
         }
     )*};
 }
-address_field!(Ipv4Addr, 4; Ipv6Addr, 16);
+address_field!(Ipv4Addr, 4, Ipv4; Ipv6Addr, 16, Ipv6);
 
 /// An IPv4 address that a value always has: the DNS Server Address and the NBNS Server
 /// Address (§8.2.193, §8.2.194), `0.0.0.0` by default. Its tree is the address, as text.
@@ -1273,6 +1310,8 @@ impl From<Ipv4Addr> for Ipv4Address {
 impl Field for Ipv4Address {
     #[cfg(feature = "spec")]
     const OCTETS: Option<usize> = Some(4);
+    #[cfg(feature = "tree")]
+    const TAKES: &'static oxirush_utils::tree::Takes = &oxirush_utils::tree::Takes::Ipv4;
     fn read(octets: &mut &[u8]) -> Option<Self> {
         Ipv4Addr::read(octets).map(Self)
     }
@@ -1529,8 +1568,13 @@ impl Fqdn {
 impl Field for Fqdn {
     const TO_THE_END: bool = true;
     #[cfg(feature = "tree")]
-    const BELOW: &'static crate::paths::Below =
-        &crate::paths::Below::Object(None, &[("octets", &crate::paths::Below::Scalar)]);
+    const TAKES: &'static oxirush_utils::tree::Takes = &oxirush_utils::tree::Takes::OneOf(&[
+        &oxirush_utils::tree::Takes::Name,
+        &oxirush_utils::tree::Takes::Members(
+            None,
+            &[("octets", &oxirush_utils::tree::Takes::Octets(None))],
+        ),
+    ]);
     fn read(octets: &mut &[u8]) -> Option<Self> {
         Some(Self(Octets::copied(core::mem::take(octets))))
     }
@@ -1587,11 +1631,11 @@ pub struct SsmAddress {
 
 impl Field for SsmAddress {
     #[cfg(feature = "tree")]
-    const BELOW: &'static crate::paths::Below = &crate::paths::Below::Object(
+    const TAKES: &'static oxirush_utils::tree::Takes = &oxirush_utils::tree::Takes::Members(
         None,
         &[
-            ("IP Multicast Distribution Address", TypedAddress::BELOW),
-            ("IP Source Address", TypedAddress::BELOW),
+            ("IP Multicast Distribution Address", TypedAddress::TAKES),
+            ("IP Source Address", TypedAddress::TAKES),
         ],
     );
     fn read(octets: &mut &[u8]) -> Option<Self> {
@@ -1658,6 +1702,8 @@ impl fmt::Debug for SecretLv8 {
 }
 
 impl Field for SecretLv8 {
+    #[cfg(feature = "tree")]
+    const TAKES: &'static oxirush_utils::tree::Takes = &oxirush_utils::tree::Takes::Octets(None);
     fn read(octets: &mut &[u8]) -> Option<Self> {
         Lv8::read(octets).map(|value| Self(value.0))
     }
@@ -1708,7 +1754,7 @@ impl fmt::Debug for SecretTextLv8 {
 
 impl Field for SecretTextLv8 {
     #[cfg(feature = "tree")]
-    const BELOW: &'static crate::paths::Below = TextLv8::BELOW;
+    const TAKES: &'static oxirush_utils::tree::Takes = TextLv8::TAKES;
     fn read(octets: &mut &[u8]) -> Option<Self> {
         Lv8::read(octets).map(|value| Self(value.0))
     }
@@ -1804,13 +1850,13 @@ impl From<&str> for TextLv8 {
 }
 
 macro_rules! identity_lv8 {
-    ($($ty:ident($length:ty) $as_text:ident $from_text:expr),*) => {$(
+    ($($ty:ident($length:ty) $as_text:ident $takes:ident $from_text:expr),*) => {$(
         impl Field for $ty {
             #[cfg(feature = "tree")]
-            const BELOW: &'static crate::paths::Below = &crate::paths::Below::Object(
-                None,
-                &[("octets", &crate::paths::Below::Scalar)],
-            );
+            const TAKES: &'static oxirush_utils::tree::Takes = &oxirush_utils::tree::Takes::OneOf(&[
+                &oxirush_utils::tree::Takes::$takes,
+                &oxirush_utils::tree::Takes::Members(None, &[("octets", &oxirush_utils::tree::Takes::Octets(None))]),
+            ]);
             fn read(octets: &mut &[u8]) -> Option<Self> {
                 let length = usize::from(<$length as Field>::read(octets)?);
                 let (value, rest) = octets.split_at_checked(length)?;
@@ -1864,9 +1910,9 @@ macro_rules! identity_lv8 {
     )*};
 }
 identity_lv8!(
-    DigitsLv8(u8) digits |text| oxirush_utils::identity::tbcd::encode(text).ok(),
-    TextLv8(u8) text_owned |text| Some(text.as_bytes().to_vec()),
-    TextLv16(u16) text_owned |text| Some(text.as_bytes().to_vec())
+    DigitsLv8(u8) digits Digits |text| oxirush_utils::identity::tbcd::encode(text).ok(),
+    TextLv8(u8) text_owned Text |text| Some(text.as_bytes().to_vec()),
+    TextLv16(u16) text_owned Text |text| Some(text.as_bytes().to_vec())
 );
 
 impl TextLv8 {

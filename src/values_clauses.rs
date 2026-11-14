@@ -752,10 +752,37 @@ impl FqCsid {
         "PDN Connection Set Identifiers",
         "Node Type"
     );
-    /// What the tree of each field may hold below it.
+    /// What its tree takes: a Node-Address as its Node-ID Type says.
     #[cfg(feature = "tree")]
-    pub(crate) const MEMBERS_BELOW: &'static [(&'static str, &'static crate::paths::Below)] =
-        &[("Node Type", <Narrow<NodeType> as Field>::BELOW)];
+    pub(crate) const TAKES: &'static oxirush_utils::tree::Takes =
+        &oxirush_utils::tree::Takes::Members(
+            None,
+            &[
+                (
+                    "FQ-CSID Node-ID Type",
+                    &oxirush_utils::tree::Takes::Number(15),
+                ),
+                (
+                    "Node-Address",
+                    &oxirush_utils::tree::Takes::OneOf(&[
+                        &oxirush_utils::tree::Takes::Ipv4,
+                        &oxirush_utils::tree::Takes::Ipv6,
+                        &oxirush_utils::tree::Takes::Octets(None),
+                    ]),
+                ),
+                (
+                    "PDN Connection Set Identifiers",
+                    &oxirush_utils::tree::Takes::List(&oxirush_utils::tree::Takes::Number(
+                        u16::MAX as u64,
+                    )),
+                ),
+                ("Node Type", <Narrow<NodeType> as Field>::TAKES),
+                (
+                    crate::ie::UNKNOWN_OCTETS,
+                    &oxirush_utils::tree::Takes::Octets(None),
+                ),
+            ],
+        );
     /// Read by hand: its layout depends on its type.
     #[doc(hidden)]
     #[cfg(feature = "spec")]
@@ -1019,9 +1046,17 @@ macro_rules! mac_addresses {
 
         impl $ty {
             crate::fields::names!("MAC address values", "C-TAG", "S-TAG");
-            /// What the tree of each field may hold below it.
+            /// What its tree takes.
             #[cfg(feature = "tree")]
-            pub(crate) const MEMBERS_BELOW: &'static [(&'static str, &'static crate::paths::Below)] = &[];
+            pub(crate) const TAKES: &'static oxirush_utils::tree::Takes = &oxirush_utils::tree::Takes::Members(
+                None,
+                &[
+                    ("MAC address values", &oxirush_utils::tree::Takes::List(&oxirush_utils::tree::Takes::Octets(Some(6)))),
+                    ("C-TAG", <Lv8 as Field>::TAKES),
+                    ("S-TAG", <Lv8 as Field>::TAKES),
+                    (crate::ie::UNKNOWN_OCTETS, &oxirush_utils::tree::Takes::Octets(None)),
+                ],
+            );
             /// Read by hand: a list after its number, then fields after their lengths.
             #[doc(hidden)]
             #[cfg(feature = "spec")]

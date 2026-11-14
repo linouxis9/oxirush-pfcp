@@ -303,6 +303,29 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
+One IE alone has its form in Table 8.1.2-1, `ie_type_info()`: `takes()` says
+what the tree of its value takes, member by member, and `tree_of()` gives the
+tree of its octets, those after the Length, as a message has it.
+
+```rust
+use oxirush_pfcp::ie_type_info;
+use oxirush_pfcp::tree::Takes;
+use oxirush_pfcp::tree;
+
+fn main() {
+    let pdn_type = ie_type_info(113).unwrap();
+    let Some(Takes::Members(Some("PDN Type"), members)) = pdn_type.takes() else {
+        panic!("PDN Type is written by its one field");
+    };
+    // A name of Table 8.2.79-1, or a number of its three bits.
+    let ("PDN Type", Takes::OneOf([Takes::Named(names), Takes::Number(7)])) = members[0] else {
+        panic!("{:?}", members[0]);
+    };
+    assert_eq!(names[0], "IPv4");
+    assert_eq!(pdn_type.tree_of(&[1], None), Some(tree!("IPv4")));
+}
+```
+
 ## Limits
 
 `check()` validates one message against TS 29.244 V19.6.0: its header, its

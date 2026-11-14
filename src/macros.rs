@@ -50,13 +50,27 @@ macro_rules! pfcp_ies {
         }
         $( pfcp_ies!(@impls $form $num $name [pfcp_ies!(@length $form $(($fixed))?)] $($($ty),+)?); )*
 
-        /// What the tree of each field of a value of `ie_type` may hold below it, of those
-        /// whose tree is no scalar: none for a grouped IE.
+        /// What the tree of a value of `ie_type` takes: none for a grouped IE.
         #[cfg(feature = "tree")]
-        pub(crate) fn members_below(ie_type: u16) -> &'static [(&'static str, &'static crate::paths::Below)] {
+        pub(crate) fn takes_of(ie_type: u16) -> Option<&'static oxirush_utils::tree::Takes> {
             match ie_type {
-                $( $num => pfcp_ies!(@below $form $($($ty),+)?), )*
-                _ => &[],
+                $( $num => pfcp_ies!(@takes $form $($($ty),+)?), )*
+                _ => None,
+            }
+        }
+
+        /// The tree of the value of `ie_type` that `octets` are, of the content of the table
+        /// `table` for a grouped IE, or of its first: `None` for octets that are no such
+        /// value, and for a table of another type.
+        #[cfg(feature = "tree")]
+        pub(crate) fn value_tree(
+            ie_type: u16,
+            table: Option<&'static crate::table::Table>,
+            octets: &[u8],
+        ) -> Option<oxirush_utils::tree::Value> {
+            match ie_type {
+                $( $num => pfcp_ies!(@value_tree $form table octets $($($ty),+)?), )*
+                _ => None,
             }
         }
     };
@@ -85,9 +99,22 @@ macro_rules! pfcp_ies {
     (@length $form:ident $(($fixed:literal))?) => { None };
     (@fields grouped $($ty:ident),+) => { &[] };
     (@fields $form:ident $ty:ident) => { $ty::FIELDS };
-    (@below grouped $($ty:ident),+) => { &[] };
-    (@below $form:ident $ty:ident) => { $ty::MEMBERS_BELOW };
-    (@below $form:ident) => { &[] };
+    (@takes grouped $($ty:ident),+) => { None };
+    (@takes $form:ident $ty:ident) => { Some($ty::TAKES) };
+    (@value_tree grouped $table:ident $octets:ident $($ty:ident),+) => { pastey::paste! {{
+        $(
+            if $table.is_none_or(|table| core::ptr::eq(table, &[<$ty:snake:upper _TABLE>])) {
+                return <$ty as crate::ie::Codec>::decode($octets).map(|value| oxirush_utils::tree::Tree::to_tree(&value));
+            }
+        )+
+        None
+    }} };
+    (@value_tree $form:ident $table:ident $octets:ident $ty:ident) => {
+        match $table {
+            Some(_) => None,
+            None => <$ty as crate::ie::Codec>::decode($octets).map(|value| oxirush_utils::tree::Tree::to_tree(&value)),
+        }
+    };
     (@members grouped $($ty:ident),+) => { &[] };
     (@members $form:ident $ty:ident) => { $ty::MEMBERS };
     (@layout grouped $($ty:ident),+) => { None };
@@ -158,17 +185,16 @@ macro_rules! pfcp_layout {
             /// Its name in an error and in a refusal of its tree: that of its IE type, or
             /// of the part of a value that it is.
             const NAMED: &'static str = pfcp_layout!(@named [$($part)?] $ty);
-            /// What its tree may hold: each member, with what it may hold below it.
+            /// What its tree takes: each member, with what it takes.
             #[cfg(feature = "tree")]
-            #[allow(dead_code)]
-            const BELOW_ALL: &'static [(&'static str, &'static crate::paths::Below)] = &[
-                $($( ($head_name, <$hkind as crate::fields::Field>::BELOW), )*)?
+            const MEMBERS_TAKE: &'static [(&'static str, &'static oxirush_utils::tree::Takes)] = &[
+                $($( ($head_name, <$hkind as crate::fields::Field>::TAKES), )*)?
                 $(
-                    $( ($flag_name, &crate::paths::Below::Scalar), )*
-                    (pfcp_layout!(@spare $fk), &crate::paths::Below::Scalar),
-                    $( ($field_name, <$kind $(<$param>)? as crate::fields::Field>::BELOW), )*
+                    $( ($flag_name, pfcp_layout!(@bits takes [$($width $(as $fkind)?)?])), )*
+                    (pfcp_layout!(@spare $fk), &oxirush_utils::tree::Takes::Number(<$fk>::MAX as u64)),
+                    $( ($field_name, <$kind $(<$param>)? as crate::fields::Field>::TAKES), )*
                 )?
-                (crate::ie::UNKNOWN_OCTETS, &crate::paths::Below::Scalar),
+                (crate::ie::UNKNOWN_OCTETS, &oxirush_utils::tree::Takes::Octets(None)),
             ];
             $(
                 /// The bits of the octet of flags that are flags.
@@ -181,13 +207,11 @@ macro_rules! pfcp_layout {
             /// flags and its unknown octets.
             #[allow(dead_code)]
             pub(crate) const MEMBERS: &'static [&'static str] = &[$($($head_name,)*)? $($($flag_name,)* pfcp_layout!(@spare $fk), $($field_name,)*)? crate::ie::UNKNOWN_OCTETS];
-            /// What the tree of each field may hold below it.
+            /// What its tree takes: an object of its members, or the tree of its one field.
             #[cfg(feature = "tree")]
             #[allow(dead_code)]
-            pub(crate) const MEMBERS_BELOW: &'static [(&'static str, &'static crate::paths::Below)] = &[
-                $($( ($head_name, <$hkind as crate::fields::Field>::BELOW), )*)?
-                $($( ($field_name, <$kind $(<$param>)? as crate::fields::Field>::BELOW), )*)?
-            ];
+            pub(crate) const TAKES: &'static oxirush_utils::tree::Takes =
+                &oxirush_utils::tree::Takes::Members(crate::registry::one(Self::FIELDS), Self::MEMBERS_TAKE);
             /// The octets of the fields before its flags, where its flags are.
             #[cfg(feature = "spec")]
             #[allow(dead_code)]
@@ -450,7 +474,7 @@ macro_rules! pfcp_layout {
     (@part $ty:ident $part:literal) => {
         impl crate::fields::Field for $ty {
             #[cfg(feature = "tree")]
-            const BELOW: &'static crate::paths::Below = &crate::paths::Below::Object(None, Self::BELOW_ALL);
+            const TAKES: &'static oxirush_utils::tree::Takes = &oxirush_utils::tree::Takes::Members(None, Self::MEMBERS_TAKE);
             fn read(octets: &mut &[u8]) -> Option<Self> {
                 let length = usize::from(<u16 as crate::fields::Field>::read(octets)?);
                 let (within, rest) = octets.split_at_checked(length)?;
@@ -567,9 +591,17 @@ macro_rules! pfcp_bits {
             /// The members that its tree may have: its flags and fields, its spare bits, the
             /// number of the octets of its fields that it has, and its unknown octets.
             pub(crate) const MEMBERS: &'static [&'static str] = &[$($name,)* "Spare", "length", crate::ie::UNKNOWN_OCTETS];
-            /// What the tree of each field may hold below it: nothing, of scalars alone.
+            /// What its tree takes: its flags and fields, or the one field that is no flag.
             #[cfg(feature = "tree")]
-            pub(crate) const MEMBERS_BELOW: &'static [(&'static str, &'static crate::paths::Below)] = &[];
+            pub(crate) const TAKES: &'static oxirush_utils::tree::Takes = &oxirush_utils::tree::Takes::Members(
+                if Self::BARE { crate::registry::one(Self::FIELDS) } else { None },
+                &[
+                    $( ($name, pfcp_bits!(@takes $width [$($kind)? $(+ $octet2 $low2 $width2)?])), )*
+                    ("Spare", &oxirush_utils::tree::Takes::Octets(Some($n))),
+                    ("length", &oxirush_utils::tree::Takes::Number($n)),
+                    (crate::ie::UNKNOWN_OCTETS, &oxirush_utils::tree::Takes::Octets(None)),
+                ],
+            );
             /// Its layout.
             #[doc(hidden)]
             #[cfg(feature = "spec")]
@@ -759,6 +791,18 @@ macro_rules! pfcp_bits {
     // A field of one bit is a flag; of a few, a number or a value of its table (`as`); of
     // two parts (`+`), a number whose high bits are in the first and low bits in the second.
     (@type $width:tt [+ $octet2:literal $low2:literal $width2:tt]) => { u16 };
+    // What its tree takes: a flag, a number of its bits or a name of its table.
+    (@takes $width:tt [+ $octet2:literal $low2:literal $width2:tt]) => {
+        &oxirush_utils::tree::Takes::Number((1 << ($width + $width2)) - 1)
+    };
+    (@takes 1 []) => { &oxirush_utils::tree::Takes::Flag };
+    (@takes $width:tt []) => { &oxirush_utils::tree::Takes::Number((1 << $width) - 1) };
+    (@takes $width:tt [$kind:ident]) => {
+        &oxirush_utils::tree::Takes::OneOf(&[
+            &oxirush_utils::tree::Takes::Named($kind::NAMED),
+            &oxirush_utils::tree::Takes::Number((1 << $width) - 1),
+        ])
+    };
     (@wide 1 [] $value:expr) => { false };
     (@wide $width:tt [] $value:expr) => { u16::from($value) >= (1u16 << $width) };
     (@wide $width:tt [$kind:ident] $value:expr) => { u16::from($value.value()) >= (1u16 << $width) };
@@ -1590,6 +1634,11 @@ macro_rules! pfcp_enum {
 
         impl crate::fields::Narrowable for $ty {
             const BITS: u32 = $bits;
+            #[cfg(feature = "tree")]
+            const NARROW: &'static oxirush_utils::tree::Takes = &oxirush_utils::tree::Takes::OneOf(&[
+                &oxirush_utils::tree::Takes::Named(Self::NAMED),
+                &oxirush_utils::tree::Takes::Number((1 << $bits) - 1),
+            ]);
             fn from_value(value: u8) -> Self {
                 Self::from_value(value)
             }
@@ -1603,6 +1652,9 @@ macro_rules! pfcp_enum {
             pub const TABLE: &'static str = $table;
             /// The values that the tables name, with their names.
             pub const NAMES: &'static [(u8, &'static str)] = &[$(($value, $name)),*];
+            /// The names of the values, which a tree writes them by.
+            #[cfg(feature = "tree")]
+            pub(crate) const NAMED: &'static [&'static str] = &[$($name),*];
             /// The width of the field, in bits.
             pub const BITS: u32 = $bits;
             /// The values that the tables reserve, and those that a note of theirs has a
@@ -1705,6 +1757,11 @@ macro_rules! pfcp_enum {
         impl crate::fields::Field for $ty {
             #[cfg(feature = "spec")]
             const OCTETS: Option<usize> = Some(1);
+            #[cfg(feature = "tree")]
+            const TAKES: &'static oxirush_utils::tree::Takes = &oxirush_utils::tree::Takes::OneOf(&[
+                &oxirush_utils::tree::Takes::Named(Self::NAMED),
+                &oxirush_utils::tree::Takes::Number(u8::MAX as u64),
+            ]);
             fn read(octets: &mut &[u8]) -> Option<Self> {
                 let (&first, rest) = octets.split_first()?;
                 *octets = rest;

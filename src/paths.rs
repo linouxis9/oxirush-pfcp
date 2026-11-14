@@ -47,11 +47,11 @@ use oxirush_utils::tree::{
 };
 
 use oxirush_utils::tree;
-use oxirush_utils::tree::Value;
+use oxirush_utils::tree::{Takes, Value};
 
 use crate::ie::{Placed, RawIe};
 use crate::message::{MESSAGE_TYPES, MessageTypeInfo};
-use crate::registry::{Form, IE_TYPES, IeTypeInfo, ie_type_info, members_below};
+use crate::registry::{Form, IE_TYPES, IeTypeInfo, ie_type_info};
 use crate::table::{Entry, FieldValues, Row, Scope, Table, each_entry, keep_order};
 
 /// The tree hook of a scope, which the table macro writes.
@@ -411,47 +411,15 @@ fn no_such_ie(table: &Table, names: &[&str], written: &str) -> String {
     )
 }
 
-/// What the tree of a field of a value may hold below it ([`Field::BELOW`](crate::Field)),
-/// which a path is checked against at a field that is there: the members that its object
-/// may have, also where its tree writes it as a scalar.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum Below {
-    /// Nothing: a flag, or a field whose tree is a scalar.
-    Scalar,
-    /// The members of an object, each with what it may hold below it, or a scalar: the
-    /// member that it names, if any. A value without spare bits is its `value`, and one
-    /// with them `{"value": ..., "Spare": ...}`; an IPv4 or IPv6 address is its `Address`,
-    /// another `{"Address Type": ..., "Address": ...}`; an identity of digits or text is
-    /// none of them, one of other octets `{"octets": ...}`.
-    Object(
-        Option<&'static str>,
-        &'static [(&'static str, &'static Below)],
-    ),
-}
-
-/// What an IE that a scope keeps as its octets may hold below it, and each entry of a list
-/// of them.
-const KEPT: Below = Below::Object(
+/// What an IE that a scope keeps as its octets takes, and each entry of a list of them.
+const KEPT: Takes = Takes::Members(
     None,
     &[
-        ("octets", &Below::Scalar),
-        ("length", &Below::Scalar),
-        ("Enterprise ID", &Below::Scalar),
+        ("octets", &Takes::Octets(None)),
+        ("length", &Takes::Number(u16::MAX as u64)),
+        ("Enterprise ID", &Takes::Number(u16::MAX as u64)),
     ],
 );
-
-impl Below {
-    /// What the member `name` of the object may hold below it.
-    fn member(&self, name: &str) -> Option<&'static Below> {
-        let Self::Object(_, members) = self else {
-            return None;
-        };
-        members
-            .iter()
-            .find(|(member, _)| tree::same_name(member, name))
-            .map(|(_, below)| *below)
-    }
-}
 
 /// Whether `name` is a field of the header of a message.
 fn is_header_field(name: &str) -> bool {
@@ -461,11 +429,10 @@ fn is_header_field(name: &str) -> bool {
 }
 
 /// What the tree of the field `name` of a value of `info` may hold below it.
-fn below_member(info: &IeTypeInfo, name: &str) -> &'static Below {
-    members_below(info.ie_type)
-        .iter()
-        .find(|(member, _)| tree::same_name(member, name))
-        .map_or(&Below::Scalar, |(_, below)| below)
+fn below_member(info: &IeTypeInfo, name: &str) -> &'static Takes {
+    (info.takes())
+        .and_then(|takes| takes.member(name))
+        .unwrap_or(&Takes::Octets(None))
 }
 
 /// The rules of the paths of PFCP, which `select` and `set` share: `/pfcp` is short for
@@ -500,7 +467,7 @@ pub(crate) enum Of {
     Value(&'static IeTypeInfo),
     /// A field of a value, or of the header, an entry of a list of them, or a member of a
     /// field: what its tree may hold below it.
-    Below(&'static Below),
+    Takes(&'static Takes),
 }
 
 impl core::fmt::Debug for Of {
@@ -513,7 +480,7 @@ impl core::fmt::Debug for Of {
             Self::Ies(table) => f.debug_tuple("Ies").field(&table.id).finish(),
             Self::List(row) => f.debug_tuple("List").field(&row.name).finish(),
             Self::Value(info) => f.debug_tuple("Value").field(&info.name).finish(),
-            Self::Below(below) => f.debug_tuple("Below").field(below).finish(),
+            Self::Takes(takes) => f.debug_tuple("Takes").field(takes).finish(),
         }
     }
 }
@@ -542,7 +509,7 @@ fn of_value(row: &'static Row, value: Option<&Value>) -> Of {
         return Of::Nothing;
     };
     match row.content {
-        _ if value.is_some_and(is_octets) => Of::Below(&KEPT),
+        _ if value.is_some_and(is_octets) => Of::Takes(&KEPT),
         Some(table) => Of::Ies(table),
         None => Of::Value(info),
     }
@@ -576,7 +543,7 @@ impl Paths {
                     .any(|member| tree::same_name(member, segment));
                 (info.scalar, known.then(|| below_member(info, segment)))
             }
-            Of::Below(below @ Below::Object(is, _)) => (*is, below.member(segment)),
+            Of::Takes(takes) if takes.is_object() => (takes.scalar(), takes.member(segment)),
             _ => return Ok(Step::Plain),
         };
         let Some(member) = member else {
@@ -584,7 +551,7 @@ impl Paths {
             return Err(tree::Error::new(ErrorKind::NoSuchMember, "", reason));
         };
         if is.is_some_and(|is| tree::same_name(is, segment)) {
-            next.stay(place, Of::Below(member));
+            next.stay(place, Of::Takes(member));
         } else if next.edit() == Some(Edit::Open) {
             let mut members = Map::new();
             if let Some(is) = is {
@@ -642,7 +609,7 @@ impl tree::Family for Paths {
                     if row_named(table, written).is_none()
                         && of_no_row(table, written) == Some(ie_type)
                     {
-                        next.member(written, value, Of::Below(&KEPT));
+                        next.member(written, value, Of::Takes(&KEPT));
                         found = true;
                     }
                 }
@@ -684,18 +651,18 @@ impl tree::Family for Paths {
             Of::Message(info) if tree::same_name(name, "ies") => Of::Ies(info.table),
             Of::Message(_) if tree::same_name(name, "header") => Of::Header,
             // The name of the message and the fields of the header are scalars.
-            Of::Message(_) => Of::Below(&Below::Scalar),
-            Of::Header if is_header_field(name) => Of::Below(&Below::Scalar),
-            Of::Ies(_) => Of::Below(&KEPT),
+            Of::Message(_) => Of::Takes(&Takes::Text),
+            Of::Header if is_header_field(name) => Of::Takes(&Takes::Number(u64::MAX)),
+            Of::Ies(_) => Of::Takes(&KEPT),
             Of::Value(info)
                 if info
                     .members
                     .iter()
                     .any(|member| tree::same_name(member, name)) =>
             {
-                Of::Below(below_member(info, name))
+                Of::Takes(below_member(info, name))
             }
-            Of::Below(below) => below.member(name).map_or(Of::Nothing, Of::Below),
+            Of::Takes(takes) => takes.member(name).map_or(Of::Nothing, Of::Takes),
             _ => Of::Nothing,
         }
     }
@@ -704,7 +671,8 @@ impl tree::Family for Paths {
         match *shape {
             Of::List(row) => of_value(row, value),
             // An entry of a list of a field is of the kind of the field.
-            Of::Below(below) => Of::Below(below),
+            Of::Takes(Takes::List(entry)) => Of::Takes(entry),
+            Of::Takes(takes) => Of::Takes(takes),
             _ => Of::Nothing,
         }
     }
@@ -720,7 +688,7 @@ impl tree::Family for Paths {
                 .members
                 .iter()
                 .any(|member| tree::same_name(member, name)),
-            Of::Below(below) => below.member(name).is_some(),
+            Of::Takes(takes) => takes.member(name).is_some(),
             _ => false,
         };
         match (there, no_such_member(*shape, name)) {
@@ -759,9 +727,7 @@ fn no_such_member(of: Of, name: &str) -> Option<String> {
         Of::Message(_) => members(crate::message::forms::NAMES),
         Of::Header => members(crate::message::forms::HEADER),
         Of::Value(info) => members(info.members),
-        Of::Below(Below::Object(_, below)) => {
-            members(&below.iter().map(|(member, _)| *member).collect::<Vec<_>>())
-        }
+        Of::Takes(takes) if takes.is_object() => members(&takes.names()),
         _ => return None,
     })
 }
@@ -932,7 +898,10 @@ mod tests {
         let header = Paths.member(&message, "header", Some(&heartbeat["header"]));
         assert_eq!(alloc::format!("{header:?}"), "Header");
         let sequence = Paths.member(&header, "Sequence Number", None);
-        assert_eq!(alloc::format!("{sequence:?}"), "Below(Scalar)");
+        assert_eq!(
+            alloc::format!("{sequence:?}"),
+            "Takes(Number(18446744073709551615))"
+        );
         let nothing = Paths.member(&header, "Bogus", None);
         assert_eq!(alloc::format!("{nothing:?}"), "Nothing");
         let stamp = &heartbeat["ies"]["Recovery Time Stamp"];
@@ -951,19 +920,19 @@ mod tests {
         assert_eq!(alloc::format!("{nothing:?}"), "Nothing");
         // The name of a message is a scalar, and no header
         let name = Paths.member(&message, "message", Some(&heartbeat["message"]));
-        assert_eq!(alloc::format!("{name:?}"), "Below(Scalar)");
+        assert_eq!(alloc::format!("{name:?}"), "Takes(Text)");
         // A member of the IEs that is no row is an IE kept as octets, or nothing yet
         let kept = Paths.member(&ies, "Bogus", None);
         assert_eq!(
             alloc::format!("{kept:?}"),
-            alloc::format!("{:?}", Of::Below(&KEPT))
+            alloc::format!("{:?}", Of::Takes(&KEPT))
         );
         // An entry of a list of IEs is of the IE of the row, and one of a list of a field
         // of the kind of the field
         let entry = Paths.entry(&addresses, None);
         assert_eq!(alloc::format!("{entry:?}"), r#"Value("Source IP Address")"#);
-        let entry = Paths.entry(&Of::Below(&Below::Scalar), None);
-        assert_eq!(alloc::format!("{entry:?}"), "Below(Scalar)");
+        let entry = Paths.entry(&Of::Takes(&Takes::List(&Takes::Ipv4)), None);
+        assert_eq!(alloc::format!("{entry:?}"), "Takes(Ipv4)");
         let entry = Paths.entry(&Of::Nothing, None);
         assert_eq!(alloc::format!("{entry:?}"), "Nothing");
     }

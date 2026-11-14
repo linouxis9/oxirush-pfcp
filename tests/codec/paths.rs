@@ -1167,6 +1167,44 @@ fn a_grouped_ie_has_the_rows_of_its_place() {
     Message::from_tree(&request).unwrap();
 }
 
+/// What a type takes names each member that the tree of a value may have, and nothing of a
+/// grouped IE, whose tree is its rows; a value of one field that is written as a scalar is
+/// that field. A misspelt member is none.
+#[test]
+fn what_a_type_takes_names_the_members_of_its_tree() {
+    use oxirush_pfcp::tree::Takes;
+    for info in IE_TYPES {
+        let takes = info.takes();
+        if info.form == Form::Grouped {
+            assert_eq!(takes, None, "{}", info.name);
+            continue;
+        }
+        let takes = takes.unwrap_or_else(|| panic!("{}", info.name));
+        for member in info.members {
+            assert!(takes.member(member).is_some(), "{}/{member}", info.name);
+        }
+        assert_eq!(takes.member("Bogus"), None, "{}", info.name);
+    }
+    let precedence = ie_type_info(29).unwrap().takes().unwrap();
+    assert_eq!(
+        precedence,
+        &Takes::Members(
+            Some("Precedence value"),
+            &[
+                ("Precedence value", &Takes::Number(u32::MAX as u64)),
+                ("unknown octets", &Takes::Octets(None)),
+            ]
+        )
+    );
+    // A value of its table, of three bits of an octet whose other bits are spare
+    let rate = ie_type_info(94).unwrap().takes().unwrap();
+    let unit = rate.member("Uplink Time Unit").unwrap();
+    let Some(Takes::OneOf([Takes::Named(names), Takes::Number(7)])) = unit.member("value") else {
+        panic!("{unit:?}")
+    };
+    assert_eq!(names[0], "minute");
+}
+
 /// `paths::row_at` names the row of a table and the IE type of the IE at a path, or of the
 /// list of them, there or not, below grouped IEs that the message lacks too: none for the
 /// header, a member of a value, or an IE of no row.
