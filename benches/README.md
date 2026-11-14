@@ -31,6 +31,7 @@ target/release/measure decode ser-16 1
 | `decode` | `Message::decode` |
 | `read` | `decode`, then each value that a program takes from the message read |
 | `encode` | `Message::encode` of a decoded message |
+| `encode_into` | `Message::encode_into` of a decoded message, into a buffer that is cleared and used again |
 | `check` | `Message::check` of a decoded message |
 | `to_tree`, `from_tree` | The tree of a decoded message, and the message of its tree |
 

@@ -7,7 +7,8 @@ All notable changes to `oxirush-pfcp` are recorded here.
 The first version. It implements TS 29.244 V19.6.0 (2026-06):
 
 - Decodes and encodes every message and IE type of N4, N4mb, Sxa, Sxb and Sxc,
-  byte for byte, and builds them with `new()` and `with_*()`.
+  byte for byte, and builds them with `new()` and `with_*()`. `encode_into()`
+  appends a message to a buffer that the caller uses again.
 - `check()` validates one message against the IE tables of clause 7 and the
   values of clause 8.2 on an interface. Each deviation has its path, its clause
   and the Cause to answer with.

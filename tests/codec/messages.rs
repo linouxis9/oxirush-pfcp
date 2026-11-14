@@ -370,6 +370,42 @@ fn a_message_length_past_the_octets_says_how_many_follow() {
     }
 }
 
+/// `encode_into` appends what `encode` returns, and leaves the buffer as it was when the
+/// header, an IE or the fields of an IE do not encode.
+#[test]
+fn encode_into_appends_or_leaves_the_buffer() {
+    let heartbeat = || HeartbeatRequest::new(RecoveryTimeStamp::new(7));
+    let source = SourceIpAddress {
+        v4: true,
+        ipv4_address: Some(Ipv4Addr::new(10, 0, 0, 1)),
+        ..Default::default()
+    };
+    let message = Message::session(9, 1, heartbeat().with_source_ip_address(source));
+    let mut buffer = vec![1, 2, 3];
+    message.encode_into(&mut buffer).unwrap();
+    assert_eq!(buffer[..3], [1, 2, 3]);
+    assert_eq!(buffer[3..], message.encode().unwrap());
+
+    let wide = Message {
+        header: Header {
+            version: 9,
+            ..Header::node(1)
+        },
+        body: heartbeat().into(),
+    };
+    let mut raw = heartbeat();
+    raw.raw.push(RawIe::new(60, vec![0; 70_000]));
+    let inconsistent = heartbeat().with_source_ip_address(SourceIpAddress {
+        v4: true,
+        ..Default::default()
+    });
+    for refused in [wide, Message::node(1, raw), Message::node(1, inconsistent)] {
+        let mut buffer = vec![1, 2, 3];
+        refused.encode_into(&mut buffer).unwrap_err();
+        assert_eq!(buffer, [1, 2, 3]);
+    }
+}
+
 /// Each error of the codec says what it is, apart from the others, with its numbers.
 #[test]
 fn an_error_of_the_codec_says_what_it_is() {

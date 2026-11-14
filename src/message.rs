@@ -218,20 +218,52 @@ impl Message {
     /// - [`Error::TooLong`] and [`Error::MessageTooLong`]: an IE or a message that is
     ///   longer than its 16-bit Length can express.
     pub fn encode(&self) -> Result<Vec<u8>, Error> {
+        let mut out = Vec::new();
+        self.encode_into(&mut out)?;
+        Ok(out)
+    }
+
+    /// Appends the message to `out`, as [`encode`](Self::encode) writes it, with one
+    /// reservation of its length: a buffer that is cleared and used again for each message
+    /// allocates nothing once it is long enough. After an error, `out` is as it was.
+    ///
+    /// ```
+    /// use oxirush_pfcp::*;
+    ///
+    /// // One buffer for the Heartbeat Requests of a node
+    /// let mut buffer = Vec::with_capacity(1500);
+    /// for sequence in [1, 2] {
+    ///     buffer.clear();
+    ///     let request = HeartbeatRequest::new(RecoveryTimeStamp::new(7));
+    ///     Message::node(sequence, request).encode_into(&mut buffer)?;
+    ///     assert_eq!(buffer[..4], [0x20, 1, 0, 12]);
+    /// }
+    /// # Ok::<(), Error>(())
+    /// ```
+    ///
+    /// # Errors
+    ///
+    /// Those of [`encode`](Self::encode).
+    pub fn encode_into(&self, out: &mut Vec<u8>) -> Result<(), Error> {
         // The IEs after room for the header, which their length then completes.
+        let start = out.len();
         let header = self.header.encoded_len();
         let expected = self.body.encoded_len();
-        let mut out = Vec::with_capacity(header + expected);
-        out.resize(header, 0);
-        self.body.encode(&mut out)?;
-        let body = out.len() - header;
-        debug_assert_eq!(
-            body, expected,
-            "the encoded length of the IEs is the one computed first"
-        );
-        self.header
-            .encode_into(self.body.message_type(), body, &mut out)?;
-        Ok(out)
+        out.reserve(header + expected);
+        out.resize(start + header, 0);
+        let written = self.body.encode(out).and_then(|()| {
+            let body = out.len() - start - header;
+            debug_assert_eq!(
+                body, expected,
+                "the encoded length of the IEs is the one computed first"
+            );
+            self.header
+                .encode_into(self.body.message_type(), body, &mut out[start..])
+        });
+        if written.is_err() {
+            out.truncate(start);
+        }
+        written
     }
 
     /// Validates the message against TS 29.244 V19.6.0 on `interface` and returns every

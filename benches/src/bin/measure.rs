@@ -124,6 +124,14 @@ fn main() {
             for _ in 0..rounds {
                 sum += black_box(black_box(&message).encode().unwrap()).len() as u64;
             }
+        } else if workload == "encode_into" {
+            let message = Message::decode(octets).unwrap();
+            let mut buffer = Vec::new();
+            for _ in 0..rounds {
+                buffer.clear();
+                black_box(&message).encode_into(&mut buffer).unwrap();
+                sum += black_box(&buffer).len() as u64;
+            }
         } else if workload == "check" {
             let message = Message::decode(octets).unwrap();
             for _ in 0..rounds {
