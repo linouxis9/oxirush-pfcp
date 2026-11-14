@@ -798,8 +798,7 @@ fn a_condition_reads_the_rows_of_the_interface_alone() {
 /// the kind of each deviation.
 #[cfg(feature = "tree")]
 fn below(message: &str, ies: tree::Value, prefix: &str) -> Vec<(String, DeviationKind)> {
-    let written =
-        tree!({"message": message, "header": {"SEID": 1, "Sequence Number": 1}, "ies": ies});
+    let written = tree!({"message": message.to_string(), "header": {"SEID": 1, "Sequence Number": 1}, "ies": ies});
     let message = Message::from_tree(&written).unwrap_or_else(|error| panic!("{error}"));
     let found = message.check(Interfaces::N4).into_iter();
     let found = found.filter(|found| found.path.starts_with(prefix));
@@ -851,7 +850,7 @@ fn a_row_by_the_ies_beside_it() {
             "Monitoring Time": 5,
         });
         for (name, value) in more.as_object().unwrap() {
-            urr[name.as_str()] = value.clone();
+            urr[name] = value.clone();
         }
         below(
             modification,
@@ -924,7 +923,7 @@ fn a_row_by_the_ies_of_a_scope_above_it() {
     // A MAR of each Steering Mode
     let mar = |mode: &str, access: tree::Value, other: tree::Value| {
         let mar = tree!({
-            "MAR ID": 1, "Steering Functionality": "ATSSS-LL", "Steering Mode": mode,
+            "MAR ID": 1, "Steering Functionality": "ATSSS-LL", "Steering Mode": mode.to_string(),
             "3GPP Access Forwarding Action Information": access,
             "Non-3GPP Access Forwarding Action Information": other,
         });
@@ -1011,7 +1010,7 @@ fn a_row_by_the_ies_of_a_scope_above_it() {
     let tunnel = |more: tree::Value| {
         let mut tunnel = tree!({"LNS Address": "0a000001"});
         for (name, value) in more.as_object().unwrap() {
-            tunnel[name.as_str()] = value.clone();
+            tunnel[name] = value.clone();
         }
         tunnel
     };

@@ -39,6 +39,7 @@
 //! and the lists on its way, an entry at the position of a list's length, and writes a
 //! value that a message lacks whole.
 
+use alloc::borrow::Cow;
 use alloc::string::String;
 use alloc::vec::Vec;
 
@@ -84,7 +85,7 @@ pub(crate) fn read_field<T: tree::Tree, F: FieldValues<T>>(
 
 /// Put `value` under `name`: a list for a row that is a list, and for an IE that is
 /// there more times than its row allows.
-fn put(members: &mut Map, name: String, list: bool, value: Value) {
+fn put(members: &mut Map, name: Cow<'static, str>, list: bool, value: Value) {
     match members.get_mut(&name) {
         Some(Value::Array(entries)) => entries.push(value),
         Some(single) => {
@@ -139,7 +140,7 @@ pub(crate) fn scope_to_tree<S: Scope + TreeScope>(scope: &S) -> Value {
     for ie in raws.iter().filter(|ie| table.row_of(ie.ie_type).is_none()) {
         put(
             &mut members,
-            crate::tree_name(ie.ie_type, Some(table)),
+            crate::tree_name(ie.ie_type, Some(table)).into(),
             false,
             raw_tree(ie),
         );
@@ -196,7 +197,7 @@ pub(crate) fn located(tree: &Value, error: tree::Error) -> tree::Error {
                 Value::Object(members) => members
                     .iter()
                     .find(|(name, _)| names(name, label))
-                    .map(|(name, held)| (name.clone(), held)),
+                    .map(|(name, held)| (String::from(name), held)),
                 Value::Array(entries) => {
                     Some((label.into(), entries.get(label.parse::<usize>().ok()?)?))
                 }
@@ -757,9 +758,10 @@ fn room(value: Option<&Value>, of: Of, list: bool, segment: &str) -> Option<Valu
             let member = opened
                 .filter(|member| lacks(members, member))
                 .find(|member| tree::same_name(segment, member))?;
-            let name = tree::member(members, member).map_or(member, |(name, _)| name);
+            let name = tree::member(members, member)
+                .map_or(member.into(), |(name, _)| Cow::Owned(String::from(name)));
             let mut members = members.clone();
-            members.insert(name.into(), Value::Object(Map::new()));
+            members.insert(name, Value::Object(Map::new()));
             Some(Value::Object(members))
         }
         (Value::Object(members), Of::Ies(table)) if lacks(members, segment) => {
@@ -769,9 +771,10 @@ fn room(value: Option<&Value>, of: Of, list: bool, segment: &str) -> Option<Valu
                 (false, _) => return None,
                 _ => Value::Array(Vec::new()),
             };
-            let name = tree::member(members, segment).map_or(row.name, |(name, _)| name);
+            let name = tree::member(members, segment)
+                .map_or(row.name.into(), |(name, _)| Cow::Owned(String::from(name)));
             let mut members = members.clone();
-            members.insert(name.into(), empty);
+            members.insert(name, empty);
             Some(Value::Object(members))
         }
         _ => None,

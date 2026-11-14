@@ -489,7 +489,7 @@ fn fields_of_each_kind_read_back_as_their_figures_have_them() {
     );
     // A tree of fifteen CSIDs at most, and of an address of the length of its type
     let csids = |count: usize, address: &str| {
-        let written = tree!({"FQ-CSID Node-ID Type": 0, "Node-Address": address,
+        let written = tree!({"FQ-CSID Node-ID Type": 0, "Node-Address": address.to_string(),
             "PDN Connection Set Identifiers": vec![1u16; count]});
         tree::from_value::<FqCsid>(&written)
     };

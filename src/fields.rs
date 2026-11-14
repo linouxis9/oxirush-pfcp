@@ -1052,7 +1052,7 @@ impl Field for PlmnId {
     fn to_tree(&self) -> oxirush_utils::tree::Value {
         match self.plmn() {
             Some(plmn) if plmn.to_nas_octets() == self.0 => {
-                oxirush_utils::tree::Value::String(alloc::format!("{plmn}"))
+                oxirush_utils::tree::Value::String(alloc::format!("{plmn}").into())
             }
             _ => oxirush_utils::tree::octets(&self.0),
         }
@@ -1176,7 +1176,7 @@ impl Field for TypedAddress {
     #[cfg(feature = "tree")]
     fn to_tree(&self) -> oxirush_utils::tree::Value {
         if let Some(address) = self.ip() {
-            return oxirush_utils::tree::Value::String(alloc::format!("{address}"));
+            return oxirush_utils::tree::Value::String(alloc::format!("{address}").into());
         }
         let mut members = oxirush_utils::tree::Members::new();
         members.put(
@@ -1275,7 +1275,7 @@ macro_rules! address_field {
             }
             #[cfg(feature = "tree")]
             fn to_tree(&self) -> oxirush_utils::tree::Value {
-                oxirush_utils::tree::Value::String(alloc::format!("{self}"))
+                oxirush_utils::tree::Value::String(alloc::format!("{self}").into())
             }
             #[cfg(feature = "tree")]
             fn from_tree(
@@ -1593,7 +1593,7 @@ impl Field for Fqdn {
     fn to_tree(&self) -> oxirush_utils::tree::Value {
         use oxirush_utils::tree;
         match self.name() {
-            Some(name) => tree::text(&name),
+            Some(name) => tree::text(name),
             None => tree::alternative("octets", tree::octets(&self.0)),
         }
     }
@@ -1882,7 +1882,7 @@ macro_rules! identity_lv8 {
             #[cfg(feature = "tree")]
             fn to_tree(&self) -> oxirush_utils::tree::Value {
                 match self.$as_text() {
-                    Some(text) => oxirush_utils::tree::text(&text),
+                    Some(text) => oxirush_utils::tree::text(text),
                     None => oxirush_utils::tree::alternative("octets", oxirush_utils::tree::octets(&self.0)),
                 }
             }

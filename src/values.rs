@@ -426,10 +426,10 @@ impl oxirush_utils::tree::Tree for NodeId {
             members.finish()
         };
         match self {
-            Self::Ipv4(address) => tree::Value::String(alloc::format!("{address}")),
-            Self::Ipv6(address) => tree::Value::String(alloc::format!("{address}")),
+            Self::Ipv4(address) => tree::Value::String(alloc::format!("{address}").into()),
+            Self::Ipv6(address) => tree::Value::String(alloc::format!("{address}").into()),
             Self::Fqdn(labels) => match self.fqdn() {
-                Some(text) => tree::alternative("FQDN", tree::text(&text)),
+                Some(text) => tree::alternative("FQDN", tree::text(text)),
                 None => other(2, labels),
             },
             Self::Other(first, rest) => other(*first, rest),
@@ -606,7 +606,7 @@ pub(crate) fn name_tree(
     field: &'static [&'static str],
 ) -> oxirush_utils::tree::Value {
     match fqdn_name(octets) {
-        Some(name) => oxirush_utils::tree::text(&name),
+        Some(name) => oxirush_utils::tree::text(name),
         None => oxirush_utils::tree::alternative(field[0], oxirush_utils::tree::octets(octets)),
     }
 }
@@ -640,7 +640,7 @@ pub(crate) fn text_tree(
     field: &'static [&'static str],
 ) -> oxirush_utils::tree::Value {
     match core::str::from_utf8(octets) {
-        Ok(text) => oxirush_utils::tree::text(text),
+        Ok(text) => oxirush_utils::tree::text(alloc::string::String::from(text)),
         Err(_) => oxirush_utils::tree::alternative(field[0], oxirush_utils::tree::octets(octets)),
     }
 }

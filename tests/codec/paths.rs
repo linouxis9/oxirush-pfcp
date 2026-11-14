@@ -1073,7 +1073,7 @@ fn values_hold(
         for (at, entry) in entries {
             let printed: Vec<&str> = entry
                 .as_object()
-                .map(|members| members.keys().map(String::as_str).collect())
+                .map(|members| members.keys().collect())
                 .unwrap_or_default();
             if printed.contains(&"octets") {
                 continue;

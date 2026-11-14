@@ -9,7 +9,7 @@ fn message(name: &str, ies: tree::Value) -> Message {
         true => tree!({"SEID": 1, "Sequence Number": 1}),
         false => tree!({"Sequence Number": 1}),
     };
-    let written = tree!({"message": name, "header": header, "ies": ies});
+    let written = tree!({"message": name.to_string(), "header": header, "ies": ies});
     Message::from_tree(&written).unwrap_or_else(|error| panic!("{error}"))
 }
 
@@ -160,7 +160,7 @@ fn more(message: &Message, known: &Known<'_>) -> Vec<(String, &'static str, Devi
 
 /// The message `name` with `header` and `ies`.
 fn message_of(name: &str, header: tree::Value, ies: tree::Value) -> Message {
-    let written = tree!({"message": name, "header": header, "ies": ies});
+    let written = tree!({"message": name.to_string(), "header": header, "ies": ies});
     Message::from_tree(&written).unwrap_or_else(|error| panic!("{error}"))
 }
 
@@ -177,16 +177,16 @@ fn establishment_with(more: tree::Value) -> Message {
         "CP F-SEID": {"V4": true, "SEID": 0x1001, "IPv4 address": "10.0.0.1"},
     });
     for (name, value) in more.as_object().unwrap() {
-        ies[name.as_str()] = value.clone();
+        ies[name] = value.clone();
     }
     message_of(ESTABLISHMENT, tree!({"SEID": 0, "Sequence Number": 7}), ies)
 }
 
 /// A response `name` with `cause`, SEID 0x1001, sequence number 7, and `more` IEs.
 fn response_with(name: &str, cause: &str, more: tree::Value) -> Message {
-    let mut ies = tree!({"Cause": cause});
+    let mut ies = tree!({"Cause": cause.to_string()});
     for (name, value) in more.as_object().unwrap() {
-        ies[name.as_str()] = value.clone();
+        ies[name] = value.clone();
     }
     message_of(name, tree!({"SEID": 0x1001, "Sequence Number": 7}), ies)
 }
@@ -245,7 +245,7 @@ fn the_seid_of_an_establishment_response() {
     let response = |seid: u64, cause: &str| {
         let header = tree!({"SEID": seid, "Sequence Number": 7});
         more(
-            &message_of(ESTABLISHED, header, tree!({"Cause": cause})),
+            &message_of(ESTABLISHED, header, tree!({"Cause": cause.to_string()})),
             &known,
         )
     };
@@ -267,7 +267,7 @@ fn a_created_pdr_for_each_pdr_that_asks_for_an_allocation() {
     let pdr = |id: u16, pdi: tree::Value| {
         let mut pdr = tree!({"PDR ID": id, "Precedence": 1, "FAR ID": 1, "PDI": {"Source Interface": "Access"}});
         for (name, value) in pdi.as_object().unwrap() {
-            pdr["PDI"][name.as_str()] = value.clone();
+            pdr["PDI"][name] = value.clone();
         }
         pdr
     };
@@ -378,7 +378,7 @@ fn what_a_modification_response_returns_for_an_allocation() {
 #[test]
 fn the_bridge_information_that_a_request_asks_for() {
     let request =
-        |flag: &str| establishment_with(tree!({"Create Bridge/Router Info": {flag: true}}));
+        |flag: &'static str| establishment_with(tree!({"Create Bridge/Router Info": {flag: true}}));
     let bridge = request("BII");
     let known = Known::default().with_request(&bridge);
     let missing = |path: &str, clause, ie_type| {
@@ -473,7 +473,7 @@ fn pdr_with(id: u16, pdi: tree::Value) -> tree::Value {
     let mut pdr =
         tree!({"PDR ID": id, "Precedence": 1, "FAR ID": 1, "PDI": {"Source Interface": "Access"}});
     for (name, value) in pdi.as_object().unwrap() {
-        pdr["PDI"][name.as_str()] = value.clone();
+        pdr["PDI"][name] = value.clone();
     }
     pdr
 }

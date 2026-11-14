@@ -232,7 +232,7 @@ fn node_id_forms() {
     ]
     .join(".");
     for name in ["a..b", "", ".a", "a.", &"a".repeat(64), &over] {
-        let written = tree!({"FQDN": name});
+        let written = tree!({"FQDN": name.to_string()});
         assert!(tree::from_value::<NodeId>(&written).is_err(), "{name}");
     }
 }
@@ -965,7 +965,7 @@ fn a_network_instance_of_labels_is_its_name() {
     // Of no name: an empty label, a label of 64 octets, more than 253 octets
     let long = ["a"; 128].join(".");
     for name in ["a..b", "", &"a".repeat(64), &long] {
-        let error = tree::from_value::<NetworkInstance>(&tree!(name)).unwrap_err();
+        let error = tree::from_value::<NetworkInstance>(&tree!(name.to_string())).unwrap_err();
         assert!(error.to_string().contains("253 octets"), "{error}");
         assert_eq!(NetworkInstance::from_name(name), None, "{name}");
     }

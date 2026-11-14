@@ -942,11 +942,11 @@ impl oxirush_utils::tree::Tree for FqCsid {
             tree::unsigned(self.node_id_type.into()),
         );
         let address = match (self.node_id_type, self.node_address.len()) {
-            (0, 4) => tree::Value::String(alloc::format!(
+            (0, 4) => tree::text(alloc::format!(
                 "{}",
                 Ipv4Addr::from(<[u8; 4]>::try_from(&self.node_address[..]).unwrap_or_default())
             )),
-            (1, 16) => tree::Value::String(alloc::format!(
+            (1, 16) => tree::text(alloc::format!(
                 "{}",
                 Ipv6Addr::from(<[u8; 16]>::try_from(&self.node_address[..]).unwrap_or_default())
             )),
