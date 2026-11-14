@@ -407,3 +407,29 @@ fn a_false_length_reads_as_the_ies_that_its_octets_frame() {
         assert_eq!(message.check(interface), read.check(interface));
     }
 }
+
+/// An FQ-CSID of a Node-ID Type that §8.2.43 reserves, which a value may have and
+/// `encode()` writes with the Node-Address that it has, for a test to send: its type does
+/// not decode the octets, which give no length of the Node-Address, so its receiver keeps
+/// the IE as octets. `check()` tells the value reserved and the IE that the receiver reads
+/// incorrect (§7.6.8), at the same path. The `edit` fuzz target found it.
+#[test]
+fn an_fq_csid_of_a_reserved_node_id_type_is_received_as_octets() {
+    let tree = tree!({"message": "PFCP Session Set Deletion Request", "header": {"Sequence Number": 7},
+        "ies": {"FQ-CSID": [{"FQ-CSID Node-ID Type": 13, "Node-Address": "0d3fa72c", "PDN Connection Set Identifiers": [8973]}]}});
+    let message = Message::from_tree(&tree).unwrap();
+    let read = Message::decode(&message.encode().unwrap()).unwrap();
+    let tree = read.to_tree();
+    let kept = select(&tree, "/pfcp/FQ-CSID").unwrap();
+    assert_eq!(kept, [&tree!([{"octets": "d10d3fa72c230d"}])]);
+    let at = |message: &Message| -> Vec<DeviationKind> {
+        let found = message.check(Interfaces::ALL).into_iter();
+        found
+            .filter(|deviation| deviation.path == "/pfcp/FQ-CSID/0")
+            .map(|deviation| deviation.kind)
+            .collect()
+    };
+    assert_eq!(at(&message), [DeviationKind::ReservedValue { value: 13 }]);
+    assert_eq!(at(&read), [DeviationKind::Incorrect { ie_type: 65 }]);
+}
+

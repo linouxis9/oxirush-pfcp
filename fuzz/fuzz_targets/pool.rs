@@ -24,8 +24,8 @@
 use libfuzzer_sys::arbitrary::{self, Arbitrary};
 use oxirush_pfcp::tree::{self, Value};
 use oxirush_pfcp::{
-    DeviationKind, Interfaces, MESSAGE_TYPES, Message, Repeat, Row, Table, is_node_related,
-    message_type_info,
+    Deviation, DeviationKind, Interfaces, MESSAGE_TYPES, Message, Repeat, Row, Table,
+    is_node_related, message_type_info, paths,
 };
 use std::collections::BTreeMap;
 use std::sync::LazyLock;
@@ -250,7 +250,10 @@ fn false_length(value: &Value) -> bool {
 /// for a test tool, which keeps the octets from decoding: then `check()` tells it, and the
 /// message without the Lengths that the tree writes decodes. A false Length can also frame
 /// the octets after it as other IEs (§7.6.7): then the message of the octets has those IEs
-/// in place of the values of the message, and `check()` still finds the same in both.
+/// in place of the values of the message, and `check()` still finds the same in both. A
+/// value that its clause reserves may write octets that its type does not decode
+/// ([`undecoded`]): the message of the octets has that IE as octets, and `check()` tells
+/// the IE in each, as what it is there.
 pub fn written(message: &Message) {
     let octets = match message.encode() {
         Ok(octets) => octets,
@@ -285,6 +288,19 @@ pub fn written(message: &Message) {
     let table = message_type_info(read.body.message_type()).map(|info| info.table);
     let mut values = tree.clone();
     cleared(&mut values);
+    let undecoded = undecoded(message, &read);
+    for path in &undecoded {
+        let kept = paths::select(&read_tree, path).ok().and_then(|found| found.first().copied().cloned());
+        let kept = kept.filter(|kept| kept.get("octets").is_some());
+        let kept = kept.unwrap_or_else(|| panic!("an IE that check() tells incorrect is not kept as octets at {path}: {read_tree}"));
+        paths::set(&mut values, path, kept).unwrap();
+    }
+    let elsewhere = |found: Vec<Deviation>| -> Vec<Deviation> {
+        let within = |deviation: &Deviation, path: &String| {
+            deviation.path.strip_prefix(path.as_str()).is_some_and(|rest| rest.is_empty() || rest.starts_with('/'))
+        };
+        found.into_iter().filter(|deviation| !undecoded.iter().any(|path| within(deviation, path))).collect()
+    };
     assert!(
         false_length(&tree) || held(&values, &read_tree, table),
         "a value of a message reads as another: {tree} reads as {read_tree}"
@@ -296,12 +312,35 @@ pub fn written(message: &Message) {
     );
     for interface in INTERFACES {
         assert_eq!(
-            message.check(interface),
-            read.check(interface),
+            elsewhere(message.check(interface)),
+            elsewhere(read.check(interface)),
             "check() of a message is not that of its octets {} on {interface:?}: {tree}",
             hex(&octets)
         );
     }
+}
+
+/// The paths of the values of `message` that its octets, which `read` decodes, do not have:
+/// a value that its clause reserves, which `encode()` writes for a test tool to send, as an
+/// FQ-CSID of a reserved Node-ID Type, whose Node-Address has the length that the value
+/// gives it (§8.2.43). Its type does not decode the octets: the receiver keeps the IE as
+/// octets, and `check()` tells the value reserved and the IE that it reads incorrect
+/// (§7.6.8), at the same path.
+fn undecoded(message: &Message, read: &Message) -> Vec<String> {
+    let found = message.check(Interfaces::ALL);
+    let reserved = |path: &str| {
+        found.iter().any(|deviation| deviation.path == path && matches!(deviation.kind, DeviationKind::ReservedValue { .. }))
+    };
+    let incorrect = |kind: &DeviationKind| {
+        matches!(
+            kind,
+            DeviationKind::Incorrect { .. } | DeviationKind::MandatoryIncorrect { .. } | DeviationKind::ConditionalIncorrect { .. }
+        )
+    };
+    let read = read.check(Interfaces::ALL).into_iter();
+    read.filter(|deviation| incorrect(&deviation.kind) && reserved(&deviation.path))
+        .map(|deviation| deviation.path)
+        .collect()
 }
 
 /// Whether each value that the tree of a message, or of a grouped IE of `table`, holds is in
