@@ -146,14 +146,15 @@ jobs:
       - uses: dtolnay/rust-toolchain@nightly
       - run: cargo install cargo-fuzz@0.13.2 --locked
       # From the seeds of fuzz/seeds: the captured messages, and for the node each of
-      # them delivered to the SMF and the UPF.
+      # them delivered to the SMF and the UPF; with the dictionary of the tables.
+      - run: cargo run --quiet --example fuzz_dictionary > fuzz/pfcp.dict
       - run: |
           for target in decode tree node; do
             seeds=messages
             [ "$target" = node ] && seeds=node
             mkdir -p "fuzz/corpus/$target"
             cp fuzz/seeds/$seeds/* "fuzz/corpus/$target/"
-            cargo fuzz run "$target" -- -max_total_time=60
+            cargo fuzz run "$target" -- -max_total_time=60 -dict=fuzz/pfcp.dict
           done
       # The input that failed, to reproduce it: `cargo fuzz run TARGET FILE`
       - uses: actions/upload-artifact@v4
@@ -173,6 +174,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@nightly
       - run: cargo install cargo-fuzz@0.13.2 --locked
+      - run: cargo run --quiet --example fuzz_dictionary > fuzz/pfcp.dict
       - run: |
           for target in paths edit endpoint; do
             cargo fuzz run "$target" -- -max_total_time=60
@@ -181,8 +183,8 @@ jobs:
             mkdir -p "fuzz/corpus/$target"
             cp fuzz/seeds/messages/* "fuzz/corpus/$target/"
           done
-          cargo fuzz run check -- -max_total_time=60
-          cargo fuzz run --features differential differential -- -max_total_time=60
+          cargo fuzz run check -- -max_total_time=60 -dict=fuzz/pfcp.dict
+          cargo fuzz run --features differential differential -- -max_total_time=60 -dict=fuzz/pfcp.dict
       - uses: actions/upload-artifact@v4
         if: failure()
         with:

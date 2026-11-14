@@ -332,7 +332,8 @@ with go-pfcp v0.0.24, and how to reproduce them.
 
 ```sh
 cargo test --all-features
-cargo +nightly fuzz run tree -- -max_total_time=60
+cargo run --example fuzz_dictionary > fuzz/pfcp.dict
+cargo +nightly fuzz run tree -- -max_total_time=60 -dict=fuzz/pfcp.dict
 ```
 
 [`tests/README.md`](tests/README.md) describes what each test checks against
