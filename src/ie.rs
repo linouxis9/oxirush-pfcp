@@ -226,6 +226,11 @@ impl oxirush_utils::tables::Raw for RawIe {
     fn encoded_len(&self) -> usize {
         4 + 2 * usize::from(self.enterprise_id.is_some()) + self.octets.len()
     }
+
+    #[inline]
+    fn content(&self) -> &[u8] {
+        &self.octets
+    }
 }
 
 /// Why the IEs of a scope do not decode.

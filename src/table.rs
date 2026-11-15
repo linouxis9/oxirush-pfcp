@@ -29,7 +29,7 @@ pub use oxirush_utils::tables::Repeat;
 use oxirush_utils::tables::{Entry, each_entry};
 pub(crate) use oxirush_utils::tables::{
     FieldValues, MAX_ROWS, decode_boxed, decode_scope, decode_scope_into, decode_scope_sized,
-    encode_scope, kept_positions, place, reread, value_positions,
+    encode_scope, place, value_positions,
 };
 #[cfg(test)]
 use {crate::ie::Placed, oxirush_utils::tables::on_roles};
@@ -59,6 +59,8 @@ pub enum Presence {
 }
 
 impl oxirush_utils::tables::Presence for Presence {
+    const OPTIONAL: Self = Self::Optional;
+
     #[inline]
     fn is_mandatory(self) -> bool {
         self == Self::Mandatory

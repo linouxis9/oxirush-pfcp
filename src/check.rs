@@ -27,7 +27,8 @@ use core::fmt;
 use crate::enums::CauseValue;
 use crate::ie::VENDOR;
 use crate::registry::ie_type_info;
-use crate::table::{Interfaces, Presence, Row, Scope};
+use crate::table::{Interfaces, Presence, Row, Scope, Table};
+use oxirush_utils::tables::TableFinding;
 
 /// One deviation: where, which clause, what, and the Cause of the answer.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -381,9 +382,11 @@ impl<T: Rules> Check for T {}
 
 /// Where a check is: the interface, and how the receiver takes the mandatory IEs of the
 /// scope (§7.2.3.2: those of a conditional grouped IE as conditional, those of an
-/// optional one as optional).
+/// optional one as optional). The checks of the tables of oxirush-utils take it through
+/// Pfcp's `Checking`; it is no part of the crate's interface.
+#[doc(hidden)]
 #[derive(Debug, Clone, Copy)]
-pub(crate) struct Context {
+pub struct Context {
     pub(crate) interface: Interfaces,
     pub(crate) view: Presence,
     /// In a request that the receiver answers with a Cause: not a Heartbeat Request.
@@ -456,7 +459,9 @@ pub(crate) trait Checked {
     fn check_values(&self, path: &Path<'_>, context: Context, found: &mut Vec<Deviation>);
 }
 
-pub(crate) use oxirush_utils::fields::{Path, Segment};
+pub(crate) use oxirush_utils::fields::Path;
+#[cfg(test)]
+use oxirush_utils::fields::Segment;
 
 /// The path of the IEs of a message, which `/pfcp` names.
 pub(crate) const ROOT: &str = "/pfcp";
@@ -581,51 +586,37 @@ pub(crate) fn check_field_values<
     context: Context,
     found: &mut Vec<Deviation>,
 ) {
-    let values = field.values();
-    if values.is_empty() {
-        return;
-    }
-    let table = S::table();
-    let row = &table.rows[at];
-    if !check_row(table.id, row, values.len(), path, context, found) {
-        // The receiver discards each IE of the row, whatever it holds (§7.6.9).
-        return;
-    }
-    // Of the values alone, their positions; with kept IEs of the row, theirs in the tree.
-    let kept = scope.raw().iter().any(|ie| ie.ie_type == row.ie_type);
-    let positions = match kept {
-        false => Vec::new(),
-        true => crate::table::value_positions(scope, row),
-    };
-    for (nth, value) in values.iter().enumerate() {
-        let nth = match kept {
-            false => row.is_list().then_some(nth),
-            true => Some(positions[nth]),
-        };
-        let here = Path::Row {
-            parent: path,
-            row: row.name,
-            nth,
-        };
-        check_field(
-            value,
-            table.id,
-            &here,
-            presence(row, context),
-            context,
-            found,
-        );
-    }
+    let table = S::table().id;
+    oxirush_utils::tables::check_values(
+        scope,
+        at,
+        field.values(),
+        path,
+        context,
+        found,
+        |value, here, presence, found| check_field(value, table, here, presence, context, found),
+    );
 }
 
-/// The presence of a row on the interface of the context. One that the interface does not
-/// have is taken as optional: its IEs are discarded (§7.6.9), and what they break has no
-/// Cause.
-fn presence(row: &Row, context: Context) -> Presence {
-    row.on(context.interface)
-        .and_then(|on| on.presence)
-        .unwrap_or(Presence::Optional)
+/// Check a scope against its table: its mandatory IEs on the interface, the IEs that it
+/// keeps as octets (repeated, incorrect, of no row of the table, of no release), then
+/// each row that has values, and each value.
+pub(crate) fn check_scope<S: Scope + Checked>(
+    scope: &S,
+    path: &Path<'_>,
+    context: Context,
+    found: &mut Vec<Deviation>,
+) {
+    oxirush_utils::tables::check_scope(
+        scope,
+        path,
+        context,
+        found,
+        |scope, path, context, found| scope.check_values(path, context, found),
+    );
 }
+
+pub(crate) use oxirush_utils::tables::{as_read, condition_absent, condition_missing, taken};
 
 /// The IEs that a response with a rejection Cause may have (§7.2.3.2): Cause, Node ID,
 /// Offending IE, Load Control Information, Overload Control Information, Failed Rule ID.
@@ -661,275 +652,6 @@ fn mandatory(row: &Row, context: Context) -> usize {
     }
 }
 
-/// Check a row that has `count` values, or IEs kept as octets alone when 0: whether the
-/// interface has it, whether a rejection may carry it, and whether the table allows that
-/// many. Whether the interface has it.
-#[inline]
-pub(crate) fn check_row(
-    table: &'static str,
-    row: &Row,
-    count: usize,
-    path: &Path<'_>,
-    context: Context,
-    found: &mut Vec<Deviation>,
-) -> bool {
-    let rejected = context
-        .rejected
-        .is_some_and(|cause| count.max(1) > with_rejection(table, row, cause));
-    let on = row.on(context.interface);
-    // The receiver discards each IE of a row that is not on the interface (§7.6.9).
-    let off = on.is_none();
-    let over = on.is_some_and(|on| !on.most.allows(count));
-    if rejected || off || over {
-        row_deviations(table, row, [rejected, off, over], path, found);
-    }
-    if context.lacking != 0 && !off {
-        crate::known::check_row(table, row, count, context.lacking, path, found);
-    }
-    !off
-}
-
-#[cold]
-#[inline(never)]
-fn row_deviations(
-    table: &'static str,
-    row: &Row,
-    [rejected, off, over]: [bool; 3],
-    path: &Path<'_>,
-    found: &mut Vec<Deviation>,
-) {
-    let here = || Path::Row {
-        parent: path,
-        row: row.name,
-        nth: None,
-    };
-    if rejected {
-        found.push(Deviation::new(
-            here(),
-            "7.2.3.2",
-            DeviationKind::WithRejection {
-                ie_type: row.ie_type,
-            },
-        ));
-    }
-    if off {
-        found.push(Deviation::new(
-            here(),
-            table,
-            DeviationKind::NotOnInterface {
-                ie_type: row.ie_type,
-            },
-        ));
-    }
-    if over {
-        found.push(Deviation::new(
-            here(),
-            "7.6.10",
-            DeviationKind::Repeated {
-                ie_type: row.ie_type,
-            },
-        ));
-    }
-}
-
-/// Check a scope against its table: its mandatory IEs on the interface, the IEs that it
-/// keeps as octets (repeated, incorrect, of no row of the table, of no release), then
-/// each row that has values, and each value.
-pub(crate) fn check_scope<S: Scope + Checked>(
-    scope: &S,
-    path: &Path<'_>,
-    context: Context,
-    found: &mut Vec<Deviation>,
-) {
-    let table = S::table();
-    for row in table.rows {
-        let needed = mandatory(row, context);
-        if scope.count(row.ie_type) < needed {
-            mandatory_missing(scope, row, needed, path, context, found);
-        }
-    }
-    if !scope.raw().is_empty() {
-        raw_deviations(scope, path, context, found);
-    }
-    scope.check_values(path, context, found);
-}
-
-/// A mandatory row that has fewer values than it needs: missing, there and incorrect, or
-/// there with a null length, which its receiver takes (§8.1.2). Of a row there once, the
-/// first IE is the one handled (§7.6.10).
-#[cold]
-#[inline(never)]
-fn mandatory_missing<S: Scope>(
-    scope: &S,
-    row: &Row,
-    needed: usize,
-    path: &Path<'_>,
-    context: Context,
-    found: &mut Vec<Deviation>,
-) {
-    let mut kept = scope.raw().iter().filter(|ie| ie.ie_type == row.ie_type);
-    // An IE of the row that does not frame, or whose IEs do not, is told as such
-    // ([`raw_deviations`]).
-    if kept
-        .clone()
-        .any(|ie| !ie.frames() || unframed_within(row, &ie.octets).is_some())
-    {
-        return;
-    }
-    let (nulls, incorrect) = match row.is_list() {
-        false => match kept.next() {
-            Some(ie) if ie.octets.is_empty() => (1, false),
-            Some(_) => (0, true),
-            None => (0, false),
-        },
-        _ => kept.fold((0, false), |(nulls, incorrect), ie| {
-            match ie.octets.is_empty() {
-                true => (nulls + 1, incorrect),
-                false => (nulls, incorrect || !scope.decodes(ie.ie_type, &ie.octets)),
-            }
-        }),
-    };
-    if scope.count(row.ie_type) + nulls >= needed {
-        let kind = DeviationKind::NullLength {
-            ie_type: row.ie_type,
-        };
-        let at = Path::Row {
-            parent: path,
-            row: row.name,
-            nth: None,
-        };
-        found.push(Deviation::new(at, S::table().id, kind));
-        return;
-    }
-    // Missing where its table has it, or there and incorrect (§7.6.8).
-    let (clause, kind) = match incorrect {
-        false => (
-            S::table().id,
-            DeviationKind::MandatoryMissing {
-                ie_type: row.ie_type,
-            },
-        ),
-        true => (
-            "7.6.8",
-            DeviationKind::MandatoryIncorrect {
-                ie_type: row.ie_type,
-            },
-        ),
-    };
-    let mut deviation = Deviation::new(
-        Path::Row {
-            parent: path,
-            row: row.name,
-            nth: None,
-        },
-        clause,
-        kind,
-    );
-    deviation.cause = context.cause(!incorrect);
-    found.push(deviation);
-}
-
-/// The IEs that a scope keeps as octets: of no row, repeated (§7.6.10), or incorrect
-/// (§7.6.8): a conditional one semantically invalid, an optional one taken as absent. Of a
-/// row there once, the first IE is the one handled, and the others are repetitions; an IE
-/// of a null length is no error (§8.1.2). A row of kept IEs alone is checked as one of
-/// values ([`check_row`]): on the interface, and in a rejection (§7.2.3.2).
-#[cold]
-#[inline(never)]
-fn raw_deviations<S: Scope>(
-    scope: &S,
-    path: &Path<'_>,
-    context: Context,
-    found: &mut Vec<Deviation>,
-) {
-    let table = S::table();
-    let raws = scope.raw();
-    let positions = crate::table::kept_positions(scope);
-    // The rows of the kept IEs met so far: a few, whatever the number of the IEs.
-    let mut handled: alloc::collections::BTreeSet<u16> = alloc::collections::BTreeSet::new();
-    for (at, ie) in raws.iter().enumerate() {
-        let Some(row) = table.row_of(ie.ie_type) else {
-            let here = kept_path(scope, &positions, at, path);
-            if !ie.frames() {
-                found.push(invalid_length(here, ie.ie_type, context));
-                continue;
-            }
-            let (clause, kind) = match ie.ie_type {
-                VENDOR.. if ie.enterprise_id.is_none_or(|id| id == 10415) => {
-                    ("8.1.1", DeviationKind::VendorId)
-                }
-                VENDOR.. => continue,
-                known if ie_type_info(known).is_some() => {
-                    ("7.6.9", DeviationKind::Unexpected { ie_type: known })
-                }
-                unknown => ("8.1.2", DeviationKind::UnknownType { ie_type: unknown }),
-            };
-            found.push(Deviation::new(here, clause, kind));
-            continue;
-        };
-        let alone = handled.insert(row.ie_type) && scope.count(row.ie_type) == 0;
-        if alone {
-            check_row(table.id, row, 0, path, context, found);
-        }
-        let here = || Path::Row {
-            parent: path,
-            row: row.name,
-            nth: positions[at],
-        };
-        // One that does not frame, whose receiver frames the IEs after it amiss, of the
-        // interface or not
-        if !ie.frames() {
-            found.push(invalid_length(here(), ie.ie_type, context));
-            continue;
-        }
-        // The receiver discards each IE of a row that is not on the interface, which its
-        // row tells (§7.6.9).
-        if row.on(context.interface).is_none() {
-            continue;
-        }
-        let first = match row.is_list() {
-            false => alone,
-            true => !ie.octets.is_empty() && !scope.decodes(ie.ie_type, &ie.octets),
-        };
-        // A grouped IE that its receiver handles, whose IEs run past it (§7.6.7).
-        if let Some(inner) = first.then(|| unframed_within(row, &ie.octets)).flatten() {
-            found.push(invalid_length(here(), inner, context));
-            continue;
-        }
-        let deviation = match (first, ie.octets.is_empty()) {
-            // A null length says what its row allows it to (§5.6.3).
-            (true, true) => continue,
-            // An incorrect mandatory IE is reported as such.
-            (true, false) if mandatory(row, context) > scope.count(row.ie_type) => continue,
-            // One of a mandatory list beyond those that it needs, or a verifiable
-            // conditional IE: semantically invalid, as one that decodes and breaks a rule
-            // (§7.6.8). An optional one is taken as absent.
-            (true, false) => {
-                let ie_type = row.ie_type;
-                let kind = match presence(row, context) {
-                    Presence::Mandatory => DeviationKind::MandatoryIncorrect { ie_type },
-                    Presence::Conditional => DeviationKind::ConditionalIncorrect { ie_type },
-                    Presence::Optional => DeviationKind::Incorrect { ie_type },
-                };
-                let mut deviation = Deviation::new(here(), "7.6.8", kind);
-                if !matches!(deviation.kind, DeviationKind::Incorrect { .. }) {
-                    deviation.cause = context.cause(false);
-                }
-                deviation
-            }
-            (false, true) if row.is_list() => continue,
-            (false, _) => Deviation::new(
-                here(),
-                "7.6.10",
-                DeviationKind::Repeated {
-                    ie_type: row.ie_type,
-                },
-            ),
-        };
-        found.push(deviation);
-    }
-}
-
 /// The IE whose Length runs past the grouped IE of `row` whose content is `octets`
 /// (§7.6.7): the first whose Length runs past the others, or the grouped IE itself where
 /// fewer octets than an IE header are left. `None` for an IE of another row, and for IEs
@@ -942,167 +664,137 @@ fn unframed_within(row: &Row, octets: &[u8]) -> Option<u16> {
     })
 }
 
-/// The scope as its receiver reads its octets, which `check()` checks: `None` for a scope
-/// that is as they read ([`Scope::plain`]). One whose octets do not decode, as the Length
-/// of an IE that it keeps as octets does not frame, has those Lengths told in `found`
-/// ([`unframed`]), and is read with them cleared. One that does not encode is taken with
-/// them cleared.
-pub(crate) fn as_read<S: Scope + Clone>(
-    scope: &S,
-    path: &Path<'_>,
-    context: Context,
-    found: &mut Vec<Deviation>,
-) -> Option<S> {
-    if scope.plain() {
-        return None;
-    }
-    if let Some(read) = crate::table::reread(scope) {
-        return Some(read);
-    }
-    unframed(scope, path, context, found);
-    let mut cleared = scope.clone();
-    for ie in cleared.raw_mut() {
-        ie.length = None;
-    }
-    Some(crate::table::reread(&cleared).unwrap_or(cleared))
-}
+/// The rules of PFCP that the checks of the tables of oxirush-utils take: the clauses and
+/// the Causes of clause 7.6, the IEs of a rejection (§7.2.3.2), and the features that the
+/// peers announced (`Known`).
+impl oxirush_utils::tables::Checking for crate::Pfcp {
+    type Deviation = Deviation;
+    type Context = Context;
 
-/// The IEs that a scope keeps as octets whose Length is not that of their content, which do
-/// not frame (§7.6.7), each at its path.
-fn unframed<S: Scope>(scope: &S, path: &Path<'_>, context: Context, found: &mut Vec<Deviation>) {
-    let positions = crate::table::kept_positions(scope);
-    for (at, ie) in scope.raw().iter().enumerate() {
-        if !ie.frames() {
-            let here = kept_path(scope, &positions, at, path);
-            found.push(invalid_length(here, ie.ie_type, context));
+    #[inline]
+    fn interfaces(context: Context) -> Interfaces {
+        context.interface
+    }
+
+    fn deviation(
+        path: &dyn fmt::Display,
+        table: &'static Table,
+        finding: TableFinding<u16>,
+        context: Context,
+    ) -> Deviation {
+        let (clause, kind, cause) = match finding {
+            TableFinding::MandatoryMissing(ie_type) => (
+                table.id,
+                DeviationKind::MandatoryMissing { ie_type },
+                context.cause(true),
+            ),
+            TableFinding::MandatoryIncorrect(ie_type) => (
+                "7.6.8",
+                DeviationKind::MandatoryIncorrect { ie_type },
+                context.cause(false),
+            ),
+            TableFinding::ConditionalIncorrect(ie_type) => (
+                "7.6.8",
+                DeviationKind::ConditionalIncorrect { ie_type },
+                context.cause(false),
+            ),
+            TableFinding::Incorrect(ie_type) => {
+                ("7.6.8", DeviationKind::Incorrect { ie_type }, None)
+            }
+            TableFinding::ConditionalMissing(ie_type) => (
+                table.id,
+                DeviationKind::ConditionalMissing { ie_type },
+                context.conditional_cause(),
+            ),
+            TableFinding::NullLength(ie_type) => {
+                (table.id, DeviationKind::NullLength { ie_type }, None)
+            }
+            TableFinding::Repeated(ie_type) => {
+                ("7.6.10", DeviationKind::Repeated { ie_type }, None)
+            }
+            TableFinding::Excluded(ie_type) => {
+                (table.id, DeviationKind::Excluded { ie_type }, None)
+            }
+            TableFinding::NotOnInterface(ie_type) => {
+                (table.id, DeviationKind::NotOnInterface { ie_type }, None)
+            }
+            TableFinding::WithRejection(ie_type) => {
+                ("7.2.3.2", DeviationKind::WithRejection { ie_type }, None)
+            }
+            TableFinding::InvalidLength(ie_type) => (
+                "7.6.7",
+                DeviationKind::InvalidLength { ie_type },
+                context.invalid_length(),
+            ),
+        };
+        let mut deviation = Deviation::new(path, clause, kind);
+        deviation.cause = cause;
+        deviation
+    }
+
+    #[inline]
+    fn mandatory(row: &Row, context: Context) -> usize {
+        mandatory(row, context)
+    }
+
+    #[inline]
+    fn rejected(table: &'static str, row: &Row, count: usize, context: Context) -> bool {
+        context
+            .rejected
+            .is_some_and(|cause| count.max(1) > with_rejection(table, row, cause))
+    }
+
+    #[inline]
+    fn check_row_more(
+        table: &'static str,
+        row: &Row,
+        count: usize,
+        path: &Path<'_>,
+        context: Context,
+        found: &mut Vec<Deviation>,
+    ) {
+        if context.lacking != 0 {
+            crate::known::check_row(table, row, count, context.lacking, path, found);
         }
     }
-}
 
-/// The path of the IE `at` that a scope keeps as octets: at the position of its row, or
-/// by its name in the tree and its position among those of its type there.
-fn kept_path<S: Scope>(
-    scope: &S,
-    positions: &[Option<usize>],
-    at: usize,
-    path: &Path<'_>,
-) -> String {
-    let (table, raws) = (S::table(), scope.raw());
-    let ie = &raws[at];
-    if let Some(row) = table.row_of(ie.ie_type) {
-        let here = Path::Row {
-            parent: path,
-            row: row.name,
-            nth: positions[at],
+    fn of_no_row(path: &str, ie: &crate::ie::RawIe) -> Option<Deviation> {
+        let (clause, kind) = match ie.ie_type {
+            VENDOR.. if ie.enterprise_id.is_none_or(|id| id == 10415) => {
+                ("8.1.1", DeviationKind::VendorId)
+            }
+            VENDOR.. => return None,
+            known if ie_type_info(known).is_some() => {
+                ("7.6.9", DeviationKind::Unexpected { ie_type: known })
+            }
+            unknown => ("8.1.2", DeviationKind::UnknownType { ie_type: unknown }),
         };
-        return format!("{here}");
+        Some(Deviation::new(path, clause, kind))
     }
-    let name = crate::tree_name(ie.ie_type, Some(table));
-    let same = |other: &&crate::ie::RawIe| other.ie_type == ie.ie_type;
-    let name = Segment(&name);
-    match raws.iter().filter(same).count() {
-        1 => format!("{path}/{name}"),
-        _ => format!("{path}/{name}/{}", raws[..at].iter().filter(same).count()),
-    }
-}
 
-/// The deviation of an IE at `path` that does not frame, of `ie_type`.
-fn invalid_length(path: impl fmt::Display, ie_type: u16, context: Context) -> Deviation {
-    let mut deviation = Deviation::new(path, "7.6.7", DeviationKind::InvalidLength { ie_type });
-    deviation.cause = context.invalid_length();
-    deviation
-}
-
-/// The scope as its receiver takes it, which the conditions of its table read: without
-/// the values of the rows of `off`, by their positions, which its interface does not have
-/// and which it discards (§7.6.9). `None` for the scope as it is.
-#[cold]
-pub(crate) fn taken<S: Scope + Clone>(scope: &S, off: u64) -> Option<S> {
-    if off == 0 {
-        return None;
+    #[inline]
+    fn is_null(ie: &crate::ie::RawIe) -> bool {
+        ie.octets.is_empty()
     }
-    let mut taken = scope.clone();
-    let rows = S::table().rows.iter().enumerate();
-    for (_, row) in rows.filter(|(at, _)| off >> at & 1 == 1) {
-        taken.clear(row.ie_type);
-    }
-    Some(taken)
-}
 
-/// Whether each interface of the context has a row, which the condition beside it then
-/// needs.
-fn on_each(row: &Row, context: Context) -> bool {
-    row.on(context.interface)
-        .is_some_and(|on| on.presence.is_some())
-}
-
-/// A C row that is not there where the condition that its table writes beside it holds
-/// (§7.6.6), on the interface: missing, or of a null length (§8.1.2). One that is there
-/// and incorrect is answered as such.
-pub(crate) fn condition_missing<S: Scope>(
-    scope: &S,
-    at: usize,
-    path: &Path<'_>,
-    context: Context,
-    found: &mut Vec<Deviation>,
-) {
-    let table = S::table();
-    let row = &table.rows[at];
-    let mut kept = scope.raw().iter().filter(|ie| ie.ie_type == row.ie_type);
-    let null = match kept.next() {
-        _ if scope.count(row.ie_type) > 0 || !on_each(row, context) => return,
-        Some(ie) if ie.octets.is_empty() => true,
-        Some(_) => return,
-        None => false,
-    };
-    let kind = match null {
-        true => DeviationKind::NullLength {
-            ie_type: row.ie_type,
-        },
-        false => DeviationKind::ConditionalMissing {
-            ie_type: row.ie_type,
-        },
-    };
-    let mut deviation = Deviation::new(
-        Path::Row {
-            parent: path,
-            row: row.name,
-            nth: None,
-        },
-        table.id,
-        kind,
-    );
-    if !null {
-        deviation.cause = context.conditional_cause();
+    #[inline]
+    fn frames(ie: &crate::ie::RawIe) -> bool {
+        ie.frames()
     }
-    found.push(deviation);
-}
 
-/// A row that is there, on the interface, where the condition that its table writes beside
-/// it has it absent: an IE of a null length too.
-pub(crate) fn condition_absent<S: Scope>(
-    scope: &S,
-    at: usize,
-    path: &Path<'_>,
-    context: Context,
-    found: &mut Vec<Deviation>,
-) {
-    let table = S::table();
-    let row = &table.rows[at];
-    let there =
-        scope.count(row.ie_type) > 0 || scope.raw().iter().any(|ie| ie.ie_type == row.ie_type);
-    if !there || row.on(context.interface).is_none() {
-        return;
+    #[inline]
+    fn clear_length(ie: &mut crate::ie::RawIe) {
+        ie.length = None;
     }
-    let at = Path::Row {
-        parent: path,
-        row: row.name,
-        nth: None,
-    };
-    let kind = DeviationKind::Excluded {
-        ie_type: row.ie_type,
-    };
-    found.push(Deviation::new(at, table.id, kind));
+
+    fn name_of(ie_type: u16, table: Option<&Table>) -> String {
+        crate::tree_name(ie_type, table)
+    }
+
+    #[inline]
+    fn unframed_within(row: &Row, ie: &crate::ie::RawIe) -> Option<u16> {
+        unframed_within(row, &ie.octets)
+    }
 }
 
 #[cfg(test)]
