@@ -115,6 +115,17 @@ pub use oxirush_utils::tables::Form;
 ///
 /// let pdn_type = ie_type_info(113).unwrap();
 /// assert_eq!(pdn_type.tree_of(&[1], None), Some(tree!("IPv4")));
+/// // PDN Type is written by its one field: a name of Table 8.2.79-1, or a number of its
+/// // three bits.
+/// let Some(tree::Takes::Members(Some("PDN Type"), members)) = pdn_type.takes() else {
+///     panic!("PDN Type is written by its one field");
+/// };
+/// let ("PDN Type", tree::Takes::OneOf([tree::Takes::Named(names), tree::Takes::Number(7)])) =
+///     members[0]
+/// else {
+///     panic!("{:?}", members[0]);
+/// };
+/// assert_eq!(names[0], "IPv4");
 /// // Create FAR: its FAR ID and its Apply Action.
 /// let create_far = ie_type_info(3).unwrap();
 /// let octets = [0, 108, 0, 4, 0, 0, 0, 1, 0, 44, 0, 2, 2, 0];
