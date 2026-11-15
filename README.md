@@ -326,31 +326,34 @@ fn main() {
 
 ## Limits
 
-- `check()` follows TS 29.244 V19.6.0: the IEs of a later release are kept as octets and reported as unknown.
-- `check()` does not check what only the sender knows (its intent, what the UE supports), nor that UR-SEQN values increase: usage reports can arrive out of order.
-- A SEID of 0 is accepted where the sender may not know the SEID of its peer yet.
-- `check()` does not look into a DNS Query/Response Filter or the content of containers.
-- `encode()` writes malformed messages on purpose, for tests: it only refuses a value that would not decode back to itself.
-- A `Node` is one PFCP entity: a request for a session of another SMF of its set (§5.22) reaches the application as `Received::stranger`.
+- `check()` follows TS 29.244 V19.6.0: IEs of a later release are kept as
+  octets and reported as unknown.
+- `check()` does not check what only the sender knows (its intent, what the
+  UE supports), nor that UR-SEQN values increase: usage reports can arrive
+  out of order.
+- A SEID of 0 is accepted where the sender may not know its peer's SEID yet.
+- `check()` does not look into a DNS Query/Response Filter or the content
+  of containers.
+- `encode()` writes malformed messages on purpose, for tests: it refuses
+  only a value that would not decode back to itself.
+- A `Node` is one PFCP entity: a request for a session of another SMF of its
+  set (§5.22) reaches the application as `Received::stranger`.
 
 ## Performance
 
-On core 2 of an Intel Xeon E5-2680 v4 (Broadwell, 2.4 GHz, a KVM guest, Linux 7.0,
-Rust 1.100.0, Go 1.27.4) at cdf4a13 on 2026-11-15, for a Session Establishment
-Request of 16 PDRs (2,824 octets), against go-pfcp v0.0.24: the median of ten
-runs, the two in turns. A ratio is the time of go-pfcp over this crate's; the ten
-times of the two do not overlap.
+| Operation, a Session Establishment Request of 16 PDRs (2,824 octets) | Time | go-pfcp v0.0.24, time over this crate's |
+|---|---|---|
+| `decode` | 15.7 µs | 4.4x |
+| `decode`, then read each value | 16.7 µs | 8.8x |
+| `encode` | 7.4 µs | 12.2x |
+| `check` | 32.2 µs | |
+| `to_tree`, `from_tree` | 51.9 µs, 198.2 µs | |
 
-| Operation | This crate | go-pfcp | Ratio |
-|-----------|------------|---------|-------|
-| `decode` | 15.7 µs, 70 allocations | 68.7 µs, 441 allocations | 4.4 |
-| `decode`, then read each value | 16.7 µs, 70 allocations | 146.6 µs, 1,043 allocations | 8.8 |
-| `encode` | 7.4 µs, 1 allocation | 91.0 µs, 2 allocations | 12.2 |
-| `check` | 32.2 µs, 12 allocations | | |
-| `to_tree`, `from_tree` | 51.9 µs, 198.2 µs | | |
-
-[`benches/`](https://github.com/linouxis9/oxirush-pfcp/blob/main/benches/README.md)
-has the other messages, and the commands that reproduce each figure.
+Medians of ten rounds, the two in turns, on one core of an Intel Xeon
+E5-2680 v4 (a KVM guest, Linux 7.0, Rust 1.100.0, Go 1.27.4), at cdf4a13 on
+2026-11-15; the ten times of the two do not overlap.
+[`benches/README.md`](benches/README.md) has the other messages, the
+allocations, and the commands that reproduce each figure.
 
 ## Tests and fuzzing
 
@@ -366,10 +369,10 @@ other implementations. The fuzz targets are in `fuzz/`. One of them,
 `differential`, compares the crate with rs-pfcp 0.5.0, an independent codec, on
 the same input.
 
-Pull requests are welcome. Add a test for what you change and sign off your
-commits (`git commit -s`, the [Developer Certificate of
-Origin](https://developercertificate.org/)). [SECURITY.md](SECURITY.md)
-explains how to report a vulnerability.
+A pull request comes with a test for what it changes. Sign off your commits
+(`git commit -s`): by contributing you agree to the [Developer Certificate
+of Origin](https://developercertificate.org/). [SECURITY.md](SECURITY.md)
+says how to report a vulnerability.
 
 ## The OxiRush family
 
