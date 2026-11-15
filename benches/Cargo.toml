@@ -28,4 +28,4 @@ codegen-units = 1
 # them, and its fields are not released yet: every crate of the build takes oxirush-utils
 # from this revision until its next release.
 [patch.crates-io]
-oxirush-utils = { git = "https://github.com/linouxis9/oxirush-utils", rev = "81a51e778373b15b770e0723ab8f1639b2b5f640" }
+oxirush-utils = { git = "https://github.com/linouxis9/oxirush-utils", rev = "afeef3376716bb29ac8d3972755a71477281ff6c" }

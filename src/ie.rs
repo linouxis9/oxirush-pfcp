@@ -318,8 +318,13 @@ pub(crate) fn finish(
 }
 
 /// Write the IE of a value.
-pub(crate) fn encode_value<T: IeType + Codec>(value: &T, out: &mut Vec<u8>) -> Result<(), Error> {
-    let at = begin(T::IE_TYPE, out);
+#[inline]
+pub(crate) fn encode_value<T: IeType + Codec>(
+    ie_type: u16,
+    value: &T,
+    out: &mut Vec<u8>,
+) -> Result<(), Error> {
+    let at = begin(ie_type, out);
     value.encode(out)?;
-    finish(T::IE_TYPE, at, None, out)
+    finish(ie_type, at, None, out)
 }

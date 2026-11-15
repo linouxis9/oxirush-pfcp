@@ -180,12 +180,13 @@ impl<S: oxirush_utils::tables::Scope<P = crate::Pfcp>> Scope for S {}
 /// Write the `nth` value of a field as its IE: `false` when it has no such value.
 #[inline]
 pub(crate) fn emit_field<T: IeType + Codec, F: FieldValues<T>>(
+    ie_type: u16,
     field: &F,
     nth: usize,
     out: &mut Vec<u8>,
 ) -> Result<bool, Error> {
     match field.values().get(nth) {
-        Some(value) => crate::ie::encode_value(value, out).map(|()| true),
+        Some(value) => crate::ie::encode_value(ie_type, value, out).map(|()| true),
         None => Ok(false),
     }
 }
