@@ -21,30 +21,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let smf = Ipv4Addr::new(10, 0, 0, 1);
     let access = SourceInterface::new(SourceInterfaceValue::Access);
     let pdi = Pdi::new(access).with_local_f_teid(FTeid::choose_ipv4());
-    let pdr =
-        CreatePdr::new_n4(PdrId::new(1), Precedence::new(255), pdi).with_far_id(FarId::new(1));
-    let core = DestinationInterface::new(DestinationInterfaceValue::Core);
-    let forward = ApplyAction {
-        forw: true,
-        ..Default::default()
-    };
-    let far = CreateFar::new(FarId::new(1), forward)
-        .with_forwarding_parameters(ForwardingParameters::new(core));
+    let pdr = CreatePdr::new_n4(PdrId::new(1), Precedence::new(255), pdi)
+        .with_far_id(FarId::new(1));
+    let to = ForwardingParameters::new(DestinationInterface::new(DestinationInterfaceValue::Core));
+    let forward = ApplyAction { forw: true, ..Default::default() };
+    let far = CreateFar::new(FarId::new(1), forward).with_forwarding_parameters(to);
     let cp_f_seid = FSeid::ipv4(0x1001, smf);
     let request = SessionEstablishmentRequest::new_n4(NodeId::Ipv4(smf), cp_f_seid, pdr, far);
     let octets = Message::session(0, 7, request).encode()?;
-    assert_eq!(octets.len(), 109);
-    assert!(hex::encode(&octets).starts_with("21320069"));
+    assert_eq!((octets.len(), &hex::encode(&octets)[..8]), (109, "21320069"));
 
     // The UPF decodes it and reads its IEs as typed fields
     let message = Message::decode(&octets)?;
-    assert_eq!(
-        message.to_string(),
-        "PFCP Session Establishment Request (SEID 0x0, sequence 7)"
-    );
-    let Body::SessionEstablishmentRequest(request) = &message.body else {
-        return Err("another message".into());
-    };
+    assert_eq!(message.to_string(), "PFCP Session Establishment Request (SEID 0x0, sequence 7)");
+    let Body::SessionEstablishmentRequest(request) = &message.body else { unreachable!() };
     let pdi = request.create_pdr[0].pdi.as_ref().ok_or("no PDI")?;
     let from = pdi.source_interface.as_ref().ok_or("no Source Interface")?;
     assert_eq!(request.create_pdr.len(), 1);
@@ -52,11 +42,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // check() reports nothing on N4. On Sxa, a Create PDR has no Precedence
     assert!(message.check(Interfaces::N4).is_empty());
-    let on_sxa: Vec<String> = message
-        .check(Interfaces::SXA)
-        .iter()
-        .map(ToString::to_string)
-        .collect();
+    let on_sxa: Vec<_> = message.check(Interfaces::SXA).iter().map(ToString::to_string).collect();
     let precedence = "Precedence is not on this interface (TS 29.244 7.5.2.2-1), \
                       at /pfcp/Create PDR/0/Precedence";
     assert_eq!(on_sxa, [precedence]);
@@ -101,8 +87,8 @@ use oxirush_pfcp::*;
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let smf_id = NodeId::Ipv4(Ipv4Addr::new(10, 0, 0, 1));
     let upf_id = NodeId::Ipv4(Ipv4Addr::new(10, 0, 0, 2));
-    let (smf_address, upf_address): (SocketAddr, SocketAddr) =
-        ("10.0.0.1:8805".parse()?, "10.0.0.2:8805".parse()?);
+    let smf_address: SocketAddr = "10.0.0.1:8805".parse()?;
+    let upf_address: SocketAddr = "10.0.0.2:8805".parse()?;
     let mut smf = Node::new(NodeConfig::new(smf_id.clone(), Function::Cp, 3_900_000_000));
     let mut upf = Node::new(NodeConfig::new(upf_id.clone(), Function::Up, 3_900_000_000));
     let now = Duration::ZERO;
@@ -116,19 +102,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // The UPF receives the datagram, and the application answers the request
     upf.handle_datagram(now, smf_address, &datagram.octets);
-    let Some(Event::Request { request, message }) = upf.poll_event() else {
-        return Err("no request".into());
-    };
-    assert_eq!(
-        message.to_string(),
-        "PFCP Association Setup Request (sequence 1)"
-    );
+    let Some(Event::Request { request, message }) = upf.poll_event() else { unreachable!() };
+    assert_eq!(message.to_string(), "PFCP Association Setup Request (sequence 1)");
     let accepted = Cause::new(CauseValue::RequestAccepted);
-    upf.respond(
-        now,
-        &request,
-        AssociationSetupResponse::new(upf_id, accepted, RecoveryTimeStamp::new(3_900_000_000)),
-    )?;
+    let recovery = RecoveryTimeStamp::new(3_900_000_000);
+    upf.respond(now, &request, AssociationSetupResponse::new(upf_id, accepted, recovery))?;
 
     // The SMF receives the response. The request is complete and the association exists
     let answer = upf.poll_transmit().ok_or("no answer")?;
@@ -141,13 +119,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             other => format!("{other:?}"),
         });
     }
-    assert_eq!(
-        events,
-        [
-            "associated with 10.0.0.2:8805",
-            "PFCP Association Setup Response (sequence 1)"
-        ]
-    );
+    let association = "PFCP Association Setup Response (sequence 1)";
+    assert_eq!(events, ["associated with 10.0.0.2:8805", association]);
     assert_eq!(smf.poll_timeout(), Some(Duration::from_secs(60)));
     Ok(())
 }
@@ -172,22 +145,17 @@ use oxirush_pfcp::node::{Function, NodeConfig};
 use oxirush_pfcp::*;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let runtime = tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()?;
+    let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build()?;
     runtime.block_on(async {
-        let config =
-            |function| NodeConfig::new(NodeId::Ipv4(Ipv4Addr::LOCALHOST), function, 3_900_000_000);
+        let node_id = NodeId::Ipv4(Ipv4Addr::LOCALHOST);
+        let config = |function| NodeConfig::new(node_id.clone(), function, 3_900_000_000);
         let smf = Endpoint::bind("127.0.0.1:0".parse()?, config(Function::Cp)).await?;
         let upf = Endpoint::bind("127.0.0.1:0".parse()?, config(Function::Up)).await?;
 
         // The node of the UPF answers a heartbeat by itself
         let heartbeat = HeartbeatRequest::new(RecoveryTimeStamp::new(3_900_000_000));
         let message = Message::node(0, heartbeat);
-        let response = smf
-            .handle()
-            .request(upf.handle().local_addr(), message)
-            .await?;
+        let response = smf.handle().request(upf.handle().local_addr(), message).await?;
         assert_eq!(response.to_string(), "PFCP Heartbeat Response (sequence 1)");
         Ok(())
     })
@@ -211,24 +179,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     0039000d0200000000000020010a000002";
     let octets = hex::decode(response)?;
     let message = Message::decode(&octets)?;
-    let Body::SessionEstablishmentResponse(response) = &message.body else {
-        return Err("another message".into());
-    };
+    let Body::SessionEstablishmentResponse(response) = &message.body else { unreachable!() };
     let cause = response.cause.as_ref().ok_or("no Cause")?.value;
     let up_f_seid = response.up_f_seid.as_ref().ok_or("no F-SEID")?;
-    assert_eq!(
-        message.to_string(),
-        "PFCP Session Establishment Response (SEID 0x1001, sequence 7)"
-    );
+    let established = "PFCP Session Establishment Response (SEID 0x1001, sequence 7)";
+    assert_eq!(message.to_string(), established);
     assert_eq!(cause, CauseValue::RequestAccepted);
-    assert_eq!(
-        (cause.to_string(), cause.value()),
-        ("Request accepted (success)".into(), 1)
-    );
-    assert_eq!(
-        (up_f_seid.seid, up_f_seid.ipv4),
-        (0x2001, Some(Ipv4Addr::new(10, 0, 0, 2)))
-    );
+    assert_eq!((cause.to_string(), cause.value()), ("Request accepted (success)".into(), 1));
+    assert_eq!((up_f_seid.seid, up_f_seid.ipv4), (0x2001, Some(Ipv4Addr::new(10, 0, 0, 2))));
     Ok(())
 }
 ```
@@ -256,51 +214,33 @@ use oxirush_pfcp::*;
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // A modification that creates PDR 3 and also removes it, and a second Create PDR
     // without its PDR ID
-    let mut pdr = CreatePdr::new_n4(
-        PdrId::new(3),
-        Precedence::new(32),
-        Pdi::new(SourceInterface::new(SourceInterfaceValue::Core)),
-    )
-    .with_far_id(FarId::new(3));
+    let core = Pdi::new(SourceInterface::new(SourceInterfaceValue::Core));
+    let mut pdr = CreatePdr::new_n4(PdrId::new(3), Precedence::new(32), core)
+        .with_far_id(FarId::new(3));
     let modification = SessionModificationRequest::default()
         .with_create_pdr(pdr.clone())
         .with_remove_pdr(RemovePdr::new(PdrId::new(3)));
     pdr.pdr_id = None;
     let request = Message::session(0x2001, 8, modification.with_create_pdr(pdr));
-    let deviations: Vec<String> = request
-        .check(Interfaces::N4)
-        .iter()
-        .map(ToString::to_string)
-        .collect();
-    assert_eq!(
-        deviations,
-        [
-            "the mandatory PDR ID is missing (TS 29.244 7.5.2.2-1), at /pfcp/Create PDR/1/PDR ID: \
+    let found: Vec<_> = request.check(Interfaces::N4).iter().map(ToString::to_string).collect();
+    assert_eq!(found, [
+        "the mandatory PDR ID is missing (TS 29.244 7.5.2.2-1), at /pfcp/Create PDR/1/PDR ID: \
          the answer is \"Conditional IE missing\"",
-            "the message changes PDR 3 more than once (TS 29.244 6.3.3.2), at /pfcp",
-        ]
-    );
+        "the message changes PDR 3 more than once (TS 29.244 6.3.3.2), at /pfcp",
+    ]);
 
     // Build the response from the first deviation that has a Cause
-    let deviation = request
-        .check(Interfaces::N4)
-        .into_iter()
-        .find(|deviation| deviation.cause.is_some())
-        .ok_or("none")?;
+    let checked = request.check(Interfaces::N4);
+    let deviation = checked.into_iter().find(|found| found.cause.is_some()).ok_or("none")?;
     let response = SessionModificationResponse {
         cause: deviation.cause.map(Cause::new),
         offending_ie: deviation.offending_ie().map(OffendingIe::new),
         ..Default::default()
     };
     let answer = Message::session(0x1001, request.header.sequence, response);
-    assert_eq!(
-        answer.to_string(),
-        "PFCP Session Modification Response (SEID 0x1001, sequence 8)"
-    );
-    assert_eq!(
-        hex::encode(answer.encode()?),
-        "213500170000000000001001000008000013000143002800020038"
-    );
+    assert_eq!(answer.to_string(), "PFCP Session Modification Response (SEID 0x1001, sequence 8)");
+    let octets = "213500170000000000001001000008000013000143002800020038";
+    assert_eq!(hex::encode(answer.encode()?), octets);
     assert!(answer.check(Interfaces::N4).is_empty());
     Ok(())
 }
@@ -322,18 +262,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     0039000d0200000000000020010a000002";
     let octets = hex::decode(response)?;
     let tree = Message::decode(&octets)?.to_tree();
-    assert_eq!(
-        tree,
-        tree!({
-            "message": "PFCP Session Establishment Response",
-            "header": {"SEID": 4097, "Sequence Number": 7},
-            "ies": {
-                "Node ID": "10.0.0.2",
-                "Cause": "Request accepted (success)",
-                "UP F-SEID": {"V4": true, "SEID": 8193, "IPv4 address": "10.0.0.2"}
-            }
-        })
-    );
+    assert_eq!(tree, tree!({
+        "message": "PFCP Session Establishment Response",
+        "header": {"SEID": 4097, "Sequence Number": 7},
+        "ies": {
+            "Node ID": "10.0.0.2",
+            "Cause": "Request accepted (success)",
+            "UP F-SEID": {"V4": true, "SEID": 8193, "IPv4 address": "10.0.0.2"}
+        }
+    }));
 
     // A tree written by hand: names match without case or punctuation
     let written = tree!({
@@ -343,10 +280,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
     let heartbeat = Message::from_tree(&written)?;
     assert_eq!(heartbeat.to_string(), "PFCP Heartbeat Request (sequence 9)");
-    assert_eq!(
-        hex::encode(heartbeat.encode()?),
-        "2001000c0000090000600004e8754700"
-    );
+    assert_eq!(hex::encode(heartbeat.encode()?), "2001000c0000090000600004e8754700");
     Ok(())
 }
 ```
@@ -369,10 +303,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     0039000d0200000000000020010a000002";
     let octets = hex::decode(response)?;
     let mut tree = Message::decode(&octets)?.to_tree();
-    assert_eq!(
-        paths::select(&tree, "/pfcp/up f-seid/ipv4 address")?,
-        [&tree!("10.0.0.2")]
-    );
+    assert_eq!(paths::select(&tree, "/pfcp/up f-seid/ipv4 address")?, [&tree!("10.0.0.2")]);
     paths::set(&mut tree, "/pfcp/Cause", "No resources available")?;
     let edited = Message::from_tree(&tree)?;
     assert_eq!(
@@ -411,7 +342,7 @@ has an example.
 |---|---|---|
 | `decode` | 15.7 µs | 4.4× slower |
 | `decode`, then read each value | 16.7 µs | 8.8× slower |
-| `encode` | 7.4 µs | 12.2× slower |
+| `encode` | 7.4 µs | 12× slower |
 | `check` | 32.2 µs | |
 | `to_tree` | 51.9 µs | |
 | `from_tree` | 198.2 µs | |
@@ -419,7 +350,8 @@ has an example.
 Medians of ten rounds, the two in turns, on one core of an Intel Xeon
 E5-2680 v4 (a KVM guest, Linux 7.0, Rust 1.100.0, Go 1.27.4), at cdf4a13 on
 2026-11-15. The go-pfcp cell says how much slower go-pfcp is than this
-crate; the ten times of the two do not overlap.
+crate: the medians differ by more than 10 % and the ten times of the two do
+not overlap.
 [`benches/README.md`](benches/README.md) has the other messages, the
 allocations, and the commands that reproduce each figure.
 
