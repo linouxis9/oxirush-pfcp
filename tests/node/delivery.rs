@@ -403,6 +403,40 @@ fn a_request_of_a_false_length_is_answered_invalid_length() {
     assert!(sent(&mut upf).is_empty());
 }
 
+/// §7.6.3: a request whose Message Length is not that of its datagram is answered "Invalid
+/// Length" before anything else of it is judged: of a host without an association too,
+/// whose request of a node or a session the node otherwise rejects as "No established PFCP
+/// Association" (§5.8.3), and a session request of SEID 0, as the node knows no session of
+/// it. A Message Length longer than the datagram, and one shorter.
+#[test]
+fn a_request_of_a_false_length_without_an_association_is_answered_invalid_length() {
+    let mut smf = node(SMF, Function::Cp);
+    let report = NodeReportRequest::new(node_id(UPF), NodeReportType::default());
+    let mut longer = Message::node(4, report).encode().unwrap();
+    longer[2..4].copy_from_slice(&4000u16.to_be_bytes());
+    let report = SessionReportRequest::new(ReportType::default());
+    let mut shorter = Message::session(0xdead_beef, 5, report).encode().unwrap();
+    shorter.extend_from_slice(&[0xde, 0xad]);
+    for (octets, message_type, seid) in [(longer, 13, None), (shorter, 57, Some(0))] {
+        smf.handle_datagram(at(0), UPF, &octets);
+        let got = events(&mut smf);
+        assert!(
+            matches!(
+                &got[..],
+                [Event::Malformed {
+                    error: Error::MessageLength { .. },
+                    ..
+                }]
+            ),
+            "{got:?}"
+        );
+        let answer = decoded(&sent(&mut smf)[0]);
+        assert_eq!(answer.body.message_type(), message_type);
+        assert_eq!(answer.header.seid, seid);
+        assert_eq!(answer.body.cause(), Some(CauseValue::InvalidLength));
+    }
+}
+
 /// §7.6.3, §7.6.7: a request of each type that the UP function takes, whose IEs run past
 /// it, is answered with its response, "Invalid length"; one of a session that the node
 /// does not have, "Session context not found" first; one of a session, of SEID 0, as the

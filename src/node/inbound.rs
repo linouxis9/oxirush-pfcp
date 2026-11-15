@@ -112,6 +112,20 @@ impl Node {
         if self.held(from, header.sequence, priority, octets) {
             return None;
         }
+        // A Message Length that is not that of the datagram is answered "Invalid length"
+        // (§7.6.3) before what the request names is judged.
+        if let Some((_, _, length)) = Header::decode(octets)
+            && 4 + usize::from(length) != octets.len()
+        {
+            let error = crate::Error::MessageLength {
+                header,
+                message_type,
+                length,
+                available: octets.len() - 4,
+            };
+            self.malformed(now, from, error);
+            return None;
+        }
         // What the node answers itself.
         let (node_id, peer_seid) = match message_type {
             7 | 9 | 12 | 14 | 16 | 50 | 56 => names(octets),
