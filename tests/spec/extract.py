@@ -62,93 +62,40 @@ script:
 Only the standard library is used. The cells are written as the document has them, with
 their spaces made single: what the crate does differently is in errata.tsv.
 """
-import hashlib
-import io
+import json
 import os
 import re
+import subprocess
 import sys
-import urllib.request
-import xml.etree.ElementTree as ET
-import zipfile
 
 URL = 'https://www.3gpp.org/ftp/Specs/archive/29_series/29.244/29244-j60.zip'
 SHA256 = '5972efec3a61a40c4da7534861495e43f88cb94315cb51c5a85997b50636c1c3'
 HERE = os.path.dirname(os.path.abspath(__file__))
-W = '{http://schemas.openxmlformats.org/wordprocessingml/2006/main}'
+
+
+def utils_tools():
+    """The tools of the oxirush-utils that the crate builds with, which read the document."""
+    listed = ['cargo', 'metadata', '--format-version', '1']
+    crate = os.path.dirname(os.path.dirname(HERE))
+    metadata = json.loads(subprocess.run(listed, cwd=crate, check=True, capture_output=True, text=True).stdout)
+    package = next(p for p in metadata['packages'] if p['name'] == 'oxirush-utils')
+    return os.path.join(os.path.dirname(package['manifest_path']), 'tools')
+
+
+sys.path.insert(0, utils_tools())
+import docx_tables  # noqa: E402
+from docx_tables import W, blocks, clean, offsets, places, text, without_notes  # noqa: E402,F401
 INTERFACES = ['Sxa', 'Sxb', 'Sxc', 'N4', 'N4mb']
 
 
 def archive():
     if sys.argv[1:] == ['--fetch']:
-        request = urllib.request.Request(URL, headers={'User-Agent': 'Mozilla/5.0'})
-        data = urllib.request.urlopen(request, timeout=60).read()
+        data = docx_tables.fetch(URL)
     elif len(sys.argv) == 2:
         data = open(sys.argv[1], 'rb').read()
     else:
         sys.exit(__doc__)
-    digest = hashlib.sha256(data).hexdigest()
-    if digest != SHA256:
-        sys.exit(f'the archive has SHA-256 {digest}, and V19.6.0 has {SHA256}')
-    with zipfile.ZipFile(io.BytesIO(data)) as outer:
-        docx = next(name for name in outer.namelist() if name.endswith('.docx'))
-        with zipfile.ZipFile(io.BytesIO(outer.read(docx))) as inner:
-            return ET.fromstring(inner.read('word/document.xml'))
-
-
-def text(element):
-    out = []
-    for node in element.iter():
-        if node.tag == W + 't':
-            out.append(node.text or '')
-        elif node.tag in (W + 'tab', W + 'br', W + 'cr'):
-            out.append(' ')
-    return clean(''.join(out))
-
-
-def clean(value):
-    value = value.replace(' ', ' ').replace('’', "'").replace('‘', "'")
-    return re.sub(r'\s+', ' ', value).strip()
-
-
-def blocks(body):
-    """The paragraphs, as (style, text), and the tables, as rows of (text, span), with the
-    widths of the cells of each row."""
-    for child in body:
-        if child.tag == W + 'p':
-            style = child.find(f'{W}pPr/{W}pStyle')
-            value = text(child)
-            if value:
-                yield 'p', (style.get(W + 'val') if style is not None else '', value)
-        elif child.tag == W + 'tbl':
-            rows, widths = [], []
-            # A cell merged with the one above it (vMerge) has the text of that one.
-            above = {}
-            for row in child.findall(W + 'tr'):
-                cells, sizes = [], []
-                before = row.find(f'{W}trPr/{W}gridBefore')
-                column = int(before.get(W + 'val')) if before is not None else 0
-                for cell in row.findall(W + 'tc'):
-                    span = cell.find(f'{W}tcPr/{W}gridSpan')
-                    width = cell.find(f'{W}tcPr/{W}tcW')
-                    merged = cell.find(f'{W}tcPr/{W}vMerge')
-                    # The paragraphs of a cell, one to a line: a name that the
-                    # document writes on two lines is one name, which clean() reads.
-                    paragraphs = [text(p) for p in cell.iter(W + 'p')]
-                    value = '\n'.join(p for p in paragraphs if p)
-                    if merged is not None and merged.get(W + 'val') != 'restart' and not value:
-                        value = above.get(column, '')
-                    above[column] = value
-                    span = int(span.get(W + 'val')) if span is not None else 1
-                    cells.append((value, span))
-                    sizes.append(int(width.get(W + 'w')) if width is not None and width.get(W + 'type', 'dxa') == 'dxa' else None)
-                    column += span
-                rows.append(cells)
-                widths.append(sizes)
-            yield 'tbl', (rows, widths)
-        elif child.tag == W + 'sdt':
-            content = child.find(W + 'sdtContent')
-            if content is not None:
-                yield from blocks(content)
+    return docx_tables.document(data, SHA256)
 
 
 # A clause without a figure yet.
@@ -159,13 +106,8 @@ def interfaces(cells):
     return ' '.join(name for name, cell in zip(INTERFACES, cells) if 'X' in cell.upper())
 
 
-def without_notes(name):
-    name = re.sub(r'(?:,?\s*\((?:see |See )?NOTE[^)]*\))+', '', name)
-    return clean(re.sub(r',\s*see NOTE \d+', '', name))
-
-
 def main():
-    body = archive().find(W + 'body')
+    body = archive()
     heading, caption = '', None
     message_types, ie_types, tables, layouts, values, clause6 = [], [], [], [], [], []
     read = []
@@ -341,56 +283,6 @@ NUMBERS = {'two': 2, 'three': 3, 'four': 4}
 
 # The words of a comment that let several IEs of a row be there.
 SEVERAL = re.compile(r'(?i:several IEs?\b|several .{0,30}IEs|represent a list|two IEs|more than one IE|IEs? with the same (?:IE )?type|may be repeated|up to \d+ (?:IEs|times)|several instances|for each PDR\b|list of all)')
-
-
-def places(rows, widths):
-    """The flags and fields of a figure of clause 8.2, each with the octets of its row, its
-    lowest bit and its number of bits: the bits are those whose cells of the row of bit
-    numbers, by their widths, have their middle within the field's cell."""
-    header = next((at for at, row in enumerate(rows) if any(cell == 'Octets' for cell, _ in row)), None)
-    if header is None:
-        return []
-    def edges(row, sizes, spans_of):
-        at, out = 0, []
-        for (cell, span), size in zip(row, sizes):
-            width = size if size is not None else spans_of * span
-            out.append((cell, at, at + width))
-            at += width
-        return out
-    usable = all(size is not None for size in widths[header])
-    middles = {}
-    for cell, start, end in edges(rows[header], widths[header] if usable else [None] * len(rows[header]), 1):
-        if re.fullmatch(r'[1-8]', cell):
-            middles[int(cell)] = (start + end) / 2
-    if len(middles) != 8:
-        return []
-    out = []
-    for row, sizes in zip(rows[header + 1:], widths[header + 1:]):
-        sizes = sizes if usable and all(size is not None for size in sizes) else [None] * len(row)
-        cells = edges(row, sizes, 1)
-        label = next(((cell, end) for cell, _, end in cells if cell and cell != '.'), None)
-        if label is None or re.search(r'Type\s*=|Length\s*=', ' '.join(cell for cell, _, _ in cells)):
-            continue
-        octets, after = label
-        for cell, start, end in cells:
-            name = without_notes(cell)
-            if start < after or not name or 'explicitly specified' in name or re.fullmatch(r'(?i)spare|\.\.\.|…|\d+', name):
-                continue
-            bits = sorted(bit for bit, middle in middles.items() if start <= middle < end)
-            if bits:
-                out.append([octets, name, str(bits[0]), str(len(bits))])
-    return out
-
-
-def offsets(label):
-    """The octets of a row of a figure that its label counts from a letter: "m" is (m, 0,
-    0), "(m+1) to (m+2)" (m, 1, 2), "a to (a+1)" (a, 0, 1); None for another label."""
-    label = re.sub(r'[\s"\']', '', label)
-    found = re.fullmatch(r'\(?([a-z])(?:\+(\d+))?\)?(?:to\(?\1(?:\+(\d+))?\)?)?', label)
-    if not found:
-        return None
-    low = int(found.group(2) or 0)
-    return found.group(1), low, int(found.group(3) or low)
 
 
 def relations(paragraph, figure):
