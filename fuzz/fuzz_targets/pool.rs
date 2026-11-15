@@ -54,7 +54,7 @@ pub static POOL: LazyLock<Pool> = LazyLock::new(|| {
     for message in &messages {
         for (path, value) in tree::paths(&message.to_tree()) {
             if let Value::String(text) = &value {
-                names.push(text.clone());
+                names.push(text.to_string());
             }
             let last = path.rsplit('/').next().unwrap_or_default().to_owned();
             let seen = values.entry(last).or_default();
@@ -154,7 +154,7 @@ impl Leaf {
             Leaf::Unsigned(number) => Value::from(*number),
             Leaf::Signed(number) => Value::from(*number),
             Leaf::Small(number) => Value::from(*number),
-            Leaf::Text(text) => Value::from(text.as_str()),
+            Leaf::Text(text) => Value::from(text),
             Leaf::Hex(octets) => Value::from(hex(octets)),
             Leaf::Octets(octets) => {
                 let mut held = tree::Map::new();
@@ -360,7 +360,7 @@ fn held(written: &Value, read: &Value, table: Option<&'static Table>) -> bool {
         && written.iter().all(|(name, value)| {
             let Some(other) = read.get(name) else { return false };
             let row = table.and_then(|table| table.rows.iter().find(|row| row.name == name));
-            match (name.as_str(), row) {
+            match (name, row) {
                 ("ies", _) => held(value, other, table),
                 // An IE of no row, or the header: each IE of the type in its place
                 (_, None) => {

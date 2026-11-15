@@ -82,7 +82,7 @@ fuzz_target!(|call: Call| {
     let start: String = start.chars().take(usize::from(call.cut)).collect();
     let path = format!("{start}{}", call.extra);
     let value = serde_json::from_slice::<Value>(&call.value)
-        .unwrap_or_else(|_| Value::String(String::from_utf8_lossy(&call.value).into_owned()));
+        .unwrap_or_else(|_| Value::String(String::from_utf8_lossy(&call.value).into_owned().into()));
 
     // Any path selects, or is refused.
     if let Ok(selected) = paths::select(&tree, &path) {
