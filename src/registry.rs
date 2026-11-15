@@ -91,18 +91,7 @@ fn frequency(
     monitoring.reporting_frequency.as_ref().is_some_and(has)
 }
 
-/// The form of an IE type in Table 8.1.2-1.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Form {
-    /// A fixed set of fields of a fixed number of octets.
-    Fixed,
-    /// A fixed set of fields of a variable number of octets.
-    Variable,
-    /// Fields that a later release may add to.
-    Extendable,
-    /// A grouped IE, whose content is IEs (§7.2.3.3).
-    Grouped,
-}
+pub use oxirush_utils::tables::Form;
 
 /// An IE type as Table 8.1.2-1 has it, of the same fields with every feature.
 ///
@@ -116,30 +105,24 @@ pub enum Form {
 /// assert_eq!(members, ["Cause value", "unknown octets"]);
 /// assert!(tables.is_empty());
 /// ```
-#[derive(Debug, Clone, Copy)]
-pub struct IeTypeInfo {
-    /// The IE type.
-    pub ie_type: u16,
-    /// Its name.
-    pub name: &'static str,
-    /// Its form.
-    pub form: Form,
-    /// The number of fixed octets that the table gives it.
-    pub fixed: Option<u16>,
-    /// The clause of its layout, or the table of its content.
-    pub clause: &'static str,
-    /// The members that the tree of a value may have, as an object: its flags and fields,
-    /// and, as the value may have them, `Spare`, `length` and `unknown octets`. A tree has
-    /// those of them that the value has, and a path that names another of them selects
-    /// nothing. None for a grouped IE, and for a value whose tree is its octets.
-    pub members: &'static [&'static str],
-    /// The member that the tree of a value is when it is written as a scalar: its one
-    /// field, `None` for a value of more, or of none.
-    pub scalar: Option<&'static str>,
-    /// The tables of its content, for a grouped IE: one, or one per place for an IE that
-    /// has different content in different places.
-    pub tables: &'static [&'static crate::table::Table],
-}
+///
+/// `tree_of()` gives the tree of a value of the type from its octets, those after the
+/// Length, as the tree of a message has it; `takes()` what the tree of a value takes.
+///
+/// ```
+/// # #[cfg(feature = "tree")] {
+/// use oxirush_pfcp::{ie_type_info, tree};
+///
+/// let pdn_type = ie_type_info(113).unwrap();
+/// assert_eq!(pdn_type.tree_of(&[1], None), Some(tree!("IPv4")));
+/// // Create FAR: its FAR ID and its Apply Action.
+/// let create_far = ie_type_info(3).unwrap();
+/// let octets = [0, 108, 0, 4, 0, 0, 0, 1, 0, 44, 0, 2, 2, 0];
+/// let tree = create_far.tree_of(&octets, None).unwrap();
+/// assert_eq!(tree, tree!({"FAR ID": 1, "Apply Action": {"FORW": true}}));
+/// # }
+/// ```
+pub type IeTypeInfo = oxirush_utils::tables::IeTypeInfo<crate::Pfcp>;
 
 /// The IE type of `ie_type`.
 pub fn ie_type_info(ie_type: u16) -> Option<&'static IeTypeInfo> {
@@ -148,43 +131,6 @@ pub fn ie_type_info(ie_type: u16) -> Option<&'static IeTypeInfo> {
         .ok()
         .map(|at| &IE_TYPES[at])
 }
-
-#[cfg(feature = "tree")]
-impl IeTypeInfo {
-    /// What the tree of a value of the type takes, each of its members with what it takes:
-    /// `None` for a grouped IE, whose tree is its IEs by the rows of
-    /// [`tables`](Self::tables).
-    pub fn takes(&self) -> Option<&'static oxirush_utils::tree::Takes> {
-        takes_of(self.ie_type)
-    }
-
-    /// The tree of a value of the type from its octets, those after the Length, as the
-    /// tree of a message has it: of a grouped IE, with the content of `table`, one of
-    /// [`tables`](Self::tables), or of the first of them where `table` is `None`. `None`
-    /// for octets that are no value of the type, which a message keeps as octets, and for
-    /// a table that is not one of the type.
-    ///
-    /// ```
-    /// use oxirush_pfcp::{ie_type_info, tree};
-    ///
-    /// let pdn_type = ie_type_info(113).unwrap();
-    /// assert_eq!(pdn_type.tree_of(&[1], None), Some(tree!("IPv4")));
-    /// // Create FAR: its FAR ID and its Apply Action.
-    /// let create_far = ie_type_info(3).unwrap();
-    /// let octets = [0, 108, 0, 4, 0, 0, 0, 1, 0, 44, 0, 2, 2, 0];
-    /// let tree = create_far.tree_of(&octets, None).unwrap();
-    /// assert_eq!(tree, tree!({"FAR ID": 1, "Apply Action": {"FORW": true}}));
-    /// ```
-    pub fn tree_of(
-        &self,
-        octets: &[u8],
-        table: Option<&'static crate::table::Table>,
-    ) -> Option<oxirush_utils::tree::Value> {
-        value_tree(self.ie_type, table, octets)
-    }
-}
-
-pub(crate) use oxirush_utils::fields::one;
 
 pfcp_ies! {
     1 "Create PDR" grouped "7.5.2.2-1" => CreatePdr;

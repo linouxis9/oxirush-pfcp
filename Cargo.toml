@@ -84,4 +84,4 @@ unexpected_cfgs = { level = "warn", check-cfg = ['cfg(docsrs)'] }
 # them, and its fields are not released yet: every crate of the build takes oxirush-utils
 # from this revision until its next release.
 [patch.crates-io]
-oxirush-utils = { git = "https://github.com/linouxis9/oxirush-utils", rev = "d5857a988119d4f9e731d8afd1bb35e8b6021994" }
+oxirush-utils = { git = "https://github.com/linouxis9/oxirush-utils", rev = "57fb99db10533643f9a6e328c7218d487bc5d6b2" }

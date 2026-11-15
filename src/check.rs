@@ -458,6 +458,18 @@ pub(crate) trait Checked {
 
 pub(crate) use oxirush_utils::fields::{Path, Segment};
 
+/// The path of the IEs of a message, which `/pfcp` names.
+pub(crate) const ROOT: &str = "/pfcp";
+
+/// The deviation of a message type that Table 7.3-1 does not have (§7.6.4).
+pub(crate) fn unknown_message(message_type: u8) -> Deviation {
+    Deviation::new(
+        "/message",
+        "7.6.4",
+        DeviationKind::UnknownMessage { message_type },
+    )
+}
+
 /// A finding of a field of oxirush-utils, as a deviation that the receiver ignores: spare
 /// bits by §8.1.2.
 impl oxirush_utils::fields::Deviate for Deviation {
