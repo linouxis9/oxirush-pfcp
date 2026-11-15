@@ -472,6 +472,7 @@ impl oxirush_utils::fields::Deviate for Deviation {
             Finding::SpareValue { value } => DeviationKind::SpareValue { value },
             Finding::ReservedValue { value } => DeviationKind::ReservedValue { value },
             Finding::ReadAs { value, read } => DeviationKind::ReadAs { value, read },
+            Finding::Inconsistent { field } => DeviationKind::Inconsistent { field },
             Finding::Rule(rule) => DeviationKind::Rule(rule),
         };
         Deviation::new(path, clause.unwrap_or("8.1.2"), kind)

@@ -184,13 +184,7 @@ impl IeTypeInfo {
     }
 }
 
-/// The one field of `fields`, which the tree of a value is when it is written as a scalar.
-pub(crate) const fn one(fields: &'static [&'static str]) -> Option<&'static str> {
-    match fields {
-        [field] => Some(field),
-        _ => None,
-    }
-}
+pub(crate) use oxirush_utils::fields::one;
 
 pfcp_ies! {
     1 "Create PDR" grouped "7.5.2.2-1" => CreatePdr;

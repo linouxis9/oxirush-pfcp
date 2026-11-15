@@ -46,8 +46,15 @@ pub(crate) fn put<F: Field>(
     name: &'static str,
     out: &mut Vec<u8>,
 ) -> Result<(), Error> {
-    oxirush_utils::fields::put(field, ie, name, out)
-        .map_err(|FieldLength { ie, field }| Error::FieldLength { ie, field })
+    oxirush_utils::fields::put(field, ie, name, out).map_err(field_error)
+}
+
+/// The error of a value that does not encode.
+pub(crate) fn field_error(error: FieldError) -> Error {
+    match error {
+        FieldError::Length { ie, field } => Error::FieldLength { ie, field },
+        FieldError::Inconsistent { ie, field, clause } => Error::Inconsistent { ie, field, clause },
+    }
 }
 /// The octets of a Network Instance after a length of two octets: the Network Instance
 /// field of Remote GTP-U Peer (§8.2.70), whose tree is that of a Network Instance.

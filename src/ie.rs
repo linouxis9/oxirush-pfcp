@@ -132,6 +132,7 @@ pub struct RawIe {
     pub octets: Octets,
 }
 
+#[cfg(feature = "tree")]
 pub(crate) use oxirush_utils::fields::UNKNOWN_OCTETS;
 
 /// Whether an IE of `ie_type` may hold a key: one of a key, or a grouped IE that a table
