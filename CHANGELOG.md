@@ -2,7 +2,7 @@
 
 All notable changes to `oxirush-pfcp` are recorded here.
 
-## 0.1.0 - unreleased
+## 0.1.0 - 2026-11-16
 
 The first version. It implements TS 29.244 V19.6.0 (2026-06):
 
