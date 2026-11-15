@@ -79,23 +79,10 @@ impl core::fmt::Display for Message {
     }
 }
 
-/// A message type as Table 7.3-1 has it.
-#[derive(Debug, Clone, Copy)]
-pub struct MessageTypeInfo {
-    /// The message type.
-    pub message_type: u8,
-    /// The interfaces that have it: its Applicability columns.
-    pub interfaces: crate::table::Interfaces,
-    /// The table of its IEs.
-    pub table: &'static crate::table::Table,
-}
-
-impl MessageTypeInfo {
-    /// The name that Table 7.3-1 gives it.
-    pub fn name(&self) -> &'static str {
-        self.table.name
-    }
-}
+/// A message type as Table 7.3-1 has it: its type, the interfaces that have it (its
+/// Applicability columns) and the table of its IEs; `name()` is the name that the table
+/// gives it.
+pub type MessageTypeInfo = oxirush_utils::tables::MessageTypeInfo<crate::Pfcp>;
 
 /// The message type of `message_type`.
 pub fn message_type_info(message_type: u8) -> Option<&'static MessageTypeInfo> {

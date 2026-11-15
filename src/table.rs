@@ -25,10 +25,8 @@ use crate::Error;
 use crate::ie::{Codec, IeType};
 
 pub use oxirush_utils::tables::Repeat;
-#[cfg(feature = "tree")]
-pub(crate) use oxirush_utils::tables::keep_order;
-#[cfg(any(feature = "tree", test))]
-pub(crate) use oxirush_utils::tables::{Entry, each_entry};
+#[cfg(test)]
+use oxirush_utils::tables::{Entry, each_entry};
 pub(crate) use oxirush_utils::tables::{
     FieldValues, MAX_ROWS, decode_boxed, decode_scope, decode_scope_into, decode_scope_sized,
     encode_scope, kept_positions, place, reread, value_positions,
