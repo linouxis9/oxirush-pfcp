@@ -34,6 +34,9 @@
 //! - [`framing`] iterates over the IEs of a message as byte slices, without decoding
 //!   them.
 //!
+//! The values, the tables and the trees are written with the `fields` and `tables` of
+//! oxirush-utils, whose tables take PFCP as [`Pfcp`].
+//!
 //! The [README](https://github.com/linouxis9/oxirush-pfcp#readme) has an example of
 //! each.
 

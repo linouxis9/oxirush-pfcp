@@ -66,7 +66,8 @@ hex = "0.4" # only for the examples on this page
 | `endpoint` | `Endpoint`, a `Node` on a UDP socket | a Tokio runtime |
 
 The crate is `no_std` and needs an allocator. Only `endpoint` needs `std`.
-It requires Rust 1.88 or later.
+It requires Rust 1.88 or later. Its values, tables and trees are written with
+the `fields` and `tables` of oxirush-utils 0.3, a dependency of every build.
 
 ## Set up an association between an SMF and a UPF
 
@@ -371,15 +372,15 @@ explains how to report a vulnerability.
 
 ## The OxiRush family
 
-- [oxirush-utils](https://github.com/linouxis9/oxirush-utils): the 3GPP identities, and the JSON tree and paths that the other crates share.
+- [oxirush-utils](https://github.com/linouxis9/oxirush-utils): the 3GPP identities, and the JSON tree with its paths that the others share.
 - [oxirush-aper](https://github.com/linouxis9/oxirush-aper): aligned PER, the runtime of the NGAP and S1AP codecs.
 - [oxirush-nas](https://github.com/linouxis9/oxirush-nas): the NAS messages of 5GS and EPS.
-- [oxirush-security](https://github.com/linouxis9/oxirush-security): NAS security, AKA and key derivation.
+- [oxirush-security](https://github.com/linouxis9/oxirush-security): NAS security, AKA and the derivation of keys.
 - [oxirush-ngap](https://github.com/linouxis9/oxirush-ngap): NGAP, between a gNB and an AMF.
 - [oxirush-s1ap](https://github.com/linouxis9/oxirush-s1ap): S1AP, between an eNB and an MME.
-- [oxirush-gtp-u](https://github.com/linouxis9/oxirush-gtp-u): GTP-U tunnels, with a test UPF.
+- [oxirush-gtp-u](https://github.com/linouxis9/oxirush-gtp-u): GTP-U tunnels, with a user-plane test peer.
 - [oxirush-pfcp](https://github.com/linouxis9/oxirush-pfcp): PFCP, between the control plane and the user plane.
-- [oxirush-sctp](https://github.com/linouxis9/oxirush-sctp): SCTP sockets, the transport of NGAP and S1AP.
+- [oxirush-sctp](https://github.com/linouxis9/oxirush-sctp): SCTP sockets, which carry NGAP and S1AP.
 
 ## License
 
