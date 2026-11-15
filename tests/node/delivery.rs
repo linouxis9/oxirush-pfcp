@@ -420,13 +420,14 @@ fn a_request_of_a_false_length_without_an_association_is_answered_invalid_length
     for (octets, message_type, seid) in [(longer, 13, None), (shorter, 57, Some(0))] {
         smf.handle_datagram(at(0), UPF, &octets);
         let got = events(&mut smf);
+        // The error has the octets that follow the first four.
         assert!(
             matches!(
                 &got[..],
                 [Event::Malformed {
-                    error: Error::MessageLength { .. },
+                    error: Error::MessageLength { available, .. },
                     ..
-                }]
+                }] if *available == octets.len() - 4
             ),
             "{got:?}"
         );

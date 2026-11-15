@@ -1203,6 +1203,15 @@ fn what_a_type_takes_names_the_members_of_its_tree() {
         panic!("{unit:?}")
     };
     assert_eq!(names[0], "minute");
+    // A bitrate of five octets, and a number of the six low bits of its octet
+    let mbr = ie_type_info(26).unwrap().takes().unwrap();
+    assert_eq!(mbr.member("UL MBR"), Some(&Takes::Number((1 << 40) - 1)));
+    let service = ie_type_info(45).unwrap().takes().unwrap();
+    let qfi = service.member("QFI").unwrap();
+    assert!(
+        matches!(qfi, Takes::Number(63)) || qfi.member("value") == Some(&Takes::Number(63)),
+        "{qfi:?}"
+    );
 }
 
 /// `paths::row_at` names the row of a table and the IE type of the IE at a path, or of the
@@ -1260,5 +1269,20 @@ fn a_row_of_the_name_of_another_ie_type_is_the_row() {
     assert_eq!(
         select(&tree, "/pfcp/252").unwrap(),
         [&tree!({"octets": "01"})]
+    );
+}
+
+/// A misspelt member below a value of a field that is no object, written as one, is
+/// refused with the members that the value has: its type has none to name.
+#[test]
+fn a_misspelt_member_of_a_scalar_written_as_an_object_names_what_the_value_has() {
+    let mut tree = establishment().to_tree();
+    tree["ies"]["PDN Type"] = tree!({"PDN Type": {"x": 1}});
+    let error = paths::select(&tree, "/pfcp/PDN Type/PDN Type/bogus").unwrap_err();
+    assert!(
+        error
+            .to_string()
+            .starts_with("\"bogus\" is not a member of this value: it has x"),
+        "{error}"
     );
 }

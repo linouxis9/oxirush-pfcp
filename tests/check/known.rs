@@ -687,3 +687,274 @@ fn a_rule_after_an_entry_kept_as_octets() {
     );
     assert_eq!(paths::select(&message.to_tree(), path).unwrap().len(), 1);
 }
+
+/// What `check_with()` reports with `rules` and the request that `message` answers.
+fn with_rules_and_request(
+    message: &Message,
+    rules: &SessionRules,
+    request: &Message,
+) -> Vec<(String, String)> {
+    let known = Known::default().with_session(rules).with_request(request);
+    let text = |kind: DeviationKind| match kind {
+        DeviationKind::Rule(rule) => rule.to_string(),
+        other => format!("{other:?}"),
+    };
+    let found = more(message, &known).into_iter();
+    found.map(|(path, _, kind)| (path, text(kind))).collect()
+}
+
+/// A URR of the session, which measures volume and reports each minute.
+fn urr_with(id: u32) -> tree::Value {
+    tree!({"URR ID": id, "Measurement Method": {"VOLUM": true}, "Reporting Triggers": {"PERIO": true}, "Measurement Period": 60})
+}
+
+/// A usage report of a response, or of a report request, for URR `urr`.
+fn usage_report(urr: u32) -> tree::Value {
+    tree!({"URR ID": urr, "UR-SEQN": 0, "Usage Report Trigger": {"PERIO": true}})
+}
+
+/// The state of a session follows the requests that were accepted: a PDR that goes takes
+/// its SDF Filter IDs with it, a PDI that is replaced takes those of its PDR, and a
+/// traffic endpoint that goes, or that is created or updated without QFIs, has none.
+#[test]
+fn the_state_of_a_session_follows_its_accepted_requests() {
+    let filter = |id: u32| tree!({"SDF Filter": [{"BID": true, "SDF Filter ID": id}]});
+    let accepted = response_with(MODIFIED, ACCEPTED, tree!({}));
+    let text = "another PDR of the session has this SDF Filter ID";
+    // PDR 1 goes: its SDF Filter ID is free for PDR 2
+    let mut rules = established(
+        tree!({"Create PDR": [pdr_with(1, filter(9)), pdr_with(3, filter(8))], "Create FAR": [far_with(1)]}),
+    );
+    rules.apply(
+        &modification_of(tree!({"Remove PDR": [{"PDR ID": 1}]})),
+        &accepted,
+    );
+    let reuse = modification_of(tree!({"Create PDR": [pdr_with(2, filter(9))]}));
+    assert_eq!(with_rules(&reuse, &rules), []);
+    // and the IDs of PDR 3 stay its own
+    let taken = modification_of(tree!({"Create PDR": [pdr_with(2, filter(8))]}));
+    assert_eq!(
+        with_rules(&taken, &rules),
+        [deviation(
+            "/pfcp/Create PDR/0/PDI/SDF Filter/0/SDF Filter ID",
+            text
+        )]
+    );
+    // PDR 1 has a new PDI: its old SDF Filter ID is free
+    let mut rules = established(
+        tree!({"Create PDR": [pdr_with(1, filter(9)), pdr_with(3, filter(8))], "Create FAR": [far_with(1)]}),
+    );
+    let replaced = tree!({"PDR ID": 1, "PDI": {"Source Interface": "Access", "SDF Filter": [{"BID": true, "SDF Filter ID": 7}]}});
+    rules.apply(
+        &modification_of(tree!({"Update PDR": [replaced]})),
+        &accepted,
+    );
+    assert_eq!(with_rules(&reuse, &rules), []);
+    assert_eq!(
+        with_rules(&taken, &rules),
+        [deviation(
+            "/pfcp/Create PDR/0/PDI/SDF Filter/0/SDF Filter ID",
+            text
+        )]
+    );
+    // Traffic endpoint 4 goes: a PDI of it has no QFI to be excluded, and refers to nothing
+    let qfi = |endpoint: u32| tree!({"Traffic Endpoint ID": [endpoint], "QFI": [5]});
+    let mut rules = established(tree!({
+        "Create PDR": [pdr_with(1, tree!({}))], "Create FAR": [far_with(1)],
+        "Create Traffic Endpoint": [{"Traffic Endpoint ID": 4, "QFI": [5]}],
+    }));
+    rules.apply(
+        &modification_of(tree!({"Remove Traffic Endpoint": [{"Traffic Endpoint ID": 4}]})),
+        &accepted,
+    );
+    let later = modification_of(tree!({"Create PDR": [pdr_with(2, qfi(4))]}));
+    assert_eq!(
+        with_rules(&later, &rules),
+        [deviation(
+            "/pfcp/Create PDR/0/PDI/Traffic Endpoint ID/0",
+            "the ID refers to no Traffic Endpoint of the session"
+        )]
+    );
+    // A traffic endpoint created without QFIs, and one updated without them, has none
+    let mut rules = established(tree!({
+        "Create PDR": [pdr_with(1, tree!({}))], "Create FAR": [far_with(1)],
+        "Create Traffic Endpoint": [{"Traffic Endpoint ID": 4}],
+    }));
+    let later = modification_of(tree!({"Create PDR": [pdr_with(2, qfi(4))]}));
+    assert_eq!(with_rules(&later, &rules), []);
+    rules.apply(
+        &modification_of(tree!({"Update Traffic Endpoint": [{"Traffic Endpoint ID": 4}]})),
+        &accepted,
+    );
+    assert_eq!(with_rules(&later, &rules), []);
+    rules.apply(
+        &modification_of(tree!({"Create Traffic Endpoint": [{"Traffic Endpoint ID": 6}]})),
+        &accepted,
+    );
+    let later = modification_of(tree!({"Create PDR": [pdr_with(2, qfi(6))]}));
+    assert_eq!(with_rules(&later, &rules), []);
+}
+
+/// What one message holds of its own rules: an Update PDR is of a PDR of the session, two
+/// PDRs of the message have distinct SDF Filter IDs, a Create MAR forwards to FARs of the
+/// session, and a PDI of a traffic endpoint without QFIs, or with no QFI itself, has
+/// nothing excluded.
+#[test]
+fn the_rules_of_one_message_hold_together() {
+    let filter = |id: u32| tree!({"SDF Filter": [{"BID": true, "SDF Filter ID": id}]});
+    let rules = established(tree!({
+        "Create PDR": [pdr_with(1, tree!({}))], "Create FAR": [far_with(1)],
+        "Create Traffic Endpoint": [{"Traffic Endpoint ID": 4, "QFI": [5]}],
+    }));
+    let update = modification_of(tree!({"Update PDR": [{"PDR ID": 6}]}));
+    assert_eq!(
+        with_rules(&update, &rules),
+        [deviation(
+            "/pfcp/Update PDR/0/PDR ID",
+            "the session has no PDR with this ID"
+        )]
+    );
+    // Two PDRs of the message: the second has the SDF Filter ID of the first
+    let twice = modification_of(
+        tree!({"Create PDR": [pdr_with(2, filter(8)), pdr_with(3, filter(8)), pdr_with(5, filter(6))]}),
+    );
+    assert_eq!(
+        with_rules(&twice, &rules),
+        [deviation(
+            "/pfcp/Create PDR/1/PDI/SDF Filter/0/SDF Filter ID",
+            "another PDR of the session has this SDF Filter ID"
+        )]
+    );
+    let mar = modification_of(tree!({"Create MAR": [{
+        "MAR ID": 1,
+        "3GPP Access Forwarding Action Information": {"FAR ID": 1},
+        "Non-3GPP Access Forwarding Action Information": {"FAR ID": 9},
+    }]}));
+    assert_eq!(
+        with_rules(&mar, &rules),
+        [deviation(
+            "/pfcp/Create MAR/0/Non-3GPP Access Forwarding Action Information/FAR ID",
+            "the ID refers to no FAR of the session"
+        )]
+    );
+    // A PDI of traffic endpoint 4, which has QFIs, without a QFI of its own
+    let endpoint =
+        modification_of(tree!({"Create PDR": [pdr_with(2, tree!({"Traffic Endpoint ID": [4]}))]}));
+    assert_eq!(with_rules(&endpoint, &rules), []);
+    // Traffic endpoint 5 of the message has no QFIs, 6 has: a PDI of 5 has its QFI
+    let created = modification_of(tree!({
+        "Create Traffic Endpoint": [{"Traffic Endpoint ID": 5}, {"Traffic Endpoint ID": 6, "QFI": [1]}],
+        "Create PDR": [pdr_with(2, tree!({"Traffic Endpoint ID": [5], "QFI": [5]}))],
+    }));
+    assert_eq!(with_rules(&created, &rules), []);
+    // and a PDI of 4 has none, whatever endpoint 6 of the message has
+    let created = modification_of(tree!({
+        "Create Traffic Endpoint": [{"Traffic Endpoint ID": 6, "QFI": [1]}],
+        "Create PDR": [pdr_with(2, tree!({"Traffic Endpoint ID": [4], "QFI": [5]}))],
+    }));
+    assert_eq!(
+        with_rules(&created, &rules),
+        [deviation(
+            "/pfcp/Create PDR/0/PDI/QFI",
+            "Excluded { ie_type: 124 }"
+        )]
+    );
+}
+
+/// The NW-TT Port Number of a bridge has 16 bits in a modification response and in a
+/// report request too, and 0xffff is one; a usage report of a response is for a URR of
+/// the session or one that its request creates, whatever else the request creates or
+/// removes; and the path of a report is its position, after an entry kept as octets.
+#[test]
+fn the_later_messages_of_a_bridge_and_their_usage_reports() {
+    let rules = established(tree!({
+        "Create PDR": [pdr_with(1, tree!({}))], "Create FAR": [far_with(1)],
+        "Create URR": [urr_with(1)], "Create Bridge/Router Info": {"BII": true},
+    }));
+    let tsc = |value: u32| tree!({"TSC Management Information": [{"Port Management Information Container": "00", "NW-TT Port Number": value}]});
+    let wide = "the NW-TT Port Number of a bridge is more than 16 bits";
+    let at = "/pfcp/TSC Management Information/0/NW-TT Port Number";
+    let response = response_with(MODIFIED, ACCEPTED, tsc(0x1_0000));
+    assert_eq!(with_rules(&response, &rules), [deviation(at, wide)]);
+    let report = |ies: tree::Value| {
+        message_of(
+            "PFCP Session Report Request",
+            tree!({"SEID": 0x1001, "Sequence Number": 3}),
+            ies,
+        )
+    };
+    let mut ies = tsc(0x1_0000);
+    ies["Report Type"] = tree!({"UPIR": true});
+    assert_eq!(with_rules(&report(ies), &rules), [deviation(at, wide)]);
+    assert_eq!(with_rules(&modification_of(tsc(0xffff)), &rules), []);
+    // The request creates URR 2 and FAR 3, and removes URR 1
+    let request = message_of(
+        MODIFICATION,
+        tree!({"SEID": 0x2001, "Sequence Number": 7}),
+        tree!({"Create URR": [urr_with(2)], "Create FAR": [far_with(3)], "Remove URR": [{"URR ID": 1}]}),
+    );
+    let reported = |urr: u32, name: &str| {
+        let response = response_with(name, ACCEPTED, tree!({"Usage Report": [usage_report(urr)]}));
+        with_rules_and_request(&response, &rules, &request)
+    };
+    let none = "the usage report is for no URR of the session";
+    assert_eq!(reported(2, MODIFIED), []);
+    assert_eq!(reported(1, MODIFIED), []);
+    assert_eq!(
+        reported(3, MODIFIED),
+        [deviation("/pfcp/Usage Report/0/URR ID", none)]
+    );
+    let deleted = response_with(
+        "PFCP Session Deletion Response",
+        ACCEPTED,
+        tree!({"Usage Report": [usage_report(1), usage_report(3)]}),
+    );
+    assert_eq!(
+        with_rules(&deleted, &rules),
+        [deviation("/pfcp/Usage Report/1/URR ID", none)]
+    );
+    // A report after one kept as octets
+    let kept = report(tree!({
+        "Report Type": {"USAR": true},
+        "Usage Report": [{"octets": "0000"}, usage_report(3)],
+    }));
+    assert_eq!(
+        with_rules(&kept, &rules),
+        [deviation("/pfcp/Usage Report/1/URR ID", none)]
+    );
+}
+
+/// A response that returns what was asked has nothing missing: the Mapped N6 IP Address
+/// of a Created PDR, and the UE IP Address and the Mapped N6 IP Address of a Created
+/// Traffic Endpoint. An Updated PDR without the UE IP Address that its Update PDR asked
+/// for lacks it.
+#[test]
+fn what_a_response_returns_is_not_missing() {
+    let mapped = tree!({"CHV4": true});
+    let request = establishment_with(tree!({
+        "Create PDR": [pdr_with(1, tree!({"Mapped N6 IP Address": mapped.clone()}))],
+        "Create Traffic Endpoint": [{"Traffic Endpoint ID": 2, "UE IP address": [{"CHV4": true, "V4": true}], "Mapped N6 IP Address": mapped}],
+    }));
+    let address = tree!({"V4": true, "IPv4 address": "10.1.0.1"});
+    let response = response_with(
+        ESTABLISHED,
+        ACCEPTED,
+        tree!({
+            "Created PDR": [{"PDR ID": 1, "Mapped N6 IP Address": address.clone()}],
+            "Created Traffic Endpoint": [{"Traffic Endpoint ID": 2, "UE IP Address": [address.clone()], "Mapped N6 IP Address": address}],
+        }),
+    );
+    assert_eq!(
+        more(&response, &Known::default().with_request(&request)),
+        []
+    );
+    let request = message_of(
+        MODIFICATION,
+        tree!({"SEID": 0x2001, "Sequence Number": 7}),
+        tree!({"Update PDR": [{"PDR ID": 4, "PDI": {"Source Interface": "Core", "UE IP address": [{"CHV6": true, "V6": true}]}}]}),
+    );
+    let response = response_with(MODIFIED, ACCEPTED, tree!({"Updated PDR": [{"PDR ID": 4}]}));
+    let found = more(&response, &Known::default().with_request(&request));
+    let paths: Vec<&str> = found.iter().map(|(path, ..)| path.as_str()).collect();
+    assert_eq!(paths, ["/pfcp/Updated PDR/0/UE IP Address"]);
+}

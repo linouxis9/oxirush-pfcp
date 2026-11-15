@@ -54,4 +54,10 @@ exclude_re = [
     # has the value and answers that it is repeated too. An IE of no row is of no row
     # there once, and one repeated is of a row noted or filled already.
     'src/table\.rs:\d+:\d+: replace unread -> bool with true$',
+    # The room that encode_into reserves for the header and the IEs (its column): more or less of it
+    # writes the same octets.
+    'src/message\.rs:\d+:28: replace \+ with \* in Message::encode_into$',
+    # An entry of a value of a field that is no list: no tree of a message has one, and
+    # a member below it is refused with what the value has, as below Nothing.
+    'src/paths\.rs:\d+:\d+: delete match arm Of::Takes\(takes\) in <impl tree::Family for Paths>::entry$',
 ]
