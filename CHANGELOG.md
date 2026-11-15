@@ -18,8 +18,8 @@ The first version. It implements TS 29.244 V19.6.0 (2026-06):
 - With `tree`, a message converts to a tree that prints as JSON and can be read
   and edited by path. Any format of serde writes the tree. `IeTypeInfo::takes()`
   says what the tree of the value of an IE type takes, member by member
-  (`tree::Takes` of oxirush-utils), and `IeTypeInfo::tree_of()` gives the tree of one IE from
-  its octets.
+  (`tree::Takes` of oxirush-utils), and `IeTypeInfo::tree_of()` gives the tree
+  of one IE from its octets.
 - With `node`, `Node` is a PFCP node without I/O: delivery and retransmission,
   heartbeats, associations, sessions, load and overload control, and bundles.
 - With `endpoint`, `Endpoint` runs a node on a Tokio UDP socket.

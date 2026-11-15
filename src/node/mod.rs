@@ -15,27 +15,30 @@
    limitations under the License.
 */
 
-//! A PFCP entity without I/O: datagrams and time go in; datagrams, events and the next
-//! timer come out. An SMF, a UPF and a test tool share it, each with its own socket loop.
+//! A PFCP node without I/O. You give it the datagrams that arrive and the current time;
+//! it gives you the datagrams to send, the events, and when to call it next. An SMF, a
+//! UPF and a test tool can each run it in their own socket loop.
 //!
-//! - **Delivery (§6.4):** sequence numbers, retransmission after T1 up to N1 times,
-//!   responses matched by sequence, peer and type, retransmitted requests answered again.
-//! - **Heartbeat (§6.2.2):** answered from anyone, sent to the associated peers.
-//! - **Associations (§6.2.6 to §6.2.8)** and **sessions**, kept in step with the
-//!   procedures, a deletion with usage reports to follow until the last (§5.2.2.3.1).
-//! - **Load and overload control (§6.2.3, §6.2.4)**, with the "Loss" throttling, and
-//!   **message priority (§6.2.4.5)**.
-//! - **Bundling (§6.5),** when both peers announced BUNDL.
+//! The node handles:
 //!
-//! An IPv4 peer that a socket of both families gives at its IPv4-mapped IPv6 address is
-//! its IPv4 address, in what the node takes and in what it sends ([`Transmit::to`]).
+//! - delivery (§6.4): sequence numbers, retransmission after T1 up to N1 times, matching
+//!   responses by sequence, peer and type, and answering a retransmitted request again;
+//! - heartbeats (§6.2.2): it answers them from anyone and sends them to associated peers;
+//! - associations (§6.2.6 to §6.2.8) and sessions, including a deletion whose usage
+//!   reports are still to come (§5.2.2.3.1);
+//! - load and overload control (§6.2.3, §6.2.4), with "Loss" throttling, and message
+//!   priority (§6.2.4.5);
+//! - bundled messages (§6.5), when both peers announced BUNDL.
 //!
-//! The node answers itself only what the clauses decide alone: a heartbeat, a request
-//! that does not decode, one of a peer without an association or of a session that the
-//! node does not have. What a peer does wrong is an [`Event::Violation`]. Every
-//! other request is the caller's to answer with [`Node::respond`]: one that names a
-//! session or an association that is not its sender's, as another SMF of a set sends
-//! (§5.22), comes [`Received::stranger`].
+//! A peer that a dual-stack socket reports at an IPv4-mapped IPv6 address is treated as
+//! its IPv4 address, both when the node receives and when it sends ([`Transmit::to`]).
+//!
+//! The node answers a request by itself only when the specification leaves no choice: a
+//! heartbeat, a request that does not decode, a request from a peer without an
+//! association, and a request for a session that the node does not have. A protocol
+//! error of a peer is an [`Event::Violation`]. You answer every other request with
+//! [`Node::respond`]. A request for a session or an association of another sender, as
+//! another SMF of the same set sends it (§5.22), is marked [`Received::stranger`].
 
 mod controls;
 mod delivery;

@@ -3,11 +3,10 @@
 [![CI](https://github.com/linouxis9/oxirush-pfcp/actions/workflows/ci.yml/badge.svg)](https://github.com/linouxis9/oxirush-pfcp/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
-A Rust implementation of PFCP (3GPP TS 29.244), the protocol between the
-control plane and the user plane of 5G and 4G core networks. It decodes, builds
-and validates every message and IE of N4, N4mb, Sxa, Sxb and Sxc, converts them
-to and from JSON, and includes a PFCP node that runs on your own socket or on
-Tokio. `no_std`.
+PFCP (3GPP TS 29.244), between the control plane and the user plane of 5G and
+4G cores: decode, build, check and encode every message and IE of N4, N4mb,
+Sxa, Sxb and Sxc, edit them as JSON, and run a PFCP node on your own socket or
+on Tokio. `no_std`.
 
 ```rust
 use std::net::Ipv4Addr;
@@ -52,14 +51,12 @@ Each example shows what it gives with `assert_eq!`, and runs as a test of the cr
 
 ## Installation
 
-The crate is not on crates.io yet. Use the Git repository:
-
 ```toml
 [dependencies]
-oxirush-pfcp = { git = "https://github.com/linouxis9/oxirush-pfcp" }
+oxirush-pfcp = "0.1"
 hex = "0.4" # only for the examples on this page
 # With JSON and the Tokio endpoint:
-# oxirush-pfcp = { git = "https://github.com/linouxis9/oxirush-pfcp", features = ["tree", "endpoint"] }
+# oxirush-pfcp = { version = "0.1", features = ["tree", "endpoint"] }
 ```
 
 | Feature | Adds | Needs |
@@ -191,7 +188,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 An IE that the crate cannot decode is kept as raw octets in its position, so
 decoding a message and encoding it again returns the same bytes.
 
-## Validate a message and answer a faulty one
+## Check a message, and answer a faulty one
 
 `check()` validates one message against TS 29.244 on an interface, or on a set
 of interfaces. Each deviation has the path of the IE, the clause that is broken
@@ -328,30 +325,32 @@ fn main() {
 
 ## Limits
 
-`check()` validates one message against TS 29.244 V19.6.0: its header, its
-framing, the IE tables of clause 7 and the values of clause 8.2.
-`check_with()` adds the request that a response answers, the features that the
-two functions announced, and the state of the session (`SessionRules`). Their
-rustdoc lists every check. They do not cover:
-
-- Whether UR-SEQN values increase: usage reports can arrive out of order.
-- What only the sender knows: its intent, or what the UE supports.
-- A SEID of 0 where the sender might not know the SEID of its peer yet.
-- The JSON of a DNS Query/Response Filter, and the content of containers.
-- Releases after V19.6.0: their IEs are kept as octets and reported as unknown.
-
-`encode()` is permissive so that a test tool can send malformed messages: it
-only refuses a value that would not decode back to itself. A `Node` is a single
-PFCP entity: a request for a session of another SMF of its set (§5.22) is
-passed to the application as `Received::stranger`.
+- `check()` follows TS 29.244 V19.6.0: the IEs of a later release are kept as octets and reported as unknown.
+- `check()` does not check what only the sender knows (its intent, what the UE supports), nor that UR-SEQN values increase: usage reports can arrive out of order.
+- A SEID of 0 is accepted where the sender may not know the SEID of its peer yet.
+- `check()` does not look into a DNS Query/Response Filter or the content of containers.
+- `encode()` writes malformed messages on purpose, for tests: it only refuses a value that would not decode back to itself.
+- A `Node` is one PFCP entity: a request for a session of another SMF of its set (§5.22) reaches the application as `Received::stranger`.
 
 ## Performance
 
-[`benches/`](https://github.com/linouxis9/oxirush-pfcp/blob/main/benches/README.md)
-has the benchmarks: the time and the allocations of each workload, compared
-with go-pfcp v0.0.24, and how to reproduce them.
+On one core of an AMD Ryzen 7 5700G (Linux 7.0, Rust 1.98.1, Go 1.27.3) at
+637fadf on 2026-11-09, for a Session Establishment Request of 16 PDRs (2,824
+octets), against go-pfcp v0.0.24, on a machine that other work shared. A ratio
+is the time of go-pfcp over this crate's.
 
-## Tests
+| Operation | This crate | go-pfcp | Ratio |
+|-----------|------------|---------|-------|
+| `decode` | 8.2 µs, 70 allocations | 31.4 µs, 441 allocations | 3.8 |
+| `decode`, then read each value | 8.6 µs, 70 allocations | 65.8 µs, 1,043 allocations | 7.7 |
+| `encode` | 4.1 µs, 1 allocation | 46.7 µs, 2 allocations | 11.4 |
+| `check` | 16.6 µs, 0 allocations | | |
+| `to_tree`, `from_tree` | 46.4 µs, 67.8 µs | | |
+
+[`benches/`](https://github.com/linouxis9/oxirush-pfcp/blob/main/benches/README.md)
+has the other messages, and the commands that reproduce each figure.
+
+## Tests and fuzzing
 
 ```sh
 cargo test --all-features

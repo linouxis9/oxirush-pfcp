@@ -17,27 +17,24 @@
 
 //! The paths of the tree of a message, which [`select`] reads and [`set`] edits.
 //!
-//! The tree of a message is on the engine of oxirush-utils ([`tree`](mod@crate::tree)): a
-//! scope is an object whose members are its IEs by the names of its table, in the order of
-//! the table; a row that is a list is a list, in the order of the wire. A path writes a
-//! `/` of a name `~1`, as a JSON pointer does: `/pfcp/APN~1DNN`. An IE that the
-//! scope keeps as octets is `{"octets": ...}` under the name of its row, of its type, or
-//! its number.
+//! The tree uses the engine of oxirush-utils ([`tree`](mod@crate::tree)). A message, and
+//! each grouped IE, is an object whose members are its IEs, named and ordered as in its
+//! table. A row that repeats is a list, in the order of the wire. As in a JSON pointer, a
+//! `/` inside a name is written `~1`: `/pfcp/APN~1DNN`. An IE that the crate keeps as
+//! octets is `{"octets": ...}`, under the name of its row, of its type, or its number.
 //!
-//! A tree is the message in the order of its tables: a message whose IEs came in another
-//! order (§8.1.2 has a receiver take them in any order) has the same tree as one in the
-//! order of its tables, and from any tree, in whatever order its rows are written, the
-//! crate encodes the latter. The octets keep the order of the wire: decoding and encoding
-//! them is byte-exact.
+//! A tree lists the IEs in the order of the tables, whatever order they arrived in
+//! (§8.1.2 lets a receiver take them in any order), and a message encoded from a tree has
+//! them in that order. A decoded message keeps the order of the wire: decoding and
+//! encoding it again gives the same octets.
 //!
-//! A path names the members of the tree in any case, a list the positions of its entries,
-//! and `*` each entry. `/pfcp` stands for the IEs of the message, and the path of a
-//! deviation of `check()` is one of them. An IE of no row of its table, a vendor's or one
-//! of a later release, goes by its number or the name of its type. What a message lacks
-//! selects nothing, whatever the path names below it: a misspelt name is an error where
-//! the value is there, and is not told below what is not. [`set`] adds the grouped IEs
-//! and the lists on its way, an entry at the position of a list's length, and writes a
-//! value that a message lacks whole.
+//! Names in a path match in any case. A number selects an entry of a list, and `*` every
+//! entry. `/pfcp` is the list of IEs of the message; the path of each deviation of
+//! `check()` starts there. An IE without a row in its table, from a vendor or a later
+//! release, goes by its number or the name of its type. A path into an IE that the
+//! message does not have selects nothing; a misspelt name is an error only where the
+//! value exists. [`set`] creates the grouped IEs and the lists on the way, adds an entry
+//! at the position equal to the length of a list, and writes a missing value whole.
 
 use alloc::borrow::Cow;
 use alloc::string::String;

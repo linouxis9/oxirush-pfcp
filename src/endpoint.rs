@@ -15,12 +15,11 @@
    limitations under the License.
 */
 
-//! A [`Node`] on a Tokio UDP socket: one task that owns both. The [`Endpoint`] owns the
-//! task and takes what comes: the requests of the peers through
-//! [`incoming`](Endpoint::incoming), each with what answers it, and the other events
-//! through [`event`](Endpoint::event). A [`Handle`], which it gives and which clones,
-//! sends the node's requests and reaches its state, from any task and while the
-//! endpoint takes the peers' requests:
+//! A [`Node`] on a Tokio UDP socket, run by a task that owns both. The [`Endpoint`] gives
+//! you the requests of the peers through [`incoming`](Endpoint::incoming), each with the
+//! means to answer it, and the other events through [`event`](Endpoint::event). A
+//! [`Handle`] is cheap to clone: any task can use it to send requests and to read the
+//! state of the node, while the endpoint keeps taking the requests of the peers:
 //!
 //! ```no_run
 //! # use oxirush_pfcp::{endpoint::Endpoint, node::{Function, NodeConfig}, *};
@@ -37,12 +36,12 @@
 //! # }
 //! ```
 //!
-//! A queue that is full drops what comes, and counts it in [`Statistics`]: a request of a
-//! peer that the caller does not take is forgotten by the node, so that its
-//! retransmission comes in again when the caller has room, and so is one whose
-//! [`Incoming`] the caller drops unanswered. A request whose future the caller drops is
-//! cancelled ([`Node::cancel`]). A caller that batches its datagrams (`recvmmsg`,
-//! `sendmmsg`) drives a [`Node`] itself.
+//! When a queue is full, the endpoint drops what arrives and counts it in
+//! [`Statistics`]. The node then forgets a request that you did not take, so that the
+//! peer's retransmission arrives again when there is room; it does the same for a
+//! request whose [`Incoming`] you drop without answering. Dropping the future of one of
+//! your requests cancels it ([`Node::cancel`]). To batch datagrams (`recvmmsg`,
+//! `sendmmsg`), drive a [`Node`] yourself.
 
 use std::boxed::Box;
 use std::collections::BTreeMap;

@@ -15,9 +15,9 @@
    limitations under the License.
 */
 
-//! Framing-only scans: the IEs of a message or of a grouped IE as slices of its octets,
-//! with nothing decoded and nothing copied, for a fast path that reads a few IEs, a proxy
-//! that forwards them, or a fuzzer. The codec frames its scopes with the same iterator.
+//! The IEs of a message or of a grouped IE as slices of its octets, without decoding or
+//! copying anything: for a fast path that reads a few IEs, a proxy that forwards them, or
+//! a fuzzer. The codec uses the same iterator.
 //!
 //! ```
 //! use oxirush_pfcp::framing;
