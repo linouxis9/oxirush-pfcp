@@ -41,7 +41,7 @@ spec = []
 [dependencies]
 pastey = "0.2"
 tokio = { version = "1.38", features = ["macros", "net", "rt", "sync", "time"], optional = true }
-oxirush-utils = { version = "0.2.0", default-features = false, features = ["alloc", "fields"] }
+oxirush-utils = { version = "0.2.0", default-features = false, features = ["alloc", "fields", "tables"] }
 
 [dev-dependencies]
 hex = "0.4.3"
@@ -84,4 +84,4 @@ unexpected_cfgs = { level = "warn", check-cfg = ['cfg(docsrs)'] }
 # them, and its fields are not released yet: every crate of the build takes oxirush-utils
 # from this revision until its next release.
 [patch.crates-io]
-oxirush-utils = { git = "https://github.com/linouxis9/oxirush-utils", rev = "770e776ff23bfe99977bd1a61ff2dae048404789" }
+oxirush-utils = { git = "https://github.com/linouxis9/oxirush-utils", rev = "c39ac3d12fc24080c551395c55da2a31fbdf551e" }

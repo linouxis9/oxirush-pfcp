@@ -112,6 +112,35 @@ pub use oxirush_utils::tree;
 #[doc = include_str!("../README.md")]
 struct Readme;
 
+/// PFCP as the tables of oxirush-utils take it: an IE is keyed by its IE type, framed as
+/// §8.1.1 has it, and one of a null length or of a vendor is kept as octets.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Pfcp;
+
+impl oxirush_utils::tables::Protocol for Pfcp {
+    type Key = u16;
+    type Raw = RawIe;
+    type Error = Error;
+    type Fault = IeFault;
+    type Presence = Presence;
+    type Interfaces = Interfaces;
+
+    #[inline]
+    fn ies(octets: &[u8]) -> impl Iterator<Item = Result<(u16, &[u8]), IeFault>> {
+        framing::ies(octets).map(|ie| ie.map(|ie| (ie.ie_type, ie.content())))
+    }
+
+    #[inline]
+    fn placeable(ie_type: u16, content: &[u8]) -> bool {
+        !content.is_empty() && ie_type < VENDOR
+    }
+
+    #[inline]
+    fn raw(ie_type: u16, content: &[u8]) -> RawIe {
+        ie::raw(ie_type, content)
+    }
+}
+
 /// Why a message does not decode or encode.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]

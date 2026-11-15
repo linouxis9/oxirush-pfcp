@@ -291,7 +291,7 @@ fn returned_pdrs(pdrs: &[CreatedPdr]) -> Vec<(Option<u32>, Allocated)> {
     let returned = |pdr: &CreatedPdr| {
         // An entry that keeps IEs as octets is taken as complete: its paths would not
         // be those of its tree.
-        let kept = !crate::table::Scope::raw(pdr).is_empty();
+        let kept = !oxirush_utils::tables::Scope::raw(pdr).is_empty();
         let has = [
             kept || !pdr.f_teid.is_empty(),
             kept || !pdr.ue_ip_address.is_empty(),
@@ -305,7 +305,7 @@ fn returned_pdrs(pdrs: &[CreatedPdr]) -> Vec<(Option<u32>, Allocated)> {
 /// What each Created Traffic Endpoint returns, with its Traffic Endpoint ID.
 fn returned_endpoints(endpoints: &[CreatedTrafficEndpoint]) -> Vec<(Option<u32>, Allocated)> {
     let returned = |endpoint: &CreatedTrafficEndpoint| {
-        let kept = !crate::table::Scope::raw(endpoint).is_empty();
+        let kept = !oxirush_utils::tables::Scope::raw(endpoint).is_empty();
         let has = [
             kept || !endpoint.f_teid.is_empty(),
             kept || !endpoint.ue_ip_address.is_empty(),
@@ -440,7 +440,7 @@ pub(crate) fn against(
                     return;
                 };
                 // One that keeps IEs as octets is taken as complete.
-                if !crate::table::Scope::raw(info).is_empty() {
+                if !oxirush_utils::tables::Scope::raw(info).is_empty() {
                     return;
                 }
                 let port = at(&here, "Port Number", None);
@@ -499,7 +499,7 @@ pub(crate) fn against(
                     (pdr.pdr_id.as_ref().map(|id| id.value.into()), pdi)
                 };
                 let returned = |pdr: &UpdatedPdr| {
-                    let kept = !crate::table::Scope::raw(pdr).is_empty();
+                    let kept = !oxirush_utils::tables::Scope::raw(pdr).is_empty();
                     let has = [true, kept || !pdr.ue_ip_address.is_empty(), true];
                     (pdr.pdr_id.as_ref().map(|id| id.value.into()), has)
                 };

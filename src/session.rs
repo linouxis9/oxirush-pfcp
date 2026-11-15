@@ -28,6 +28,7 @@ use crate::ie::IeType;
 use crate::message::{Body, Message};
 use crate::table::{Scope, place};
 use crate::{CreatePdr, Pdi, UpdatePdr};
+use oxirush_utils::tables::Scope as _;
 
 /// The kinds of rules and other objects that a session creates by ID.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]

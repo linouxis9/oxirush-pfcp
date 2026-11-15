@@ -260,7 +260,7 @@ macro_rules! pfcp_messages {
 
             pub(crate) fn encoded_len(&self) -> usize {
                 match self {
-                    $( Self::$ty(body) => crate::table::Scope::encoded_len(&**body), )*
+                    $( Self::$ty(body) => oxirush_utils::tables::Scope::encoded_len(&**body), )*
                     Self::Other { octets, .. } => octets.len(),
                 }
             }
@@ -270,7 +270,7 @@ macro_rules! pfcp_messages {
             #[cfg(feature = "endpoint")]
             pub(crate) fn held(&self) -> usize {
                 match self {
-                    $( Self::$ty(body) => core::mem::size_of::<crate::registry::$ty>() + crate::table::Scope::held(&**body), )*
+                    $( Self::$ty(body) => core::mem::size_of::<crate::registry::$ty>() + oxirush_utils::tables::Scope::held(&**body), )*
                     Self::Other { .. } => 0,
                 }
             }
@@ -434,7 +434,8 @@ macro_rules! pfcp_table {
 
         // A table without rows leaves its arguments unused.
         #[allow(unused_variables, unused_mut, unused_assignments)]
-        impl crate::table::Scope for $ty {
+        impl oxirush_utils::tables::Scope for $ty {
+            type P = crate::Pfcp;
             fn table() -> &'static crate::table::Table {
                 &[<$ty:snake:upper _TABLE>]
             }
@@ -568,7 +569,7 @@ macro_rules! pfcp_table {
                 const CONDITIONS: bool = false $( || pfcp_table!(@checked $($scope)? $($ascope)?) )*;
                 let mut off = 0u64;
                 if CONDITIONS {
-                    let (rows, mut row) = (<Self as crate::table::Scope>::table().rows, 0);
+                    let (rows, mut row) = (<Self as oxirush_utils::tables::Scope>::table().rows, 0);
                     $(
                         if !crate::table::FieldValues::<$vty>::values(&self.$field).is_empty() && !rows[row].roles.iter().any(|role| role.interfaces.has(context.interface)) {
                             off |= 1 << row;
@@ -715,7 +716,7 @@ macro_rules! pfcp_table {
     (@held [] Ob ($t:ty) $f:expr) => { pfcp_table!(@held_box ($t) $f) };
     (@held [] $p:ident ($t:ty) $f:expr) => { $f.as_ref().map_or(0, crate::ie::Listed::held) };
     (@held_box ($t:ty) $f:expr) => {
-        $f.as_ref().map_or(0, |value| core::mem::size_of::<$t>() + crate::table::Scope::held(&**value))
+        $f.as_ref().map_or(0, |value| core::mem::size_of::<$t>() + oxirush_utils::tables::Scope::held(&**value))
     };
     // Whether a field reads as it is: as many values as the row takes, each plain.
     (@plain [] ($t:ty) $f:expr) => { crate::table::FieldValues::<$t>::values(&$f).iter().all(crate::ie::Listed::plain) };
@@ -738,7 +739,7 @@ macro_rules! pfcp_table {
             }
 
             fn encoded_len(&self) -> usize {
-                crate::table::Scope::encoded_len(self)
+                oxirush_utils::tables::Scope::encoded_len(self)
             }
         }
 
@@ -765,7 +766,7 @@ macro_rules! pfcp_table {
 
             #[cfg(feature = "endpoint")]
             fn held(&self) -> usize {
-                crate::table::Scope::held(self)
+                oxirush_utils::tables::Scope::held(self)
             }
 
             fn check_in(&self, path: &crate::check::Path, context: crate::check::Context, found: &mut alloc::vec::Vec<crate::check::Deviation>) {
@@ -774,7 +775,7 @@ macro_rules! pfcp_table {
 
             /// Of a grouped IE that has an IE: one of a null length reads as none.
             fn plain(&self) -> bool {
-                crate::table::Scope::plain(self) && !crate::table::Scope::is_empty(self)
+                oxirush_utils::tables::Scope::plain(self) && !oxirush_utils::tables::Scope::is_empty(self)
             }
         }
 
@@ -783,7 +784,7 @@ macro_rules! pfcp_table {
             /// IEs of any, and those that all need; as its receiver reads it
             /// ([`crate::check::as_read`]).
             fn check(&self, path: &crate::check::Path, found: &mut alloc::vec::Vec<crate::check::Deviation>) {
-                let interfaces = <Self as crate::table::Scope>::table().interfaces();
+                let interfaces = <Self as oxirush_utils::tables::Scope>::table().interfaces();
                 let context = crate::check::Context::on(interfaces);
                 let read = crate::check::as_read(self, path, context, found);
                 crate::check::check_scope(read.as_ref().unwrap_or(self), path, context, found);

@@ -95,4 +95,4 @@ bench = false
 # them, and its fields are not released yet: every crate of the build takes oxirush-utils
 # from this revision until its next release.
 [patch.crates-io]
-oxirush-utils = { git = "https://github.com/linouxis9/oxirush-utils", rev = "770e776ff23bfe99977bd1a61ff2dae048404789" }
+oxirush-utils = { git = "https://github.com/linouxis9/oxirush-utils", rev = "c39ac3d12fc24080c551395c55da2a31fbdf551e" }

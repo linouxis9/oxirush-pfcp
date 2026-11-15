@@ -89,7 +89,7 @@ pub(crate) trait Listed: Codec + crate::check::Rules {
     }
 
     /// Whether its octets read as the value: of a value that writes some, and of a
-    /// grouped IE as [`Scope::plain`](crate::table::Scope::plain) has it.
+    /// grouped IE as [`Scope::plain`](oxirush_utils::tables::Scope::plain) has it.
     fn plain(&self) -> bool {
         self.encoded_len() > 0
     }
@@ -202,29 +202,25 @@ impl RawIe {
 
 /// An entry of the `order` of a scope, the order of the wire, which a decoded message keeps
 /// when its IEs are not in the order of their tables, so that it encodes back byte for
-/// byte: the next value of a field, or the next IE of the scope's `raw`. A scope without
-/// an order is encoded in the order of its table, each IE of its `raw` after the values of
-/// its row and those of no row last; a value added to a scope of an order goes in the
-/// place of its row.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Placed {
-    /// The next value of the field of this IE type.
-    Field(u16),
-    /// The next IE of the scope's raw IEs.
-    Raw,
-}
+/// byte: the next value of a field of an IE type, or the next IE of the scope's `raw`.
+pub type Placed = oxirush_utils::tables::Placed<u16>;
 
-/// What a typed scope did with an IE of its octets.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum Placing {
-    /// It is the value of its field.
-    Placed,
-    /// Its row is there as many times as the table allows already.
-    Repeated,
-    /// Its value does not decode as the type of its row.
-    Malformed,
-    /// The table has no row of its type.
-    Unexpected,
+pub(crate) use oxirush_utils::tables::Placing;
+
+/// What the tables of oxirush-utils keep of an IE as octets.
+impl oxirush_utils::tables::Raw for RawIe {
+    type Key = u16;
+    type Error = Error;
+
+    #[inline]
+    fn key(&self) -> u16 {
+        self.ie_type
+    }
+
+    #[inline]
+    fn encode(&self, out: &mut Vec<u8>) -> Result<(), Error> {
+        RawIe::encode(self, out)
+    }
 }
 
 /// Why the IEs of a scope do not decode.
