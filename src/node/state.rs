@@ -538,7 +538,7 @@ impl Answers {
         response: Vec<u8>,
         expires: Duration,
     ) {
-        if !self.entries.get(&key).is_some_and(|entry| entry.id == id) {
+        if self.entries.get(&key).is_none_or(|entry| entry.id != id) {
             return;
         }
         if let Some(mut entry) = self.remove(&key) {
