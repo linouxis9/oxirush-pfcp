@@ -335,18 +335,19 @@ fn main() {
 
 ## Performance
 
-On one core of an AMD Ryzen 7 5700G (Linux 7.0, Rust 1.98.1, Go 1.27.3) at
-637fadf on 2026-11-09, for a Session Establishment Request of 16 PDRs (2,824
-octets), against go-pfcp v0.0.24, on a machine that other work shared. A ratio
-is the time of go-pfcp over this crate's.
+On core 2 of an Intel Xeon E5-2680 v4 (Broadwell, 2.4 GHz, a KVM guest, Linux 7.0,
+Rust 1.100.0, Go 1.27.4) at cdf4a13 on 2026-11-15, for a Session Establishment
+Request of 16 PDRs (2,824 octets), against go-pfcp v0.0.24: the median of ten
+runs, the two in turns. A ratio is the time of go-pfcp over this crate's; the ten
+times of the two do not overlap.
 
 | Operation | This crate | go-pfcp | Ratio |
 |-----------|------------|---------|-------|
-| `decode` | 8.2 µs, 70 allocations | 31.4 µs, 441 allocations | 3.8 |
-| `decode`, then read each value | 8.6 µs, 70 allocations | 65.8 µs, 1,043 allocations | 7.7 |
-| `encode` | 4.1 µs, 1 allocation | 46.7 µs, 2 allocations | 11.4 |
-| `check` | 16.6 µs, 0 allocations | | |
-| `to_tree`, `from_tree` | 46.4 µs, 67.8 µs | | |
+| `decode` | 15.7 µs, 70 allocations | 68.7 µs, 441 allocations | 4.4 |
+| `decode`, then read each value | 16.7 µs, 70 allocations | 146.6 µs, 1,043 allocations | 8.8 |
+| `encode` | 7.4 µs, 1 allocation | 91.0 µs, 2 allocations | 12.2 |
+| `check` | 32.2 µs, 12 allocations | | |
+| `to_tree`, `from_tree` | 51.9 µs, 198.2 µs | | |
 
 [`benches/`](https://github.com/linouxis9/oxirush-pfcp/blob/main/benches/README.md)
 has the other messages, and the commands that reproduce each figure.

@@ -46,31 +46,33 @@ cd compare/go-pfcp && go build -o go-pfcp . && cd ../..
 taskset -c 1 compare/go-pfcp/go-pfcp read 100000 HEX
 ```
 
-## At 637fadf
+## At cdf4a13
 
-The time of a round, the median of five runs of about a second, the lower of two series,
-and the allocations of a round, taken on 2026-11-09 at 637fadf with Rust 1.98.1 and
-Go 1.27.3, on one core of an AMD Ryzen 7 5700G (Linux 7.0): `measure` of the feature
-`tree` for the times, of `heap,tree` for the allocations, and go-pfcp of the same octets.
-The machine was shared, and the other thread of the core busy at times: the times are
-notes, and go-pfcp's were taken beside this crate's, under the same load; the allocations
+The time of a round and the allocations of a round, taken on 2026-11-15 at cdf4a13
+with Rust 1.100.0 and Go 1.27.4, on core 2 of an Intel Xeon E5-2680 v4 (Broadwell,
+2.4 GHz; a KVM guest bound to NUMA node 0; Linux 7.0): `measure` of the feature `tree`
+for the times, of `heap,tree` for the allocations, and go-pfcp of the same octets. Every
+cell ran once a round, for about half a second, in turns with the others, ten rounds:
+a time is the median of the ten. The ten runs of 33 of the 43 cells were within 15 % of
+each other, and those of the others within 49 % (`encode` of go-pfcp-ser); for every
+cell that go-pfcp has, its ten times and this crate's do not overlap. The allocations
 are exact. A cell is the time of a round, then its allocations.
 
 | Message | | `frame` | `decode` | `read` | `encode` | `check` | `to_tree` | `from_tree` |
 |---|---|---|---|---|---|---|---|---|
-| heartbeat | this crate | 0.03 µs, 0 | 0.05 µs, 1 | 0.05 µs, 1 | 0.04 µs, 1 | 0.07 µs, 0 | 0.36 µs, 16 | 0.50 µs, 13 |
-| | go-pfcp |  | 0.19 µs, 5 | 0.18 µs, 5 | 0.23 µs, 2 |  |  |  |
-| ser-4 | this crate | 0.95 µs, 0 | 2.5 µs, 22 | 2.6 µs, 22 | 1.3 µs, 1 | 5.4 µs, 0 | 14.0 µs, 288 | 20.7 µs, 305 |
-| | go-pfcp |  | 8.7 µs, 128 | 18.2 µs, 292 | 12.3 µs, 2 |  |  |  |
-| ser-16 | this crate | 3.5 µs, 0 | 8.2 µs, 70 | 8.6 µs, 70 | 4.1 µs, 1 | 16.6 µs, 0 | 46.4 µs, 965 | 67.8 µs, 1,055 |
-| | go-pfcp |  | 31.4 µs, 441 | 65.8 µs, 1,043 | 46.7 µs, 2 |  |  |  |
-| go-pfcp-ser | this crate | 2.1 µs, 0 | 5.8 µs, 60 | 5.9 µs, 60 | 3.3 µs, 1 | 54.2 µs, 324 | 41.8 µs, 860 | 56.8 µs, 697 |
-| | go-pfcp |  | 20.3 µs, 261 | 37.6 µs, 526 | 29.7 µs, 2 |  |  |  |
-| the 213 captures | this crate | 21.9 µs, 0 | 69.9 µs, 519 | 71.8 µs, 519 |  |  |  |  |
+| heartbeat | this crate | 0.07 µs, 0 | 0.09 µs, 1 | 0.09 µs, 1 | 0.08 µs, 1 | 0.17 µs, 0 | 0.59 µs, 7 | 1.0 µs, 15 |
+| | go-pfcp |  | 0.41 µs, 5 | 0.41 µs, 5 | 0.48 µs, 2 |  |  |  |
+| ser-4 | this crate | 2.1 µs, 0 | 4.4 µs, 22 | 4.5 µs, 22 | 2.4 µs, 1 | 11.1 µs, 12 | 13.1 µs, 113 | 63.5 µs, 307 |
+| | go-pfcp |  | 19.0 µs, 128 | 39.4 µs, 292 | 24.2 µs, 2 |  |  |  |
+| ser-16 | this crate | 7.5 µs, 0 | 15.7 µs, 70 | 16.7 µs, 70 | 7.4 µs, 1 | 32.2 µs, 12 | 51.9 µs, 364 | 198.2 µs, 1,057 |
+| | go-pfcp |  | 68.7 µs, 441 | 146.6 µs, 1,043 | 91.0 µs, 2 |  |  |  |
+| go-pfcp-ser | this crate | 4.5 µs, 0 | 10.5 µs, 60 | 10.7 µs, 60 | 7.4 µs, 1 | 117.2 µs, 358 | 51.6 µs, 352 | 181.7 µs, 699 |
+| | go-pfcp |  | 44.0 µs, 261 | 78.6 µs, 526 | 59.4 µs, 2 |  |  |  |
+| the 213 captures | this crate | 47.2 µs, 0 | 129.4 µs, 519 | 137.1 µs, 519 |  |  |  |  |
 
 Decoding allocates the box of the message, each row that is a list, of one value too,
 each conditional or optional grouped IE, and each octet string longer than 22 octets.
-`encode` allocates once, as it computes the length first, and `check` allocates nothing
-for a message without a deviation that keeps no IE as octets: one that keeps some, as
-go-pfcp's does, is read again from its octets, an `encode` and a `decode` that its check
-counts, and has deviations, whose paths it writes.
+`encode` allocates once, as it computes the length first, and `check` allocates 12 times
+for a message without a deviation that keeps no IE as octets (none for the heartbeat):
+one that keeps some, as go-pfcp's does, is read again from its octets, an `encode` and a
+`decode` that its check counts, and has deviations, whose paths it writes.
