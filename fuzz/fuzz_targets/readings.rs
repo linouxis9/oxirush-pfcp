@@ -217,7 +217,8 @@ fn refused(ours: &Message, octets: &[u8], error: &PfcpError) {
 
 /// The IE types of the IE that a refusal of rs-pfcp names: by its type, by the type of its
 /// text (`Unknown (type 0)`) or by its name; where it names no type, a vendor IE too short
-/// for its Enterprise ID, an IE of a type that it lacks, or one cut short in a grouped IE.
+/// for its Enterprise ID, an IE of a type that it lacks, or one cut short in a grouped IE;
+/// where it names an IE cut short in a grouped IE, the grouped IEs that do not frame too.
 fn named(octets: &[u8], error: &PfcpError) -> Vec<u16> {
     // The IE type of the longest name that a text begins with
     let by_name = |text: &str| -> Vec<u16> {
@@ -237,7 +238,15 @@ fn named(octets: &[u8], error: &PfcpError) -> Vec<u16> {
             let unknown = ies.iter().filter(|ie| IeType::from(ie.ie_type) == IeType::Unknown).map(|ie| ie.ie_type);
             unknown.chain(unframed(octets)).collect()
         }
-        PfcpError::IeParseError { ie_type, .. } | PfcpError::InvalidLength { ie_type, .. } | PfcpError::EncodingError { ie_type, .. } => {
+        // An IE of a type that rs-pfcp has, cut short in a grouped IE: the grouped IEs that do
+        // not frame too, which this crate keeps as octets and check() tells of at the
+        // outermost of them
+        PfcpError::InvalidLength { ie_type, .. } => {
+            let (ie_type, cut) = (*ie_type as u16, unframed(octets));
+            let within = cut.contains(&ie_type);
+            [ie_type].into_iter().chain(cut.into_iter().filter(|_| within)).collect()
+        }
+        PfcpError::IeParseError { ie_type, .. } | PfcpError::EncodingError { ie_type, .. } => {
             vec![*ie_type as u16]
         }
         PfcpError::ZeroLengthNotAllowed { ie_type, .. } => vec![*ie_type],
