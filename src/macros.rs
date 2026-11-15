@@ -348,529 +348,50 @@ macro_rules! pfcp_messages {
 /// with a condition on its IEs begins with `@ function;`, which checks those conditions
 /// from it ([`crate::across`]).
 macro_rules! pfcp_table {
-    // A table whose mandatory IEs differ between its interfaces has a constructor for each
-    // interface that it lists, and no `new()`.
-    (
-        $(#[$meta:meta])*
-        $kind:ident $ty:ident = $code:literal, $name:literal, $id:literal by [$($by:ident)*] { $($rows:tt)* }
-    ) => {
-        pfcp_table!(@table [$($by)*] $(#[$meta])* $kind $ty = $code, $name, $id { $($rows)* });
-    };
-    (
-        $(#[$meta:meta])*
-        $kind:ident $ty:ident = $code:literal, $name:literal, $id:literal { $($rows:tt)* }
-    ) => {
-        pfcp_table!(@table [] $(#[$meta])* $kind $ty = $code, $name, $id { $($rows)* });
-    };
-    (
-        @table [$($by:ident)*]
-        $(#[$meta:meta])*
-        $kind:ident $ty:ident = $code:literal, $name:literal, $id:literal {
-            $(@ $across:path ;)?
-            $( $field:ident : $row:literal $p:ident $(* $($max:literal)?)? $vty:ident
-                [$($interface:ident)*] $(roles [$($role:literal $rp:ident $(* $($rmax:literal)?)? [$($ri:ident)*]),*])?
-                $(absent(|$ascope:ident| $absent:expr))? $(if |$scope:ident| $condition:expr)? , )*
-        }
-    ) => { pastey::paste! {
-        $(#[$meta])*
-        #[derive(Debug, Clone, Default, PartialEq, Eq)]
-        pub struct $ty {
-            $(
-                #[doc = concat!("The ", $row, " IE.")]
-                pub $field: pfcp_table!(@field [$(* $($max)?)?] $p ($vty)),
-            )*
-            /// The IEs that the scope keeps as octets, in the order of the wire.
-            pub raw: alloc::vec::Vec<crate::ie::RawIe>,
-            /// The order of the wire, when it is not that of the table: each row, its values
-            /// then the IEs of its type in `raw`, and the IEs of no row last.
-            pub order: alloc::vec::Vec<crate::ie::Placed>,
-        }
-
-        const _: () = assert!(
-            <[&str]>::len(&[$($row),*]) < crate::table::MAX_ROWS,
-            "a table of more rows than the encoder counts"
-        );
-        // A field holds as many IEs as its roles allow.
-        const _: () = {$(
-            let roles: &[crate::table::Role] = pfcp_table!(@roles $row $p [$(* $($max)?)?] [$($interface)*] $([$($role $rp [$(* $($rmax)?)?] [$($ri)*]),*])?);
-            assert!(
-                crate::table::capacity(roles) == crate::table::capacity(&[pfcp_table!(@role $row $p [$(* $($max)?)?] [])]),
-                concat!("the field of ", $row, " holds other than its roles")
-            );
-        )*};
-
-        pub(crate) static [<$ty:snake:upper _TABLE>]: crate::table::Table = crate::table::Table {
-            id: $id,
-            name: $name,
-            code: $code,
-            constructors: crate::table::Interfaces(0 $(| crate::table::Interfaces::$by.0)*),
-            rows: &[$(
-                crate::table::Row {
-                    name: $row,
-                    ie_type: <$vty as crate::ie::IeType>::IE_TYPE,
-                    roles: pfcp_table!(@roles $row $p [$(* $($max)?)?] [$($interface)*] $([$($role $rp [$(* $($rmax)?)?] [$($ri)*]),*])?),
-                    content: <$vty as crate::table::Content>::TABLE,
-                    checked: pfcp_table!(@checked $($scope)? $($ascope)?),
-                },
-            )*],
-        };
-
-        impl $ty {
-            /// The table of the scope.
-            pub fn table() -> &'static crate::table::Table {
-                &[<$ty:snake:upper _TABLE>]
-            }
-
-            $(
-                #[doc = concat!("Builder: add the ", $row, " IE.")]
-                pub fn [<with_ $field>](mut self, value: $vty) -> Self {
-                    crate::table::FieldValues::<$vty>::add(&mut self.$field, value);
-                    self
-                }
-            )*
-        }
-
-        pfcp_table!(@ctors [$($by)*] $ty { $( $field : $row $p $(* $($max)?)? $vty [$($interface)*] , )* });
-
-        // A table without rows leaves its arguments unused.
-        #[allow(unused_variables, unused_mut, unused_assignments)]
-        impl oxirush_utils::tables::Scope for $ty {
-            type P = crate::Pfcp;
-            fn table() -> &'static crate::table::Table {
-                &[<$ty:snake:upper _TABLE>]
-            }
-
-            #[allow(unused_assignments, unused_variables, unused_mut)]
-            fn position(ie_type: u16) -> Option<usize> {
-                let mut at = 0;
-                $(
-                    if ie_type == <$vty as crate::ie::IeType>::IE_TYPE {
-                        return Some(at);
-                    }
-                    at += 1;
-                )*
-                None
-            }
-
-            const PRESIZE: bool = false $( || pfcp_table!(@large [$(* $($max)?)?] ($vty)) )*;
-
-            // Only the IEs that can be values are counted: not one of a null length, nor
-            // one whose IEs run past it, which the scope keeps as octets.
-            #[allow(unused_variables)]
-            fn presize(&mut self, octets: &[u8]) {
-                $( let mut [<count_ $field>] = 0usize; )*
-                for ie in crate::framing::ies(octets).flatten() {
-                    $(
-                        if pfcp_table!(@large [$(* $($max)?)?] ($vty))
-                            && ie.ie_type == <$vty as crate::ie::IeType>::IE_TYPE
-                        {
-                            let content = ie.content();
-                            if !content.is_empty() && crate::framing::ies(content).all(|inner| inner.is_ok()) {
-                                [<count_ $field>] += 1;
-                            }
-                            continue;
-                        }
-                    )*
-                }
-                $( pfcp_table!(@reserve [$(* $($max)?)?] self.$field, [<count_ $field>]); )*
-            }
-
-            fn place(&mut self, ie_type: u16, body: &[u8]) -> crate::ie::Placing {
-                $(
-                    if ie_type == <$vty as crate::ie::IeType>::IE_TYPE {
-                        return pfcp_table!(@place [$(* $($max)?)?] $p ($vty) self.$field, body);
-                    }
-                )*
-                crate::ie::Placing::Unexpected
-            }
-
-            fn emit(&self, ie_type: u16, nth: usize, out: &mut alloc::vec::Vec<u8>) -> Result<bool, crate::Error> {
-                $(
-                    if ie_type == <$vty as crate::ie::IeType>::IE_TYPE {
-                        return crate::table::emit_field::<$vty, _>(&self.$field, nth, out);
-                    }
-                )*
-                Ok(false)
-            }
-
-            fn encoded_len(&self) -> usize {
-                let mut length = 0;
-                $( pfcp_table!(@each [$(* $($max)?)?] ($vty) self.$field, |value| {
-                    length += 4 + crate::ie::Codec::encoded_len(value);
-                }); )*
-                for ie in &self.raw {
-                    length += 4 + 2 * usize::from(ie.enterprise_id.is_some()) + ie.octets.len();
-                }
-                length
-            }
-
-            fn encode_fields(&self, out: &mut alloc::vec::Vec<u8>) -> Result<(), crate::Error> {
-                $( pfcp_table!(@each [$(* $($max)?)?] ($vty) self.$field, |value| {
-                    crate::ie::encode_value(value, out)?;
-                }); )*
-                Ok(())
-            }
-
-            #[cfg(feature = "endpoint")]
-            fn held(&self) -> usize {
-                let mut held = self.raw.capacity() * core::mem::size_of::<crate::ie::RawIe>()
-                    + self.order.capacity() * core::mem::size_of::<crate::ie::Placed>();
-                $( held += pfcp_table!(@held [$(* $($max)?)?] $p ($vty) self.$field); )*
-                held
-            }
-
-            fn count(&self, ie_type: u16) -> usize {
-                $(
-                    if ie_type == <$vty as crate::ie::IeType>::IE_TYPE {
-                        return crate::table::FieldValues::<$vty>::values(&self.$field).len();
-                    }
-                )*
-                0
-            }
-
-            fn clear(&mut self, ie_type: u16) {
-                $(
-                    if ie_type == <$vty as crate::ie::IeType>::IE_TYPE {
-                        self.$field = Default::default();
-                        return;
-                    }
-                )*
-            }
-
-            fn decodes(&self, ie_type: u16, octets: &[u8]) -> bool {
-                $(
-                    if ie_type == <$vty as crate::ie::IeType>::IE_TYPE {
-                        return <$vty as crate::ie::Codec>::decode(octets).is_some();
-                    }
-                )*
-                false
-            }
-
-            fn plain(&self) -> bool {
-                self.raw.is_empty() $( && pfcp_table!(@plain [$(* $($max)?)?] ($vty) self.$field) )*
-            }
-
-            fn is_empty(&self) -> bool {
-                self.raw.is_empty() $( && crate::table::FieldValues::<$vty>::values(&self.$field).is_empty() )*
-            }
-
-            fn raw(&self) -> &[crate::ie::RawIe] { &self.raw }
-            fn raw_mut(&mut self) -> &mut alloc::vec::Vec<crate::ie::RawIe> { &mut self.raw }
-            fn order(&self) -> &[crate::ie::Placed] { &self.order }
-            fn order_mut(&mut self) -> &mut alloc::vec::Vec<crate::ie::Placed> { &mut self.order }
-        }
-
-        // A table without rows leaves its arguments unused.
-        #[allow(unused_variables, unused_mut, unused_assignments)]
-        impl crate::check::Checked for $ty {
-            fn check_values(&self, path: &crate::check::Path, context: crate::check::Context, found: &mut alloc::vec::Vec<crate::check::Deviation>) {
-                // The conditions read the scope as its receiver on the interface takes it:
-                // without the values of the rows that the interface does not have.
-                const CONDITIONS: bool = false $( || pfcp_table!(@checked $($scope)? $($ascope)?) )*;
-                let mut off = 0u64;
-                if CONDITIONS {
-                    let (rows, mut row) = (<Self as oxirush_utils::tables::Scope>::table().rows, 0);
-                    $(
-                        if !crate::table::FieldValues::<$vty>::values(&self.$field).is_empty() && !rows[row].roles.iter().any(|role| role.interfaces.has(context.interface)) {
-                            off |= 1 << row;
-                        }
-                        row += 1;
-                    )*
-                }
-                let taken = crate::check::taken(self, off);
-                let view: &Self = taken.as_ref().unwrap_or(self);
-                let mut row = 0;
-                $(
-                    crate::check::check_field_values::<$vty, _, _>(
-                        self, row, &self.$field, path, context, found,
-                    );
-                    $({
-                        let $scope: &Self = view;
-                        if $condition {
-                            crate::check::condition_missing(self, row, path, context, found);
-                        }
-                    })?
-                    $({
-                        let $ascope: &Self = view;
-                        if $absent {
-                            crate::check::condition_absent(self, row, path, context, found);
-                        }
-                    })?
-                    row += 1;
-                )*
-                $( $across(self, path, context, found); )?
-            }
-        }
-
-        pfcp_table!(@kind $kind $ty);
-
-        #[cfg(feature = "tree")]
-        // A table without rows leaves its arguments unused.
-        #[allow(unused_variables, unused_mut, unused_assignments)]
-        impl crate::paths::TreeScope for $ty {
-            fn field_tree(&self, ie_type: u16, nth: usize) -> Option<oxirush_utils::tree::Value> {
-                $(
-                    if ie_type == <$vty as crate::ie::IeType>::IE_TYPE {
-                        return crate::paths::field_tree::<$vty, _>(&self.$field, nth);
-                    }
-                )*
-                None
-            }
-
-            fn read_field(
-                &mut self,
-                ie_type: u16,
-                value: &oxirush_utils::tree::Value,
-                reading: &mut oxirush_utils::tree::Reading,
-            ) -> Result<(), oxirush_utils::tree::Refused> {
-                $(
-                    if ie_type == <$vty as crate::ie::IeType>::IE_TYPE {
-                        return crate::paths::read_field::<$vty, _>(&mut self.$field, value, reading);
-                    }
-                )*
-                Ok(())
-            }
-        }
-    } };
-
-    // ── The parts of a row ──────────────────────────────────────────────────
-
-    // A row that is there once is a field of its value, in place, but a grouped IE of `Cb`
-    // or `Ob`, large and rare, which is boxed.
-    (@field [] Cb ($t:ty)) => { Option<alloc::boxed::Box<$t>> };
-    (@field [] Ob ($t:ty)) => { Option<alloc::boxed::Box<$t>> };
-    (@field [] $p:ident ($t:ty)) => { Option<$t> };
-    (@field [* $($max:literal)?] $p:ident ($t:ty)) => { alloc::vec::Vec<$t> };
-    (@presence M) => { crate::table::Presence::Mandatory };
-    (@presence C) => { crate::table::Presence::Conditional };
-    (@presence O) => { crate::table::Presence::Optional };
-    (@presence Cb) => { crate::table::Presence::Conditional };
-    (@presence Ob) => { crate::table::Presence::Optional };
-    // The roles of a row: the row itself, or the rows that share its field.
-    (@roles $row:literal $p:ident [$($repeat:tt)*] [$($interface:ident)*]) => {
-        &[pfcp_table!(@role $row $p [$($repeat)*] [$($interface)*])]
-    };
-    (@roles $row:literal $p:ident $repeat:tt $interfaces:tt [$($role:literal $rp:ident [$($rrepeat:tt)*] [$($ri:ident)*]),*]) => {
-        &[$(pfcp_table!(@role $role $rp [$($rrepeat)*] [$($ri)*])),*]
-    };
-    (@role $name:literal $p:ident [$($repeat:tt)*] [$($interface:ident)*]) => {
-        crate::table::Role {
-            name: $name,
-            presence: pfcp_table!(@presence $p),
-            repeat: pfcp_table!(@repeat $($repeat)*),
-            interfaces: crate::table::Interfaces(0 $(| crate::table::Interfaces::$interface.0)*),
+    ($($table:tt)*) => {
+        oxirush_utils::table! {
+            {proto: crate::Pfcp, table: table, ie: ie, check: check, paths: paths, error: crate::Error, ctors: pfcp_ctors}
+            $($table)*
         }
     };
-    (@repeat) => { crate::table::Repeat::Once };
-    (@repeat *) => { crate::table::Repeat::Any };
-    (@repeat * $max:literal) => { crate::table::Repeat::AtMost($max) };
-    // Each value of a field: that of a field there once, or those of a list.
-    (@each [] ($t:ty) $f:expr, |$value:ident| $body:block) => {
-        if let Some($value) = crate::table::FieldValues::<$t>::first(&$f) $body
-    };
-    (@each [* $($max:literal)?] ($t:ty) $f:expr, |$value:ident| $body:block) => {
-        for $value in crate::table::FieldValues::<$t>::values(&$f) $body
-    };
-    (@checked) => { false };
-    (@checked $($scope:ident)+) => { true };
-    (@place [] $p:ident ($t:ty) $f:expr, $body:expr) => {
-        pfcp_table!(@place_once $p ($t) $f, $body)
-    };
-    (@place_once Cb ($t:ty) $f:expr, $body:expr) => {
-        pfcp_table!(@placing $f, crate::table::decode_boxed(&mut $f, $body))
-    };
-    (@place_once Ob ($t:ty) $f:expr, $body:expr) => {
-        pfcp_table!(@placing $f, crate::table::decode_boxed(&mut $f, $body))
-    };
-    (@place_once $p:ident ($t:ty) $f:expr, $body:expr) => {
-        pfcp_table!(@placing $f, crate::ie::Listed::decode_into(&mut $f, $body))
-    };
-    // A row there once that has its value repeats it; one that has none takes it when it
-    // decodes.
-    (@placing $f:expr, $decoded:expr) => {
-        match $f.is_some() {
-            true => crate::ie::Placing::Repeated,
-            false if $decoded => crate::ie::Placing::Placed,
-            false => crate::ie::Placing::Malformed,
-        }
-    };
-    (@place [* $($max:literal)?] $p:ident ($t:ty) $f:expr, $body:expr) => {
-        if pfcp_table!(@full [$($max)?] $f) {
-            crate::ie::Placing::Repeated
-        } else if <$t as crate::ie::Listed>::decode_push(&mut $f, $body) {
-            crate::ie::Placing::Placed
-        } else {
-            crate::ie::Placing::Malformed
-        }
-    };
-    // A list of values larger than this is sized before it is filled.
-    (@large [] ($t:ty)) => { false };
-    (@large [* $($max:literal)?] ($t:ty)) => { core::mem::size_of::<$t>() > 64 };
-    (@reserve [] $f:expr, $n:expr) => { let _ = $n; };
-    (@reserve [* $($max:literal)?] $f:expr, $n:expr) => { $f.reserve_exact($n) };
-    // What a field takes beyond its own size: a list its entries, a box its value.
-    (@held [* $($max:literal)?] $p:ident ($t:ty) $f:expr) => {
-        $f.capacity() * core::mem::size_of::<$t>() + $f.iter().map(crate::ie::Listed::held).sum::<usize>()
-    };
-    (@held [] Cb ($t:ty) $f:expr) => { pfcp_table!(@held_box ($t) $f) };
-    (@held [] Ob ($t:ty) $f:expr) => { pfcp_table!(@held_box ($t) $f) };
-    (@held [] $p:ident ($t:ty) $f:expr) => { $f.as_ref().map_or(0, crate::ie::Listed::held) };
-    (@held_box ($t:ty) $f:expr) => {
-        $f.as_ref().map_or(0, |value| core::mem::size_of::<$t>() + oxirush_utils::tables::Scope::held(&**value))
-    };
-    // Whether a field reads as it is: as many values as the row takes, each plain.
-    (@plain [] ($t:ty) $f:expr) => { crate::table::FieldValues::<$t>::values(&$f).iter().all(crate::ie::Listed::plain) };
-    (@plain [* $($max:literal)?] ($t:ty) $f:expr) => { !pfcp_table!(@over [$($max)?] $f) && $f.iter().all(crate::ie::Listed::plain) };
-    (@over [] $f:expr) => { false };
-    (@over [$max:literal] $f:expr) => { $f.len() > $max };
-    (@full [] $f:expr) => { false };
-    (@full [$max:literal] $f:expr) => { $f.len() >= $max };
+}
 
-    // ── A message, or the content of a grouped IE ───────────────────────────
-
-    (@kind group $ty:ident) => {
-        impl crate::ie::Codec for $ty {
-            fn decode(octets: &[u8]) -> Option<Self> {
-                crate::table::decode_scope(octets).ok()
-            }
-
-            fn encode(&self, out: &mut alloc::vec::Vec<u8>) -> Result<(), crate::Error> {
-                crate::table::encode_scope(self, out)
-            }
-
-            fn encoded_len(&self) -> usize {
-                oxirush_utils::tables::Scope::encoded_len(self)
-            }
-        }
-
-        impl crate::ie::Listed for $ty {
-            // A grouped IE is large: it is decoded in its place, and not moved there.
-            fn decode_into(slot: &mut Option<Self>, octets: &[u8]) -> bool {
-                let scope = slot.insert(Self::default());
-                if crate::table::decode_scope_into(scope, octets).is_err() {
-                    *slot = None;
-                    return false;
-                }
-                true
-            }
-
-            fn decode_push(list: &mut alloc::vec::Vec<Self>, octets: &[u8]) -> bool {
-                list.push(Self::default());
-                let last = list.len() - 1;
-                if crate::table::decode_scope_into(&mut list[last], octets).is_err() {
-                    list.pop();
-                    return false;
-                }
-                true
-            }
-
-            #[cfg(feature = "endpoint")]
-            fn held(&self) -> usize {
-                oxirush_utils::tables::Scope::held(self)
-            }
-
-            fn check_in(&self, path: &crate::check::Path, context: crate::check::Context, found: &mut alloc::vec::Vec<crate::check::Deviation>) {
-                crate::check::check_scope(self, path, context, found);
-            }
-
-            /// Of a grouped IE that has an IE: one of a null length reads as none.
-            fn plain(&self) -> bool {
-                oxirush_utils::tables::Scope::plain(self) && !oxirush_utils::tables::Scope::is_empty(self)
-            }
-        }
-
-        impl crate::check::Rules for $ty {
-            /// Its table on the interfaces that it has, as the receiver of a response: the
-            /// IEs of any, and those that all need; as its receiver reads it
-            /// ([`crate::check::as_read`]).
-            fn check(&self, path: &crate::check::Path, found: &mut alloc::vec::Vec<crate::check::Deviation>) {
-                let interfaces = <Self as oxirush_utils::tables::Scope>::table().interfaces();
-                let context = crate::check::Context::on(interfaces);
-                let read = crate::check::as_read(self, path, context, found);
-                crate::check::check_scope(read.as_ref().unwrap_or(self), path, context, found);
-            }
-        }
-
-        #[cfg(feature = "tree")]
-        impl oxirush_utils::tree::Tree for $ty {
-            const NAME: &'static str = <$ty as crate::ie::IeType>::TYPE_NAME;
-
-            fn to_tree(&self) -> oxirush_utils::tree::Value {
-                crate::paths::scope_to_tree(self)
-            }
-
-            fn from_tree(
-                value: &oxirush_utils::tree::Value,
-                reading: &mut oxirush_utils::tree::Reading,
-            ) -> Result<Self, oxirush_utils::tree::Refused> {
-                crate::paths::scope_from_tree(value, reading)
-            }
-        }
+/// The constructors of a table by interface, which [`table!`](oxirush_utils::table) has the
+/// protocol write: `new_sxa()` to `new_n4mb()`, each with the mandatory rows of its interface.
+macro_rules! pfcp_ctors {
+    (@ctors $fam:tt [$($by:ident)+] $ty:ident $rows:tt) => {
+        pfcp_ctors!(@each $fam [$($by)+] $ty $rows);
     };
-    (@kind message $ty:ident) => {};
-
-    // The constructors: `new()` with the mandatory rows of every interface, or one for each
-    // interface that the table lists, with the mandatory rows of that interface.
-    (@ctors [] $ty:ident { $($rows:tt)* }) => {
-        pfcp_table!(@new new * $ty "The scope with its mandatory IEs, which each interface of its table has alike." [] [] $($rows)*);
+    (@each $fam:tt [] $ty:ident $rows:tt) => {};
+    (@each $fam:tt [$on:ident $($more:ident)*] $ty:ident $rows:tt) => {
+        pfcp_ctors!(@ctor $fam $on $ty $rows);
+        pfcp_ctors!(@each $fam [$($more)*] $ty $rows);
     };
-    (@ctors [$($by:ident)+] $ty:ident $rows:tt) => {
-        pfcp_table!(@each [$($by)+] $ty $rows);
+    (@ctor $fam:tt SXA $ty:ident { $($rows:tt)* }) => { oxirush_utils::table!(@new $fam new_sxa SXA $ty "The scope with its mandatory IEs on Sxa." [] [] $($rows)*); };
+    (@ctor $fam:tt SXB $ty:ident { $($rows:tt)* }) => { oxirush_utils::table!(@new $fam new_sxb SXB $ty "The scope with its mandatory IEs on Sxb." [] [] $($rows)*); };
+    (@ctor $fam:tt SXC $ty:ident { $($rows:tt)* }) => { oxirush_utils::table!(@new $fam new_sxc SXC $ty "The scope with its mandatory IEs on Sxc." [] [] $($rows)*); };
+    (@ctor $fam:tt N4 $ty:ident { $($rows:tt)* }) => { oxirush_utils::table!(@new $fam new_n4 N4 $ty "The scope with its mandatory IEs on N4." [] [] $($rows)*); };
+    (@ctor $fam:tt N4MB $ty:ident { $($rows:tt)* }) => { oxirush_utils::table!(@new $fam new_n4mb N4MB $ty "The scope with its mandatory IEs on N4mb." [] [] $($rows)*); };
+    (@in $fam:tt SXA [SXA $($i:ident)*] $name:ident $ty:ident $doc:literal [$($arg:tt)*] [$($set:tt)*] ($field:ident [$($m:tt)*] ($t:ty)) $($rest:tt)*) => {
+        oxirush_utils::table!(@new $fam $name SXA $ty $doc [$($arg)* $field: $t,] [$($set)* ($field [$($m)*] ($t))] $($rest)*);
     };
-    (@each [] $ty:ident $rows:tt) => {};
-    (@each [$on:ident $($more:ident)*] $ty:ident $rows:tt) => {
-        pfcp_table!(@ctor $on $ty $rows);
-        pfcp_table!(@each [$($more)*] $ty $rows);
+    (@in $fam:tt SXB [SXB $($i:ident)*] $name:ident $ty:ident $doc:literal [$($arg:tt)*] [$($set:tt)*] ($field:ident [$($m:tt)*] ($t:ty)) $($rest:tt)*) => {
+        oxirush_utils::table!(@new $fam $name SXB $ty $doc [$($arg)* $field: $t,] [$($set)* ($field [$($m)*] ($t))] $($rest)*);
     };
-    (@ctor SXA $ty:ident { $($rows:tt)* }) => { pfcp_table!(@new new_sxa SXA $ty "The scope with its mandatory IEs on Sxa." [] [] $($rows)*); };
-    (@ctor SXB $ty:ident { $($rows:tt)* }) => { pfcp_table!(@new new_sxb SXB $ty "The scope with its mandatory IEs on Sxb." [] [] $($rows)*); };
-    (@ctor SXC $ty:ident { $($rows:tt)* }) => { pfcp_table!(@new new_sxc SXC $ty "The scope with its mandatory IEs on Sxc." [] [] $($rows)*); };
-    (@ctor N4 $ty:ident { $($rows:tt)* }) => { pfcp_table!(@new new_n4 N4 $ty "The scope with its mandatory IEs on N4." [] [] $($rows)*); };
-    (@ctor N4MB $ty:ident { $($rows:tt)* }) => { pfcp_table!(@new new_n4mb N4MB $ty "The scope with its mandatory IEs on N4mb." [] [] $($rows)*); };
-    // A constructor, with the fields of the mandatory rows of `$on` (`*` for any interface),
-    // which a muncher collects.
-    (@new $name:ident $on:tt $ty:ident $doc:literal [$($arg:tt)*] [$( ($f:ident [$($m:tt)*] ($ft:ty)) )*]) => {
-        impl $ty {
-            #[doc = $doc]
-            #[allow(clippy::too_many_arguments)]
-            pub fn $name($($arg)*) -> Self {
-                #[allow(unused_mut)]
-                let mut scope = Self::default();
-                $( crate::table::FieldValues::<$ft>::add(&mut scope.$f, $f); )*
-                scope
-            }
-        }
+    (@in $fam:tt SXC [SXC $($i:ident)*] $name:ident $ty:ident $doc:literal [$($arg:tt)*] [$($set:tt)*] ($field:ident [$($m:tt)*] ($t:ty)) $($rest:tt)*) => {
+        oxirush_utils::table!(@new $fam $name SXC $ty $doc [$($arg)* $field: $t,] [$($set)* ($field [$($m)*] ($t))] $($rest)*);
     };
-    (@new $name:ident $on:tt $ty:ident $doc:literal [$($arg:tt)*] [$($set:tt)*] $field:ident : $row:literal M $(* $($max:literal)?)? $vty:ident [$($i:ident)*] , $($rest:tt)*) => {
-        pfcp_table!(@in $on [$($i)*] $name $ty $doc [$($arg)*] [$($set)*] ($field [$(* $($max)?)?] ($vty)) $($rest)*);
+    (@in $fam:tt N4 [N4 $($i:ident)*] $name:ident $ty:ident $doc:literal [$($arg:tt)*] [$($set:tt)*] ($field:ident [$($m:tt)*] ($t:ty)) $($rest:tt)*) => {
+        oxirush_utils::table!(@new $fam $name N4 $ty $doc [$($arg)* $field: $t,] [$($set)* ($field [$($m)*] ($t))] $($rest)*);
     };
-    (@new $name:ident $on:tt $ty:ident $doc:literal [$($arg:tt)*] [$($set:tt)*] $field:ident : $row:literal $p:ident $(* $($max:literal)?)? $vty:ident [$($i:ident)*] , $($rest:tt)*) => {
-        pfcp_table!(@new $name $on $ty $doc [$($arg)*] [$($set)*] $($rest)*);
+    (@in $fam:tt N4MB [N4MB $($i:ident)*] $name:ident $ty:ident $doc:literal [$($arg:tt)*] [$($set:tt)*] ($field:ident [$($m:tt)*] ($t:ty)) $($rest:tt)*) => {
+        oxirush_utils::table!(@new $fam $name N4MB $ty $doc [$($arg)* $field: $t,] [$($set)* ($field [$($m)*] ($t))] $($rest)*);
     };
-    // A mandatory row is an argument where its interfaces have `$on`.
-    (@in * [$($i:ident)*] $name:ident $ty:ident $doc:literal [$($arg:tt)*] [$($set:tt)*] ($field:ident [$($m:tt)*] ($t:ty)) $($rest:tt)*) => {
-        pfcp_table!(@new $name * $ty $doc [$($arg)* $field: $t,] [$($set)* ($field [$($m)*] ($t))] $($rest)*);
+    (@in $fam:tt $on:tt [$other:ident $($i:ident)*] $name:ident $ty:ident $doc:literal [$($arg:tt)*] [$($set:tt)*] $row:tt $($rest:tt)*) => {
+        pfcp_ctors!(@in $fam $on [$($i)*] $name $ty $doc [$($arg)*] [$($set)*] $row $($rest)*);
     };
-    (@in SXA [SXA $($i:ident)*] $name:ident $ty:ident $doc:literal [$($arg:tt)*] [$($set:tt)*] ($field:ident [$($m:tt)*] ($t:ty)) $($rest:tt)*) => {
-        pfcp_table!(@new $name SXA $ty $doc [$($arg)* $field: $t,] [$($set)* ($field [$($m)*] ($t))] $($rest)*);
-    };
-    (@in SXB [SXB $($i:ident)*] $name:ident $ty:ident $doc:literal [$($arg:tt)*] [$($set:tt)*] ($field:ident [$($m:tt)*] ($t:ty)) $($rest:tt)*) => {
-        pfcp_table!(@new $name SXB $ty $doc [$($arg)* $field: $t,] [$($set)* ($field [$($m)*] ($t))] $($rest)*);
-    };
-    (@in SXC [SXC $($i:ident)*] $name:ident $ty:ident $doc:literal [$($arg:tt)*] [$($set:tt)*] ($field:ident [$($m:tt)*] ($t:ty)) $($rest:tt)*) => {
-        pfcp_table!(@new $name SXC $ty $doc [$($arg)* $field: $t,] [$($set)* ($field [$($m)*] ($t))] $($rest)*);
-    };
-    (@in N4 [N4 $($i:ident)*] $name:ident $ty:ident $doc:literal [$($arg:tt)*] [$($set:tt)*] ($field:ident [$($m:tt)*] ($t:ty)) $($rest:tt)*) => {
-        pfcp_table!(@new $name N4 $ty $doc [$($arg)* $field: $t,] [$($set)* ($field [$($m)*] ($t))] $($rest)*);
-    };
-    (@in N4MB [N4MB $($i:ident)*] $name:ident $ty:ident $doc:literal [$($arg:tt)*] [$($set:tt)*] ($field:ident [$($m:tt)*] ($t:ty)) $($rest:tt)*) => {
-        pfcp_table!(@new $name N4MB $ty $doc [$($arg)* $field: $t,] [$($set)* ($field [$($m)*] ($t))] $($rest)*);
-    };
-    (@in $on:tt [$other:ident $($i:ident)*] $name:ident $ty:ident $doc:literal [$($arg:tt)*] [$($set:tt)*] $row:tt $($rest:tt)*) => {
-        pfcp_table!(@in $on [$($i)*] $name $ty $doc [$($arg)*] [$($set)*] $row $($rest)*);
-    };
-    (@in $on:tt [] $name:ident $ty:ident $doc:literal [$($arg:tt)*] [$($set:tt)*] $row:tt $($rest:tt)*) => {
-        pfcp_table!(@new $name $on $ty $doc [$($arg)*] [$($set)*] $($rest)*);
+    (@in $fam:tt $on:tt [] $name:ident $ty:ident $doc:literal [$($arg:tt)*] [$($set:tt)*] $row:tt $($rest:tt)*) => {
+        oxirush_utils::table!(@new $fam $name $on $ty $doc [$($arg)*] [$($set)*] $($rest)*);
     };
 }
 
@@ -892,4 +413,6 @@ macro_rules! pfcp_enum {
     };
 }
 
-pub(crate) use {pfcp_bits, pfcp_enum, pfcp_ies, pfcp_layout, pfcp_messages, pfcp_table};
+pub(crate) use {
+    pfcp_bits, pfcp_ctors, pfcp_enum, pfcp_ies, pfcp_layout, pfcp_messages, pfcp_table,
+};

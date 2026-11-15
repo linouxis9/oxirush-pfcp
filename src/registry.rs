@@ -19,7 +19,7 @@
 //! clause 7, one row each, which the macros expand into the types of the crate.
 
 use crate::enums::{CauseValue, DestinationInterfaceValue, SteeringFunctionalityValue};
-use crate::macros::{pfcp_ies, pfcp_table};
+use crate::macros::{pfcp_ctors, pfcp_ies, pfcp_table};
 use crate::values::*;
 use crate::values_clauses::*;
 use crate::values_figures::*;
