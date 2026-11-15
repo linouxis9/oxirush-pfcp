@@ -596,82 +596,6 @@ pub(crate) const NAME_TAKES: &oxirush_utils::tree::Takes = &oxirush_utils::tree:
     ),
 ]);
 
-/// The tree of the octets of a Network Instance, of an APN/DNN and of the Network Instance
-/// field of Remote GTP-U Peer: the name of their labels, a text whatever its characters,
-/// or, of other octets, an object of one member, the one name of `field`, of the octets in
-/// hexadecimal. `{"octets": ...}` is an IE kept as octets.
-#[cfg(feature = "tree")]
-pub(crate) fn name_tree(
-    octets: &[u8],
-    field: &'static [&'static str],
-) -> oxirush_utils::tree::Value {
-    match fqdn_name(octets) {
-        Some(name) => oxirush_utils::tree::text(name),
-        None => oxirush_utils::tree::alternative(field[0], oxirush_utils::tree::octets(octets)),
-    }
-}
-
-/// The octets of the tree of a Network Instance, an APN/DNN or the Network Instance field
-/// of Remote GTP-U Peer ([`name_tree`]).
-#[cfg(feature = "tree")]
-pub(crate) fn name_from_tree(
-    value: &oxirush_utils::tree::Value,
-    reading: &mut oxirush_utils::tree::Reading,
-    field: &'static [&'static str],
-) -> Result<Vec<u8>, oxirush_utils::tree::Refused> {
-    if let Some(name) = value.as_str() {
-        return fqdn_of(name).ok_or_else(|| {
-            reading.mismatch(
-                "a name of 253 octets at most, of labels of 1 to 63 octets with dots between them",
-                value,
-            )
-        });
-    }
-    let (_, octets) = reading.alternative(value, field)?;
-    reading.within(field[0], octets, |octets, reading| reading.octets(octets))
-}
-
-/// The tree of the octets of a value that is a text, a UTF8String: the text, or, of octets
-/// that are no UTF-8, an object of one member, the one name of `field`, of the octets in
-/// hexadecimal. `{"octets": ...}` is an IE kept as octets.
-#[cfg(feature = "tree")]
-pub(crate) fn text_tree(
-    octets: &[u8],
-    field: &'static [&'static str],
-) -> oxirush_utils::tree::Value {
-    match core::str::from_utf8(octets) {
-        Ok(text) => oxirush_utils::tree::text(alloc::string::String::from(text)),
-        Err(_) => oxirush_utils::tree::alternative(field[0], oxirush_utils::tree::octets(octets)),
-    }
-}
-
-/// The octets of the tree of a value that is a text ([`text_tree`]), or of a field that
-/// is one, whose octets that are no text are the one member `member` of an object. A
-/// refusal names no member that is written, which a secret may be.
-#[cfg(feature = "tree")]
-pub(crate) fn text_from_tree(
-    value: &oxirush_utils::tree::Value,
-    reading: &mut oxirush_utils::tree::Reading,
-    member: &'static str,
-) -> Result<Vec<u8>, oxirush_utils::tree::Refused> {
-    if let Some(text) = value.as_str() {
-        return Ok(text.as_bytes().to_vec());
-    }
-    let octets = value
-        .as_object()
-        .filter(|members| members.len() == 1)
-        .and_then(|members| oxirush_utils::tree::member(members, member));
-    match octets {
-        Some((_, octets)) => {
-            reading.within(member, octets, |octets, reading| reading.octets(octets))
-        }
-        None => {
-            let expected = alloc::format!("a text, or its octets as {{\"{member}\": ...}}");
-            Err(reading.mismatch(&expected, value))
-        }
-    }
-}
-
 pfcp_layout! {
     /// MBR (§8.2.8): the maximum bitrates of the uplink and of the downlink, in kbps.
     pub struct Mbr "8.2.8" { fields { ul_mbr "UL MBR": U40, dl_mbr "DL MBR": U40 } }
@@ -966,8 +890,8 @@ macro_rules! pfcp_octets {
             const NAME: &'static str = <$ty as crate::ie::IeType>::TYPE_NAME;
             fn to_tree(&self) -> oxirush_utils::tree::Value {
                 match (Self::NAME_LABELS, Self::TEXT) {
-                    (true, _) => crate::values::name_tree(&self.0, Self::FIELDS),
-                    (false, true) => crate::values::text_tree(&self.0, Self::FIELDS),
+                    (true, _) => crate::fields::name_tree(&self.0, Self::FIELDS),
+                    (false, true) => crate::fields::text_tree(&self.0, Self::FIELDS),
                     (false, false) => oxirush_utils::tree::octets(&self.0),
                 }
             }
@@ -976,10 +900,10 @@ macro_rules! pfcp_octets {
                 reading: &mut oxirush_utils::tree::Reading,
             ) -> Result<Self, oxirush_utils::tree::Refused> {
                 let octets = match (Self::SECRET, Self::NAME_LABELS, Self::TEXT) {
-                    (true, _, true) => reading.secret(|reading| crate::values::text_from_tree(value, reading, $name))?,
+                    (true, _, true) => reading.secret(|reading| crate::fields::text_from_tree(value, reading, $name))?,
                     (true, ..) => reading.secret(|reading| reading.octets(value))?,
-                    (false, true, _) => crate::values::name_from_tree(value, reading, Self::FIELDS)?,
-                    (false, false, true) => crate::values::text_from_tree(value, reading, $name)?,
+                    (false, true, _) => crate::fields::name_from_tree(value, reading, Self::FIELDS)?,
+                    (false, false, true) => crate::fields::text_from_tree(value, reading, $name)?,
                     (false, false, false) => reading.octets(value)?,
                 };
                 Ok(Self(octets.into()))

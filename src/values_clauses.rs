@@ -776,7 +776,7 @@ impl FqCsid {
                         u16::MAX as u64,
                     )),
                 ),
-                ("Node Type", <Narrow<NodeType> as Field>::TAKES),
+                ("Node Type", <Narrow<NodeType> as FieldTree>::TAKES),
                 (
                     crate::ie::UNKNOWN_OCTETS,
                     &oxirush_utils::tree::Takes::Octets(None),
@@ -963,7 +963,7 @@ impl oxirush_utils::tree::Tree for FqCsid {
             ),
         );
         if let Some(node_type) = self.node_type {
-            members.put("Node Type", Field::to_tree(&node_type));
+            members.put("Node Type", FieldTree::to_tree(&node_type));
         }
         if !self.extra.is_empty() {
             members.put(crate::ie::UNKNOWN_OCTETS, tree::octets(&self.extra));
@@ -1052,8 +1052,8 @@ macro_rules! mac_addresses {
                 None,
                 &[
                     ("MAC address values", &oxirush_utils::tree::Takes::List(&oxirush_utils::tree::Takes::Octets(Some(6)))),
-                    ("C-TAG", <Lv8 as Field>::TAKES),
-                    ("S-TAG", <Lv8 as Field>::TAKES),
+                    ("C-TAG", <Lv8 as FieldTree>::TAKES),
+                    ("S-TAG", <Lv8 as FieldTree>::TAKES),
                     (crate::ie::UNKNOWN_OCTETS, &oxirush_utils::tree::Takes::Octets(None)),
                 ],
             );
@@ -1129,8 +1129,8 @@ macro_rules! mac_addresses {
                 use oxirush_utils::tree;
                 let mut members = tree::Members::new();
                 members.put("MAC address values", tree::Value::Array(self.mac_addresses.iter().map(|mac| tree::octets(mac)).collect()));
-                members.put_optional("C-TAG", self.c_tag.as_ref().map(Field::to_tree));
-                members.put_optional("S-TAG", self.s_tag.as_ref().map(Field::to_tree));
+                members.put_optional("C-TAG", self.c_tag.as_ref().map(FieldTree::to_tree));
+                members.put_optional("S-TAG", self.s_tag.as_ref().map(FieldTree::to_tree));
                 if !self.extra.is_empty() {
                     members.put(crate::ie::UNKNOWN_OCTETS, tree::octets(&self.extra));
                 }

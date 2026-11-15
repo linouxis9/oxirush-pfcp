@@ -188,11 +188,11 @@ macro_rules! pfcp_layout {
             /// What its tree takes: each member, with what it takes.
             #[cfg(feature = "tree")]
             const MEMBERS_TAKE: &'static [(&'static str, &'static oxirush_utils::tree::Takes)] = &[
-                $($( ($head_name, <$hkind as crate::fields::Field>::TAKES), )*)?
+                $($( ($head_name, <$hkind as crate::fields::FieldTree>::TAKES), )*)?
                 $(
                     $( ($flag_name, pfcp_layout!(@bits takes [$($width $(as $fkind)?)?])), )*
                     (pfcp_layout!(@spare $fk), &oxirush_utils::tree::Takes::Number(<$fk>::MAX as u64)),
-                    $( ($field_name, <$kind $(<$param>)? as crate::fields::Field>::TAKES), )*
+                    $( ($field_name, <$kind $(<$param>)? as crate::fields::FieldTree>::TAKES), )*
                 )?
                 (crate::ie::UNKNOWN_OCTETS, &oxirush_utils::tree::Takes::Octets(None)),
             ];
@@ -392,11 +392,11 @@ macro_rules! pfcp_layout {
                 // unknown octets.
                 $($(
                     if Self::FIELDS.len() == 1 && self.extra.is_empty() {
-                        return crate::fields::Field::to_tree(&self.$head);
+                        return crate::fields::FieldTree::to_tree(&self.$head);
                     }
                 )*)?
                 let mut members = oxirush_utils::tree::Members::new();
-                $($( crate::fields::Field::put_member(&self.$head, &mut members, $head_name); )*)?
+                $($( crate::fields::FieldTree::put_member(&self.$head, &mut members, $head_name); )*)?
                 $(
                     $( pfcp_layout!(@bits put [$($width $(as $fkind)?)?] members, $flag_name, self.$flag); )*
                     if self.spare != <$fk>::default() {
@@ -404,7 +404,7 @@ macro_rules! pfcp_layout {
                     }
                     $(
                         if let Some(field) = pfcp_layout!(@get [$($cond)?] self.$field) {
-                            crate::fields::Field::put_member(field, &mut members, $field_name);
+                            crate::fields::FieldTree::put_member(field, &mut members, $field_name);
                         }
                     )*
                 )?
@@ -420,13 +420,13 @@ macro_rules! pfcp_layout {
             ) -> Result<Self, oxirush_utils::tree::Refused> {
                 $($(
                     if Self::FIELDS.len() == 1 && !value.is_object() {
-                        let $head = <$hkind as crate::fields::Field>::from_tree(value, reading)?;
+                        let $head = <$hkind as crate::fields::FieldTree>::from_tree(value, reading)?;
                         return Ok(Self { $head, ..Self::default() });
                     }
                 )*)?
                 let read = reading.members(value, Self::MEMBERS)?;
                 $($(
-                    let $head = <$hkind as crate::fields::Field>::read_member(&read, $head_name, reading)?;
+                    let $head = <$hkind as crate::fields::FieldTree>::read_member(&read, $head_name, reading)?;
                 )*)?
                 $(
                     $(
@@ -473,8 +473,6 @@ macro_rules! pfcp_layout {
     // octets, an entry of a list of them. Its value checks each at its place in the list.
     (@part $ty:ident $part:literal) => {
         impl crate::fields::Field for $ty {
-            #[cfg(feature = "tree")]
-            const TAKES: &'static oxirush_utils::tree::Takes = &oxirush_utils::tree::Takes::Members(None, Self::MEMBERS_TAKE);
             fn read(octets: &mut &[u8]) -> Option<Self> {
                 let length = usize::from(<u16 as crate::fields::Field>::read(octets)?);
                 let (within, rest) = octets.split_at_checked(length)?;
@@ -497,11 +495,14 @@ macro_rules! pfcp_layout {
                 length <= usize::from(u16::MAX)
                     && <Self as crate::ie::Codec>::encode(self, &mut alloc::vec::Vec::new()).is_ok()
             }
-            #[cfg(feature = "tree")]
+        }
+
+        #[cfg(feature = "tree")]
+        impl crate::fields::FieldTree for $ty {
+            const TAKES: &'static oxirush_utils::tree::Takes = &oxirush_utils::tree::Takes::Members(None, Self::MEMBERS_TAKE);
             fn to_tree(&self) -> oxirush_utils::tree::Value {
                 oxirush_utils::tree::Tree::to_tree(self)
             }
-            #[cfg(feature = "tree")]
             fn from_tree(
                 value: &oxirush_utils::tree::Value,
                 reading: &mut oxirush_utils::tree::Reading,
@@ -522,8 +523,8 @@ macro_rules! pfcp_layout {
     (@get [$cond:expr] $field:expr) => { $field.as_ref() };
     (@decode [] $read:expr) => { $read? };
     (@decode [$cond:expr] $read:expr) => { match $cond { true => Some($read?), false => None } };
-    (@from_tree [] $reading:ident, $read:expr, $name:expr, $kind:ty) => { <$kind as crate::fields::Field>::read_member($read, $name, $reading) };
-    (@from_tree [$cond:expr] $reading:ident, $read:expr, $name:expr, $kind:ty) => { $reading.optional($read, $name, <$kind as crate::fields::Field>::from_tree) };
+    (@from_tree [] $reading:ident, $read:expr, $name:expr, $kind:ty) => { <$kind as crate::fields::FieldTree>::read_member($read, $name, $reading) };
+    (@from_tree [$cond:expr] $reading:ident, $read:expr, $name:expr, $kind:ty) => { $reading.optional($read, $name, <$kind as crate::fields::FieldTree>::from_tree) };
     // A field read from the octets left, or from the first `length` of them, the others
     // being the next field's or the unknown octets.
     (@read $rest:ident, [$($kind:tt)+]) => { <$($kind)+ as crate::fields::Field>::read(&mut $rest) };
@@ -1757,11 +1758,6 @@ macro_rules! pfcp_enum {
         impl crate::fields::Field for $ty {
             #[cfg(feature = "spec")]
             const OCTETS: Option<usize> = Some(1);
-            #[cfg(feature = "tree")]
-            const TAKES: &'static oxirush_utils::tree::Takes = &oxirush_utils::tree::Takes::OneOf(&[
-                &oxirush_utils::tree::Takes::Named(Self::NAMED),
-                &oxirush_utils::tree::Takes::Number(u8::MAX as u64),
-            ]);
             fn read(octets: &mut &[u8]) -> Option<Self> {
                 let (&first, rest) = octets.split_first()?;
                 *octets = rest;
@@ -1773,22 +1769,28 @@ macro_rules! pfcp_enum {
             fn size(&self) -> usize {
                 1
             }
-            fn check(&self, path: &crate::check::Path, clause: &'static str, found: &mut alloc::vec::Vec<crate::check::Deviation>) {
+            fn check<D: crate::fields::Deviate>(&self, path: &crate::check::Path<'_>, clause: &'static str, found: &mut alloc::vec::Vec<D>) {
                 if self.name().is_none() {
                     let value = self.value().into();
-                    let kind = match (Self::RESERVED.contains(&self.value()), self.effective().value()) {
-                        (true, _) => crate::check::DeviationKind::ReservedValue { value },
-                        (false, read) if u32::from(read) != value => crate::check::DeviationKind::ReadAs { value, read: read.into() },
-                        (false, _) => crate::check::DeviationKind::SpareValue { value },
+                    let finding = match (Self::RESERVED.contains(&self.value()), self.effective().value()) {
+                        (true, _) => crate::fields::Finding::ReservedValue { value },
+                        (false, read) if u32::from(read) != value => crate::fields::Finding::ReadAs { value, read: read.into() },
+                        (false, _) => crate::fields::Finding::SpareValue { value },
                     };
-                    found.push(crate::check::Deviation::new(path, clause, kind));
+                    found.push(D::found(path, Some(clause), finding));
                 }
             }
-            #[cfg(feature = "tree")]
+        }
+
+        #[cfg(feature = "tree")]
+        impl crate::fields::FieldTree for $ty {
+            const TAKES: &'static oxirush_utils::tree::Takes = &oxirush_utils::tree::Takes::OneOf(&[
+                &oxirush_utils::tree::Takes::Named(Self::NAMED),
+                &oxirush_utils::tree::Takes::Number(u8::MAX as u64),
+            ]);
             fn to_tree(&self) -> oxirush_utils::tree::Value {
                 self.tree()
             }
-            #[cfg(feature = "tree")]
             fn from_tree(
                 value: &oxirush_utils::tree::Value,
                 reading: &mut oxirush_utils::tree::Reading,

@@ -456,57 +456,25 @@ pub(crate) trait Checked {
     fn check_values(&self, path: &Path<'_>, context: Context, found: &mut Vec<Deviation>);
 }
 
-/// Where an IE is in the tree of its message: written only for a deviation.
-#[derive(Debug, Clone, Copy)]
-pub enum Path<'a> {
-    /// The message level, or a path written already.
-    Root(&'a str),
-    /// The IE of a row in a scope: a row that is a list has its position.
-    Row {
-        /// The scope.
-        parent: &'a Path<'a>,
-        /// The name of the row.
-        row: &'static str,
-        /// The position in a list.
-        nth: Option<usize>,
-    },
-}
+pub(crate) use oxirush_utils::fields::{Path, Segment};
 
-impl fmt::Display for Path<'_> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Root(path) => f.write_str(path),
-            Self::Row {
-                parent,
-                row,
-                nth: Some(nth),
-            } => write!(f, "{parent}/{}/{nth}", Segment(row)),
-            Self::Row {
-                parent,
-                row,
-                nth: None,
-            } => write!(f, "{parent}/{}", Segment(row)),
-        }
-    }
-}
-
-/// A name as a segment of a path writes it: `~0` for its `~` and `~1` for its `/`, as a
-/// JSON pointer (RFC 6901) and the paths of oxirush-utils have them.
-struct Segment<'a>(&'a str);
-
-impl fmt::Display for Segment<'_> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut rest = self.0;
-        while let Some(at) = rest.find(['~', '/']) {
-            f.write_str(&rest[..at])?;
-            f.write_str(if rest[at..].starts_with('~') {
-                "~0"
-            } else {
-                "~1"
-            })?;
-            rest = &rest[at + 1..];
-        }
-        f.write_str(rest)
+/// A finding of a field of oxirush-utils, as a deviation that the receiver ignores: spare
+/// bits by §8.1.2.
+impl oxirush_utils::fields::Deviate for Deviation {
+    fn found(
+        path: &Path<'_>,
+        clause: Option<&'static str>,
+        finding: oxirush_utils::fields::Finding,
+    ) -> Self {
+        use oxirush_utils::fields::Finding;
+        let kind = match finding {
+            Finding::SpareBits => DeviationKind::SpareBits,
+            Finding::SpareValue { value } => DeviationKind::SpareValue { value },
+            Finding::ReservedValue { value } => DeviationKind::ReservedValue { value },
+            Finding::ReadAs { value, read } => DeviationKind::ReadAs { value, read },
+            Finding::Rule(rule) => DeviationKind::Rule(rule),
+        };
+        Deviation::new(path, clause.unwrap_or("8.1.2"), kind)
     }
 }
 
