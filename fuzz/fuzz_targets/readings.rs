@@ -68,11 +68,12 @@ pub const READINGS: [&str; 14] = [
      into fields of their own, which its all_ies() leaves out",
     "rs-pfcp gives no SEID of a node related message whose S flag is set, which check() \
      tells (§7.2.2.1)",
-    "rs-pfcp panics on an FQ-CSID whose bits 4 to 1 of octet 5 are 2, which it reads as the \
+    "rs-pfcp panics on some octets, which counts as its refusing them, and they are not \
+     compared: an FQ-CSID whose bits 4 to 1 of octet 5 are 2, which it reads as the \
      Node-ID Type of an FQDN, and whose bits 8 to 5 count more PDN Connection Set \
      Identifiers than its octets hold (a subtraction that overflows in ie/fq_csid.rs), \
      where §8.2.43 has the Node-ID Type in bits 8 to 5 and the Number of CSID in bits 4 \
-     to 1: the octets are not compared",
+     to 1",
 ];
 
 /// The IE types whose values both read: Cause, F-TEID, Precedence, PDR ID, F-SEID, Node
@@ -82,11 +83,11 @@ pub const VALUES: [u16; 10] = [19, 21, 29, 56, 57, 60, 81, 93, 108, 109];
 /// Compare the readings of `octets`, and panic at a difference that is not one of
 /// [`READINGS`].
 pub fn compare(octets: &[u8]) {
-    if panics_rs_pfcp(octets) {
+    let Some(parsed) = unpanicked(|| rs_pfcp::message::parse(octets)) else {
         let _ = READINGS[13];
         return;
-    }
-    let (ours, theirs) = match (Message::decode(octets), rs_pfcp::message::parse(octets)) {
+    };
+    let (ours, theirs) = match (Message::decode(octets), parsed) {
         (Ok(ours), Ok(theirs)) => (ours, theirs),
         (Err(_), Err(_)) => return,
         (Ok(ours), Err(error)) => return refused(&ours, octets, &error),
@@ -304,14 +305,15 @@ fn fqdn_not_utf8(octets: &[u8]) -> bool {
     every_ie(octets).iter().any(|ie| ie.ie_type == 60 && not_utf8(ie))
 }
 
-/// Whether rs-pfcp panics on the octets: an FQ-CSID, at any level, whose low half of its
-/// first octet is 2 and whose high half counts more identifiers of two octets than the IE
-/// has octets (`READINGS[13]`).
-fn panics_rs_pfcp(octets: &[u8]) -> bool {
-    let panics = |ie: &IeSlice| {
-        ie.value.first().is_some_and(|first| first & 0x0f == 2 && ie.value.len() < 2 * usize::from(first >> 4))
-    };
-    every_ie(octets).iter().any(|ie| ie.ie_type == 65 && panics(ie))
+/// What `read` gives, or `None` where it panics: rs-pfcp panics on some octets
+/// (`READINGS[13]`), which the target takes as its refusing them. The hook of the fuzzer,
+/// which aborts at a panic, is set aside meanwhile.
+fn unpanicked<T>(read: impl FnOnce() -> T) -> Option<T> {
+    let hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(|_| {}));
+    let read = std::panic::catch_unwind(std::panic::AssertUnwindSafe(read)).ok();
+    std::panic::set_hook(hook);
+    read
 }
 
 /// The IE type that a deviation names.
