@@ -1092,3 +1092,35 @@ fn an_error_of_a_tree_prints_no_key() {
     let error = Message::from_tree(&serde_json::from_str(&written).unwrap()).unwrap_err();
     assert!(error.to_string().contains("FAR ID"), "{error}");
 }
+
+/// IEs of no row of two types, one between two of the other: their octets encode back as
+/// they came, and the tree, which has a member for each name, writes the IEs of a type
+/// together where the first is, in their order. It loads to the message of the IEs in that
+/// order, whose tree it is.
+#[test]
+fn ies_of_no_row_of_a_type_are_together_in_the_tree() {
+    let with = |raw: Vec<RawIe>| {
+        let mut message = establishment();
+        let Body::SessionEstablishmentRequest(request) = &mut message.body else {
+            panic!()
+        };
+        request.raw = raw;
+        message
+    };
+    let (first, second) = (RawIe::new(40000, vec![1]), RawIe::new(40000, vec![2]));
+    let between = RawIe::new(14848, vec![]);
+    let wire = with(vec![first.clone(), between.clone(), second.clone()]);
+    let octets = wire.encode().unwrap();
+    let read = Message::decode(&octets).unwrap();
+    assert_eq!(
+        read.encode().unwrap(),
+        octets,
+        "the octets keep the order of the wire"
+    );
+    let tree = read.to_tree();
+    let members: Vec<&str> = tree["ies"].as_object().unwrap().keys().collect();
+    assert_eq!(members[members.len() - 2..], ["40000", "14848"]);
+    let loaded = Message::from_tree(&tree).unwrap();
+    assert_eq!(loaded, with(vec![first, second, between]));
+    assert_eq!(loaded.to_tree(), tree);
+}

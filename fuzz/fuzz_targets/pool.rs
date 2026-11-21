@@ -305,10 +305,16 @@ pub fn written(message: &Message) {
         false_length(&tree) || held(&values, &read_tree, table),
         "a value of a message reads as another: {tree} reads as {read_tree}"
     );
-    assert_eq!(
-        Message::from_tree(&read_tree).as_ref(),
-        Ok(&read),
-        "the tree of a decoded message loads to another: {read_tree}"
+    // The tree writes the IEs of no row of a type together, where the first is: of IEs of
+    // no row of several types between each other, it loads to the message of the IEs of
+    // each type together, whose tree it is, of as many octets.
+    let loaded = Message::from_tree(&read_tree);
+    let regrouped = loaded.as_ref().is_ok_and(|loaded| {
+        loaded.to_tree() == read_tree && loaded.encode().map(|again| again.len()) == Ok(octets.len())
+    });
+    assert!(
+        loaded.as_ref() == Ok(&read) || regrouped,
+        "the tree of a decoded message loads to another: {read_tree}: {loaded:?}"
     );
     for interface in INTERFACES {
         assert_eq!(

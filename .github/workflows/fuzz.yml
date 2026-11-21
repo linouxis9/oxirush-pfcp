@@ -63,7 +63,7 @@ jobs:
          {"target": "tree", "seeds": "fuzz/seeds/messages", "flags": "-dict=fuzz/pfcp.dict"},
          {"target": "node", "seeds": "fuzz/seeds/node", "flags": "-dict=fuzz/pfcp.dict"},
          {"target": "paths"},
-         {"target": "edit"},
+         {"target": "edit", "seeds": "fuzz/seeds/edit"},
          {"target": "endpoint"},
          {"target": "check", "seeds": "fuzz/seeds/messages", "flags": "-dict=fuzz/pfcp.dict"},
          {"target": "differential", "seeds": "fuzz/seeds/messages", "features": "differential",
