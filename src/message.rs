@@ -633,6 +633,26 @@ pub fn is_request(message_type: u8) -> bool {
     )
 }
 
+/// The request that a response of Table 7.3-1 answers, which is the type before it: 1, the
+/// Heartbeat Request, of 2. `None` for a request; for 11, the Version Not Supported
+/// Response, which answers a message of any type in a version that the receiver does not
+/// support (§7.4.4.7, §7.6.2); and for a type that the table does not have.
+///
+/// ```
+/// use oxirush_pfcp::request_of;
+///
+/// // A Session Establishment Response answers a Session Establishment Request
+/// assert_eq!(request_of(51), Some(50));
+/// assert_eq!(request_of(50), None);
+/// assert_eq!(request_of(11), None);
+/// ```
+pub fn request_of(message_type: u8) -> Option<u8> {
+    match message_type {
+        2 | 4 | 6 | 8 | 10 | 13 | 15 | 17 | 51 | 53 | 55 | 57 => Some(message_type - 1),
+        _ => None,
+    }
+}
+
 impl Body {
     /// Whether its receiver on `interface` takes the IEs of the row of `ie_type`: it
     /// discards those of a row that is not on the interface, and nothing that they hold is

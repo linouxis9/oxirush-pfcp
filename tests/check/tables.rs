@@ -346,6 +346,29 @@ fn a_request_by_the_name_of_its_type() {
     );
 }
 
+/// Table 7.3-1: a response answers the request of the type before it, and 11, the Version Not
+/// Supported Response, a message of any type (§7.4.4.7).
+#[test]
+fn the_request_that_a_response_answers() {
+    let mut responses = 0;
+    for info in MESSAGE_TYPES {
+        let (message_type, name) = (info.message_type, info.name());
+        let Some(request) = request_of(message_type) else {
+            assert!(is_request(message_type) || message_type == 11, "{name}");
+            continue;
+        };
+        assert!(is_request(request), "{name}");
+        let request = message_type_info(request).unwrap().name();
+        assert_eq!(request.replace(" Request", " Response"), name);
+        responses += 1;
+    }
+    assert_eq!(responses, 12);
+    for message_type in (0..=255).filter(|&message_type| message_type_info(message_type).is_none())
+    {
+        assert_eq!(request_of(message_type), None, "{message_type}");
+    }
+}
+
 /// §7.6.9 and §8.1.2: an IE of a type of Table 8.1.2-1 that the table of its scope has no
 /// row of is unexpected; one of a type that no release has is unknown. Each is at its
 /// name in the tree.

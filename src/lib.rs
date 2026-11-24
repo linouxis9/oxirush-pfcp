@@ -91,6 +91,7 @@ pub use known::Known;
 pub use known::ROWS as FEATURE_ROWS;
 pub use message::{
     Body, MESSAGE_TYPES, Message, MessageTypeInfo, is_node_related, is_request, message_type_info,
+    request_of,
 };
 pub use octets::Octets;
 pub use registry::*;

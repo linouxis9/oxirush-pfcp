@@ -2,6 +2,15 @@
 
 All notable changes to `oxirush-pfcp` are recorded here.
 
+## Unreleased
+
+### Added
+
+- `request_of()`: the request that a response of Table 7.3-1 answers, which is the type
+  before it, as 50, the Session Establishment Request, of 51. It is `None` for a
+  request, for 11, the Version Not Supported Response, which answers a message of any
+  type, and for a type that the table does not have.
+
 ## 0.1.0 - 2026-11-16
 
 The first version. It implements TS 29.244 V19.6.0 (2026-06):
