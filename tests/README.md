@@ -89,6 +89,30 @@ PFCP_VECTORS=/tmp/vectors.tsv cargo test --all-features --test codec other_vecto
 Each decodes and encodes back byte for byte, and its tree reads back. 16 of them have
 their IEs in another order than their tables', which their trees put in that order.
 
+## go-pfcp beside the crate
+
+`go_pfcp.rs` compares the crate with go-pfcp v0.0.24 on the messages of a corpus:
+`go-pfcp/` is a Go program that reads each message with go-pfcp, whether `message.Parse`
+accepts it, and its IEs as `ie.Parse` frames them at every level, each with whether the
+accessor of its type reads its value. The test compares the message that one decodes and
+the other refuses, the IEs and where they stop framing, the IEs that one reads as grouped
+and the other as a value, the values that one decodes and the other does not, and what
+check() tells of a message that both read, which go-pfcp leaves to its user. Each
+difference is a row of `go-pfcp-differences.tsv`, with its clause and the side that the
+clause supports; one without a row fails the test. The workflow `go-pfcp` runs it each
+week on the seeds of the fuzz targets, go-pfcp's vectors and the corpora of the fuzz
+targets `decode`, `tree` and `check`:
+
+```sh
+python3 tests/go-pfcp-vectors.py "$(go mod download -json github.com/wmnsk/go-pfcp@v0.0.24 | jq -r .Dir)" /tmp/vectors.tsv
+python3 tests/go-pfcp/corpus.py /tmp/corpus.tsv fuzz/seeds/messages /tmp/vectors.tsv fuzz/corpus/decode
+(cd tests/go-pfcp && go build -o /tmp/go-pfcp .) && /tmp/go-pfcp < /tmp/corpus.tsv > /tmp/readings.jsonl
+PFCP_GO_CORPUS=/tmp/corpus.tsv PFCP_GO_READINGS=/tmp/readings.jsonl \
+    cargo test --release --all-features --test go_pfcp -- --ignored --nocapture
+```
+
+`go-pfcp/accessors.go` is written from the sources of go-pfcp by `go-pfcp/accessors.py`.
+
 ## What the crate finds in others
 
 Each of these is against TS 29.244 V19.6.0, at the version named.
@@ -194,6 +218,30 @@ test `codec` expects them (`other_vectors_round_trip`, with `--ignored` and
 - Session Modification Requests that create, update and remove one rule (§6.3.3.2), two
   Session Establishment Requests without Node ID, CP F-SEID, Create PDR and Create FAR,
   and a Heartbeat Request without its Recovery Time Stamp.
+
+**go-pfcp v0.0.24**, beside the crate (`go-pfcp-differences.tsv`, rows of the side
+`crate`), in its code:
+
+- `ParseHeader` (`message/header.go`) compares the Message Length with the octets after
+  the header rather than after the first four, which no message matches, and takes every
+  octet after the header as IEs: the Message Length is never read (§7.2.2.1, §7.6.3), and
+  the messages of a datagram that §6.5 bundles are read as one.
+- `ie.UnmarshalBinary` (`ie/ie.go`) returns no error for an IE header with nothing after
+  it, whatever its Length, which §7.6.7 has an invalid length.
+- `MACAddressesDetectedFields.UnmarshalBinary` (`ie/mac-address-detected.go`, and the
+  same of MAC Addresses Removed) reads one MAC address more than the Number of MAC
+  addresses (`i <= n`), and the lengths of the C-TAG and of the S-TAG at one octet
+  (§8.2.103, §8.2.104): it refuses its own vectors.
+- `OuterHeaderCreationFields.UnmarshalBinary` (`ie/outer-header-creation.go`) takes C-TAG
+  and S-TAG from bits 6/7 and 6/8, which Table 8.2.56-1 has at 5/7 and 5/8.
+- IE type 116, which Table 8.1.2-1 has Reserved since Release 16, is read as the User
+  Plane IP Resource Information of Release 15.
+- The UE IP address Pool Identity is written with a length of one octet (§8.2.128 has
+  two), the User Plane Node ID of six octets (§8.2.143 has eight), the PMF ports are read
+  without a PMF address (§8.2.159), the Rate Control Status Validity Time of a Packet Rate
+  Status of neither UL nor DL (§8.2.139), and the values whose own lengths or flags run
+  past their octets are read without an error (Multiplier, Flow Information, Forwarding
+  Policy, FQ-CSID, Dropped DL Traffic Threshold, Packet Rate).
 
 **tshark 4.6.4** names IE type 170 "Unknown" while it dissects it as a MAR ID, and stops
 at the one-octet Pool Identity length of go-pfcp's vector.

@@ -1,0 +1,62 @@
+name: go-pfcp
+
+# The crate beside go-pfcp v0.0.24 (github.com/wmnsk/go-pfcp, the codec of free5GC's SMF
+# and UPF), on the same messages: tests/go-pfcp/ reads each message with go-pfcp, and the
+# test go_pfcp compares what it read with what decode() and check() of the crate find.
+# Each difference is a row of tests/go-pfcp-differences.tsv, and a new one fails the run.
+# The messages are the seeds of the fuzz targets, go-pfcp's own vectors, and the corpora
+# of the fuzz targets decode, tree and check that the Fuzz workflow keeps in the cache of
+# the repository, as the last of its runs left them. Each Monday at 05:23 UTC.
+on:
+  schedule:
+    - cron: "23 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  go-pfcp:
+    name: The crate beside go-pfcp
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+          cache-dependency-path: tests/go-pfcp/go.sum
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      # The corpus of each target as its last run kept it: the key is none of the keys,
+      # and the newest cache whose key begins with the prefix is restored
+      - uses: actions/cache/restore@v4
+        with:
+          path: fuzz/corpus/decode
+          key: fuzz-corpus-decode-none
+          restore-keys: fuzz-corpus-decode-
+      - uses: actions/cache/restore@v4
+        with:
+          path: fuzz/corpus/tree
+          key: fuzz-corpus-tree-none
+          restore-keys: fuzz-corpus-tree-
+      - uses: actions/cache/restore@v4
+        with:
+          path: fuzz/corpus/check
+          key: fuzz-corpus-check-none
+          restore-keys: fuzz-corpus-check-
+      - name: The corpus, and what go-pfcp reads of it
+        run: |
+          dir=$(go mod download -json github.com/wmnsk/go-pfcp@v0.0.24 | python3 -c 'import json, sys; print(json.load(sys.stdin)["Dir"])')
+          python3 tests/go-pfcp-vectors.py "$dir" "$RUNNER_TEMP/vectors.tsv"
+          mkdir -p fuzz/corpus/decode fuzz/corpus/tree fuzz/corpus/check
+          python3 tests/go-pfcp/corpus.py "$RUNNER_TEMP/corpus.tsv" fuzz/seeds/messages \
+            "$RUNNER_TEMP/vectors.tsv" fuzz/corpus/decode fuzz/corpus/tree fuzz/corpus/check
+          (cd tests/go-pfcp && test -z "$(gofmt -l .)" && go vet . && go build -o "$RUNNER_TEMP/go-pfcp" .)
+          "$RUNNER_TEMP/go-pfcp" < "$RUNNER_TEMP/corpus.tsv" > "$RUNNER_TEMP/readings.jsonl" 2> /dev/null
+      - name: The differences, each a row of tests/go-pfcp-differences.tsv
+        run: >-
+          PFCP_GO_CORPUS="$RUNNER_TEMP/corpus.tsv" PFCP_GO_READINGS="$RUNNER_TEMP/readings.jsonl"
+          cargo test --release --all-features --test go_pfcp -- --ignored --nocapture

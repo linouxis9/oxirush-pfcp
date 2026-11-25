@@ -57,6 +57,10 @@ name = "captures"
 required-features = ["tree"]
 
 [[test]]
+name = "go_pfcp"
+required-features = ["tree"]
+
+[[test]]
 name = "spec"
 required-features = ["spec"]
 

@@ -10,6 +10,10 @@ All notable changes to `oxirush-pfcp` are recorded here.
   before it, as 50, the Session Establishment Request, of 51. It is `None` for a
   request, for 11, the Version Not Supported Response, which answers a message of any
   type, and for a type that the table does not have.
+- The test `go_pfcp` and the weekly workflow `go-pfcp`: go-pfcp v0.0.24 reads the
+  messages of the fuzz corpora and go-pfcp's vectors out of process, and each difference
+  from decode() and check() is a row of `tests/go-pfcp-differences.tsv`, with its clause
+  and the side that the clause supports.
 
 ### Removed
 

@@ -1,0 +1,52 @@
+# What go-pfcp v0.0.24 reads otherwise than the crate, in the corpus of the test go_pfcp: the
+# aspect, the IE type (`message`, `*` for any, or `>=N` for N and above), what the crate
+# reads, what go-pfcp reads, the clause of TS 29.244 V19.6.0, the side that the clause
+# supports (crate, go-pfcp, both or neither), and why. tests/go_pfcp.rs says what each
+# aspect compares.
+message	message	decodes	length value is invalid	8.1.1	both	A vendor IE has a Length below the two octets of its Enterprise ID: the crate keeps it as octets and check() tells it; go-pfcp refuses the message
+message	message	decodes	unexpected EOF	7.6.7	both	An IE does not frame within a grouped IE: the crate keeps that grouped IE as octets, decodes the message and check() tells the IE Invalid length; go-pfcp refuses the message
+message	message	refuses: Ies	accepts	7.6.7	crate	An IE of the message does not frame: go-pfcp takes an IE header with no octets after it whatever its Length, and reads the octets after the Message Length as IEs
+message	message	refuses: MessageLength	accepts	7.6.3	crate	The Message Length is not the length of the octets after the first four: go-pfcp does not read the Message Length
+framing	*	frames another IE	stops after a grouped IE whose IEs do not frame	7.6.7	both	go-pfcp refuses a scope whose grouped IE does not frame its IEs; the crate keeps that grouped IE as octets, check() tells it Invalid length, and the crate reads the IEs after it
+framing	*	frames another IE	stops at a vendor IE too short for its Enterprise ID	8.1.1	both	A vendor IE has its Enterprise ID after its Length: go-pfcp refuses the scope; the crate frames the IE without one, and check() tells it
+framing	*	stops at an IE whose Length runs past its scope	takes it, without the octets that it lacks	7.6.7	crate	An IE whose Length is greater than the octets of its scope has an invalid length; ie.UnmarshalBinary of go-pfcp returns no error for an IE header with nothing after it, whatever its Length
+framing	message	ends at the Message Length	reads the octets after the header, whatever the Message Length	7.2.2.1	crate	The Message Length gives the length of the message: ParseHeader of go-pfcp compares it with the octets after the header rather than after the first four, which no message matches, and takes every octet after the header as IEs of the message (§6.5 bundles messages in one datagram)
+framing	message	stops at a Message Length that runs past the octets	reads the octets after the header, whatever the Message Length	7.6.3	crate	A Request whose Message Length is inconsistent with its datagram is answered "Invalid length"; go-pfcp does not read the Message Length
+grouped	>=272	reads IEs in it	reads a value	8.1.2	neither	A grouped IE type of a release after go-pfcp v0.0.24, whose last IE type is 271; go-pfcp keeps it as octets
+value	21	keeps it as octets	decodes	8.2.3	crate	CHID gives a CHOOSE ID after the address, which the value lacks; the accessor of go-pfcp returns no error
+value	23	keeps it as octets	decodes	8.2.5	crate	The Length of Flow Description of an SDF Filter runs past its octets; the accessor of go-pfcp returns no error
+value	38	keeps it as octets	decodes	8.2.20	crate	A Redirect Information whose lengths run past its octets, or whose Redirect Address Type is spare; the accessor of go-pfcp returns no error
+value	41	keeps it as octets	decodes	8.2.23	crate	The length of the Forwarding Policy Identifier runs past its octets; the accessor of go-pfcp returns the octets
+value	45	keeps it as octets	decodes	8.2.27	crate	DLPSI (bit 3) gives a DL Data Packets Size of two octets, which the value lacks; go-pfcp v0.0.24 does not have DLPSI
+value	60	decodes	refuses: got invalid NodeID: N	8.2.38	both	A Node ID of a spare Node ID Type: check() tells that it cannot be read, go-pfcp refuses its value
+value	60	decodes	refuses: unexpected EOF	8.2.38	both	A Node ID value shorter than its type: check() tells it, go-pfcp refuses its value
+value	65	keeps it as octets	decodes	8.2.43	crate	The Node Address of an FQ-CSID lacks octets of its Node-ID Type; the accessor of go-pfcp returns the octets
+value	66	decodes	refuses: unexpected EOF	8.2.44	both	A Volume Measurement of no flag: check() tells "no bit is set", go-pfcp refuses its value
+value	72	keeps it as octets	decodes	8.2.49	crate	A flag of a Dropped DL Traffic Threshold gives a field of eight octets that the value lacks; the accessor of go-pfcp returns no error
+value	84	decodes	refuses: unexpected EOF	8.2.56	crate	C-TAG and S-TAG are bits 5/7 and 5/8 of the Outer Header Creation Description: go-pfcp takes them from bits 6/7 and 6/8, and looks for a C-TAG or an S-TAG that is not there
+value	84	keeps it as octets	decodes	8.2.56	crate	Bit 5/7 or 5/8 gives a C-TAG or an S-TAG that the value lacks; go-pfcp takes those flags from octet 6
+value	92	keeps it as octets	decodes	8.2.61	crate	The Length of Flow Description of a Flow Information runs past its octets; the accessor of go-pfcp returns the octets
+value	94	decodes	refuses: unexpected EOF	8.2.63	both	A Packet Rate of no flag, where "At least one bit in Octet 5 shall be set": check() tells it, go-pfcp refuses its value
+value	94	keeps it as octets	decodes	8.2.63	crate	APRC gives the additional packet rates that the value lacks; the accessor of go-pfcp returns no error
+value	114	decodes	refuses: unexpected EOF	8.2.80	both	A Rule ID value of another length than the ID of its Rule ID Type: check() tells it, go-pfcp refuses its value
+value	115	keeps it as octets	decodes	8.2.81	crate	The Base Time Interval has four octets, which the value lacks; the accessor of go-pfcp returns no error
+value	116	has no such type	decodes	8.1.2	crate	Table 8.1.2-1 has 116 Reserved; go-pfcp reads it as the User Plane IP Resource Information of Release 15
+value	116	has no such type	refuses: unexpected EOF	8.1.2	crate	Table 8.1.2-1 has 116 Reserved; go-pfcp reads it as the User Plane IP Resource Information of Release 15
+value	119	keeps it as octets	decodes	8.2.84	crate	A Multiplier has 12 octets; go-pfcp returns the octets of any length
+value	122	keeps it as octets	decodes	8.2.87	crate	The Subsequent Time Quota has four octets, which the value lacks; the accessor of go-pfcp returns no error
+value	144	decodes	refuses: unexpected EOF	8.2.103	crate	The Number of MAC addresses, the addresses, and the C-TAG and the S-TAG after their lengths, as Figure 8.2.103-1 has them: go-pfcp reads one MAC address more than the number says (i <= n) and both lengths at one octet, and refuses its own vector
+value	145	decodes	refuses: unexpected EOF	8.2.104	crate	As the MAC Addresses Detected of §8.2.103: go-pfcp reads one MAC address more than the number says, and refuses its own vector
+value	177	keeps it as octets	decodes	8.2.128	crate	The UE IP address Pool Id Length has two octets (octets 5 to 6); go-pfcp writes it in one, and returns the octets
+value	178	decodes	refuses: unexpected EOF	8.2.129	both	An Alternative SMF IP Address of no address: check() tells "neither V4 nor V6 is set", go-pfcp refuses its value
+value	191	decodes	refuses: unexpected EOF	8.2.137	both	An IP Multicast Address of no flag: check() tells "none, or more than one, of V6, V4 and A is set", go-pfcp refuses its value
+value	193	decodes	refuses: unexpected EOF	8.2.139	crate	The Rate Control Status Validity Time is present where UL or DL is set: go-pfcp reads it in a Packet Rate Status of neither
+value	198	keeps it as octets	decodes	8.2.143	crate	The User Plane Node ID value has eight octets (Unsigned64); go-pfcp reads six, as the Bridge ID of an earlier release
+value	230	decodes	refuses: unexpected EOF	8.2.159	crate	The PMF ports come with a PMF IP address (V4 or V6); go-pfcp reads them in a PMF Address Information of neither
+value	>=272	decodes	has no accessor	8.1.2	neither	An IE type of a release after go-pfcp v0.0.24, whose last IE type is 271
+told	message	ConditionalIncorrect	accepts	7.6.8	crate	A conditional IE is incorrect, which its receiver answers "Conditional IE incorrect" where it can verify it; message.Parse of go-pfcp leaves it to its user
+told	message	ConditionalMissing	accepts	7.6.6	crate	A conditional IE whose condition holds is missing, which its receiver answers "Conditional IE missing"; message.Parse of go-pfcp leaves it to its user
+told	message	InvalidLength	accepts	7.6.7	crate	An IE does not frame, which its receiver answers "Invalid length": go-pfcp takes an IE header with no octets after it, whatever its Length
+told	message	MandatoryIncorrect	accepts	7.6.8	crate	A mandatory IE that does not decode as its value is incorrect, which its receiver answers "Mandatory IE incorrect"; message.Parse of go-pfcp does not read the values
+told	message	MandatoryMissing	accepts	7.6.6	crate	A mandatory IE of the message is missing, which its receiver answers "Mandatory IE missing"; message.Parse of go-pfcp does not check the IEs of a table, and leaves it to its user
+told	message	ReservedValue	accepts	7.6.8	crate	A value that its clause has as reserved is invalid, which its receiver answers "Mandatory IE incorrect"; message.Parse of go-pfcp does not read the values
+told	message	Rule	accepts	7.6.8	crate	A value breaks a rule of its clause, which its receiver answers "Mandatory IE incorrect"; message.Parse of go-pfcp does not read the values
