@@ -54,10 +54,7 @@ jobs:
       # The targets that read octets start from the captured messages, the node from
       # each of them delivered to the SMF and the UPF, and take the dictionary; those
       # that build their input with `arbitrary` from the messages of tests/captures, or
-      # of an IE of any row, themselves. `differential` compares the crate with rs-pfcp 0.5.0 on the same
-      # octets: the messages that each decodes or refuses, the header, the IEs at every
-      # level of the grouped IEs and the values of ten IE types, each difference one of
-      # the readings of rs-pfcp that fuzz_targets/readings.rs names.
+      # of an IE of any row, themselves.
       targets: >-
         [{"target": "decode", "seeds": "fuzz/seeds/messages", "flags": "-dict=fuzz/pfcp.dict"},
          {"target": "tree", "seeds": "fuzz/seeds/messages", "flags": "-dict=fuzz/pfcp.dict"},
@@ -65,6 +62,4 @@ jobs:
          {"target": "paths"},
          {"target": "edit", "seeds": "fuzz/seeds/edit"},
          {"target": "endpoint"},
-         {"target": "check", "seeds": "fuzz/seeds/messages", "flags": "-dict=fuzz/pfcp.dict"},
-         {"target": "differential", "seeds": "fuzz/seeds/messages", "features": "differential",
-          "flags": "-dict=fuzz/pfcp.dict"}]
+         {"target": "check", "seeds": "fuzz/seeds/messages", "flags": "-dict=fuzz/pfcp.dict"}]

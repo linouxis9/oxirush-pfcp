@@ -17,10 +17,9 @@ cargo run --example fuzz_dictionary > fuzz/pfcp.dict
 cargo +nightly fuzz run tree -- -max_total_time=60 -dict=fuzz/pfcp.dict
 ```
 
-`fuzz/` has ten [cargo-fuzz](https://crates.io/crates/cargo-fuzz) targets.
-One of them, `differential`, compares the crate with rs-pfcp 0.5.0, an
-independent codec, on the same input. CI runs each for a minute at a push,
-an hour each day but Friday and Sunday, and four hours on Friday.
+`fuzz/` has seven [cargo-fuzz](https://crates.io/crates/cargo-fuzz) targets.
+CI runs each for a minute at a push, an hour each day but Friday and
+Sunday, and four hours on Friday.
 
 ## Benchmarks
 

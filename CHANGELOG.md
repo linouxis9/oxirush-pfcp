@@ -11,6 +11,12 @@ All notable changes to `oxirush-pfcp` are recorded here.
   request, for 11, the Version Not Supported Response, which answers a message of any
   type, and for a type that the table does not have.
 
+### Removed
+
+- The fuzz target `differential`, which compared the crate with rs-pfcp 0.5.0. It
+  failed the scheduled runs on panics and strict readings of rs-pfcp, not on the crate.
+  The tests compare the crate with go-pfcp.
+
 ## 0.1.0 - 2026-11-16
 
 The first version. It implements TS 29.244 V19.6.0 (2026-06):

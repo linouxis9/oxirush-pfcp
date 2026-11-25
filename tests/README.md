@@ -68,7 +68,7 @@ its addresses and its interface:
 ## A corpus of the fuzz targets
 
 `PFCP_CORPUS` names a directory of messages, a corpus of the fuzz targets `decode`,
-`tree`, `check` or `differential`: of each of them, and of each with one of its IEs, at
+`tree` or `check`: of each of them, and of each with one of its IEs, at
 every level, written as its octets, of a null length, or after one of a null length,
 `check(m)` is `check(Message::decode(m.encode()))` on every interface.
 
