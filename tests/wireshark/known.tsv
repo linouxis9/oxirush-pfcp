@@ -1,0 +1,25 @@
+# The differences between Wireshark and the crate that were triaged, which do not fail the run
+# (compare.py). A difference that no row explains fails it.
+#
+# Columns, separated by tabs: what (the kind of difference, `*` for any: header, ie, field,
+# ws-malformed, crate-refuses, class), where (a regular expression over the text of the
+# difference), verdict (wireshark: Wireshark reads the octets otherwise than the clause;
+# crate-by-clause: the crate does what the clause says and Wireshark shows something else;
+# both: both find fault, or read them as the clause allows; gap: Wireshark 4.6.4 does not
+# dissect or name them), and the reference: the clause of TS 29.244 V19.6.0, and why.
+ws-malformed	\(the crate discards it\)$	both	§7.6.9, §7.6.10: a receiver discards an IE that its scope does not have, the repetitions of an IE that it has once, and an IE of a type that it does not have, whose value the crate does not read (check() tells each); Wireshark dissects it, and finds it malformed
+ws-malformed	\(the crate stops there\)$	both	§7.6.7: an IE whose Length runs past its scope has an invalid length, where the crate stops; Wireshark finds the octets malformed
+ws-malformed	\(the crate keeps it as octets\)$	both	§7.6.8: a value that does not decode, which the crate keeps as octets and check() tells; Wireshark finds it malformed
+ws-malformed	: \(Error/Protocol\): Reserved IE value used \(	both	Table 8.1.2-1: IE type 0 is Reserved, and a receiver discards an IE of a type that it does not have (§7.6.9): check() tells it, or its scope, or the IE does not frame; Wireshark reports it as an error
+ws-malformed	^IE [0-9/]*\b27: \(Error/Protocol\): IE wrongly encoded \(the crate decodes it\)$	wireshark	Table 8.1.2-1: GBR is Extendable with 10 fixed octets, and a receiver ignores the octets after its fields (§8.1.2); Wireshark 4.6.4 reports a GBR of more octets as wrongly encoded
+ie	Wireshark dissects it, the crate stops: IE type \d+ has the Length \d+, and \d+ octets follow its header	crate-by-clause	§7.6.7: an IE whose Length runs past the grouped IE that holds it has an invalid length, which check() tells; Wireshark 4.6.4 dissects the octets that there are, and reports no error
+crate-refuses	^the IEs do not fit the message: IE type \d+ has the Length \d+, and \d+ octets follow its header	crate-by-clause	§7.6.7: an IE whose Length runs past the message has an invalid length; Wireshark 4.6.4 dissects the octets that there are, and reports no error
+crate-refuses	^the Message Length is \d+, and \d+ octets follow the first four	both	§6.5, §7.6.3: Message::decode reads one message, and refuses octets after its Message Length, as a receiver of one message answers "Invalid length"; Message::decode_datagram reads them as the next message of a bundle, as Wireshark does
+ws-malformed	^IE none: .*\(the crate reads a message of a type that no table has\)$	both	§7.6.4: a message of a type that the receiver does not have is discarded, which check() tells; Wireshark 4.6.4 finds the message malformed
+ws-malformed	^IE [0-9/]*\b45: \(Error/Malformed\): Malformed Packet \(Exception occurred\) \(the crate decodes it\)$	wireshark	§8.2.27: a Downlink Data Service Information of QFII alone has the QFI after its flags, which the crate decodes; Wireshark 4.6.4 finds it malformed
+field	^(22|159) pfcp\.(network_instance|apn_dnn): Wireshark '[^']*' \([^)]*\), crate ".*\\u0000	wireshark	§8.2.4, §8.2.117: a label is the octets after its length, and may hold a zero octet; Wireshark 4.6.4 shows the name up to its first zero octet
+field	^319 pfcp\.qer_indications_flags\.pdusm: 	wireshark	§8.2.216: PDUSM is bit 4 of octet 5; Wireshark 4.6.4 reads it with the mask of EML4S, bit 3
+field	^328 pfcp\.traffic_parameter_measurement_indication\.n6jmi: 	wireshark	§8.2.223: N6JMI is bit 3 of octet 5; Wireshark 4.6.4 reads it with the mask of DLPMI, bit 2
+field	^141 (pfcp\.user_id\.imei|e212\.(assoc\.)?imsi): Wireshark '[0-9?]*\?[0-9?]*' \([^)]*\), crate "[0-9*#abc]+"$	both	§8.2.101: the IMSI and the IMEI are TBCD (TS 29.274 §8.3), whose codes 1010 to 1110 are *, #, a, b and c (TS 29.002): the crate writes them, Wireshark 4.6.4 shows ?
+field	^141 (pfcp\.user_id\.(imei|nai)|e212\.(assoc\.)?imsi): Wireshark .*, crate \{"octets": "[0-9a-f]+"\}$	both	§8.2.101: an IMSI, IMEI or NAI that is no TBCD of its digits or no text, a filler before its last digit for instance, the crate keeps as octets; Wireshark 4.6.4 shows the digits before it
+field	^19 pfcp\.cause: Wireshark '(9[0-2])' \(Unknown\), crate "	gap	Table 8.2.1-1: Causes 90 to 92 are of PFD Partial Failure Information, which Wireshark 4.6.4 does not name

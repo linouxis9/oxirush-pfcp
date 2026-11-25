@@ -61,6 +61,10 @@ name = "go_pfcp"
 required-features = ["tree"]
 
 [[test]]
+name = "wireshark"
+required-features = ["tree"]
+
+[[test]]
 name = "spec"
 required-features = ["spec"]
 

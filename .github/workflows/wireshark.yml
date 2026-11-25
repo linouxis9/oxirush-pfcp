@@ -1,0 +1,83 @@
+name: Wireshark
+
+# The crate beside Wireshark's dissector of PFCP, on the same messages: the test wireshark
+# writes what the crate reads of each, tshark dissects them as datagrams to port 8805, and
+# tests/wireshark/compare.py compares the two field by field, by tests/wireshark/mapping.tsv.
+# tshark is 4.6.4, the version that tests/wireshark/known.tsv was triaged with: the package
+# 4.6.4-1 of Ubuntu 26.04, which its updates do not replace here. A difference that
+# known.tsv does not explain fails the job, and so does a run in which nothing is compared.
+# The messages are the seeds of the fuzz targets, go-pfcp's vectors, and the corpora of the
+# fuzz targets decode, tree and check that the Fuzz workflow keeps in the cache of the
+# repository. Each Monday at 05:53 UTC; the report is kept for 30 days.
+on:
+  schedule:
+    - cron: "53 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  wireshark:
+    name: Wireshark 4.6.4
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: tshark 4.6.4
+        run: |
+          sudo apt-get update
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            tshark=4.6.4-1 wireshark-common=4.6.4-1 libwireshark19=4.6.4-1 \
+            libwiretap16=4.6.4-1 libwsutil17=4.6.4-1 libwireshark-data=4.6.4-1
+          tshark --version | head -n 1
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      # The corpus of each target as its last run kept it: the key is none of the keys,
+      # and the newest cache whose key begins with the prefix is restored
+      - uses: actions/cache/restore@v4
+        with:
+          path: fuzz/corpus/decode
+          key: fuzz-corpus-decode-none
+          restore-keys: fuzz-corpus-decode-
+      - uses: actions/cache/restore@v4
+        with:
+          path: fuzz/corpus/tree
+          key: fuzz-corpus-tree-none
+          restore-keys: fuzz-corpus-tree-
+      - uses: actions/cache/restore@v4
+        with:
+          path: fuzz/corpus/check
+          key: fuzz-corpus-check-none
+          restore-keys: fuzz-corpus-check-
+      - name: The messages, and what the crate reads of them
+        run: |
+          dir=$(go mod download -json github.com/wmnsk/go-pfcp@v0.0.24 | python3 -c 'import json, sys; print(json.load(sys.stdin)["Dir"])')
+          python3 tests/go-pfcp-vectors.py "$dir" "$RUNNER_TEMP/vectors.tsv"
+          mkdir -p fuzz/corpus/decode fuzz/corpus/tree fuzz/corpus/check
+          python3 tests/go-pfcp/corpus.py "$RUNNER_TEMP/corpus.tsv" fuzz/seeds/messages \
+            "$RUNNER_TEMP/vectors.tsv" fuzz/corpus/decode fuzz/corpus/tree fuzz/corpus/check
+          PFCP_WIRESHARK_CORPUS="$RUNNER_TEMP/corpus.tsv" PFCP_WIRESHARK_CRATE="$RUNNER_TEMP/crate.jsonl" \
+            cargo test --release --all-features --test wireshark -- --ignored
+      - name: Compare
+        run: >-
+          python3 -I tests/wireshark/compare.py --corpus "$RUNNER_TEMP/corpus.tsv"
+          --crate "$RUNNER_TEMP/crate.jsonl" --mapping tests/wireshark/mapping.tsv
+          --known tests/wireshark/known.tsv --output "$RUNNER_TEMP/wireshark"
+      - name: Summary
+        if: always()
+        run: |
+          summary=$RUNNER_TEMP/wireshark/summary.txt
+          test -s "$summary" || { echo "::error::nothing was compared with Wireshark"; exit 1; }
+          { echo '```'; cat "$summary"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: wireshark
+          path: ${{ runner.temp }}/wireshark
+          retention-days: 30

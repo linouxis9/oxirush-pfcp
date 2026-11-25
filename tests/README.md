@@ -113,6 +113,33 @@ PFCP_GO_CORPUS=/tmp/corpus.tsv PFCP_GO_READINGS=/tmp/readings.jsonl \
 
 `go-pfcp/accessors.go` is written from the sources of go-pfcp by `go-pfcp/accessors.py`.
 
+## Wireshark beside the crate
+
+`wireshark.rs` writes what the crate reads of each message of a corpus: whether it decodes,
+its header, what check() tells of it, and its IEs at every level with their offsets and the
+tree of each value. `wireshark/compare.py` has tshark 4.6.4 dissect the same messages, as
+datagrams to port 8805, and compares its PDML with that: the header, the IEs at each offset
+by their type, Length and Enterprise ID, and each field of an IE that `wireshark/mapping.tsv`
+pairs with a member of the crate's tree, 437 of them. A message is `agree`, `differs`,
+`both-refuse`, `ws-malformed` or `crate-refuses`, and each difference is a row of
+`wireshark/known.tsv`, with its clause and whether it is Wireshark's, the crate's by its
+clause, both's or a field that Wireshark does not dissect; one without a row fails the run,
+and `coverage.tsv` says how each field was compared or why not. The workflow `wireshark`
+runs it each week on the corpus of `go_pfcp`:
+
+```sh
+python3 tests/go-pfcp/corpus.py /tmp/corpus.tsv fuzz/seeds/messages /tmp/vectors.tsv fuzz/corpus/decode
+PFCP_WIRESHARK_CORPUS=/tmp/corpus.tsv PFCP_WIRESHARK_CRATE=/tmp/crate.jsonl \
+    cargo test --release --all-features --test wireshark -- --ignored
+python3 -I tests/wireshark/compare.py --corpus /tmp/corpus.tsv --crate /tmp/crate.jsonl \
+    --mapping tests/wireshark/mapping.tsv --known tests/wireshark/known.tsv --output /tmp/wireshark
+```
+
+On 28343 messages here, 57093 fields compared, the differences are 16 rows: five of
+Wireshark 4.6.4, two of the crate by its clause, one that Wireshark does not name, and eight
+where both find fault, among them the IEs that a receiver discards and that Wireshark
+dissects.
+
 ## What the crate finds in others
 
 Each of these is against TS 29.244 V19.6.0, at the version named.
@@ -244,6 +271,12 @@ test `codec` expects them (`other_vectors_round_trip`, with `--ignored` and
   Policy, FQ-CSID, Dropped DL Traffic Threshold, Packet Rate).
 
 **tshark 4.6.4** names IE type 170 "Unknown" while it dissects it as a MAR ID, and stops
-at the one-octet Pool Identity length of go-pfcp's vector.
+at the one-octet Pool Identity length of go-pfcp's vector. Beside the crate
+(`wireshark/known.tsv`, rows of `wireshark`): it reads PDUSM of QER Indications with the mask
+of EML4S, and N6JMI of Traffic Parameter Measurement Indication with that of DLPMI; it
+reports a GBR longer than its fixed octets as wrongly encoded, and a Downlink Data Service
+Information of QFII alone as malformed; it shows a label up to its first zero octet; it names
+14/2 of UP Function Features "ULM N4", which V19.6.0 has UN6DM; and it dissects an IE whose
+Length runs past its scope without an error.
 
 These are recorded, and reported to no one.

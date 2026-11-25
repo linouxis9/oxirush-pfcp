@@ -14,6 +14,10 @@ All notable changes to `oxirush-pfcp` are recorded here.
   messages of the fuzz corpora and go-pfcp's vectors out of process, and each difference
   from decode() and check() is a row of `tests/go-pfcp-differences.tsv`, with its clause
   and the side that the clause supports.
+- The test `wireshark` and the weekly workflow `wireshark`: tshark 4.6.4 dissects the same
+  messages, and `tests/wireshark/compare.py` compares its PDML with the crate's reading field
+  by field, by the mapping of `tests/wireshark/mapping.tsv`; each difference is a row of
+  `tests/wireshark/known.tsv`, with its clause.
 
 ### Removed
 

@@ -1,0 +1,488 @@
+# What Wireshark shows of an IE of PFCP, and what of the crate it is compared with (compare.py).
+#
+# Columns, separated by tabs:
+#   field  IE type, Wireshark's field, the member of the crate's tree of the value (`.` the
+#          tree itself, where it is a scalar), and the comparison:
+#          bool (a flag, which the tree has where it is set), int (a number, decimal or 0x),
+#          ip (an address), text (the same text), name (a coded value, by Wireshark's label and
+#          the crate's name), hex (the octets), int31 (a rule ID without its bit of a predefined
+#          rule), bit32 (the bit of a predefined rule, the high bit of the crate's ID), time
+#          (seconds of RFC 5905); and a note where the two name the field otherwise;
+#   none   IE type (`*` for any), Wireshark's field, and why it is compared with nothing;
+#   value  Wireshark's field, a code, and the crate's name of it, where Wireshark labels the
+#          code otherwise.
+# A field that no row names is counted in coverage.tsv as unlisted, and a spare field as spare.
+none	*	pfcp.adf_len	the length of a field, which the tree of the field has
+none	*	pfcp.adnp_len	the length of a field, which the tree of the field has
+none	*	pfcp.aurl_len	the length of a field, which the tree of the field has
+none	*	pfcp.cp_len	the length of a field, which the tree of the field has
+none	*	pfcp.dn_len	the length of a field, which the tree of the field has
+none	*	pfcp.dnp_len	the length of a field, which the tree of the field has
+none	*	pfcp.enterprise_ie_data	the content of a vendor IE, which the crate keeps as octets
+none	*	pfcp.flow_desc_len	the length of a field, which the tree of the field has
+none	*	pfcp.ie_data_not_decoded	octets that Wireshark does not dissect, which the crate keeps as the unknown octets of the value
+none	*	pfcp.ie_not_decoded	an IE type that Wireshark 4.6.4 does not dissect
+none	*	pfcp.ie_not_decoded_null	a vendor IE, which Wireshark does not dissect
+none	*	pfcp.url_len	the length of a field, which the tree of the field has
+field	19	pfcp.cause	.	name
+field	20	pfcp.source_interface	.	name
+field	21	pfcp.f_teid.choose_id	CHOOSE ID	int
+field	21	pfcp.f_teid.ipv4_addr	IPv4 address	ip
+field	21	pfcp.f_teid.teid	TEID	int
+field	21	pfcp.f_teid_flags.ch	CH	bool
+field	21	pfcp.f_teid_flags.ch_id	CHID	bool
+field	21	pfcp.f_teid_flags.v4	V4	bool
+field	21	pfcp.f_teid_flags.v6	V6	bool
+field	22	pfcp.network_instance	.	text
+field	23	pfcp.flow_desc	Flow Description	text
+field	23	pfcp.sdf_filter.bid	BID	bool
+field	23	pfcp.sdf_filter.fd	FD	bool
+field	23	pfcp.sdf_filter.fl	FL	bool
+field	23	pfcp.sdf_filter.spi	SPI	bool
+field	23	pfcp.sdf_filter.ttc	TTC	bool
+field	23	pfcp.spi	Security Parameter Index	int
+field	23	pfcp.traffic_class	ToS Traffic Class	int
+field	24	pfcp.application_id	.	hex
+field	24	pfcp.application_id_str	.	text
+field	25	pfcp.gate_status.dlgate	DL Gate	name
+field	25	pfcp.gate_status.ulgate	UL Gate	name
+field	26	pfcp.dl_mbr	DL MBR	int
+field	26	pfcp.ul_mbr	UL MBR	int
+field	27	pfcp.dl_gbr	DL GBR	int
+field	27	pfcp.ul_gbr	UL GBR	int
+field	29	pfcp.precedence	.	int
+field	31	pfcp.volume_threshold.dlvol	Downlink Volume	int
+field	31	pfcp.volume_threshold.tovol	Total Volume	int
+field	31	pfcp.volume_threshold.ulvol	Uplink Volume	int
+field	31	pfcp.volume_threshold_flags.dlvol	DLVOL	bool
+field	31	pfcp.volume_threshold_flags.tovol	TOVOL	bool
+field	31	pfcp.volume_threshold_flags.ulvol	ULVOL	bool
+field	36	pfcp.inactivity_detection_time	Inactivity Detection Time	int
+field	37	pfcp.reporting_triggers_flags.droth	DROTH	bool
+field	37	pfcp.reporting_triggers_flags.envcl	ENVCL	bool
+field	37	pfcp.reporting_triggers_flags.evequ	EVEQU	bool
+field	37	pfcp.reporting_triggers_flags.eveth	EVETH	bool
+field	37	pfcp.reporting_triggers_flags.ipmjl	IPMJL	bool
+field	37	pfcp.reporting_triggers_flags.liusa	LIUSA	bool
+field	37	pfcp.reporting_triggers_flags.macar	MACAR	bool
+field	37	pfcp.reporting_triggers_flags.perio	PERIO	bool
+field	37	pfcp.reporting_triggers_flags.quhti	QUHTI	bool
+field	37	pfcp.reporting_triggers_flags.quvti	QUVTI	bool
+field	37	pfcp.reporting_triggers_flags.reemr	REEMR	bool
+field	37	pfcp.reporting_triggers_flags.start	START	bool
+field	37	pfcp.reporting_triggers_flags.stopt	STOPT	bool
+field	37	pfcp.reporting_triggers_flags.timqu	TIMQU	bool
+field	37	pfcp.reporting_triggers_flags.timth	TIMTH	bool
+field	37	pfcp.reporting_triggers_flags.upint	UPINT	bool
+field	37	pfcp.reporting_triggers_flags.volqu	VOLQU	bool
+field	37	pfcp.reporting_triggers_flags.volth	VOLTH	bool
+field	39	pfcp.report_type.dldr	DLDR	bool
+field	39	pfcp.report_type.erir	ERIR	bool
+field	39	pfcp.report_type.sesr	SESR	bool
+field	39	pfcp.report_type.tmir	TMIR	bool
+field	39	pfcp.report_type.uisr	UISR	bool
+field	39	pfcp.report_type.upir	UPIR	bool
+field	39	pfcp.report_type.usar	USAR	bool
+field	40	pfcp.offending_ie	Type of the offending IE	int
+field	42	pfcp.dst_interface	.	name
+field	43	pfcp.up_function_features.adpdp	ADPDP	bool
+field	43	pfcp.up_function_features.afsfc	AFSFC	bool
+field	43	pfcp.up_function_features.atsss_ll	ATSSS-LL	bool
+field	43	pfcp.up_function_features.bucp	BUCP	bool
+field	43	pfcp.up_function_features.bundl	BUNDL	bool
+field	43	pfcp.up_function_features.ciot	CIOT	bool
+field	43	pfcp.up_function_features.cntl	CN-TL	bool
+field	43	pfcp.up_function_features.dbdm	DBDM	bool
+field	43	pfcp.up_function_features.ddds	DDDS	bool
+field	43	pfcp.up_function_features.ddnd	DDND	bool
+field	43	pfcp.up_function_features.detnet	DETNET	bool
+field	43	pfcp.up_function_features.dlbd	DLBD	bool
+field	43	pfcp.up_function_features.dnsts	DNSTS	bool
+field	43	pfcp.up_function_features.dpdra	DPDRA	bool
+field	43	pfcp.up_function_features.drqos	DRQOS	bool
+field	43	pfcp.up_function_features.drtsc	DRTSC	bool
+field	43	pfcp.up_function_features.edbnc	EDBNC	bool
+field	43	pfcp.up_function_features.eml4s	EML4S	bool
+field	43	pfcp.up_function_features.empu	EMPU	bool
+field	43	pfcp.up_function_features.epfar	EPFAR	bool
+field	43	pfcp.up_function_features.ethar	ETHAR	bool
+field	43	pfcp.up_function_features.frrt	FRRT	bool
+field	43	pfcp.up_function_features.ftup	FTUP	bool
+field	43	pfcp.up_function_features.gcom	GCOM	bool
+field	43	pfcp.up_function_features.gpqm	GPQM	bool
+field	43	pfcp.up_function_features.heeu	HEEU	bool
+field	43	pfcp.up_function_features.ip6pl	IP6PL	bool
+field	43	pfcp.up_function_features.iprep	IPREP	bool
+field	43	pfcp.up_function_features.iptv	IPTV	bool
+field	43	pfcp.up_function_features.l2tp	L2TP	bool
+field	43	pfcp.up_function_features.mbsch	MBSCH	bool
+field	43	pfcp.up_function_features.mbsn4	MBSN4	bool
+field	43	pfcp.up_function_features.mnop	MNOP	bool
+field	43	pfcp.up_function_features.mpas	MPAS	bool
+field	43	pfcp.up_function_features.mptcp	MPTCP	bool
+field	43	pfcp.up_function_features.mte_n4	MTE	bool
+field	43	pfcp.up_function_features.mtedt	MT-EDT	bool
+field	43	pfcp.up_function_features.mtsdt	MT-SDT	bool
+field	43	pfcp.up_function_features.n6jedb	N6JEDB	bool
+field	43	pfcp.up_function_features.norp	NORP	bool
+field	43	pfcp.up_function_features.nspoc	NSPOC	bool
+field	43	pfcp.up_function_features.pdiu	PDIU	bool
+field	43	pfcp.up_function_features.pdusm	PDUSM	bool
+field	43	pfcp.up_function_features.pfde	PFDE	bool
+field	43	pfcp.up_function_features.pfdm	PFDM	bool
+field	43	pfcp.up_function_features.qfqm	QFQM	bool
+field	43	pfcp.up_function_features.qmcon	QMCON	bool
+field	43	pfcp.up_function_features.qmdrm	QMDRM	bool
+field	43	pfcp.up_function_features.quasf	QUASF	bool
+field	43	pfcp.up_function_features.quoac	QUOAC	bool
+field	43	pfcp.up_function_features.ratp	RATP	bool
+field	43	pfcp.up_function_features.rds	RDS	bool
+field	43	pfcp.up_function_features.redsm	REDSM	bool
+field	43	pfcp.up_function_features.resps	RESPS	bool
+field	43	pfcp.up_function_features.rttl	RTTL	bool
+field	43	pfcp.up_function_features.rttwp	RTTWP	bool
+field	43	pfcp.up_function_features.sset	SSET	bool
+field	43	pfcp.up_function_features.trace	TRACE	bool
+field	43	pfcp.up_function_features.treu	TREU	bool
+field	43	pfcp.up_function_features.trst	TRST	bool
+field	43	pfcp.up_function_features.tscts	TSCTS	bool
+field	43	pfcp.up_function_features.tsn	TSN	bool
+field	43	pfcp.up_function_features.udbc	UDBC	bool
+field	43	pfcp.up_function_features.ueip	UEIP	bool
+field	43	pfcp.up_function_features.ulmn4	UN6DM	bool	Wireshark 4.6.4 names 14/2 "ULM N4", which V19.6.0 has UN6DM, and ULM 15/3
+field	43	pfcp.up_function_features.umn6ip	UMN6IP	bool
+field	43	pfcp.up_function_features.un6tu	UN6TU	bool
+field	43	pfcp.up_function_features.upber	UPBER	bool
+field	43	pfcp.up_function_features.upidp	UPIDP	bool
+field	43	pfcp.up_function_features.upsbies	UPSBIES	bool
+field	43	pfcp.up_function_features.vtime	VTIME	bool
+field	44	pfcp.apply_action.bdpn	BDPN	bool
+field	44	pfcp.apply_action.buff	BUFF	bool
+field	44	pfcp.apply_action.ddpn	DDPN	bool
+field	44	pfcp.apply_action.dfrt	DFRT	bool
+field	44	pfcp.apply_action.drop	DROP	bool
+field	44	pfcp.apply_action.dupl	DUPL	bool
+field	44	pfcp.apply_action.edrt	EDRT	bool
+field	44	pfcp.apply_action.forw	FORW	bool
+field	44	pfcp.apply_action.fssm	FSSM	bool
+field	44	pfcp.apply_action.ipma	IPMA	bool
+field	44	pfcp.apply_action.ipmd	IPMD	bool
+field	44	pfcp.apply_action.mbsu	MBSU	bool
+field	44	pfcp.apply_action.nocp	NOCP	bool
+field	45	pfcp.dl_data_service_inf.dlpsi	DLPSI	bool
+field	45	pfcp.dl_data_service_inf.ppi	PPI	bool
+field	45	pfcp.dl_data_service_inf.qfii	QFII	bool
+field	45	pfcp.qfi_value	QFI	int
+field	46	pfcp.dl_data_notification_delay	.	int
+field	47	pfcp.timer_unit	Timer unit	name
+field	47	pfcp.timer_value	Timer value	int
+field	48	pfcp.packet_count	.	name
+field	49	pfcp.smreq_flags.deteid	DETEID	bool
+field	49	pfcp.smreq_flags.drobu	DROBU	bool
+field	49	pfcp.smreq_flags.hrsbom	HRSBOM	bool
+field	49	pfcp.smreq_flags.qaurr	QAURR	bool
+field	49	pfcp.smreq_flags.rumuc	RUMUC	bool
+field	49	pfcp.smreq_flags.sndem	SNDEM	bool
+field	49	pfcp.smreq_flags.sumpc	SUMPC	bool
+field	50	pfcp.srrsp_flags.drobu	DROBU	bool
+field	52	pfcp.sequence_number	.	int
+field	53	pfcp.metric	.	int
+field	55	pfcp.timer_unit	Timer unit	name
+field	55	pfcp.timer_value	Timer value	int
+field	56	pfcp.pdr_id	.	int
+field	57	pfcp.f_seid.ipv4	IPv4 address	ip
+field	57	pfcp.f_seid_flags.v4	V4	bool
+field	57	pfcp.f_seid_flags.v6	V6	bool
+field	57	pfcp.seid	SEID	int
+field	60	pfcp.node_id_fqdn	.	text
+field	60	pfcp.node_id_ipv4	.	ip
+field	60	pfcp.node_id_ipv6	.	ip
+none	60	pfcp.node_id_type	the tree of a Node ID is its address or its name, by its type
+field	61	pfcp.cp	Custom PFD Content	hex
+field	61	pfcp.dn	Domain Name	name
+field	61	pfcp.dnp	Domain Name Protocol	hex
+field	61	pfcp.flow_desc	Flow Description	name
+field	61	pfcp.pfd_contents_flags.adnp	ADNP	bool
+field	61	pfcp.pfd_contents_flags.afd	AFD	bool
+field	61	pfcp.pfd_contents_flags.aurl	AURL	bool
+field	61	pfcp.pfd_contents_flags.cp	CP	bool
+field	61	pfcp.pfd_contents_flags.dn	DN	bool
+field	61	pfcp.pfd_contents_flags.dnp	DNP	bool
+field	61	pfcp.pfd_contents_flags.fd	FD	bool
+field	61	pfcp.pfd_contents_flags.url	URL	bool
+field	61	pfcp.url	URL field	text
+field	62	pfcp.measurement_method_flags.durat	DURAT	bool
+field	62	pfcp.measurement_method_flags.event	EVENT	bool
+field	62	pfcp.measurement_method_flags.volume	VOLUM	bool
+field	63	pfcp.usage_report_trigger.immer	IMMER	bool
+field	63	pfcp.usage_report_trigger.monit	MONIT	bool
+field	63	pfcp.usage_report_trigger.term	TERMR	bool
+field	63	pfcp.usage_report_trigger_flags.droth	DROTH	bool
+field	63	pfcp.usage_report_trigger_flags.emrre	EMRRE	bool
+field	63	pfcp.usage_report_trigger_flags.envcl	ENVCL	bool
+field	63	pfcp.usage_report_trigger_flags.evequ	EVEQU	bool
+field	63	pfcp.usage_report_trigger_flags.eveth	EVETH	bool
+field	63	pfcp.usage_report_trigger_flags.ipmjl	IPMJL	bool
+field	63	pfcp.usage_report_trigger_flags.liusa	LIUSA	bool
+field	63	pfcp.usage_report_trigger_flags.macar	MACAR	bool
+field	63	pfcp.usage_report_trigger_flags.perio	PERIO	bool
+field	63	pfcp.usage_report_trigger_flags.quhti	QUHTI	bool
+field	63	pfcp.usage_report_trigger_flags.quvti	QUVTI	bool
+field	63	pfcp.usage_report_trigger_flags.start	START	bool
+field	63	pfcp.usage_report_trigger_flags.stopt	STOPT	bool
+field	63	pfcp.usage_report_trigger_flags.tebur	TEBUR	bool
+field	63	pfcp.usage_report_trigger_flags.timqu	TIMQU	bool
+field	63	pfcp.usage_report_trigger_flags.timth	TIMTH	bool
+field	63	pfcp.usage_report_trigger_flags.upint	UPINT	bool
+field	63	pfcp.usage_report_trigger_flags.volqu	VOLQU	bool
+field	63	pfcp.usage_report_trigger_flags.volth	VOLTH	bool
+field	64	pfcp.measurement_period	.	int
+none	65	pfcp.csid	an entry of the list of PDN Connection Set Identifiers
+field	65	pfcp.fq_csid_node_id_type	FQ-CSID Node-ID Type	int
+field	65	pfcp.fq_csid_node_type	Node Type	name
+none	65	pfcp.num_csid	the length of the list of PDN Connection Set Identifiers
+none	65	pfcp.q_csid_node_id.int	the crate keeps the Node-Address of Node-ID Type 2 as its four octets, which Wireshark shows as an MCC and MNC and a number
+field	65	pfcp.q_csid_node_id.ipv4	Node-Address	ip
+field	65	pfcp.q_csid_node_id.ipv6	Node-Address	ip
+none	65	pfcp.q_csid_node_id.mcc_mnc	the crate keeps the Node-Address of Node-ID Type 2 as its four octets, which Wireshark shows as an MCC and MNC and a number
+field	66	pfcp.volume_measurement.dlnop	Downlink Number of Packets	int
+field	66	pfcp.volume_measurement.dlvol	Downlink Volume	int
+field	66	pfcp.volume_measurement.tonop	Total Number of Packets	int
+field	66	pfcp.volume_measurement.tovol	Total Volume	int
+field	66	pfcp.volume_measurement.ulnop	Uplink Number of Packets	int
+field	66	pfcp.volume_measurement.ulvol	Uplink Volume	int
+field	66	pfcp.volume_measurement_flags.dlnops	DLNOP	bool
+field	66	pfcp.volume_measurement_flags.dlvol	DLVOL	bool
+field	66	pfcp.volume_measurement_flags.tonop	TONOP	bool
+field	66	pfcp.volume_measurement_flags.tovol	TOVOL	bool
+field	66	pfcp.volume_measurement_flags.ulnop	ULNOP	bool
+field	66	pfcp.volume_measurement_flags.ulvol	ULVOL	bool
+field	67	pfcp.duration_measurement	.	int
+field	69	pfcp.time_of_first_packet	.	time
+field	70	pfcp.time_of_last_packet	.	time
+field	72	pfcp.dropped_dl_traffic_threshold.dlby_flg	DLBY	bool
+field	72	pfcp.dropped_dl_traffic_threshold.dlpa_flg	DLPA	bool
+field	73	pfcp.volume_quota_flags.dlvol	DLVOL	bool
+field	73	pfcp.volume_quota_flags.tovol	TOVOL	bool
+field	73	pfcp.volume_quota_flags.ulvol	ULVOL	bool
+field	75	pfcp.start_time	.	time
+field	76	pfcp.end_time	.	time
+field	81	pfcp.urr_id	.	int31
+field	81	pfcp.urr_id_flg	.	bit32
+field	82	pfcp.urr_id	.	int31
+field	82	pfcp.urr_id_flg	.	bit32
+field	84	pfcp.outer_hdr_creation.ipv4	IPv4 Address	ip
+field	84	pfcp.outer_hdr_creation.port	Port Number	int
+field	84	pfcp.outer_hdr_creation.teid	TEID	int
+field	84	pfcp.pfcp_outer_hdr_desc.ctag	C-TAG	bool
+field	84	pfcp.pfcp_outer_hdr_desc.gtpu_udp_ipv4	GTP-U/UDP/IPv4	bool
+field	84	pfcp.pfcp_outer_hdr_desc.gtpu_udp_ipv6	GTP-U/UDP/IPv6	bool
+field	84	pfcp.pfcp_outer_hdr_desc.ipv4	IPv4	bool
+field	84	pfcp.pfcp_outer_hdr_desc.ipv6	IPv6	bool
+field	84	pfcp.pfcp_outer_hdr_desc.n19	N19 Indication	bool
+field	84	pfcp.pfcp_outer_hdr_desc.n6	N6 Indication	bool
+field	84	pfcp.pfcp_outer_hdr_desc.ssm_cteid	Low Layer SSM and C-TEID	bool
+field	84	pfcp.pfcp_outer_hdr_desc.stag	S-TAG	bool
+field	84	pfcp.pfcp_outer_hdr_desc.udp_ipv4	UDP/IPv4	bool
+field	84	pfcp.pfcp_outer_hdr_desc.udp_ipv6	UDP/IPv6	bool
+field	88	pfcp.bar_id	.	int
+field	89	pfcp.cp_function_features.ardr	ARDR	bool
+field	89	pfcp.cp_function_features.bundl	BUNDL	bool
+field	89	pfcp.cp_function_features.epfar	EPFAR	bool
+field	89	pfcp.cp_function_features.load	LOAD	bool
+field	89	pfcp.cp_function_features.mpas	MPAS	bool
+field	89	pfcp.cp_function_features.ovrl	OVRL	bool
+field	89	pfcp.cp_function_features.psucc	PSUCC	bool
+field	89	pfcp.cp_function_features.rpgur	RPGUR	bool
+field	89	pfcp.cp_function_features.sset	SSET	bool
+field	89	pfcp.cp_function_features.uiaur	UIAUR	bool
+field	90	pfcp.usage_information.aft	AFT	bool
+field	90	pfcp.usage_information.bef	BEF	bool
+field	90	pfcp.usage_information.uae	UAE	bool
+field	90	pfcp.usage_information.ube	UBE	bool
+field	91	pfcp.application_instance_id	.	text
+field	92	pfcp.flow_desc	Flow Description	text
+field	92	pfcp.flow_dir	Flow Direction	name
+field	93	pfcp.ue_ip_addr_ipv4	IPv4 address	ip
+field	93	pfcp.ue_ip_addr_ipv6_prefix	IPv6 Prefix Delegation Bits	int
+field	93	pfcp.ue_ip_address_flag.chv4	CHV4	bool
+field	93	pfcp.ue_ip_address_flag.chv6	CHV6	bool
+field	93	pfcp.ue_ip_address_flag.sd	S/D	bool
+field	93	pfcp.ue_ip_address_flag.v4	V4	bool
+field	93	pfcp.ue_ip_address_flag.v6	V6	bool
+field	93	pfcp.ue_ip_address_flag.v6d	IPv6D	bool
+field	93	pfcp.ue_ip_address_flag.v6pl	IP6PL	bool
+field	94	pfcp.dl_time_unit	Downlink Time Unit	name
+field	94	pfcp.max_dl_pr	Maximum Downlink Packet Rate	int
+field	94	pfcp.max_ul_pr	Maximum Uplink Packet Rate	int
+field	94	pfcp.packet_rate.aprc	APRC	bool
+field	94	pfcp.packet_rate.dlpr	DLPR	bool
+field	94	pfcp.packet_rate.ulpr	ULPR	bool
+field	94	pfcp.ul_time_unit	Uplink Time Unit	name
+field	95	pfcp.out_hdr_desc	Outer Header Removal Description	name
+field	96	pfcp.recovery_time_stamp	.	time
+field	100	pfcp.measurement_info.aspoc	ASPOC	bool
+field	100	pfcp.measurement_info.ciam	CIAM	bool
+field	100	pfcp.measurement_info.fd	MBQE	bool
+field	100	pfcp.measurement_info.inam	INAM	bool
+field	100	pfcp.measurement_info.istm	ISTM	bool
+field	100	pfcp.measurement_info.mnop	MNOP	bool
+field	100	pfcp.measurement_info.radi	RADI	bool
+field	100	pfcp.measurement_info.sspoc	SSPOC	bool
+field	101	pfcp.node_report_type.ckdr	CKDR	bool
+field	101	pfcp.node_report_type.gpqr	GPQR	bool
+field	101	pfcp.node_report_type.purr	PURR	bool
+field	101	pfcp.node_report_type.pvsrurr	VSR	bool
+field	101	pfcp.node_report_type.upfr	UPFR	bool
+field	101	pfcp.node_report_type.uprr	UPRR	bool
+field	104	pfcp.ur_seqn	.	int
+field	106	pfcp.predef_rules_name	.	text
+field	108	pfcp.far_id	.	int31
+field	108	pfcp.far_id_flg	.	bit32
+field	109	pfcp.qer_id	.	int31
+field	109	pfcp.qer_id_flg	.	bit32
+field	110	pfcp.oci_flags.aoci	AOCI	bool
+field	112	pfcp.timer_unit	Timer unit	name
+field	112	pfcp.timer_value	Timer value	int
+field	113	pfcp.pdn_type	.	name
+field	117	pfcp.user_plane_inactivity_time	User Plane Inactivity Timer	int
+field	121	pfcp.subsequent_volume_quota_flags.dlvol	DLVOL	bool
+field	121	pfcp.subsequent_volume_quota_flags.tovol	TOVOL	bool
+field	121	pfcp.subsequent_volume_quota_flags.ulvol	ULVOL	bool
+field	122	pfcp.subsequent_time_quota	.	int
+field	123	pfcp.rqi_flag	RQI	bool
+field	124	pfcp.qfi_value	.	int
+field	125	pfcp.query_urr_reference	.	int
+field	126	pfcp.additional_usage_reports_information_auri	AURI	bool
+field	126	pfcp.additional_usage_reports_information_value	Number of Additional Usage Reports value	int
+field	131	pfcp.traffic_endpoint_id	.	int
+field	139	pfcp.ethertype_filter_properties.flags.bide	BIDE	bool
+field	140	pfcp.suggested_buffering_packets_count.packet_count	.	int
+field	141	e212.assoc.imsi	IMSI	text
+field	141	e212.imsi	IMSI	text
+none	141	e212.imsi.malformed	part of the IMSI, which is compared whole
+none	141	e212.mcc	part of the IMSI, which is compared whole
+none	141	e212.mcc.non_decimal	part of the IMSI, which is compared whole
+none	141	e212.mnc	part of the IMSI, which is compared whole
+none	141	e212.mnc.non_decimal	part of the IMSI, which is compared whole
+field	141	pfcp.user_id.flags.gpsif	GPSIF	bool
+field	141	pfcp.user_id.flags.imeif	IMEIF	bool
+field	141	pfcp.user_id.flags.imsif	IMSIF	bool
+field	141	pfcp.user_id.flags.msisdnf	MSISDNF	bool
+field	141	pfcp.user_id.flags.naif	NAIF	bool
+field	141	pfcp.user_id.flags.peif	PEIF	bool
+field	141	pfcp.user_id.flags.supif	SUPIF	bool
+field	141	pfcp.user_id.gpsi	GPSI	text
+field	141	pfcp.user_id.imei	IMEI	text
+none	141	pfcp.user_id.length_of_gpsi	the length of a field, which the tree of the field has
+none	141	pfcp.user_id.length_of_imei	the length of a field, which the tree of the field has
+none	141	pfcp.user_id.length_of_imsi	the length of a field, which the tree of the field has
+none	141	pfcp.user_id.length_of_msisdn	the length of a field, which the tree of the field has
+none	141	pfcp.user_id.length_of_nai	the length of a field, which the tree of the field has
+none	141	pfcp.user_id.length_of_pei	the length of a field, which the tree of the field has
+none	141	pfcp.user_id.length_of_supi	the length of a field, which the tree of the field has
+field	141	pfcp.user_id.nai	NAI	text
+field	141	pfcp.user_id.pei	PEI	text
+field	149	pfcp.event_threshold	.	int
+field	152	pfcp.trace_information.list_interfaces	List of Interfaces	text
+field	152	pfcp.trace_information.session_trace_depth	Session Trace Depth	int
+field	152	pfcp.trace_information.traceid	Trace ID	int
+field	153	pfcp.framed_route	.	text
+field	155	pfcp.framed_ipv6_route	.	text
+field	159	pfcp.apn_dnn	.	text
+field	160	pfcp.tgpp_interface_type	.	name
+field	161	pfcp.srreq_flags.psdbu	PSDBU	bool
+field	178	pfcp.alternative_smf_ip_address.ipv4	IPv4 Address	ip
+field	178	pfcp.alternative_smf_ip_address_flags.ppe	PPE	bool
+field	178	pfcp.f_seid_flags.v4	V4	bool
+field	178	pfcp.f_seid_flags.v6	V6	bool
+field	179	pfcp.packet_replication_and_detection_carry_on_information.flags.dcaroni	DCARONI	bool
+field	179	pfcp.packet_replication_and_detection_carry_on_information.flags.prin19i	PRIN19I	bool
+field	179	pfcp.packet_replication_and_detection_carry_on_information.flags.prin6i	PRIN6I	bool
+field	179	pfcp.packet_replication_and_detection_carry_on_information.flags.priueai	PRIUEAI	bool
+field	181	pfcp.validity_time_value	Validity Time value	int
+field	184	pfcp.asrsp_flags.flags.psrei	PSREI	bool
+field	184	pfcp.asrsp_flags.flags.uupsi	UUPSI	bool
+field	185	pfcp.f_seid_flags.v4	V4	bool
+field	185	pfcp.f_seid_flags.v6	V6	bool
+field	186	pfcp.sereq_flags.flags.hrsbom	HRSBOM	bool
+field	186	pfcp.sereq_flags.flags.resti	RESTI	bool
+field	186	pfcp.sereq_flags.flags.sumpc	SUMPC	bool
+field	191	pfcp.f_seid_flags.v4	V4	bool
+field	191	pfcp.f_seid_flags.v6	V6	bool
+field	192	pfcp.f_seid_flags.v4	V4	bool
+field	192	pfcp.f_seid_flags.v6	V6	bool
+field	192	pfcp.source_ip_address.flags.mpl	MPL	bool
+field	192	pfcp.source_ip_address.ipv4	IPv4 address	ip
+field	192	pfcp.source_ip_address.ipv6	IPv6 address	ip
+field	193	pfcp.packet_rate_status.flags.apr	APR	bool
+field	193	pfcp.packet_rate_status.flags.dl	DL	bool
+field	193	pfcp.packet_rate_status.flags.ul	UL	bool
+field	193	pfcp.packet_rate_status.tovol	UL	bool
+field	193	pfcp.packet_rate_status.ulvol	DL	bool
+field	196	pfcp.port_number.value	.	int
+field	197	pfcp.nw_tt_port_number.value	.	int
+field	198	pfcp.5gs_user_plane_node_id.flags.sour	BID	bool
+field	217	pfcp.requested_access_availability_control_information.flags.rrca	RRCA	bool
+field	222	pfcp.mptcp_control_information.flags.tci	TCI	bool
+field	223	pfcp.atsss_ll_control_information.flags.lli	LLI	bool
+field	224	pfcp.pmf_control_information.flags.drtti	DRTTI	bool
+field	224	pfcp.pmf_control_information.flags.pmfi	PMFI	bool
+field	224	pfcp.pmf_control_information.flags.pqpm	PQPM	bool
+field	228	pfcp.mptcp_ip_address_information.flags.v4	V4	bool
+field	228	pfcp.mptcp_ip_address_information.flags.v6	V6	bool
+field	228	pfcp.mptcp_proxy.ipv4	MPTCP Proxy IPv4 Address	ip
+field	228	pfcp.mptcp_proxy.ipv6	MPTCP Proxy IPv6 Address	ip
+field	228	pfcp.mptcp_proxy.port	MPTCP Proxy Port	int
+field	228	pfcp.mptcp_proxy.type	MPTCP Proxy Type	int
+field	229	pfcp.link_specific_multipath_ip_address.flags.nv4	NV4	bool
+field	229	pfcp.link_specific_multipath_ip_address.flags.nv6	NV6	bool
+field	229	pfcp.link_specific_multipath_ip_address.flags.v4	V4	bool
+field	229	pfcp.link_specific_multipath_ip_address.flags.v6	V6	bool
+field	230	pfcp.pmf_address_information.flags.mac	MAC	bool
+field	230	pfcp.pmf_address_information.flags.v4	V4	bool
+field	230	pfcp.pmf_address_information.flags.v6	V6	bool
+field	230	pfcp.pmf_address_information.ipv4	PMF IPv4 Address	ip
+field	230	pfcp.pmf_address_information.ipv6	PMF IPv6 Address	ip
+field	231	pfcp.atsss_ll_information.flags.lli	LLI	bool
+field	237	pfcp.qos_report_trigger.flags.ire	IRE	bool
+field	237	pfcp.qos_report_trigger.flags.thr	THR	bool
+field	237	pfcp.qos_report_trigger.flags.v4	PER	bool
+field	257	pfcp.s_nssai_sst.sd	SD	int
+field	257	pfcp.s_nssai_sst.sst	SST	int
+field	258	pfcp.ip_version.v4	V4	bool
+field	258	pfcp.ip_version.v6	V6	bool
+field	259	pfcp.asreq_flags.flags.uupsi	UUPSI	bool
+field	275	pfcp.rattype	.	name
+field	278	pfcp.l2tp_user_authentication.flags.pac	PAC	bool
+field	278	pfcp.l2tp_user_authentication.flags.pai	PAI	bool
+field	278	pfcp.l2tp_user_authentication.flags.pan	PAN	bool
+field	278	pfcp.l2tp_user_authentication.flags.par	PAR	bool
+field	278	pfcp.l2tp_user_authentication.proxy_authen_type_value	Proxy Authen Type Value	int
+field	282	pfcp.calling_number_value	Calling Number value	text
+field	291	pfcp.group_id	.	text
+field	299	pfcp.predef_rules_name	.	text
+field	313	pfcp.tunnel_password_value	.	text
+field	319	pfcp.qer_indications_flags.edbmi	EDBMI	bool
+field	319	pfcp.qer_indications_flags.eml4s	EML4S	bool
+field	319	pfcp.qer_indications_flags.iqfis	IQFISN	bool
+field	319	pfcp.qer_indications_flags.pdusm	PDUSM	bool
+field	328	pfcp.traffic_parameter_measurement_indication.dlpmi	DLPMI	bool
+field	328	pfcp.traffic_parameter_measurement_indication.n6jmi	N6JMI	bool
+field	328	pfcp.traffic_parameter_measurement_indication.ulpmi	ULPMI	bool
+field	333	pfcp.transport_mode.value	Transport Mode Value	name
+field	335	pfcp.reporting_suggestion_info.reporting_time_info	Reporting Time Info	int
+field	335	pfcp.reporting_suggestion_info.reporting_urgency_value	Reporting Urgency value	name
+field	336	pfcp.tl_container	.	text
+field	337	pfcp.measurement_indication.dqfi	DQFI	bool
+field	339	pfcp.media_transport_protocol.media_transport_protocol_value	Media Transport Protocol	name
+field	345	pfcp.rtp_payload_format.rtp_payload_format	.	int
+field	352	pfcp.uri	.	text
+value	pfcp.timer_unit	0	2 seconds
+value	pfcp.timer_unit	1	1 minute
+value	pfcp.timer_unit	2	10 minutes
+value	pfcp.timer_unit	3	1 hour
+value	pfcp.timer_unit	4	10 hours
+value	pfcp.timer_unit	5	1 minute
+value	pfcp.timer_unit	6	1 minute
+value	pfcp.timer_unit	7	infinite
